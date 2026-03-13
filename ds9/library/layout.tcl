@@ -180,10 +180,16 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelShowVisible -width 8
     ttk::button $f.titlebar.trim -text "Trim..." \
 	-command CatalogPanelTrimDialog -width 6
+    ttk::button $f.titlebar.save -text "Save" \
+	-command CatalogPanelSaveCatalog -width 6
+    ttk::button $f.titlebar.load -text "Load" \
+	-command CatalogPanelLoadCatalog -width 6
     ttk::button $f.titlebar.clear -text "Clear" \
 	-command CatalogPanelClear -width 6
     pack $f.titlebar.title -side left -padx 4 -pady 2
     pack $f.titlebar.clear -side right -padx 2 -pady 2
+    pack $f.titlebar.load -side right -padx 2 -pady 2
+    pack $f.titlebar.save -side right -padx 2 -pady 2
     pack $f.titlebar.trim -side right -padx 2 -pady 2
     pack $f.titlebar.visible -side right -padx 2 -pady 2
     pack $f.titlebar.markall -side right -padx 2 -pady 2
@@ -480,6 +486,138 @@ proc CatalogPanelClear {} {
 
     # Reset trim state
     set catpanel(trim,active) 0
+}
+
+proc CatalogPanelSaveCatalog {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog to save"
+	return
+    }
+
+    set fn [tk_getSaveFile \
+		-title "Save Catalog" \
+		-defaultextension ".tsv" \
+		-filetypes {
+		    {{Tab-Separated Values} {.tsv}}
+		    {{CSV Files} {.csv}}
+		    {{All Files} {*}}
+		}]
+    if {$fn eq {}} return
+
+    set ext [string tolower [file extension $fn]]
+
+    if {$ext eq ".csv"} {
+	# Convert TSV to CSV
+	set lines [split $catpanel(alldata) \n]
+	set csvdata {}
+	foreach line $lines {
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line \t]
+	    set csvfields {}
+	    foreach fld $fields {
+		set fld [string trim $fld]
+		if {[string match *,* $fld] || [string match *\"* $fld]} {
+		    regsub -all {"} $fld {""} fld
+		    set fld "\"$fld\""
+		}
+		lappend csvfields $fld
+	    }
+	    lappend csvdata [join $csvfields ,]
+	}
+	set outdata [join $csvdata \n]
+    } else {
+	set outdata $catpanel(alldata)
+    }
+
+    if {[catch {
+	set fd [open $fn w]
+	puts -nonewline $fd $outdata
+	close $fd
+    } err]} {
+	set catpanel(status) "Save error: $err"
+	return
+    }
+
+    set nlines [llength [split $catpanel(alldata) \n]]
+    set nobj [expr {$nlines - 1}]
+    set catpanel(status) "Saved $nobj sources to [file tail $fn]"
+}
+
+proc CatalogPanelLoadCatalog {} {
+    global catpanel
+
+    set fn [tk_getOpenFile \
+		-title "Load Catalog" \
+		-filetypes {
+		    {{Tab-Separated Values} {.tsv}}
+		    {{CSV Files} {.csv}}
+		    {{All Files} {*}}
+		}]
+    if {$fn eq {}} return
+
+    if {[catch {
+	set fd [open $fn r]
+	set rawdata [read $fd]
+	close $fd
+    } err]} {
+	set catpanel(status) "Load error: $err"
+	return
+    }
+
+    set rawdata [string trimright $rawdata \n]
+    if {$rawdata eq {}} {
+	set catpanel(status) "Empty file: [file tail $fn]"
+	return
+    }
+
+    set ext [string tolower [file extension $fn]]
+
+    if {$ext eq ".csv"} {
+	# Convert CSV to TSV
+	set lines [split $rawdata \n]
+	set tsvlines {}
+	foreach line $lines {
+	    set line [string trimright $line \r]
+	    if {$line eq {}} continue
+	    # Simple CSV parse: split on comma, handle quoted fields
+	    set fields {}
+	    set cur {}
+	    set inquote 0
+	    for {set i 0} {$i < [string length $line]} {incr i} {
+		set ch [string index $line $i]
+		if {$inquote} {
+		    if {$ch eq "\""} {
+			if {$i+1 < [string length $line] && [string index $line [expr {$i+1}]] eq "\""} {
+			    append cur "\""
+			    incr i
+			} else {
+			    set inquote 0
+			}
+		    } else {
+			append cur $ch
+		    }
+		} else {
+		    if {$ch eq "\""} {
+			set inquote 1
+		    } elseif {$ch eq ","} {
+			lappend fields $cur
+			set cur {}
+		    } else {
+			append cur $ch
+		    }
+		}
+	    }
+	    lappend fields $cur
+	    lappend tsvlines [join $fields \t]
+	}
+	set data [join $tsvlines \n]
+    } else {
+	set data $rawdata
+    }
+
+    CatalogPanelLoadTSV $data [file tail $fn]
 }
 
 proc CatalogPanelFilter {} {
