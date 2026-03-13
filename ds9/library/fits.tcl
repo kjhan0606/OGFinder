@@ -41,6 +41,9 @@ proc LoadFitsFile {fn layer mode} {
 	    catch {$current(frame) marker load fits "\"$reg\"" $marker(color)}
 	}
     }
+
+    # Auto-extract sources for the catalog panel
+    CatalogPanelAutoExtract
 }
 
 proc LoadFitsAlloc {path fn layer mode} {

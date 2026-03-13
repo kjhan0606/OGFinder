@@ -549,12 +549,23 @@ switch $pds9(language) {
     default {SetLanguage $pds9(language)}
 }
 
-# create our main frame
+# create top-level panedwindow to split main content and catalog
+set ds9(toppw) [ttk::panedwindow ${ds9(top)}pw -orient horizontal]
+pack $ds9(toppw) -fill both -expand true
+
+# create our main frame (left pane)
 set ds9(main) [ttk::frame ${ds9(top)}ds9]
-pack $ds9(main) -fill both -expand true
+$ds9(toppw) add $ds9(main) -weight 3
+
+# create catalog panel frame (right pane)
+set ds9(catalog_frame) [ttk::frame ${ds9(top)}catf]
+$ds9(toppw) add $ds9(catalog_frame) -weight 2
 
 # Create image canvas
 CreateCanvas
+
+# Create catalog panel in the right pane
+CreateCatalogPanel
 
 # Create Colorbar
 CreateColorbar

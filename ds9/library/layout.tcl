@@ -127,6 +127,7 @@ proc CreateCanvas {} {
     global canvas
 
     set ds9(image) [ttk::frame $ds9(main).f]
+
     set ds9(canvas) [canvas $ds9(image).c \
 			 -width $canvas(width) \
 			 -height $canvas(height) \
@@ -141,7 +142,6 @@ proc CreateCanvas {} {
     # extra space for window tab
     set ds9(canvas,bottom) {}
     if {$canvas(gap,bottom)>0} {
-	# set background style to TreeView, not TFrame
 	set ds9(canvas,bottom) [ttk::frame $ds9(image).b \
 				    -width 1 \
 				    -height $canvas(gap,bottom) \
@@ -149,7 +149,7 @@ proc CreateCanvas {} {
 				   ]
 	grid $ds9(canvas,bottom) -row 1 -column 0 -sticky ew
     }
-	
+
     # needed to realize window so Layout routines will work
     grid $ds9(image)
 
@@ -160,9 +160,1694 @@ proc CreateCanvas {} {
     }
 }
 
+proc CreateCatalogPanel {} {
+    global ds9
+    global catpanel
+
+    set f $ds9(catalog_frame)
+
+    # Title bar
+    set catpanel(titlebar) [ttk::frame $f.titlebar]
+    ttk::label $f.titlebar.title -text "Source Extractor" \
+	-font {Helvetica 11 bold} -anchor w
+    ttk::button $f.titlebar.extract -text "Extract" \
+	-command CatalogPanelExtract -width 8
+    ttk::button $f.titlebar.settings -text "Settings..." \
+	-command CatalogPanelSettingsDialog -width 10
+    ttk::button $f.titlebar.markall -text "Mark All" \
+	-command CatalogPanelMarkAll -width 8
+    ttk::button $f.titlebar.visible -text "Visible" \
+	-command CatalogPanelShowVisible -width 8
+    ttk::button $f.titlebar.trim -text "Trim..." \
+	-command CatalogPanelTrimDialog -width 6
+    ttk::button $f.titlebar.clear -text "Clear" \
+	-command CatalogPanelClear -width 6
+    pack $f.titlebar.title -side left -padx 4 -pady 2
+    pack $f.titlebar.clear -side right -padx 2 -pady 2
+    pack $f.titlebar.trim -side right -padx 2 -pady 2
+    pack $f.titlebar.visible -side right -padx 2 -pady 2
+    pack $f.titlebar.markall -side right -padx 2 -pady 2
+    pack $f.titlebar.settings -side right -padx 2 -pady 2
+    pack $f.titlebar.extract -side right -padx 2 -pady 2
+
+    # Search/Filter bar
+    set catpanel(searchbar) [ttk::frame $f.searchbar]
+    ttk::label $f.searchbar.lbl -text "Filter:"
+    set catpanel(search_var) {}
+    ttk::entry $f.searchbar.entry -textvariable catpanel(search_var) -width 20
+    ttk::button $f.searchbar.go -text "Apply" \
+	-command CatalogPanelFilter -width 6
+    pack $f.searchbar.lbl -side left -padx 4 -pady 2
+    pack $f.searchbar.entry -side left -padx 2 -pady 2 -fill x -expand true
+    pack $f.searchbar.go -side right -padx 2 -pady 2
+    bind $f.searchbar.entry <Return> CatalogPanelFilter
+
+    # Table frame with scrollbars
+    set catpanel(tblframe) [ttk::frame $f.tblf]
+
+    set catpanel(tbldb) catpaneltbldb
+    global $catpanel(tbldb)
+
+    set catpanel(tbl) [table $f.tblf.t \
+			   -state disabled \
+			   -usecommand 0 \
+			   -variable $catpanel(tbldb) \
+			   -colorigin 1 \
+			   -roworigin 0 \
+			   -cols 19 \
+			   -rows 20 \
+			   -width -1 \
+			   -height -1 \
+			   -colwidth 11 \
+			   -maxwidth 0 \
+			   -maxheight 0 \
+			   -titlerows 1 \
+			   -resizeborders col \
+			   -xscrollcommand [list $f.tblf.xscroll set] \
+			   -yscrollcommand [list $f.tblf.yscroll set] \
+			   -selecttype row \
+			   -selectmode browse \
+			   -browsecommand [list CatalogPanelSelectCmd %s %S] \
+			   -anchor w \
+			   -font [font actual TkDefaultFont] \
+			   -fg [ThemeTreeForeground] \
+			   -bg [ThemeTreeBackground] \
+			  ]
+
+    $catpanel(tbl) tag configure sel \
+	-fg [ThemeSelectedForeground] -bg [ThemeSelectedBackground]
+    $catpanel(tbl) tag configure title \
+	-fg [ThemeForeground] -bg [ThemeBackground]
+
+    ttk::scrollbar $f.tblf.yscroll \
+	-command [list $catpanel(tbl) yview] -orient vertical
+    ttk::scrollbar $f.tblf.xscroll \
+	-command [list $catpanel(tbl) xview] -orient horizontal
+
+    grid $catpanel(tbl) $f.tblf.yscroll -sticky news
+    grid $f.tblf.xscroll -sticky news
+    grid rowconfigure $f.tblf 0 -weight 1
+    grid columnconfigure $f.tblf 0 -weight 1
+
+    # Status bar
+    set catpanel(status) {Ready - Load a FITS file to extract sources}
+    set catpanel(statusbar) [ttk::frame $f.statusbar]
+    ttk::label $f.statusbar.lbl -textvariable catpanel(status) \
+	-anchor w -relief sunken
+    pack $f.statusbar.lbl -fill x -expand true -padx 2 -pady 2
+
+    # Pack all into catalog frame
+    pack $f.titlebar -fill x -side top
+    pack $f.searchbar -fill x -side top
+    pack $f.statusbar -fill x -side bottom
+    pack $f.tblf -fill both -expand true -side top
+
+    # Initialize state
+    set catpanel(alldata) {}
+    set catpanel(filename) {}
+    set catpanel(delim) "\t"
+    set catpanel(sort,col) {}
+    set catpanel(sort,dir) {}
+
+    # Feature B: visible mode
+    set catpanel(visible_mode) 0
+
+    # Feature C: merge state
+    set catpanel(merge,list) {}
+    set catpanel(merge,active) 0
+
+    # Feature D: trim state
+    set catpanel(trim,active) 0
+
+    # Ctrl key tracking (Feature A/C)
+    set ::catpanel_ctrl 0
+    bind . <KeyPress-Control_L>   {set ::catpanel_ctrl 1}
+    bind . <KeyRelease-Control_L> {set ::catpanel_ctrl 0}
+    bind . <KeyPress-Control_R>   {set ::catpanel_ctrl 1}
+    bind . <KeyRelease-Control_R> {set ::catpanel_ctrl 0}
+
+    # Key bindings (Feature C)
+    bind . <Control-Key-m> {CatalogPanelMergeSources}
+    bind . <Escape> {+CatalogPanelEscapeKey}
+
+    # Bind table header click for sorting (ButtonRelease to not conflict with tktable)
+    bind $catpanel(tbl) <ButtonRelease-1> {+CatalogPanelTableClick %x %y}
+
+    # Initialize extraction parameters
+    CatalogPanelParamDef
+}
+
+# Run source extraction on the currently loaded FITS image
+proc CatalogPanelExtract {} {
+    global catpanel
+    global ds9
+    global current
+    global loadParam
+
+    # Find the ds9_sextract binary
+    set bindir [file dirname [info nameofexecutable]]
+    set sextract [file join $bindir ds9_sextract]
+    if {![file executable $sextract]} {
+	set catpanel(status) "ERROR: ds9_sextract not found in $bindir"
+	return
+    }
+
+    # Get current FITS filename
+    set fn {}
+    if {$current(frame) != {}} {
+	catch {set fn [$current(frame) get fits file name full]}
+    }
+    if {$fn eq {}} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    # Strip curly braces if present
+    set fn [string trim $fn "{}"]
+
+    if {![file exists $fn]} {
+	set catpanel(status) "File not found: $fn"
+	return
+    }
+
+    set catpanel(status) "Extracting sources from [file tail $fn] ..."
+    update idletasks
+
+    # Build LD_LIBRARY_PATH: include conda lib and any existing path
+    set libpaths {}
+    if {[info exists ::env(CONDA_PREFIX)]} {
+	lappend libpaths "$::env(CONDA_PREFIX)/lib"
+    }
+    # Also check for miniconda3 relative to home
+    set home_conda [file join [file normalize ~] miniconda3/lib]
+    if {[file isdirectory $home_conda]} {
+	lappend libpaths $home_conda
+    }
+    if {[info exists ::env(LD_LIBRARY_PATH)]} {
+	lappend libpaths $::env(LD_LIBRARY_PATH)
+    }
+    set ldpath [join $libpaths :]
+
+    # Build parameter flags
+    set paramflags {}
+    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
+		   back-size back-filtersize} {
+	if {[info exists catpanel(param,$pname)]} {
+	    append paramflags " --$pname $catpanel(param,$pname)"
+	}
+    }
+
+    # Run extraction
+    set cmd "LD_LIBRARY_PATH=$ldpath $sextract \"$fn\"$paramflags"
+    if {[catch {set data [exec sh -c $cmd 2>@stderr]} err]} {
+	set catpanel(status) "Extraction error: $err"
+	return
+    }
+
+    # Parse TSV output into table
+    CatalogPanelLoadTSV $data [file tail $fn]
+}
+
+# Load tab-separated catalog data into the panel
+proc CatalogPanelLoadTSV {data source_name} {
+    global catpanel
+
+    global $catpanel(tbldb)
+
+    # Unbind table from variable while modifying
+    $catpanel(tbl) configure -variable {}
+
+    unset -nocomplain $catpanel(tbldb)
+
+    set lines [split $data \n]
+    set nlines [llength $lines]
+
+    if {$nlines < 2} {
+	set catpanel(status) "No sources detected"
+	$catpanel(tbl) configure -variable $catpanel(tbldb)
+	return
+    }
+
+    # Store for filtering
+    set catpanel(alldata) $data
+    set catpanel(delim) "\t"
+
+    # Parse header
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Fill header row
+    for {set c 0} {$c < $ncols} {incr c} {
+	set ${catpanel(tbldb)}(0,[expr {$c+1}]) \
+	    [string trim [lindex $headers $c]]
+    }
+
+    # Fill data rows
+    set row 1
+    for {set i 1} {$i < $nlines} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+	for {set c 0} {$c < $ncols} {incr c} {
+	    set ${catpanel(tbldb)}($row,[expr {$c+1}]) \
+		[string trim [lindex $fields $c]]
+	}
+	incr row
+    }
+
+    # Rebind table and configure dimensions to trigger full refresh
+    $catpanel(tbl) configure -variable $catpanel(tbldb) \
+	-cols $ncols -rows $row -state disabled
+
+    set nobj [expr {$row - 1}]
+    set catpanel(status) "$source_name: $nobj sources extracted"
+}
+
+proc CatalogPanelClear {} {
+    global catpanel
+    global current
+
+    # Delete all sextract markers
+    if {$current(frame) != {}} {
+	catch {$current(frame) marker catalog sextract_sel delete}
+	catch {$current(frame) marker catalog sextract_all delete}
+	catch {$current(frame) marker catalog sextract_merge delete}
+    }
+
+    global $catpanel(tbldb)
+    $catpanel(tbl) configure -variable {}
+    unset -nocomplain $catpanel(tbldb)
+    $catpanel(tbl) configure -variable $catpanel(tbldb) \
+	-cols 19 -rows 20
+
+    set catpanel(status) {Ready}
+    set catpanel(filename) {}
+    set catpanel(alldata) {}
+
+    # Reset merge state
+    set catpanel(merge,list) {}
+    set catpanel(merge,active) 0
+
+    # Reset visible mode
+    set catpanel(visible_mode) 0
+
+    # Reset trim state
+    set catpanel(trim,active) 0
+}
+
+proc CatalogPanelFilter {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set pattern $catpanel(search_var)
+
+    global $catpanel(tbldb)
+
+    # Unbind table while modifying
+    $catpanel(tbl) configure -variable {}
+    unset -nocomplain $catpanel(tbldb)
+
+    set data $catpanel(alldata)
+    set lines [split $data \n]
+
+    # Header
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    for {set c 0} {$c < $ncols} {incr c} {
+	set ${catpanel(tbldb)}(0,[expr {$c+1}]) \
+	    [string trim [lindex $headers $c]]
+    }
+
+    # Filter data rows
+    set row 1
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	if {$pattern ne {} && ![string match -nocase "*${pattern}*" $line]} continue
+	set fields [split $line "\t"]
+	for {set c 0} {$c < $ncols} {incr c} {
+	    set ${catpanel(tbldb)}($row,[expr {$c+1}]) \
+		[string trim [lindex $fields $c]]
+	}
+	incr row
+    }
+
+    # Rebind table to trigger full refresh
+    $catpanel(tbl) configure -variable $catpanel(tbldb) \
+	-cols $ncols -rows $row
+
+    set ndata [expr {$row - 1}]
+    if {$pattern eq {}} {
+	set catpanel(status) "Showing all $ndata sources"
+    } else {
+	set catpanel(status) "Filtered: $ndata sources matching '$pattern'"
+    }
+}
+
+# Hook: automatically extract sources after FITS file is loaded
+proc CatalogPanelAutoExtract {} {
+    global catpanel
+    if {[info exists catpanel(tbl)]} {
+	after 500 CatalogPanelExtract
+    }
+}
+
+# Row selection: navigate to source and mark it on the image
+proc CatalogPanelSelectCmd {prev cur} {
+    global catpanel
+
+    # cur is "row,col" of current selection
+    set row [lindex [split $cur ,] 0]
+    if {![string is integer -strict $row] || $row <= 0} return
+
+    after cancel CatalogPanelGotoSource
+    after 100 [list CatalogPanelGotoSource $row]
+}
+
+proc CatalogPanelGotoSource {row} {
+    global catpanel
+    global current
+    global ds9
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+
+    global $catpanel(tbldb)
+
+    # Find column indices from header row
+    set ncols [$catpanel(tbl) cget -cols]
+    set col_x -1
+    set col_y -1
+    set col_a -1
+    set col_b -1
+    set col_theta -1
+    set col_ir -1
+    for {set c 1} {$c <= $ncols} {incr c} {
+	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
+	    set hdr [set ${catpanel(tbldb)}(0,$c)]
+	    switch -- $hdr {
+		X_IMAGE     { set col_x $c }
+		Y_IMAGE     { set col_y $c }
+		A_IMAGE     { set col_a $c }
+		B_IMAGE     { set col_b $c }
+		THETA_IMAGE { set col_theta $c }
+		ISO_RADIUS  { set col_ir $c }
+	    }
+	}
+    }
+
+    if {$col_x < 0 || $col_y < 0} return
+
+    # Get coordinates from selected row
+    if {![info exists ${catpanel(tbldb)}($row,$col_x)]} return
+    set x [set ${catpanel(tbldb)}($row,$col_x)]
+    set y [set ${catpanel(tbldb)}($row,$col_y)]
+
+    if {![string is double -strict $x] || ![string is double -strict $y]} return
+
+    # Get ellipse parameters (with NaN/Inf safety via catch)
+    set iso_radius 10.0
+    set a_image 0
+    set b_image 0
+    set theta 0
+
+    if {$col_ir >= 0 && [info exists ${catpanel(tbldb)}($row,$col_ir)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_ir)]
+	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+	    set iso_radius $v
+	}
+    }
+    if {$col_a >= 0 && [info exists ${catpanel(tbldb)}($row,$col_a)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_a)]
+	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+    }
+    if {$col_b >= 0 && [info exists ${catpanel(tbldb)}($row,$col_b)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_b)]
+	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+    }
+    if {$col_theta >= 0 && [info exists ${catpanel(tbldb)}($row,$col_theta)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_theta)]
+	if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
+    }
+
+    # Compute ellipse: ISO_RADIUS as semi-major, scaled by B/A for semi-minor
+    set semi_a $iso_radius
+    set semi_b $iso_radius
+    if {$a_image > 0 && $b_image > 0} {
+	set semi_b [expr {$iso_radius * $b_image / $a_image}]
+    }
+
+    # Delete previous selection markers
+    set frame $current(frame)
+    catch {$frame marker catalog sextract_sel delete}
+
+    # Use global variable for marker creation (var form requires global access)
+    global sextract_sel_reg
+
+    # Create cross point marker (cyan)
+    set sextract_sel_reg "image\ncross point($x $y) # color=cyan width=2 point=cross 15 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
+    catch {$frame marker catalog command ds9 var sextract_sel_reg}
+
+    # Create ellipse marker (green, dashed)
+    set sextract_sel_reg "image\nellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
+    catch {$frame marker catalog command ds9 var sextract_sel_reg}
+
+    # Pan to the object
+    PanToFrame $current(frame) $x $y image {}
+
+    set catpanel(status) "Source at image ($x, $y)"
+}
+
+# --- Source Extractor Parameter Management ---
+
+proc CatalogPanelParamDef {} {
+    global catpanel
+
+    set catpanel(param,detect-thresh) 1.5
+    set catpanel(param,detect-minarea) 5
+    set catpanel(param,deblend-nthresh) 32
+    set catpanel(param,deblend-mincont) 0.005
+    set catpanel(param,phot-aperture) 5.0
+    set catpanel(param,mag-zeropoint) 25.0
+    set catpanel(param,gain) 0.0
+    set catpanel(param,pixel-scale) 1.0
+    set catpanel(param,seeing-fwhm) 3.0
+    set catpanel(param,back-size) 64
+    set catpanel(param,back-filtersize) 3
+
+    CatalogPanelParamLoad
+}
+
+proc CatalogPanelParamLoad {} {
+    global catpanel
+
+    set preffile [file join [file normalize ~] .ds9 sextract.prf]
+    if {![file exists $preffile]} return
+    if {[catch {set fd [open $preffile r]} err]} return
+    while {[gets $fd line] >= 0} {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set parts [split $line]
+	if {[llength $parts] >= 2} {
+	    set key [lindex $parts 0]
+	    set val [lindex $parts 1]
+	    if {[info exists catpanel(param,$key)]} {
+		set catpanel(param,$key) $val
+	    }
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelParamSave {} {
+    global catpanel
+
+    set prefdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $prefdir]} {
+	file mkdir $prefdir
+    }
+    set preffile [file join $prefdir sextract.prf]
+    if {[catch {set fd [open $preffile w]} err]} return
+    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
+		   back-size back-filtersize} {
+	puts $fd "$pname $catpanel(param,$pname)"
+    }
+    close $fd
+}
+
+proc CatalogPanelParamDefaults {} {
+    global ed
+
+    set ed(detect-thresh) 1.5
+    set ed(detect-minarea) 5
+    set ed(deblend-nthresh) 32
+    set ed(deblend-mincont) 0.005
+    set ed(phot-aperture) 5.0
+    set ed(mag-zeropoint) 25.0
+    set ed(gain) 0.0
+    set ed(pixel-scale) 1.0
+    set ed(seeing-fwhm) 3.0
+    set ed(back-size) 64
+    set ed(back-filtersize) 3
+}
+
+proc CatalogPanelSettingsDialog {} {
+    global catpanel
+    global ed
+
+    set w {.sextractparam}
+
+    set ed(ok) 0
+
+    # Copy current params to ed()
+    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
+		   back-size back-filtersize} {
+	set ed($pname) $catpanel(param,$pname)
+    }
+
+    DialogCreate $w {Source Extractor Settings} ed(ok)
+
+    # Param frame
+    set f [ttk::frame $w.param]
+    set row 0
+    foreach {pname plabel} {
+	detect-thresh {Detect Threshold}
+	detect-minarea {Detect Min Area}
+	deblend-nthresh {Deblend NThresh}
+	deblend-mincont {Deblend MinCont}
+	phot-aperture {Phot Aperture}
+	mag-zeropoint {Mag Zeropoint}
+	gain {Gain}
+	pixel-scale {Pixel Scale}
+	seeing-fwhm {Seeing FWHM}
+	back-size {Back Size}
+	back-filtersize {Back Filter Size}
+    } {
+	ttk::label $f.l$row -text "$plabel:" -anchor w
+	ttk::entry $f.e$row -textvariable ed($pname) -width 12
+	grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
+	incr row
+    }
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    ttk::button $bf.ok -text {OK} -command {set ed(ok) 1} -default active
+    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
+    ttk::button $bf.defaults -text {Defaults} -command CatalogPanelParamDefaults
+    ttk::button $bf.save -text {Save} -command {
+	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
+		       back-size back-filtersize} {
+	    set catpanel(param,$pname) $ed($pname)
+	}
+	CatalogPanelParamSave
+    }
+    pack $bf.ok $bf.cancel $bf.defaults $bf.save \
+	-side left -expand true -padx 2 -pady 4
+
+    bind $w <Return> {set ed(ok) 1}
+
+    # Fini
+    ttk::separator $w.sep -orient horizontal
+    pack $w.buttons $w.sep -side bottom -fill x
+    pack $w.param -side top -fill both -expand true
+
+    DialogWait $w ed(ok) $w.param.e0
+    destroy $w
+
+    if {$ed(ok)} {
+	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
+		       back-size back-filtersize} {
+	    set catpanel(param,$pname) $ed($pname)
+	}
+	CatalogPanelParamSave
+    }
+
+    unset ed
+}
+
+# --- Mark All Sources ---
+
+proc CatalogPanelMarkAll {} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set frame $current(frame)
+
+    # Delete previous "mark all" markers
+    catch {$frame marker catalog sextract_all delete}
+
+    global $catpanel(tbldb)
+
+    # Find column indices
+    set ncols [$catpanel(tbl) cget -cols]
+    set col_x -1
+    set col_y -1
+    set col_a -1
+    set col_b -1
+    set col_theta -1
+    set col_ir -1
+    set col_num -1
+    for {set c 1} {$c <= $ncols} {incr c} {
+	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
+	    set hdr [set ${catpanel(tbldb)}(0,$c)]
+	    switch -- $hdr {
+		NUMBER      { set col_num $c }
+		X_IMAGE     { set col_x $c }
+		Y_IMAGE     { set col_y $c }
+		A_IMAGE     { set col_a $c }
+		B_IMAGE     { set col_b $c }
+		THETA_IMAGE { set col_theta $c }
+		ISO_RADIUS  { set col_ir $c }
+	    }
+	}
+    }
+    if {$col_x < 0 || $col_y < 0} return
+
+    set catpanel(status) "Marking all sources..."
+    update idletasks
+
+    # Build one big region string for all sources
+    set reg "image\n"
+    set nrows [$catpanel(tbl) cget -rows]
+    set count 0
+
+    for {set r 1} {$r < $nrows} {incr r} {
+	if {![info exists ${catpanel(tbldb)}($r,$col_x)]} continue
+	set x [set ${catpanel(tbldb)}($r,$col_x)]
+	set y [set ${catpanel(tbldb)}($r,$col_y)]
+	if {![string is double -strict $x] || ![string is double -strict $y]} continue
+
+	# Get source NUMBER for individual tag
+	set src_num $r
+	if {$col_num >= 0 && [info exists ${catpanel(tbldb)}($r,$col_num)]} {
+	    set src_num [set ${catpanel(tbldb)}($r,$col_num)]
+	}
+
+	# Get ellipse parameters (NaN/Inf safe via catch)
+	set iso_radius 5.0
+	set a_image 0
+	set b_image 0
+	set theta 0
+
+	if {$col_ir >= 0 && [info exists ${catpanel(tbldb)}($r,$col_ir)]} {
+	    set val [set ${catpanel(tbldb)}($r,$col_ir)]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+		set iso_radius $v
+	    }
+	}
+	if {$col_a >= 0 && [info exists ${catpanel(tbldb)}($r,$col_a)]} {
+	    set val [set ${catpanel(tbldb)}($r,$col_a)]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+	}
+	if {$col_b >= 0 && [info exists ${catpanel(tbldb)}($r,$col_b)]} {
+	    set val [set ${catpanel(tbldb)}($r,$col_b)]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+	}
+	if {$col_theta >= 0 && [info exists ${catpanel(tbldb)}($r,$col_theta)]} {
+	    set val [set ${catpanel(tbldb)}($r,$col_theta)]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
+	}
+
+	# ISO_RADIUS as semi-major, scaled by B/A for semi-minor
+	set semi_a $iso_radius
+	set semi_b $iso_radius
+	if {$a_image > 0 && $b_image > 0} {
+	    set semi_b [expr {$iso_radius * $b_image / $a_image}]
+	}
+
+	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=yellow width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
+	incr count
+    }
+
+    if {$count == 0} return
+
+    # Create all markers in one call using global variable
+    global sextract_all_reg
+    set sextract_all_reg $reg
+    catch {$frame marker catalog command ds9 var sextract_all_reg}
+
+    set catpanel(status) "Marked $count sources (yellow ellipses)"
+}
+
+# --- Marker Callbacks (Feature A) ---
+
+proc CatalogPanelMarkerCB {num_str id} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+
+    global $catpanel(tbldb)
+
+    # Find NUMBER column index
+    set ncols [$catpanel(tbl) cget -cols]
+    set col_num -1
+    for {set c 1} {$c <= $ncols} {incr c} {
+	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
+	    set hdr [set ${catpanel(tbldb)}(0,$c)]
+	    if {$hdr eq "NUMBER"} {
+		set col_num $c
+		break
+	    }
+	}
+    }
+
+    # Find table row matching this source NUMBER
+    set nrows [$catpanel(tbl) cget -rows]
+    set target_row -1
+
+    if {$col_num >= 0} {
+	for {set r 1} {$r < $nrows} {incr r} {
+	    if {[info exists ${catpanel(tbldb)}($r,$col_num)]} {
+		set val [set ${catpanel(tbldb)}($r,$col_num)]
+		if {$val eq $num_str} {
+		    set target_row $r
+		    break
+		}
+	    }
+	}
+    }
+
+    if {$target_row < 0} return
+
+    # Select and scroll to row in table
+    $catpanel(tbl) selection set $target_row,1
+    $catpanel(tbl) see $target_row,1
+
+    # Show selection marker and pan
+    CatalogPanelGotoSource $target_row
+}
+
+proc CatalogPanelMarkerUnCB {num_str id} {
+    # no-op
+}
+
+# Click handler called from Button1Frame in none mode
+proc CatalogPanelMarkerClick {which x y} {
+    global catpanel
+
+    if {![info exists catpanel(tbl)]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![$which has fits]} return
+
+    # Check if click is on a catalog marker
+    set id [$which get marker catalog id $x $y]
+    if {$id == 0} return
+
+    # Get tags of this marker
+    set tags [$which get marker catalog $id tag]
+
+    # Look for sextract_src.NUMBER tag
+    set src_num {}
+    foreach tag $tags {
+	if {[string match "sextract_src.*" $tag]} {
+	    set src_num [string range $tag 13 end]
+	    break
+	}
+    }
+    if {$src_num eq {}} return
+
+    # Found a sextract marker — navigate to it
+    CatalogPanelMarkerCB $src_num $id
+}
+
+# Ctrl+Click handler called from ControlButton1Frame in none mode
+proc CatalogPanelMarkerCtrlClick {which x y} {
+    global catpanel
+
+    if {![info exists catpanel(tbl)]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![$which has fits]} return
+
+    # Check if click is on a catalog marker
+    set id [$which get marker catalog id $x $y]
+    if {$id == 0} return
+
+    # Get tags of this marker
+    set tags [$which get marker catalog $id tag]
+
+    # Look for sextract_src.NUMBER tag
+    set src_num {}
+    foreach tag $tags {
+	if {[string match "sextract_src.*" $tag]} {
+	    set src_num [string range $tag 13 end]
+	    break
+	}
+    }
+    if {$src_num eq {}} return
+
+    # Ctrl+Click: merge selection
+    CatalogPanelCtrlSelect $src_num
+}
+
+# --- Visible Filter (Feature B) ---
+
+proc CatalogPanelShowVisible {} {
+    global catpanel
+    global current
+    global ds9
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+
+    # Toggle mode
+    if {$catpanel(visible_mode)} {
+	set catpanel(visible_mode) 0
+	CatalogPanelLoadTSV $catpanel(alldata) "all"
+	set catpanel(status) "Showing all sources"
+	return
+    }
+
+    set catpanel(visible_mode) 1
+
+    set frame $current(frame)
+
+    # Get viewport center in image coordinates
+    set cursor [$frame get cursor image]
+    set cx [lindex $cursor 0]
+    set cy [lindex $cursor 1]
+
+    # Get zoom level
+    set zoom [$frame get zoom]
+    set zx [lindex $zoom 0]
+    set zy [lindex $zoom 1]
+
+    # Get canvas size
+    set cw [winfo width $ds9(canvas)]
+    set ch [winfo height $ds9(canvas)]
+
+    # Compute viewport bounds in image coordinates
+    set x_min [expr {$cx - $cw / 2.0 / $zx}]
+    set x_max [expr {$cx + $cw / 2.0 / $zx}]
+    set y_min [expr {$cy - $ch / 2.0 / $zy}]
+    set y_max [expr {$cy + $ch / 2.0 / $zy}]
+
+    # Parse alldata, find X_IMAGE/Y_IMAGE columns
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+    set ncols [llength $headers]
+
+    set idx_x -1
+    set idx_y -1
+    for {set i 0} {$i < $ncols} {incr i} {
+	set h [string trim [lindex $headers $i]]
+	if {$h eq "X_IMAGE"} { set idx_x $i }
+	if {$h eq "Y_IMAGE"} { set idx_y $i }
+    }
+    if {$idx_x < 0 || $idx_y < 0} return
+
+    # Filter rows within viewport
+    set filtered $header
+    set count 0
+    set total 0
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	incr total
+	set fields [split $line "\t"]
+	set x [string trim [lindex $fields $idx_x]]
+	set y [string trim [lindex $fields $idx_y]]
+	if {![string is double -strict $x] || ![string is double -strict $y]} continue
+	if {$x >= $x_min && $x <= $x_max && $y >= $y_min && $y <= $y_max} {
+	    append filtered "\n$line"
+	    incr count
+	}
+    }
+
+    CatalogPanelLoadTSV $filtered "visible"
+    set catpanel(status) "Visible: $count of $total sources in current view"
+}
+
+# --- Merge Selection (Feature C) ---
+
+proc CatalogPanelCtrlSelect {src_num} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+
+    set frame $current(frame)
+
+    # Toggle: if already in list, remove; otherwise add
+    set idx [lsearch -exact $catpanel(merge,list) $src_num]
+    if {$idx >= 0} {
+	# Remove from merge list
+	set catpanel(merge,list) [lreplace $catpanel(merge,list) $idx $idx]
+	# Delete this source's merge marker
+	catch {$frame marker catalog sextract_merge.$src_num delete}
+    } else {
+	# Add to merge list
+	lappend catpanel(merge,list) $src_num
+
+	# Find source position from alldata
+	set lines [split $catpanel(alldata) \n]
+	set header [lindex $lines 0]
+	set headers [split $header "\t"]
+	set ncols [llength $headers]
+
+	set idx_num -1
+	set idx_x -1
+	set idx_y -1
+	set idx_a -1
+	set idx_b -1
+	set idx_theta -1
+	set idx_ir -1
+	for {set i 0} {$i < $ncols} {incr i} {
+	    set h [string trim [lindex $headers $i]]
+	    switch -- $h {
+		NUMBER      { set idx_num $i }
+		X_IMAGE     { set idx_x $i }
+		Y_IMAGE     { set idx_y $i }
+		A_IMAGE     { set idx_a $i }
+		B_IMAGE     { set idx_b $i }
+		THETA_IMAGE { set idx_theta $i }
+		ISO_RADIUS  { set idx_ir $i }
+	    }
+	}
+
+	# Find the matching line
+	for {set i 1} {$i < [llength $lines]} {incr i} {
+	    set line [lindex $lines $i]
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line "\t"]
+	    set num_val [string trim [lindex $fields $idx_num]]
+	    if {$num_val eq $src_num} {
+		set x [string trim [lindex $fields $idx_x]]
+		set y [string trim [lindex $fields $idx_y]]
+
+		# Get ellipse params
+		set iso_radius 5.0
+		set a_image 0
+		set b_image 0
+		set theta 0
+		if {$idx_ir >= 0} {
+		    set val [string trim [lindex $fields $idx_ir]]
+		    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+			set iso_radius $v
+		    }
+		}
+		if {$idx_a >= 0} {
+		    set val [string trim [lindex $fields $idx_a]]
+		    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+		}
+		if {$idx_b >= 0} {
+		    set val [string trim [lindex $fields $idx_b]]
+		    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+		}
+		if {$idx_theta >= 0} {
+		    set val [string trim [lindex $fields $idx_theta]]
+		    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
+		}
+
+		set semi_a $iso_radius
+		set semi_b $iso_radius
+		if {$a_image > 0 && $b_image > 0} {
+		    set semi_b [expr {$iso_radius * $b_image / $a_image}]
+		}
+
+		# Create red thick merge marker
+		global sextract_merge_reg
+		set sextract_merge_reg "image\nellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=red width=3 tag={sextract_merge} tag={sextract_merge.$src_num} select=0 edit=0 move=0 rotate=0 delete=1\n"
+		catch {$frame marker catalog command ds9 var sextract_merge_reg}
+		break
+	    }
+	}
+    }
+
+    set catpanel(merge,active) 1
+    set n [llength $catpanel(merge,list)]
+    if {$n == 0} {
+	set catpanel(merge,active) 0
+	set catpanel(status) "Merge selection cleared"
+    } else {
+	set catpanel(status) "Merge: $n sources selected (Ctrl+M to merge, Esc to cancel)"
+    }
+}
+
+proc CatalogPanelMergeSources {} {
+    global catpanel
+    global current
+
+    if {!$catpanel(merge,active)} return
+    if {[llength $catpanel(merge,list)] < 2} {
+	set catpanel(status) "Need at least 2 sources to merge"
+	return
+    }
+
+    # Parse alldata
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+    set ncols [llength $headers]
+
+    # Find column indices
+    set idx_num -1
+    set idx_x -1
+    set idx_y -1
+    set idx_a -1
+    set idx_b -1
+    set idx_theta -1
+    set idx_ir -1
+    set idx_flux -1
+    set idx_mag -1
+    set idx_npix -1
+    for {set i 0} {$i < $ncols} {incr i} {
+	set h [string trim [lindex $headers $i]]
+	switch -- $h {
+	    NUMBER      { set idx_num $i }
+	    X_IMAGE     { set idx_x $i }
+	    Y_IMAGE     { set idx_y $i }
+	    A_IMAGE     { set idx_a $i }
+	    B_IMAGE     { set idx_b $i }
+	    THETA_IMAGE { set idx_theta $i }
+	    ISO_RADIUS  { set idx_ir $i }
+	    FLUX_AUTO   { set idx_flux $i }
+	    MAG_AUTO    { set idx_mag $i }
+	    NPIX_ISO    { set idx_npix $i }
+	}
+    }
+
+    # Collect data for merge sources and find brightest
+    set merge_rows {}
+    set other_rows {}
+    set max_number 0
+    set brightest_idx -1
+    set brightest_flux -1e30
+
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+	set num_val [string trim [lindex $fields $idx_num]]
+
+	# Track max NUMBER
+	if {[string is integer -strict $num_val] && $num_val > $max_number} {
+	    set max_number $num_val
+	}
+
+	if {[lsearch -exact $catpanel(merge,list) $num_val] >= 0} {
+	    lappend merge_rows $fields
+	    if {$idx_flux >= 0} {
+		set fval [string trim [lindex $fields $idx_flux]]
+		if {[string is double -strict $fval] && $fval > $brightest_flux} {
+		    set brightest_flux $fval
+		    set brightest_idx [expr {[llength $merge_rows] - 1}]
+		}
+	    }
+	} else {
+	    lappend other_rows $line
+	}
+    }
+
+    if {[llength $merge_rows] < 2} {
+	set catpanel(status) "Merge error: sources not found in catalog"
+	return
+    }
+
+    if {$brightest_idx < 0} { set brightest_idx 0 }
+    set new_num [expr {$max_number + 1}]
+
+    # Compute merged values
+    # Flux-weighted centroid for X,Y
+    set total_flux 0.0
+    set wx 0.0
+    set wy 0.0
+    set total_npix 0
+    set wa 0.0
+    set wb 0.0
+    set wtheta 0.0
+
+    foreach row $merge_rows {
+	set flux 1.0
+	if {$idx_flux >= 0} {
+	    set fv [string trim [lindex $row $idx_flux]]
+	    if {[string is double -strict $fv] && $fv > 0} { set flux $fv }
+	}
+	set x [string trim [lindex $row $idx_x]]
+	set y [string trim [lindex $row $idx_y]]
+	if {![string is double -strict $x]} { set x 0 }
+	if {![string is double -strict $y]} { set y 0 }
+
+	set total_flux [expr {$total_flux + $flux}]
+	set wx [expr {$wx + $x * $flux}]
+	set wy [expr {$wy + $y * $flux}]
+
+	if {$idx_npix >= 0} {
+	    set nv [string trim [lindex $row $idx_npix]]
+	    if {[string is integer -strict $nv]} {
+		set total_npix [expr {$total_npix + $nv}]
+	    }
+	}
+	if {$idx_a >= 0} {
+	    set av [string trim [lindex $row $idx_a]]
+	    if {[string is double -strict $av]} {
+		set wa [expr {$wa + $av * $flux}]
+	    }
+	}
+	if {$idx_b >= 0} {
+	    set bv [string trim [lindex $row $idx_b]]
+	    if {[string is double -strict $bv]} {
+		set wb [expr {$wb + $bv * $flux}]
+	    }
+	}
+	if {$idx_theta >= 0} {
+	    set tv [string trim [lindex $row $idx_theta]]
+	    if {[string is double -strict $tv]} {
+		set wtheta [expr {$wtheta + $tv * $flux}]
+	    }
+	}
+    }
+
+    if {$total_flux <= 0} { set total_flux 1.0 }
+
+    set new_x [expr {$wx / $total_flux}]
+    set new_y [expr {$wy / $total_flux}]
+    set new_a [expr {$wa / $total_flux}]
+    set new_b [expr {$wb / $total_flux}]
+    set new_theta [expr {$wtheta / $total_flux}]
+
+    # MAG_AUTO from total flux
+    set mag_zp 25.0
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	set mag_zp $catpanel(param,mag-zeropoint)
+    }
+    set new_mag [expr {-2.5 * log10($total_flux) + $mag_zp}]
+
+    # ISO_RADIUS from total NPIX
+    set new_ir 5.0
+    if {$total_npix > 0 && $new_a > 0 && $new_b > 0} {
+	set ratio [expr {$new_b / $new_a}]
+	if {$ratio <= 0} { set ratio 1.0 }
+	set new_ir [expr {sqrt($total_npix / (3.14159265 * $ratio))}]
+    }
+
+    # Build merged row: copy from brightest, override computed fields
+    set base_row [lindex $merge_rows $brightest_idx]
+    set new_fields {}
+    for {set c 0} {$c < $ncols} {incr c} {
+	set val [string trim [lindex $base_row $c]]
+	if {$c == $idx_num} { set val $new_num }
+	if {$c == $idx_x} { set val [format "%.4f" $new_x] }
+	if {$c == $idx_y} { set val [format "%.4f" $new_y] }
+	if {$c == $idx_flux && $idx_flux >= 0} { set val [format "%.6g" $total_flux] }
+	if {$c == $idx_mag && $idx_mag >= 0} { set val [format "%.4f" $new_mag] }
+	if {$c == $idx_npix && $idx_npix >= 0} { set val $total_npix }
+	if {$c == $idx_ir && $idx_ir >= 0} { set val [format "%.4f" $new_ir] }
+	if {$c == $idx_a && $idx_a >= 0} { set val [format "%.4f" $new_a] }
+	if {$c == $idx_b && $idx_b >= 0} { set val [format "%.4f" $new_b] }
+	if {$c == $idx_theta && $idx_theta >= 0} { set val [format "%.4f" $new_theta] }
+	lappend new_fields $val
+    }
+    set new_line [join $new_fields "\t"]
+
+    # Rebuild alldata: header + other rows + merged row
+    set newdata $header
+    foreach row $other_rows {
+	append newdata "\n$row"
+    }
+    append newdata "\n$new_line"
+    set catpanel(alldata) $newdata
+
+    # Clear merge state
+    set nmerged [llength $catpanel(merge,list)]
+    set catpanel(merge,list) {}
+    set catpanel(merge,active) 0
+
+    # Delete merge markers
+    if {$current(frame) != {}} {
+	catch {$current(frame) marker catalog sextract_merge delete}
+    }
+
+    # Reload table and markers
+    CatalogPanelLoadTSV $catpanel(alldata) "merged"
+    CatalogPanelMarkAll
+
+    # Find merged source row and auto-select/navigate
+    global $catpanel(tbldb)
+    set ncols [$catpanel(tbl) cget -cols]
+    set nrows [$catpanel(tbl) cget -rows]
+    set col_num -1
+    for {set c 1} {$c <= $ncols} {incr c} {
+	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
+	    set hdr [set ${catpanel(tbldb)}(0,$c)]
+	    if {$hdr eq "NUMBER"} {
+		set col_num $c
+		break
+	    }
+	}
+    }
+    set merged_row -1
+    if {$col_num >= 0} {
+	for {set r 1} {$r < $nrows} {incr r} {
+	    if {[info exists ${catpanel(tbldb)}($r,$col_num)]} {
+		set val [set ${catpanel(tbldb)}($r,$col_num)]
+		if {$val eq $new_num} {
+		    set merged_row $r
+		    break
+		}
+	    }
+	}
+    }
+    if {$merged_row >= 0} {
+	$catpanel(tbl) selection set $merged_row,1
+	$catpanel(tbl) see $merged_row,1
+	CatalogPanelGotoSource $merged_row
+    }
+
+    set catpanel(status) "Merged $nmerged sources into #$new_num: pos=([format %.2f $new_x],[format %.2f $new_y]) mag=[format %.3f $new_mag]"
+}
+
+proc CatalogPanelMergeCancel {} {
+    global catpanel
+    global current
+
+    # Delete all merge markers
+    if {$current(frame) != {}} {
+	catch {$current(frame) marker catalog sextract_merge delete}
+    }
+
+    set catpanel(merge,list) {}
+    set catpanel(merge,active) 0
+    set catpanel(status) "Merge cancelled"
+}
+
+proc CatalogPanelEscapeKey {} {
+    global catpanel
+
+    if {$catpanel(merge,active)} {
+	CatalogPanelMergeCancel
+    }
+}
+
+# --- Column Header Click Sorting ---
+
+proc CatalogPanelTableClick {x y} {
+    global catpanel
+
+    set tbl $catpanel(tbl)
+    set idx [$tbl index @$x,$y]
+    set row [lindex [split $idx ,] 0]
+
+    # Only handle header row clicks
+    if {$row != 0} return
+
+    set col [lindex [split $idx ,] 1]
+
+    global $catpanel(tbldb)
+    if {![info exists ${catpanel(tbldb)}(0,$col)]} return
+    set colname [set ${catpanel(tbldb)}(0,$col)]
+
+    # Toggle direction if same column clicked again
+    if {$catpanel(sort,col) eq $colname} {
+	if {$catpanel(sort,dir) eq "ascending"} {
+	    set catpanel(sort,dir) descending
+	} else {
+	    set catpanel(sort,dir) ascending
+	}
+    } else {
+	set catpanel(sort,col) $colname
+	set catpanel(sort,dir) ascending
+    }
+
+    CatalogPanelSort $colname $catpanel(sort,dir)
+}
+
+proc CatalogPanelSort {colname direction} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+
+    # Find column index
+    set colidx -1
+    for {set i 0} {$i < [llength $headers]} {incr i} {
+	if {[string trim [lindex $headers $i]] eq $colname} {
+	    set colidx $i
+	    break
+	}
+    }
+    if {$colidx < 0} return
+
+    # Collect data rows (skip header and empty lines)
+    set datarows {}
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	lappend datarows $line
+    }
+
+    # Determine sort type: check first non-empty value
+    set isnumeric 1
+    foreach drow $datarows {
+	set val [string trim [lindex [split $drow "\t"] $colidx]]
+	if {$val ne {}} {
+	    if {![string is double -strict $val]} {
+		set isnumeric 0
+	    }
+	    break
+	}
+    }
+
+    # Sort
+    if {$isnumeric} {
+	set cmd [list CatalogPanelSortCmpNum $colidx]
+    } else {
+	set cmd [list CatalogPanelSortCmpStr $colidx]
+    }
+    if {$direction eq "descending"} {
+	set sortedrows [lsort -decreasing -command $cmd $datarows]
+    } else {
+	set sortedrows [lsort -command $cmd $datarows]
+    }
+
+    # Rebuild alldata with sorted rows
+    set newdata $header
+    foreach drow $sortedrows {
+	append newdata "\n$drow"
+    }
+    set catpanel(alldata) $newdata
+
+    # Reload table
+    CatalogPanelLoadTSV $catpanel(alldata) "sorted"
+
+    set catpanel(status) "Sorted by $colname $direction"
+}
+
+proc CatalogPanelSortCmpNum {colidx a b} {
+    set va [string trim [lindex [split $a "\t"] $colidx]]
+    set vb [string trim [lindex [split $b "\t"] $colidx]]
+    if {![string is double -strict $va]} { set va 0 }
+    if {![string is double -strict $vb]} { set vb 0 }
+    if {$va < $vb} { return -1 }
+    if {$va > $vb} { return 1 }
+    return 0
+}
+
+proc CatalogPanelSortCmpStr {colidx a b} {
+    set va [string trim [lindex [split $a "\t"] $colidx]]
+    set vb [string trim [lindex [split $b "\t"] $colidx]]
+    return [string compare $va $vb]
+}
+
+# --- Trim Filter (Feature D) ---
+
+proc CatalogPanelTrimDialog {} {
+    global catpanel
+    global ed
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog data to trim"
+	return
+    }
+
+    set w {.sextracttrim}
+
+    set ed(ok) 0
+
+    # Get column names from alldata header
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+    set ncols [llength $headers]
+
+    set ed(trim,cols) {}
+    for {set i 0} {$i < $ncols} {incr i} {
+	set colname [string trim [lindex $headers $i]]
+	lappend ed(trim,cols) $colname
+	# Initialize from existing trim values or empty
+	if {[info exists catpanel(trim,$colname,min)]} {
+	    set ed(trim,$colname,min) $catpanel(trim,$colname,min)
+	} else {
+	    set ed(trim,$colname,min) {}
+	}
+	if {[info exists catpanel(trim,$colname,max)]} {
+	    set ed(trim,$colname,max) $catpanel(trim,$colname,max)
+	} else {
+	    set ed(trim,$colname,max) {}
+	}
+    }
+
+    DialogCreate $w {Trim - Column Filter} ed(ok)
+
+    # Scrollable frame for columns
+    set sf [ttk::frame $w.param]
+    set canvas_w [canvas $sf.c -width 400 -height 300 \
+		      -yscrollcommand [list $sf.vs set]]
+    ttk::scrollbar $sf.vs -orient vertical -command [list $canvas_w yview]
+    set inner [ttk::frame $canvas_w.inner]
+    $canvas_w create window 0 0 -anchor nw -window $inner
+
+    # Header labels
+    ttk::label $inner.hcol -text "Column" -font {Helvetica 10 bold} -width 15
+    ttk::label $inner.hmin -text "Min" -font {Helvetica 10 bold} -width 12
+    ttk::label $inner.htilde -text "" -width 2
+    ttk::label $inner.hmax -text "Max" -font {Helvetica 10 bold} -width 12
+    grid $inner.hcol $inner.hmin $inner.htilde $inner.hmax \
+	-padx 2 -pady 2 -sticky w
+
+    set row 1
+    foreach colname $ed(trim,cols) {
+	ttk::label $inner.l$row -text "$colname:" -anchor w -width 15
+	ttk::entry $inner.emin$row -textvariable ed(trim,$colname,min) -width 12
+	ttk::label $inner.tilde$row -text "~" -width 2
+	ttk::entry $inner.emax$row -textvariable ed(trim,$colname,max) -width 12
+	grid $inner.l$row $inner.emin$row $inner.tilde$row $inner.emax$row \
+	    -padx 2 -pady 1 -sticky w
+	incr row
+    }
+
+    # Update scroll region after layout
+    bind $inner <Configure> [list $canvas_w configure -scrollregion \
+				 [$canvas_w bbox all]]
+
+    pack $canvas_w -side left -fill both -expand true
+    pack $sf.vs -side right -fill y
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    ttk::button $bf.ok -text {Apply} -command {set ed(ok) 1} -default active
+    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
+    ttk::button $bf.reset -text {Reset} -command {
+	foreach col $ed(trim,cols) {
+	    set ed(trim,$col,min) {}
+	    set ed(trim,$col,max) {}
+	}
+    }
+    ttk::button $bf.save -text {Save} -command {
+	CatalogPanelTrimSaveFromEd
+    }
+    ttk::button $bf.load -text {Load} -command {
+	CatalogPanelTrimLoadToEd
+    }
+    pack $bf.ok $bf.cancel $bf.reset $bf.save $bf.load \
+	-side left -expand true -padx 2 -pady 4
+
+    bind $w <Return> {set ed(ok) 1}
+
+    # Fini
+    ttk::separator $w.sep -orient horizontal
+    pack $w.buttons $w.sep -side bottom -fill x
+    pack $w.param -side top -fill both -expand true
+
+    DialogWait $w ed(ok)
+    destroy $w
+
+    if {$ed(ok)} {
+	# Copy trim values from ed to catpanel
+	foreach colname $ed(trim,cols) {
+	    set catpanel(trim,$colname,min) $ed(trim,$colname,min)
+	    set catpanel(trim,$colname,max) $ed(trim,$colname,max)
+	}
+	CatalogPanelTrimApply
+    }
+
+    unset ed
+}
+
+proc CatalogPanelTrimSaveFromEd {} {
+    global ed
+
+    set prefdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $prefdir]} {
+	file mkdir $prefdir
+    }
+    set preffile [file join $prefdir sextract_trim.prf]
+    if {[catch {set fd [open $preffile w]} err]} return
+
+    foreach colname $ed(trim,cols) {
+	puts $fd "$colname\t$ed(trim,$colname,min)\t$ed(trim,$colname,max)"
+    }
+    close $fd
+}
+
+proc CatalogPanelTrimLoadToEd {} {
+    global ed
+
+    set preffile [file join [file normalize ~] .ds9 sextract_trim.prf]
+    if {![file exists $preffile]} return
+    if {[catch {set fd [open $preffile r]} err]} return
+
+    while {[gets $fd line] >= 0} {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set parts [split $line "\t"]
+	if {[llength $parts] >= 3} {
+	    set colname [lindex $parts 0]
+	    set minval [lindex $parts 1]
+	    set maxval [lindex $parts 2]
+	    if {[lsearch -exact $ed(trim,cols) $colname] >= 0} {
+		set ed(trim,$colname,min) $minval
+		set ed(trim,$colname,max) $maxval
+	    }
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelTrimApply {} {
+    global catpanel
+    global current
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+    set ncols [llength $headers]
+
+    # Build list of active trim conditions
+    set conditions {}
+    for {set i 0} {$i < $ncols} {incr i} {
+	set colname [string trim [lindex $headers $i]]
+	set has_min 0
+	set has_max 0
+	set minval 0
+	set maxval 0
+	if {[info exists catpanel(trim,$colname,min)] && $catpanel(trim,$colname,min) ne {}} {
+	    if {[string is double -strict $catpanel(trim,$colname,min)]} {
+		set has_min 1
+		set minval $catpanel(trim,$colname,min)
+	    }
+	}
+	if {[info exists catpanel(trim,$colname,max)] && $catpanel(trim,$colname,max) ne {}} {
+	    if {[string is double -strict $catpanel(trim,$colname,max)]} {
+		set has_max 1
+		set maxval $catpanel(trim,$colname,max)
+	    }
+	}
+	if {$has_min || $has_max} {
+	    lappend conditions [list $i $has_min $minval $has_max $maxval]
+	}
+    }
+
+    # If no conditions, show all
+    if {[llength $conditions] == 0} {
+	set catpanel(trim,active) 0
+	CatalogPanelLoadTSV $catpanel(alldata) "all"
+	set catpanel(status) "Trim cleared - showing all sources"
+	return
+    }
+
+    # Filter rows
+    set filtered $header
+    set count 0
+    set total 0
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	incr total
+	set fields [split $line "\t"]
+	set pass 1
+
+	foreach cond $conditions {
+	    set cidx [lindex $cond 0]
+	    set has_min [lindex $cond 1]
+	    set minval [lindex $cond 2]
+	    set has_max [lindex $cond 3]
+	    set maxval [lindex $cond 4]
+
+	    set val [string trim [lindex $fields $cidx]]
+	    if {![string is double -strict $val]} {
+		set pass 0
+		break
+	    }
+	    if {$has_min && $val < $minval} {
+		set pass 0
+		break
+	    }
+	    if {$has_max && $val > $maxval} {
+		set pass 0
+		break
+	    }
+	}
+
+	if {$pass} {
+	    append filtered "\n$line"
+	    incr count
+	}
+    }
+
+    set catpanel(trim,active) 1
+    CatalogPanelLoadTSV $filtered "trimmed"
+
+    # Re-mark if markers were present
+    if {$current(frame) != {}} {
+	catch {$current(frame) marker catalog sextract_all delete}
+    }
+    CatalogPanelMarkAll
+
+    set catpanel(status) "Trimmed: $count of $total sources match conditions"
+}
+
+proc CatalogPanelTrimSave {} {
+    global catpanel
+
+    set prefdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $prefdir]} {
+	file mkdir $prefdir
+    }
+    set preffile [file join $prefdir sextract_trim.prf]
+    if {[catch {set fd [open $preffile w]} err]} return
+
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+    foreach h $headers {
+	set colname [string trim $h]
+	set minval {}
+	set maxval {}
+	if {[info exists catpanel(trim,$colname,min)]} {
+	    set minval $catpanel(trim,$colname,min)
+	}
+	if {[info exists catpanel(trim,$colname,max)]} {
+	    set maxval $catpanel(trim,$colname,max)
+	}
+	puts $fd "$colname\t$minval\t$maxval"
+    }
+    close $fd
+}
+
+proc CatalogPanelTrimLoad {} {
+    global catpanel
+
+    set preffile [file join [file normalize ~] .ds9 sextract_trim.prf]
+    if {![file exists $preffile]} return
+    if {[catch {set fd [open $preffile r]} err]} return
+
+    while {[gets $fd line] >= 0} {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set parts [split $line "\t"]
+	if {[llength $parts] >= 3} {
+	    set colname [lindex $parts 0]
+	    set catpanel(trim,$colname,min) [lindex $parts 1]
+	    set catpanel(trim,$colname,max) [lindex $parts 2]
+	}
+    }
+    close $fd
+}
+
 proc ThemeConfigCanvas {w} {
     global ds9
-    
+
     $w configure -bg [ThemeTreeBackground]
 
     $w itemconfigure colorbar -fg [ThemeTreeForeground]
@@ -199,7 +1884,7 @@ proc BindEventsCanvas {} {
     bind $ds9(canvas) <Tab> [list NextFrame]
     bind $ds9(canvas) <Shift-Tab> [list PrevFrame]
     switch $ds9(wm) {
-	x11 {bind $ds9(canvas) <ISO_Left_Tab> [list PrevFrame]} 
+	x11 {bind $ds9(canvas) <ISO_Left_Tab> [list PrevFrame]}
 	aqua -
 	win32 {}
     }
@@ -231,7 +1916,7 @@ proc BindEventsCanvas {} {
 	    bind $ds9(canvas) <Button-3> {Button3Canvas %x %y}
 	    bind $ds9(canvas) <B3-Motion> {Motion3Canvas %x %y}
 	    bind $ds9(canvas) <ButtonRelease-3> {Release3Canvas %x %y}
-	} 
+	}
 	aqua {
 	    # swap button-2 and button-3 on the mighty mouse
 	    bind $ds9(canvas) <Button-2> {Button3Canvas %x %y}
@@ -285,7 +1970,7 @@ proc UnBindEventsCanvas {} {
 	    bind $ds9(canvas) <Button-3> {}
 	    bind $ds9(canvas) <B3-Motion> {}
 	    bind $ds9(canvas) <ButtonRelease-3> {}
-	} 
+	}
 	aqua {
 	    # swap button-2 and button-3 on the mighty mouse
 	    bind $ds9(canvas) <Button-2> {}
@@ -579,7 +2264,7 @@ proc LayoutViewAdvanced {} {
 	grid $ds9(icons,bottom,sep) -row 3 -column 0 -sticky ew -columnspan 7
 	grid $ds9(icons,bottom) -row 4 -column 0 -sticky ew -columnspan 7
     }
-    
+
     # image
     grid $ds9(image) -row 2 -column 2 -sticky news
 }
@@ -590,7 +2275,7 @@ proc LayoutFrames {} {
     global tile
     global view
     global colorbar
-    
+
     # turn off default colorbar
     colorbar hide
 
@@ -643,7 +2328,7 @@ proc LayoutFramesNone {} {
     global current
     global colorbar
     global view
-    
+
     set current(frame) {}
     set current(colorbar) colorbar
 
@@ -668,7 +2353,7 @@ proc LayoutFramesNone {} {
 #	    $ds9(canvas) raise colorbar
 	}
     }
-    
+
     # graphs
     if {$view(graph,horz)} {
 	LayoutGraphHorz graph 0 0 \
@@ -904,11 +2589,11 @@ proc TileRectNone {numx numy} {
     global current
     global view
     global colorbar
-    
+
     set fw [winfo width $ds9(canvas)]
     set fh [winfo height $ds9(canvas)]
     LayoutFrameAdjust fw fh
-    
+
     set ww [expr int(($fw-($tile(grid,gap)*($numx-1)))/$numx)]
     set hh [expr int(($fh-($tile(grid,gap)*($numy-1)))/$numy)]
 
@@ -950,13 +2635,13 @@ proc TileRectNone {numx numy} {
 	    LayoutColorbar ${ff}cb 0 0 \
 		[winfo width $ds9(canvas)] [winfo height $ds9(canvas)]
 	}
-	
+
 	if {$view(graph,horz)} {
 	    LayoutGraphHorz $ff 0 0 \
 		[winfo width $ds9(canvas)] [winfo height $ds9(canvas)]
 	    UpdateGraphAxis $ff horz
 	}
-	
+
 	if {$view(graph,vert)} {
 	    LayoutGraphVert $ff 0 0 \
 		[winfo width $ds9(canvas)] [winfo height $ds9(canvas)]
@@ -1103,7 +2788,7 @@ proc LayoutChangeWidth {ww} {
 
 proc LayoutChangeHeight {hh} {
     global ds9
-    
+
     set ch [winfo height $ds9(canvas)]
     set tw [winfo width $ds9(top)]
     set th [winfo height $ds9(top)]
@@ -1116,7 +2801,7 @@ proc LayoutChangeHeight {hh} {
 
 proc LayoutChangeSize {ww hh} {
     global ds9
-    
+
     set cw [winfo width $ds9(canvas)]
     set ch [winfo height $ds9(canvas)]
     set tw [winfo width $ds9(top)]
@@ -1150,7 +2835,7 @@ proc DisplayDefaultDialog {} {
     ttk::entry $f.y -textvariable ed(y) -width 10
     ttk::label $f.xunit -text [msgcat::mc {Pixels}]
     ttk::label $f.yunit -text [msgcat::mc {Pixels}]
-    
+
     grid $f.xTitle $f.x $f.xunit -padx 2 -pady 2 -sticky w
     grid $f.yTitle $f.y $f.yunit -padx 2 -pady 2 -sticky w
 

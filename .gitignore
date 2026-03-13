@@ -1,0 +1,108 @@
+# Build artifacts
+Makefile
+config.cache
+config.log
+config.status
+
+# Build output directories
+bin/
+lib/
+include/
+share/
+man/
+docs/
+
+# Object files and libraries
+*.o
+*.lo
+*.la
+*.a
+*.so
+*.dylib
+*.libs/
+*.deps/
+.dirstamp
+
+# Build subdirectory artifacts
+ast/config.h
+ast/config.h.in~
+ast/config.log
+ast/config.status
+ast/ast.h
+ast/ast_cpp
+ast/ast_link
+ast/ast_link_adam
+ast/libtool
+ast/component.xml
+ast/autom4te.cache/
+ast/src/f77.h
+
+# ds9 build
+ds9/unix/Makefile
+ds9/unix/config.log
+ds9/unix/config.status
+ds9/unix/ds9
+ds9/unix/ds9.o
+ds9/unix/ds9.zip
+ds9/unix/ds9base
+ds9/unix/mntpt/
+
+# Source extractor source (can re-download)
+ds9/library/ds9_sextract.c
+ds9/library/ds9_sextract.py
+
+# Various build configs
+funtools/filter/conf.h
+funtools/fitsy/conf.h
+funtools/wcs/conf.h
+funtools/conf.h
+funtools/funtest/conf.h
+funtools/funtools.pc
+funtools/gnu/conf.h
+funtools/util/conf.h
+fitsy/
+openssl/
+tcl8.6/
+tk8.6/
+tclzipfs/
+
+# Auto-generated package/config files
+**/pkgIndex.tcl
+**/*Config.sh
+**/conf.h
+**/stamp-h1
+
+# Build-generated source files
+ast/src/object.h
+ds9/unix/tkAppInit.c
+tkimg/bmp/init.c
+tkimg/dted/init.c
+tkimg/**/init.c
+tkimg/**/__pycache__/
+tkimg/base/tkimgUuid.h
+
+# tksao build artifacts
+tksao/**/Makefile
+tksao/**/config.log
+tksao/**/config.status
+tls/
+vector/
+
+# tkimg build artifacts
+tkimg/libjpeg/libjpeg/jconfig.h
+tkimg/libjpeg/libjpeg/libjpeg.pc
+tkimg/libjpeg/libjpeg/libtool
+tkimg/libpng/pnglibconf.h
+tkimg/libtiff/config/config.h
+tkimg/libtiff/libtiff-4.pc
+tkimg/libtiff/libtiff/stamp-h*
+tkimg/libtiff/libtiff/tif_config.h
+tkimg/libtiff/libtiff/tiffconf.h
+tkimg/libtiff/libtiff/tiffvers.h
+tkimg/libtiff/libtool
+tkimg/libtiff/port/libport_config.h
+tkimg/libtiff/port/stamp-h*
+
+# tktable build artifacts
+tktable/tkTable.tcl.h
+tktable/tkTableUuid.h

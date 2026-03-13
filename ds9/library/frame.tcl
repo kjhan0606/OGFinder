@@ -840,8 +840,10 @@ proc Button1Frame {which x y} {
     switch -- $current(mode) {
 	none {
 	    if {$which == $current(frame)} {
+		# Check for sextract catalog marker click
+		CatalogPanelMarkerClick $which $x $y
 	    } else {
-		# we need this cause MarkerMotion maybe called, 
+		# we need this cause MarkerMotion maybe called,
 		# and we don't want it
 		set imarker(motion) none
 		set imarker(handle) -1
@@ -982,7 +984,12 @@ proc ControlButton1Frame {which x y} {
     set ds9(cb1) 1
 
     switch -- $current(mode) {
-	none {}
+	none {
+	    if {$which == $current(frame)} {
+		# Check for sextract catalog marker Ctrl+click
+		CatalogPanelMarkerCtrlClick $which $x $y
+	    }
+	}
 	pointer -
 	region {
 	    if {$which == $current(frame)} {
@@ -991,7 +998,7 @@ proc ControlButton1Frame {which x y} {
 		    MarkerCreate $which $x $y
 		}
 	    } else {
-		# we need this cause MarkerMotion maybe called, 
+		# we need this cause MarkerMotion maybe called,
 		# and we don't want it
 		set imarker(motion) none
 		set imarker(handle) -1
