@@ -180,6 +180,8 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelShowVisible -width 8
     ttk::button $f.titlebar.trim -text "Trim..." \
 	-command CatalogPanelTrimDialog -width 6
+    ttk::button $f.titlebar.aimerge -text "AI Merge" \
+	-command CatalogPanelAIMerge -width 9
     ttk::button $f.titlebar.save -text "Save" \
 	-command CatalogPanelSaveCatalog -width 6
     ttk::button $f.titlebar.load -text "Load" \
@@ -190,6 +192,7 @@ proc CreateCatalogPanel {} {
     pack $f.titlebar.clear -side right -padx 2 -pady 2
     pack $f.titlebar.load -side right -padx 2 -pady 2
     pack $f.titlebar.save -side right -padx 2 -pady 2
+    pack $f.titlebar.aimerge -side right -padx 2 -pady 2
     pack $f.titlebar.trim -side right -padx 2 -pady 2
     pack $f.titlebar.visible -side right -padx 2 -pady 2
     pack $f.titlebar.markall -side right -padx 2 -pady 2
@@ -284,6 +287,13 @@ proc CreateCatalogPanel {} {
 
     # Feature D: trim state
     set catpanel(trim,active) 0
+
+    # AI Merge state
+    set catpanel(ai,groups) {}
+    set catpanel(ai,current) 0
+    set catpanel(ai,total) 0
+    set catpanel(ai,threshold) 0.7
+    set catpanel(ai,active) 0
 
     # Ctrl key tracking (Feature A/C)
     set ::catpanel_ctrl 0
@@ -486,6 +496,16 @@ proc CatalogPanelClear {} {
 
     # Reset trim state
     set catpanel(trim,active) 0
+
+    # Reset AI merge state
+    if {$current(frame) != {}} {
+	catch {$current(frame) marker catalog ai_merge delete}
+    }
+    set catpanel(ai,groups) {}
+    set catpanel(ai,active) 0
+    set catpanel(ai,total) 0
+    set catpanel(ai,current) 0
+    CatalogPanelAIUnbindKeys
 }
 
 proc CatalogPanelSaveCatalog {} {
@@ -1593,9 +1613,399 @@ proc CatalogPanelMergeCancel {} {
 proc CatalogPanelEscapeKey {} {
     global catpanel
 
+    if {$catpanel(ai,active)} {
+	CatalogPanelAIDone
+	return
+    }
     if {$catpanel(merge,active)} {
 	CatalogPanelMergeCancel
     }
+}
+
+# --- AI Merge ---
+
+proc CatalogPanelAIMerge {} {
+    global catpanel
+    global current
+    global ds9
+
+    # Need extracted catalog first
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first before AI Merge"
+	return
+    }
+
+    # Get current FITS filename (same pattern as CatalogPanelExtract)
+    set fn {}
+    if {$current(frame) != {}} {
+	catch {set fn [$current(frame) get fits file name full]}
+    }
+    set fn [string trim $fn "{}"]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    # Find ds9_ai_merge.py
+    set bindir [file dirname [info nameofexecutable]]
+    set script [file join $bindir ds9_ai_merge.py]
+    if {![file exists $script]} {
+	# Also check library dir
+	set libdir [file join [file dirname $bindir] ds9 library]
+	set script [file join $libdir ds9_ai_merge.py]
+    }
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_ai_merge.py not found"
+	return
+    }
+
+    # Build parameter arguments
+    set paramargs {}
+    lappend paramargs "--threshold" $catpanel(ai,threshold)
+    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		   mag-zeropoint back-size back-filtersize} {
+	if {[info exists catpanel(param,$pname)]} {
+	    lappend paramargs "--$pname" $catpanel(param,$pname)
+	}
+    }
+
+    # Find checkpoint
+    set ckpt [file join [file dirname $bindir] ai_merge data checkpoints mlp_best.pt]
+    if {[file exists $ckpt]} {
+	lappend paramargs "--checkpoint" $ckpt
+    }
+
+    set catpanel(status) "AI Merge: running prediction on [file tail $fn] ..."
+    update idletasks
+
+    # Run prediction
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>@stderr]} err]} {
+	set catpanel(status) "AI Merge error: $err"
+	return
+    }
+
+    # Parse output
+    set lines [split $data \n]
+    set groups {}
+    set n_groups 0
+    set threshold 0.70
+
+    foreach line $lines {
+	if {[string match "#AI_MERGE*" $line]} {
+	    # Parse header: #AI_MERGE	N_GROUPS=5	THRESHOLD=0.70
+	    foreach field [split $line "\t"] {
+		if {[string match "N_GROUPS=*" $field]} {
+		    set n_groups [string range $field 9 end]
+		}
+		if {[string match "THRESHOLD=*" $field]} {
+		    set threshold [string range $field 10 end]
+		}
+	    }
+	    continue
+	}
+	if {[string match "GROUP*" $line] && [string match "*MEMBERS_X*" $line]} {
+	    # Skip column header
+	    continue
+	}
+	if {[string trim $line] eq {}} continue
+
+	# Data row: GROUP	N_MEMBERS	CONFIDENCE	MEMBERS_X	MEMBERS_Y
+	set fields [split $line "\t"]
+	if {[llength $fields] < 5} continue
+	set g_idx [lindex $fields 0]
+	set n_mem [lindex $fields 1]
+	set conf  [lindex $fields 2]
+	set mem_x [lindex $fields 3]
+	set mem_y [lindex $fields 4]
+	lappend groups [list $g_idx $n_mem $conf $mem_x $mem_y]
+    }
+
+    if {[llength $groups] == 0} {
+	set catpanel(status) "AI Merge: no merge groups found (threshold=$threshold)"
+	return
+    }
+
+    # Store state
+    set catpanel(ai,groups) $groups
+    set catpanel(ai,total) [llength $groups]
+    set catpanel(ai,current) 0
+    set catpanel(ai,active) 1
+
+    # Bind navigation keys
+    CatalogPanelAIBindKeys
+
+    # Show first group
+    CatalogPanelAIShowGroup 0
+}
+
+proc CatalogPanelAIBindKeys {} {
+    bind . <Key-n> {CatalogPanelAINext}
+    bind . <Key-p> {CatalogPanelAIPrev}
+    bind . <Key-a> {CatalogPanelAIAccept}
+    bind . <Key-r> {CatalogPanelAIReject}
+    bind . <Right> {CatalogPanelAINext}
+    bind . <Left>  {CatalogPanelAIPrev}
+}
+
+proc CatalogPanelAIUnbindKeys {} {
+    bind . <Key-n> {}
+    bind . <Key-p> {}
+    bind . <Key-a> {}
+    bind . <Key-r> {}
+    bind . <Right> {}
+    bind . <Left>  {}
+}
+
+proc CatalogPanelAIShowGroup {idx} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    set frame $current(frame)
+
+    # Delete previous ai_merge markers
+    catch {$frame marker catalog ai_merge delete}
+
+    set groups $catpanel(ai,groups)
+    if {$idx < 0 || $idx >= [llength $groups]} return
+
+    set catpanel(ai,current) $idx
+    set group [lindex $groups $idx]
+
+    # Parse group: {g_idx n_mem conf mem_x mem_y}
+    set n_mem [lindex $group 1]
+    set conf  [lindex $group 2]
+    set xs_str [lindex $group 3]
+    set ys_str [lindex $group 4]
+    set xs [split $xs_str ","]
+    set ys [split $ys_str ","]
+
+    if {[llength $xs] < 2 || [llength $xs] != [llength $ys]} return
+
+    # Match each AI coordinate to catalog NUMBER
+    set matched_nums {}
+    set matched_xs {}
+    set matched_ys {}
+    for {set m 0} {$m < [llength $xs]} {incr m} {
+	set ax [lindex $xs $m]
+	set ay [lindex $ys $m]
+	set num [CatalogPanelAIMatchSource $ax $ay]
+	lappend matched_nums $num
+	lappend matched_xs $ax
+	lappend matched_ys $ay
+    }
+
+    # Draw markers for each member
+    set color magenta
+    set reg "image\n"
+    for {set m 0} {$m < [llength $matched_xs]} {incr m} {
+	set mx [lindex $matched_xs $m]
+	set my [lindex $matched_ys $m]
+	# Draw circle marker for each member
+	append reg "circle($mx,$my,8) # color=$color width=3 tag={ai_merge}\n"
+    }
+
+    # Draw connecting lines between all pairs
+    for {set a 0} {$a < [llength $matched_xs]} {incr a} {
+	for {set b [expr {$a + 1}]} {$b < [llength $matched_xs]} {incr b} {
+	    set x1 [lindex $matched_xs $a]
+	    set y1 [lindex $matched_ys $a]
+	    set x2 [lindex $matched_xs $b]
+	    set y2 [lindex $matched_ys $b]
+	    append reg "line($x1,$y1,$x2,$y2) # color=$color width=1 dash=1 tag={ai_merge}\n"
+	}
+    }
+
+    # Create markers
+    global ai_merge_reg
+    set ai_merge_reg $reg
+    $frame marker catalog command ds9 var ai_merge_reg
+
+    # Pan to group center
+    set cx 0.0
+    set cy 0.0
+    foreach mx $matched_xs my $matched_ys {
+	set cx [expr {$cx + $mx}]
+	set cy [expr {$cy + $my}]
+    }
+    set nm [llength $matched_xs]
+    set cx [expr {$cx / $nm}]
+    set cy [expr {$cy / $nm}]
+    PanTo $cx $cy image
+
+    # Status bar
+    set g_num [expr {$idx + 1}]
+    set total $catpanel(ai,total)
+    set num_str [join $matched_nums ","]
+    set catpanel(status) "AI Group $g_num/$total (conf=[format %.2f $conf], ${n_mem} sources: $num_str) \[n:Next p:Prev a:Accept r:Reject Esc:Done\]"
+}
+
+proc CatalogPanelAIMatchSource {ai_x ai_y} {
+    global catpanel
+
+    # Search catpanel(alldata) for nearest source within 3px
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	return {}
+    }
+
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+
+    # Find column indices
+    set idx_num -1
+    set idx_x -1
+    set idx_y -1
+    for {set i 0} {$i < [llength $headers]} {incr i} {
+	set h [string trim [lindex $headers $i]]
+	switch -- $h {
+	    NUMBER  { set idx_num $i }
+	    X_IMAGE { set idx_x $i }
+	    Y_IMAGE { set idx_y $i }
+	}
+    }
+    if {$idx_x < 0 || $idx_y < 0} { return {} }
+
+    set best_num {}
+    set best_dist 3.0  ;# max 3px tolerance
+
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+	set sx [string trim [lindex $fields $idx_x]]
+	set sy [string trim [lindex $fields $idx_y]]
+	if {![string is double -strict $sx] || ![string is double -strict $sy]} continue
+
+	set dx [expr {$ai_x - $sx}]
+	set dy [expr {$ai_y - $sy}]
+	set dist [expr {sqrt($dx*$dx + $dy*$dy)}]
+	if {$dist < $best_dist} {
+	    set best_dist $dist
+	    if {$idx_num >= 0} {
+		set best_num [string trim [lindex $fields $idx_num]]
+	    } else {
+		set best_num $i
+	    }
+	}
+    }
+    return $best_num
+}
+
+proc CatalogPanelAINext {} {
+    global catpanel
+    if {!$catpanel(ai,active)} return
+    set next [expr {$catpanel(ai,current) + 1}]
+    if {$next >= $catpanel(ai,total)} {
+	set catpanel(status) "AI Merge: last group reached. Press Esc to finish."
+	return
+    }
+    CatalogPanelAIShowGroup $next
+}
+
+proc CatalogPanelAIPrev {} {
+    global catpanel
+    if {!$catpanel(ai,active)} return
+    set prev [expr {$catpanel(ai,current) - 1}]
+    if {$prev < 0} {
+	set catpanel(status) "AI Merge: already at first group."
+	return
+    }
+    CatalogPanelAIShowGroup $prev
+}
+
+proc CatalogPanelAIAccept {} {
+    global catpanel
+    global current
+    if {!$catpanel(ai,active)} return
+
+    set idx $catpanel(ai,current)
+    set groups $catpanel(ai,groups)
+    set group [lindex $groups $idx]
+
+    # Get member coordinates and match to NUMBERs
+    set xs_str [lindex $group 3]
+    set ys_str [lindex $group 4]
+    set xs [split $xs_str ","]
+    set ys [split $ys_str ","]
+
+    set merge_nums {}
+    for {set m 0} {$m < [llength $xs]} {incr m} {
+	set num [CatalogPanelAIMatchSource [lindex $xs $m] [lindex $ys $m]]
+	if {$num ne {}} {
+	    lappend merge_nums $num
+	}
+    }
+
+    if {[llength $merge_nums] < 2} {
+	set catpanel(status) "AI Accept: could not match enough sources"
+	return
+    }
+
+    # Delete AI markers before merge (merge will re-mark)
+    catch {$current(frame) marker catalog ai_merge delete}
+
+    # Set up merge and execute
+    set catpanel(merge,list) $merge_nums
+    set catpanel(merge,active) 1
+    CatalogPanelMergeSources
+
+    # Remove accepted group from list
+    set catpanel(ai,groups) [lreplace $groups $idx $idx]
+    set catpanel(ai,total) [llength $catpanel(ai,groups)]
+
+    # Advance to next (or stay at end)
+    if {$catpanel(ai,total) == 0} {
+	CatalogPanelAIDone
+	return
+    }
+    if {$idx >= $catpanel(ai,total)} {
+	set idx [expr {$catpanel(ai,total) - 1}]
+    }
+    CatalogPanelAIShowGroup $idx
+}
+
+proc CatalogPanelAIReject {} {
+    global catpanel
+    if {!$catpanel(ai,active)} return
+
+    set idx $catpanel(ai,current)
+    # Remove rejected group from list
+    set catpanel(ai,groups) [lreplace $catpanel(ai,groups) $idx $idx]
+    set catpanel(ai,total) [llength $catpanel(ai,groups)]
+
+    if {$catpanel(ai,total) == 0} {
+	CatalogPanelAIDone
+	return
+    }
+    if {$idx >= $catpanel(ai,total)} {
+	set idx [expr {$catpanel(ai,total) - 1}]
+    }
+    CatalogPanelAIShowGroup $idx
+}
+
+proc CatalogPanelAIDone {} {
+    global catpanel
+    global current
+
+    # Delete AI markers
+    if {$current(frame) != {}} {
+	catch {$current(frame) marker catalog ai_merge delete}
+    }
+
+    # Unbind navigation keys
+    CatalogPanelAIUnbindKeys
+
+    # Reset state
+    set catpanel(ai,groups) {}
+    set catpanel(ai,active) 0
+    set catpanel(ai,total) 0
+    set catpanel(ai,current) 0
+
+    # Re-mark all sources
+    CatalogPanelMarkAll
+
+    set catpanel(status) "AI Merge session ended"
 }
 
 # --- Column Header Click Sorting ---
