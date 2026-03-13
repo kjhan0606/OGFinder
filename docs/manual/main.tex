@@ -1,0 +1,1439 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% DS9 Integrated Source Extractor
+% Technical Reference Manual
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%----------------------------------------------------------------------------------------
+%    PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
+%----------------------------------------------------------------------------------------
+
+\documentclass[11pt,fleqn]{book}
+
+\usepackage[top=3cm,bottom=3cm,left=3.2cm,right=3.2cm,headsep=10pt,headheight=14pt,a4paper]{geometry}
+
+\usepackage{xcolor}
+\definecolor{ocre}{RGB}{52,177,201}
+
+% Font Settings
+\usepackage{avant}
+\usepackage{mathptmx}
+\usepackage{microtype}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Bibliography
+\usepackage[style=alphabetic,sorting=nyt,sortcites=true,autopunct=true,hyperref=true,abbreviate=false,backref=true,backend=biber]{biblatex}
+\addbibresource{bibliography.bib}
+\defbibheading{bibempty}{}
+
+\input{structure}
+
+%----------------------------------------------------------------------------------------
+%    Definitions of new commands
+%----------------------------------------------------------------------------------------
+
+\def\R{\mathbb{R}}
+\newcommand{\ds}{\texttt{ds9}}
+\newcommand{\sextract}{\texttt{ds9\_sextract}}
+\newcommand{\sep}{\texttt{SEP}}
+
+%------------------------------------------------------
+% Document
+%------------------------------------------------------
+\begin{document}
+
+%------------------------------------------------------
+% Title page
+%------------------------------------------------------
+\begin{titlepage}
+\begin{tikzpicture}[remember picture,overlay]
+  % Top colored area
+  \fill[ocre] (current page.north west) rectangle ([yshift=-9cm]current page.north east);
+  % Bottom accent strip
+  \fill[ocre!10] (current page.south west) rectangle ([yshift=2.5cm]current page.south east);
+  \draw[ocre,line width=1.5pt] ([yshift=2.5cm]current page.south west) -- ([yshift=2.5cm]current page.south east);
+\end{tikzpicture}
+
+\vspace*{1cm}
+
+\begin{center}
+{\fontsize{38}{46}\selectfont\sffamily\bfseries\color{white}DS9 Integrated}\\[0.5cm]
+{\fontsize{38}{46}\selectfont\sffamily\bfseries\color{white}Source Extractor}\\[1cm]
+{\fontsize{20}{24}\selectfont\sffamily\color{white!80}Technical Reference Manual}
+\end{center}
+
+\vspace{5cm}
+
+\begin{center}
+{\Large\sffamily
+SEP-Based Source Detection, Photometry,\\[8pt]
+and Catalog Management\\[8pt]
+Integrated into SAOImageDS9}
+
+\vspace{3cm}
+
+{\large\sffamily Juhan~Kim}\\[0.5cm]
+{\sffamily March 2026}
+\end{center}
+
+\vfill
+
+\begin{center}
+{\small\sffamily
+Based on SAOImageDS9 (Smithsonian Astrophysical Observatory)\\[3pt]
+and SEP --- Source Extraction and Photometry (Barbary et al.)}
+\end{center}
+\vspace{1cm}
+\end{titlepage}
+
+%------------------------------------------------------
+% Table of Contents
+%------------------------------------------------------
+
+\pagestyle{empty}
+\tableofcontents
+\pagestyle{fancy}
+
+%------------------------------------------------------
+% PART I
+%------------------------------------------------------
+\part{User Guide}
+
+%======================================================
+\chapter{Quick Start Guide}
+\label{ch:quickstart}
+%======================================================
+
+This chapter provides a step-by-step guide to using the integrated Source Extractor in DS9. For detailed explanations of the extraction algorithm, output parameters, and internal architecture, refer to the subsequent chapters.
+
+\section{Overview}
+
+The DS9 Integrated Source Extractor adds SExtractor-like source detection and photometry capabilities directly within the SAOImageDS9 image viewer. When a FITS image is loaded, sources can be extracted with a single click, and the resulting catalog is displayed in a resizable panel alongside the image.
+
+Key features:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{One-click extraction} --- Press the ``Extract'' button to detect and measure all sources in the current FITS image
+  \item \textbf{Split-panel interface} --- The main window is divided into an image viewer (left) and a catalog table (right), separated by a draggable divider
+  \item \textbf{19 output parameters} --- Photometry, astrometry, morphology, surface brightness, and star/galaxy classification
+  \item \textbf{Real-time filtering} --- Filter the catalog interactively by any column value
+  \item \textbf{Automatic WCS} --- Celestial coordinates (RA, Dec) are computed automatically when WCS information is available in the FITS header
+  \item \textbf{Auto-extraction} --- Sources are extracted automatically when a new FITS file is loaded
+\end{itemize}
+
+\section{Prerequisites}
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{DS9} --- SAOImageDS9 built with the integrated Source Extractor patch
+  \item \textbf{Python 3} with the following packages:
+  \begin{itemize}
+    \item \texttt{sep} --- Source Extraction and Photometry library (Python binding of SExtractor)
+    \item \texttt{astropy} --- FITS I/O and WCS coordinate transformations
+    \item \texttt{numpy} --- Numerical array operations
+  \end{itemize}
+  \item \textbf{\sextract{} binary} --- The compiled Python script, located in the same directory as the \ds{} executable
+\end{itemize}
+
+\begin{codebox}[Install Python Dependencies]
+\begin{lstlisting}[style=bash,numbers=none]
+pip install sep astropy numpy
+\end{lstlisting}
+\end{codebox}
+
+\section{Building DS9 with the Source Extractor}
+
+\begin{codebox}[Build Commands]
+\begin{lstlisting}[style=bash,numbers=none]
+cd SAOImageDS9
+make -C ds9/unix -j 128
+\end{lstlisting}
+\end{codebox}
+
+The build process compiles the C/Tcl core, packages the Tcl library files (including the modified \texttt{layout.tcl} and \texttt{ds9.tcl}) into \texttt{ds9.zip}, and produces the final \texttt{bin/ds9} executable. The \sextract{} binary must be placed in the same \texttt{bin/} directory.
+
+\begin{important}
+After modifying any \texttt{.tcl} file in \texttt{ds9/library/}, you must copy it to \texttt{ds9/unix/mntpt/library/}, update the zip, and rebuild:
+\begin{codebox}
+\begin{lstlisting}[style=bash,numbers=none]
+cp ds9/library/layout.tcl ds9/unix/mntpt/library/
+cp ds9/library/ds9.tcl    ds9/unix/mntpt/library/
+cd ds9/unix
+zip -ru ds9.zip mntpt/library/layout.tcl mntpt/library/ds9.tcl
+cat ds9base ds9.zip > ds9
+zip -A ds9
+chmod 755 ds9
+cp ds9 ../../bin/
+\end{lstlisting}
+\end{codebox}
+\end{important}
+
+\section{Using the Source Extractor}
+
+\subsection{Step 1: Launch DS9}
+
+\begin{codebox}[Launch]
+\begin{lstlisting}[style=bash,numbers=none]
+./bin/ds9 image.fits
+\end{lstlisting}
+\end{codebox}
+
+The window opens with two panels separated by a vertical divider:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Left panel} --- The standard DS9 interface (menu bar, info panel, buttons, image canvas, colorbar)
+  \item \textbf{Right panel} --- The Source Extractor catalog panel (title bar, filter bar, data table, status bar)
+\end{itemize}
+
+The divider can be dragged left or right to resize the panels.
+
+\subsection{Step 2: Extract Sources}
+
+Click the \textbf{``Extract''} button in the catalog panel title bar. The status bar will show progress:
+\begin{enumerate}[leftmargin=2em]
+  \item \texttt{Extracting sources from image.fits ...} --- Extraction is running
+  \item \texttt{image.fits: 142 sources extracted} --- Extraction complete
+\end{enumerate}
+
+The catalog table is automatically populated with all detected sources, sorted by brightness (brightest first).
+
+\begin{infobox}[Auto-Extraction]
+When a FITS file is loaded via \texttt{File $\to$ Open}, sources are extracted automatically after a 500\,ms delay. This behavior is controlled by the \texttt{CatalogPanelAutoExtract} hook in \texttt{fits.tcl}.
+\end{infobox}
+
+\subsection{Step 3: Browse the Catalog}
+
+The catalog table displays 19 columns (see Chapter~\ref{ch:parameters} for detailed descriptions):
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Category} & \textbf{Columns} \\
+\midrule
+Identification & NUMBER \\
+Astrometry & X\_IMAGE, Y\_IMAGE, ALPHA\_J2000, DELTA\_J2000 \\
+Photometry & MAG\_AUTO, MAG\_ISOCOR, MAG\_APER, FLUX\_AUTO \\
+Morphology & FLUX\_RADIUS, A\_IMAGE, B\_IMAGE, THETA\_IMAGE, ELLIPTICITY \\
+ & KRON\_RADIUS \\
+Surface Brightness & MU\_MAX, MU\_THRESHOLD \\
+Classification & CLASS\_STAR, FLAGS \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}[leftmargin=2em]
+  \item Scroll horizontally and vertically using the scrollbars
+  \item Column widths can be resized by dragging column borders in the header row
+  \item Rows can be selected by clicking (extended selection with Shift/Ctrl)
+\end{itemize}
+
+\subsection{Step 4: Filter Results}
+
+Type a search pattern in the \textbf{Filter} entry and click \textbf{``Apply''} (or press Enter). The filter performs case-insensitive substring matching across all columns. For example:
+\begin{itemize}[leftmargin=2em]
+  \item Type \texttt{0.9} to show only rows containing ``0.9'' in any field
+  \item Clear the filter field and press Apply to show all sources again
+\end{itemize}
+
+\subsection{Step 5: Clear and Re-extract}
+
+Click \textbf{``Clear''} to reset the table and status. Load a new FITS image and click \textbf{``Extract''} again, or rely on auto-extraction.
+
+
+\section{Interface Layout}
+
+The window hierarchy below the pulldown menu bar:
+
+\begin{codebox}[Widget Hierarchy]
+\begin{lstlisting}[numbers=none]
+. (top-level window)
+|-- .mb (pulldown menu bar: File, Edit, View, ...)
+|-- .pw (ttk::panedwindow, horizontal, draggable divider)
+    |-- .ds9 (left pane: main DS9 interface)
+    |   |-- header (info panel, magnifier, panner)
+    |   |-- buttons (toolbar)
+    |   |-- image frame
+    |       |-- canvas (FITS image display)
+    |       |-- colorbar, graphs
+    |-- .catf (right pane: catalog panel)
+        |-- titlebar ("Source Extractor", Extract, Clear)
+        |-- searchbar (Filter entry + Apply)
+        |-- table (19-column scrollable data table)
+        |-- statusbar (status messages)
+\end{lstlisting}
+\end{codebox}
+
+The \texttt{ttk::panedwindow} widget provides a sash (divider handle) that the user can drag to redistribute space between the image viewer and the catalog panel. The left pane has weight~3 and the right pane has weight~2, giving an initial 60:40 split.
+
+\section{Troubleshooting}
+
+\begin{center}
+\begin{longtable}{L{4.5cm} L{8.5cm}}
+\toprule
+\textbf{Symptom} & \textbf{Solution} \\
+\midrule
+\endhead
+\texttt{ds9\_sextract not found} & Ensure the \sextract{} binary is in the same directory as the \ds{} executable. Check that it has execute permission (\texttt{chmod +x}). \\
+\midrule
+\texttt{No FITS image loaded} & Open a FITS file before clicking Extract. The extractor requires a frame with a loaded FITS image. \\
+\midrule
+\texttt{Extraction error: ...} & Check that Python dependencies (\texttt{sep}, \texttt{astropy}, \texttt{numpy}) are installed. Check \texttt{LD\_LIBRARY\_PATH} if using conda. \\
+\midrule
+\texttt{No sources detected} & The image may have very low signal-to-noise. Try adjusting the detection threshold (default: $1.5\sigma$) via command-line arguments to \sextract{}. \\
+\midrule
+Catalog panel not visible & Drag the divider from the right edge of the window toward the center. The panel may have been collapsed. \\
+\midrule
+WCS coordinates show 0.0 & The FITS header does not contain valid WCS keywords. Pixel coordinates (X\_IMAGE, Y\_IMAGE) are still accurate. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+%======================================================
+\chapter{Architecture}
+\label{ch:architecture}
+%======================================================
+
+This chapter describes the internal architecture of the integrated Source Extractor, covering the modified DS9 source files, the extraction pipeline, and the data flow between components.
+
+\section{Modified Source Files}
+
+Three files implement the integration:
+
+\begin{center}
+\begin{longtable}{L{4.2cm} L{8.8cm}}
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\endhead
+\texttt{ds9/library/ds9.tcl} & Creates the top-level \texttt{ttk::panedwindow} that splits the main window into two panes. Initializes \texttt{ds9(toppw)}, \texttt{ds9(main)}, and \texttt{ds9(catalog\_frame)}. Calls \texttt{CreateCatalogPanel}. \\
+\midrule
+\texttt{ds9/library/layout.tcl} & Defines \texttt{CreateCanvas} (image canvas, restored to original structure), \texttt{CreateCatalogPanel} (catalog UI), \texttt{CatalogPanelExtract} (runs \sextract{}), \texttt{CatalogPanelLoadTSV} (parses output into table), \texttt{CatalogPanelFilter} (interactive filtering), and \texttt{CatalogPanelAutoExtract} (auto-extraction hook). \\
+\midrule
+\texttt{ds9/library/fits.tcl} & Calls \texttt{CatalogPanelAutoExtract} after a FITS file is loaded, triggering automatic source extraction. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\section{Top-Level Window Structure}
+
+The key architectural change is the introduction of a \texttt{ttk::panedwindow} at the highest level of the widget hierarchy, directly below the native pulldown menu bar.
+
+\begin{codebox}[ds9.tcl --- Top-level panedwindow creation]
+\begin{lstlisting}[style=tcl,numbers=none]
+# create top-level panedwindow
+set ds9(toppw) [ttk::panedwindow ${ds9(top)}pw -orient horizontal]
+pack $ds9(toppw) -fill both -expand true
+
+# left pane: main DS9 content
+set ds9(main) [ttk::frame ${ds9(top)}ds9]
+$ds9(toppw) add $ds9(main) -weight 3
+
+# right pane: catalog panel
+set ds9(catalog_frame) [ttk::frame ${ds9(top)}catf]
+$ds9(toppw) add $ds9(catalog_frame) -weight 2
+\end{lstlisting}
+\end{codebox}
+
+This design ensures that:
+\begin{enumerate}[leftmargin=2em]
+  \item The pulldown menu bar spans the full window width (it is set via \texttt{\$ds9(top) configure -menu \$ds9(mb)}, independent of pack geometry)
+  \item Everything below the menu bar is split into two resizable panes
+  \item All existing DS9 layout modes (horizontal, vertical, basic, advanced) continue to work within the left pane without modification
+  \item The catalog panel occupies its own independent pane on the right
+\end{enumerate}
+
+\section{Data Flow}
+
+The extraction pipeline follows this sequence:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Trigger} --- User clicks ``Extract'' (or auto-extraction fires after FITS load)
+  \item \textbf{File discovery} --- \texttt{CatalogPanelExtract} retrieves the current FITS filename from the active frame via \texttt{\$current(frame) get fits file name full}
+  \item \textbf{External process} --- The \sextract{} binary is executed as a child process via \texttt{exec sh -c}. The \texttt{LD\_LIBRARY\_PATH} is configured to include conda library paths.
+  \item \textbf{Output capture} --- \sextract{} writes a tab-separated table to \texttt{stdout}. The Tcl \texttt{exec} command captures this output as a string.
+  \item \textbf{Table population} --- \texttt{CatalogPanelLoadTSV} parses the TSV string, splits it into rows and columns, and populates the \texttt{Tktable} widget via the \texttt{catpaneltbldb} array variable.
+  \item \textbf{Status update} --- The status bar displays the filename and number of detected sources.
+\end{enumerate}
+
+\begin{remark}[Process Isolation]
+The extraction runs as a separate process, not within the DS9 Tcl interpreter. This prevents numerical library conflicts and allows the Python-based extractor to use its own dependencies (NumPy, SEP, Astropy) independently.
+\end{remark}
+
+
+%======================================================
+\chapter{Extraction Algorithm}
+\label{ch:algorithm}
+%======================================================
+
+The \sextract{} tool implements a SExtractor-compatible extraction pipeline using the SEP (Source Extraction and Photometry) library. This chapter describes each step of the algorithm in detail.
+
+\section{Background Estimation}
+
+The first step is to estimate and subtract the sky background. SEP uses the same algorithm as SExtractor:
+
+\begin{enumerate}[leftmargin=2em]
+  \item The image is divided into a grid of rectangular meshes (default size: $64 \times 64$ pixels, controlled by \texttt{--back-size})
+  \item In each mesh cell, the local background level is estimated using iterative $\kappa\sigma$-clipping
+  \item The resulting coarse background map is smoothed with a median filter (default kernel: $3 \times 3$ cells, controlled by \texttt{--back-filtersize})
+  \item The smoothed map is interpolated to full image resolution using bicubic spline interpolation
+\end{enumerate}
+
+\begin{codebox}[Background estimation]
+\begin{lstlisting}[style=python,numbers=none]
+bkg = sep.Background(data, bw=back_size, bh=back_size,
+                     fw=back_filtersize, fh=back_filtersize)
+data_sub = data - bkg.back()
+\end{lstlisting}
+\end{codebox}
+
+Two outputs are produced:
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{bkg.back()} --- the background level map $B(x,y)$
+  \item \texttt{bkg.rms()} --- the background RMS (noise) map $\sigma_B(x,y)$, used as the detection threshold and photometric error
+\end{itemize}
+
+\section{Source Detection}
+
+Sources are detected as groups of connected pixels above a threshold:
+
+\begin{equation}
+I(x,y) - B(x,y) > k \cdot \sigma_B(x,y)
+\end{equation}
+
+where $k$ is the detection threshold in units of the local background RMS (default: $k = 1.5$, set by \texttt{--detect-thresh}). Connected pixel groups with fewer than \texttt{--detect-minarea} pixels (default: 5) are rejected.
+
+\subsection{Deblending}
+
+Overlapping sources are separated using multi-threshold deblending:
+
+\begin{enumerate}[leftmargin=2em]
+  \item The detected object is re-thresholded at \texttt{--deblend-nthresh} (default: 32) exponentially spaced sub-thresholds between the detection threshold and the peak value
+  \item At each sub-threshold, connected components are identified
+  \item A component is split into a separate object if it contains more than \texttt{--deblend-mincont} (default: 0.005) of the total flux of the parent object
+\end{enumerate}
+
+\begin{codebox}[Source detection with deblending]
+\begin{lstlisting}[style=python,numbers=none]
+objects, segmap = sep.extract(
+    data_sub, detect_thresh, err=bkg_rms,
+    minarea=detect_minarea,
+    deblend_nthresh=deblend_nthresh,
+    deblend_cont=deblend_mincont,
+    segmentation_map=True
+)
+\end{lstlisting}
+\end{codebox}
+
+The segmentation map assigns each pixel to the object it belongs to (or zero for background), enabling morphological measurements.
+
+
+\section{Photometry}
+
+Three photometric methods are applied to each detected source.
+
+\subsection{AUTO Photometry (Kron Elliptical Aperture)}
+
+The AUTO magnitude follows the Kron (1980) method:
+
+\begin{enumerate}[leftmargin=2em]
+  \item The first-moment radius (Kron radius $r_K$) is computed within an ellipse of semi-major axis $6a$:
+  \begin{equation}
+    r_K = \frac{\sum_i r_i \, I_i}{\sum_i I_i}
+  \end{equation}
+  where $r_i$ is the elliptical distance of pixel $i$ from the object center, and $I_i$ is the background-subtracted intensity.
+  \item A minimum Kron radius of 3.5 pixels is enforced to prevent underestimation for compact sources.
+  \item The flux is summed within an elliptical aperture of semi-major axis $2.5 \, r_K$, following the SExtractor convention.
+\end{enumerate}
+
+\begin{infobox}[Kron Factor]
+The factor of 2.5 applied to the Kron radius ensures that ${\gtrsim}96\%$ of the total flux is captured for a typical galaxy profile (S\'{e}rsic $n \approx 1$--4), while ${\gtrsim}99\%$ is captured for a Gaussian PSF.
+\end{infobox}
+
+\subsection{Isophotal Corrected Photometry}
+
+The isophotal flux is the sum of all pixels belonging to the detection footprint. A correction factor accounts for the flux missed below the detection isophote, using the SExtractor formula:
+
+\begin{equation}
+F_{\text{isocor}} = \frac{F_{\text{iso}}}{1 - 0.196\,\alpha - 0.751\,\alpha^2}, \qquad
+\alpha = \frac{N_{\text{pix}} \cdot t_{\text{local}}}{F_{\text{iso}}}
+\end{equation}
+
+where $N_{\text{pix}}$ is the number of detection pixels, $t_{\text{local}}$ is the local threshold, and $F_{\text{iso}}$ is the raw isophotal flux.
+
+\subsection{Aperture Photometry}
+
+A fixed circular aperture of diameter \texttt{--phot-aperture} (default: 5.0 pixels) is centered on each source. The flux is summed within this circle, with partial pixel weighting at the boundary.
+
+\subsection{Magnitude Conversion}
+
+All fluxes are converted to magnitudes using:
+\begin{equation}
+m = -2.5 \log_{10}(F) + m_0
+\end{equation}
+
+where $m_0$ is the magnitude zero-point (default: 25.0, set by \texttt{--mag-zeropoint}). Sources with non-positive flux are assigned $m = 99.0$.
+
+
+\section{Morphological Parameters}
+
+\subsection{Shape Parameters}
+
+The semi-major axis ($a$), semi-minor axis ($b$), and position angle ($\theta$) are derived from the second-order moments of the intensity distribution within the detection isophote:
+
+\begin{align}
+\overline{x^2} &= \frac{\sum_i I_i \, x_i^2}{\sum_i I_i} - \bar{x}^2 \\
+\overline{y^2} &= \frac{\sum_i I_i \, y_i^2}{\sum_i I_i} - \bar{y}^2 \\
+\overline{xy}  &= \frac{\sum_i I_i \, x_i \, y_i}{\sum_i I_i} - \bar{x}\bar{y}
+\end{align}
+
+The ellipse parameters are:
+\begin{align}
+a^2 &= \frac{\overline{x^2} + \overline{y^2}}{2} + \sqrt{\left(\frac{\overline{x^2} - \overline{y^2}}{2}\right)^2 + \overline{xy}^2} \\
+b^2 &= \frac{\overline{x^2} + \overline{y^2}}{2} - \sqrt{\left(\frac{\overline{x^2} - \overline{y^2}}{2}\right)^2 + \overline{xy}^2} \\
+\theta &= \frac{1}{2}\arctan\!\left(\frac{2\,\overline{xy}}{\overline{x^2} - \overline{y^2}}\right)
+\end{align}
+
+The ellipticity is defined as:
+\begin{equation}
+e = 1 - \frac{b}{a}
+\end{equation}
+
+\subsection{Half-Light Radius}
+
+The half-light radius (\texttt{FLUX\_RADIUS}) is the radius of a circular aperture centered on the source that encloses 50\% of the AUTO flux. It is computed by integrating the flux profile outward from the center until the cumulative flux reaches $0.5 \times F_{\text{AUTO}}$.
+
+\section{Surface Brightness}
+
+Two surface brightness measurements are provided:
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{MU\_MAX} --- Surface brightness of the brightest pixel:
+  \begin{equation}
+    \mu_{\max} = -2.5\log_{10}\!\left(\frac{I_{\text{peak}}}{\Omega_{\text{pix}}}\right) + m_0
+  \end{equation}
+  where $I_{\text{peak}}$ is the peak pixel value above background and $\Omega_{\text{pix}}$ is the pixel area in arcsec$^2$.
+
+  \item \textbf{MU\_THRESHOLD} --- Surface brightness at the detection threshold:
+  \begin{equation}
+    \mu_{\text{thresh}} = -2.5\log_{10}\!\left(\frac{t_{\text{local}}}{\Omega_{\text{pix}}}\right) + m_0
+  \end{equation}
+\end{itemize}
+
+
+\section{Star/Galaxy Classification}
+
+An approximate star/galaxy classifier is implemented using the ratio of the measured FWHM to the seeing FWHM:
+
+\begin{equation}
+\text{FWHM}_{\text{image}} = 2\sqrt{\ln 2 \cdot (a^2 + b^2)}
+\end{equation}
+
+\begin{equation}
+\text{CLASS\_STAR} = \frac{1}{1 + \exp\!\bigl(3 \cdot (r_{\text{FWHM}} - 1.5)\bigr)}, \qquad
+r_{\text{FWHM}} = \frac{\text{FWHM}_{\text{image}}}{\text{FWHM}_{\text{seeing}} / s}
+\end{equation}
+
+where $s$ is the pixel scale in arcsec/pixel and $\text{FWHM}_{\text{seeing}}$ is set by \texttt{--seeing-fwhm} (default: 3.0 arcsec).
+
+Objects with $\text{CLASS\_STAR} \approx 1$ are point-like (stars), while $\text{CLASS\_STAR} \approx 0$ indicates extended sources (galaxies).
+
+\begin{remark}[Classifier Limitations]
+This is a simple heuristic classifier, not the neural-network-based classifier used by SExtractor. For accurate star/galaxy separation, use dedicated tools such as \texttt{PSFEx} + SExtractor or machine learning classifiers.
+\end{remark}
+
+
+\section{Flags}
+
+The \texttt{FLAGS} column is a bitmask combining detection and photometry flags:
+
+\begin{center}
+\begin{tabular}{ccl}
+\toprule
+\textbf{Bit} & \textbf{Value} & \textbf{Meaning} \\
+\midrule
+0 & 1 & Object has neighbors (bright and close enough to bias photometry) \\
+1 & 2 & Object was originally blended with another \\
+2 & 4 & At least one pixel is saturated (peak $+$ background $\geq$ \texttt{SATURATE}) \\
+3 & 8 & Object is truncated (too close to image boundary) \\
+4 & 16 & Aperture data incomplete or corrupted \\
+5 & 32 & Isophotal data incomplete or corrupted \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Multiple flags can be set simultaneously. For example, \texttt{FLAGS = 3} means the object has neighbors (1) and was deblended (2).
+
+\section{WCS Coordinate Transformation}
+
+If the FITS header contains valid World Coordinate System (WCS) keywords (\texttt{CRPIX}, \texttt{CRVAL}, \texttt{CD} or \texttt{CDELT}+\texttt{CROTA}), pixel coordinates are converted to celestial coordinates (J2000 equatorial):
+
+\begin{codebox}[WCS transformation]
+\begin{lstlisting}[style=python,numbers=none]
+wcs = WCS(header)
+coords = wcs.pixel_to_world(objects['x'], objects['y'])
+alpha_j2000 = coords.ra.deg    # Right Ascension in degrees
+delta_j2000 = coords.dec.deg   # Declination in degrees
+\end{lstlisting}
+\end{codebox}
+
+If WCS is unavailable, \texttt{ALPHA\_J2000} and \texttt{DELTA\_J2000} are set to 0.0.
+
+
+%======================================================
+\chapter{Output Parameters}
+\label{ch:parameters}
+%======================================================
+
+This chapter provides a detailed description of each column in the output catalog.
+
+\section{Complete Parameter Reference}
+
+\begin{center}
+\begin{longtable}{L{3.2cm} C{1.8cm} L{7.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Unit} & \textbf{Description} \\
+\midrule
+\endhead
+
+\texttt{NUMBER} & --- & Running object number, assigned after sorting by brightness (brightest = 1). \\
+\midrule
+
+\texttt{X\_IMAGE} & pixel & Object centroid $x$-coordinate in FITS convention (1-indexed). Computed as the intensity-weighted first moment. \\
+\midrule
+
+\texttt{Y\_IMAGE} & pixel & Object centroid $y$-coordinate in FITS convention (1-indexed). \\
+\midrule
+
+\texttt{ALPHA\_J2000} & deg & Right Ascension (J2000 equatorial) computed from pixel coordinates via WCS. Zero if no WCS is available. \\
+\midrule
+
+\texttt{DELTA\_J2000} & deg & Declination (J2000 equatorial) computed from pixel coordinates via WCS. Zero if no WCS is available. \\
+\midrule
+
+\texttt{MAG\_AUTO} & mag & Kron-like elliptical aperture magnitude. Uses an elliptical aperture with semi-major axis $= 2.5 \times r_{\text{Kron}}$. Most reliable total magnitude for galaxies. \\
+\midrule
+
+\texttt{MAG\_ISOCOR} & mag & Isophotal magnitude corrected for flux lost below the detection threshold, using the SExtractor analytical correction formula. \\
+\midrule
+
+\texttt{MAG\_APER} & mag & Fixed circular aperture magnitude. Aperture diameter set by \texttt{--phot-aperture} (default: 5.0 pixels). Useful for comparing point sources. \\
+\midrule
+
+\texttt{FLUX\_AUTO} & counts & Total flux within the Kron elliptical aperture (in ADU or counts). \\
+\midrule
+
+\texttt{FLUX\_RADIUS} & pixel & Half-light radius: radius of a circular aperture enclosing 50\% of \texttt{FLUX\_AUTO}. Indicator of object size; correlates with effective radius $R_e$ for galaxies. \\
+\midrule
+
+\texttt{A\_IMAGE} & pixel & Semi-major axis of the object ellipse, derived from second-order intensity moments. \\
+\midrule
+
+\texttt{B\_IMAGE} & pixel & Semi-minor axis of the object ellipse. \\
+\midrule
+
+\texttt{THETA\_IMAGE} & deg & Position angle of the major axis, measured counter-clockwise from the $x$-axis (FITS convention). Range: $-90\degree$ to $+90\degree$. \\
+\midrule
+
+\texttt{ELLIPTICITY} & --- & Ellipticity: $e = 1 - b/a$. Values range from 0 (circular) to 1 (infinitely elongated). \\
+\midrule
+
+\texttt{KRON\_RADIUS} & pixel & First-moment radius (Kron radius), used to scale the AUTO aperture. Minimum enforced value: 3.5 pixels. \\
+\midrule
+
+\texttt{MU\_MAX} & mag/arcsec$^2$ & Peak surface brightness: magnitude of the brightest pixel divided by pixel area. Lower values = brighter peaks. \\
+\midrule
+
+\texttt{MU\_THRESHOLD} & mag/arcsec$^2$ & Detection threshold surface brightness at the object position. Objects with $\mu_{\max} < \mu_{\text{thresh}}$ are detected. \\
+\midrule
+
+\texttt{CLASS\_STAR} & --- & Star/galaxy classifier output. Range 0.0 (extended/galaxy) to 1.0 (point-like/star). Based on FWHM ratio to seeing. \\
+\midrule
+
+\texttt{FLAGS} & --- & Extraction flags (bitmask). See Section~\ref{ch:algorithm} for flag definitions. Zero means clean photometry. \\
+
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+%======================================================
+\chapter{Command-Line Reference}
+\label{ch:cmdline}
+%======================================================
+
+The \sextract{} tool can also be used as a standalone command-line program, independent of the DS9 GUI.
+
+\section{Synopsis}
+
+\begin{codebox}
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract [OPTIONS] <FITS_FILE>
+\end{lstlisting}
+\end{codebox}
+
+The output is a tab-separated table printed to \texttt{stdout}. The first line is the header row containing column names; subsequent lines contain data rows sorted by \texttt{MAG\_AUTO} (brightest first).
+
+\section{Options}
+
+\begin{center}
+\begin{longtable}{L{4.0cm} C{1.5cm} L{7.0cm}}
+\toprule
+\textbf{Option} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+
+\texttt{--detect-thresh} & 1.5 & Detection threshold in units of the local background RMS ($\sigma$). Lower values detect fainter sources but increase false positives. \\
+\midrule
+
+\texttt{--detect-minarea} & 5 & Minimum number of connected pixels above the threshold required to register a detection. Rejects cosmic ray hits and noise spikes. \\
+\midrule
+
+\texttt{--deblend-nthresh} & 32 & Number of exponentially spaced sub-thresholds used for deblending overlapping sources. Higher values provide finer deblending. \\
+\midrule
+
+\texttt{--deblend-mincont} & 0.005 & Minimum contrast ratio for deblending. A sub-component must contain at least this fraction of the parent flux to be split off. Lower values split more aggressively. \\
+\midrule
+
+\texttt{--phot-aperture} & 5.0 & Diameter of the fixed circular aperture (in pixels) used for \texttt{MAG\_APER} measurements. \\
+\midrule
+
+\texttt{--mag-zeropoint} & 25.0 & Photometric zero-point $m_0$ for magnitude conversion: $m = -2.5\log_{10}(F) + m_0$. Set this to the calibrated zero-point of your image. \\
+\midrule
+
+\texttt{--gain} & 0 & Detector gain in $e^-$/ADU. Used for Poisson noise estimation in photometric errors. If 0, the tool attempts to read \texttt{GAIN}, \texttt{EGAIN}, or \texttt{CCDGAIN} from the FITS header. \\
+\midrule
+
+\texttt{--pixel-scale} & 1.0 & Pixel scale in arcsec/pixel. Used for surface brightness calculations. If 1.0 and WCS is available, the scale is automatically derived from WCS. \\
+\midrule
+
+\texttt{--seeing-fwhm} & 3.0 & Seeing FWHM in arcsec. Used for star/galaxy classification (\texttt{CLASS\_STAR}). \\
+\midrule
+
+\texttt{--back-size} & 64 & Background mesh size in pixels. Each mesh cell has dimensions \texttt{back-size} $\times$ \texttt{back-size}. Smaller values track finer background variations but may subtract source flux. \\
+\midrule
+
+\texttt{--back-filtersize} & 3 & Median filter kernel size (in mesh cells) applied to the background map before interpolation. Smooths out mesh-to-mesh noise. \\
+
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{Usage Examples}
+
+\begin{codebox}[Basic extraction]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract image.fits > catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Deep extraction with calibrated zero-point]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract --detect-thresh 1.0 --detect-minarea 3 \
+             --mag-zeropoint 28.09 --gain 2.5 \
+             --seeing-fwhm 0.8 --pixel-scale 0.03 \
+             hst_acs_f814w.fits > deep_catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Conservative extraction (few false positives)]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract --detect-thresh 3.0 --detect-minarea 10 \
+             --deblend-mincont 0.01 \
+             crowded_field.fits > clean_catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Fine background estimation for extended objects]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract --back-size 128 --back-filtersize 5 \
+             galaxy_cluster.fits > cluster_catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+
+%------------------------------------------------------
+% PART II
+%------------------------------------------------------
+\part{Developer Reference}
+
+%======================================================
+\chapter{Tcl/Tk Implementation Details}
+\label{ch:tcl}
+%======================================================
+
+This chapter documents the Tcl procedures that implement the catalog panel and its integration with the DS9 GUI.
+
+\section{Catalog Panel Procedures}
+
+\subsection{CreateCatalogPanel}
+
+Creates all widgets for the catalog panel within \texttt{ds9(catalog\_frame)}:
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9.5cm}}
+\toprule
+\textbf{Widget} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{titlebar} & Horizontal frame containing the ``Source Extractor'' label, ``Extract'' button, and ``Clear'' button. \\
+\midrule
+\texttt{searchbar} & Filter entry with ``Apply'' button. The entry is bound to \texttt{<Return>} for keyboard activation. \\
+\midrule
+\texttt{tblf} (table frame) & Contains the \texttt{Tktable} widget (\texttt{catpanel(tbl)}) with horizontal and vertical scrollbars. The table is configured with 19 columns, row selection mode, and resizable column borders. \\
+\midrule
+\texttt{statusbar} & Displays status messages via the \texttt{catpanel(status)} variable. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{CatalogPanelExtract}
+
+Orchestrates the extraction process:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Locates the \sextract{} binary in the same directory as the DS9 executable
+  \item Retrieves the current FITS filename from the active frame
+  \item Constructs \texttt{LD\_LIBRARY\_PATH} to include conda libraries (both \texttt{\$CONDA\_PREFIX/lib} and \texttt{\$HOME/miniconda3/lib})
+  \item Executes \sextract{} via \texttt{exec sh -c} and captures stdout
+  \item Passes the TSV output to \texttt{CatalogPanelLoadTSV}
+\end{enumerate}
+
+\subsection{CatalogPanelLoadTSV}
+
+Parses tab-separated data into the Tktable widget:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Splits the input string by newlines into rows
+  \item Parses the first row as column headers
+  \item Configures the table dimensions (\texttt{-cols}, \texttt{-rows})
+  \item Fills the \texttt{catpaneltbldb} array variable: \texttt{catpaneltbldb(\textit{row},\textit{col})}
+  \item Stores the raw data in \texttt{catpanel(alldata)} for filtering
+\end{enumerate}
+
+\subsection{CatalogPanelFilter}
+
+Performs case-insensitive substring filtering:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Reads the filter pattern from \texttt{catpanel(search\_var)}
+  \item Iterates over stored data rows (\texttt{catpanel(alldata)})
+  \item Includes a row if the pattern appears anywhere in the tab-separated line (\texttt{string match -nocase})
+  \item Repopulates the table with matching rows only
+  \item Updates the status bar with the count of matching rows
+\end{enumerate}
+
+\subsection{CatalogPanelAutoExtract}
+
+A hook procedure called from \texttt{fits.tcl} after a FITS file is loaded:
+
+\begin{codebox}
+\begin{lstlisting}[style=tcl,numbers=none]
+proc CatalogPanelAutoExtract {} {
+    global catpanel
+    if {[info exists catpanel(tbl)]} {
+        after 500 CatalogPanelExtract
+    }
+}
+\end{lstlisting}
+\end{codebox}
+
+The 500\,ms delay (\texttt{after 500}) ensures the image is fully loaded and rendered before extraction begins.
+
+
+\section{Global Variables}
+
+\begin{center}
+\begin{longtable}{L{4.0cm} L{9.0cm}}
+\toprule
+\textbf{Variable} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{ds9(toppw)} & The top-level \texttt{ttk::panedwindow} widget path \\
+\texttt{ds9(catalog\_frame)} & Frame widget path for the right (catalog) pane \\
+\texttt{catpanel(tbl)} & The Tktable widget path \\
+\texttt{catpanel(tbldb)} & Name of the global array backing the table data \\
+\texttt{catpanel(status)} & Status bar text variable \\
+\texttt{catpanel(search\_var)} & Filter entry text variable \\
+\texttt{catpanel(alldata)} & Raw TSV string from last extraction (for filtering) \\
+\texttt{catpanel(filename)} & Last extracted FITS filename \\
+\texttt{catpanel(delim)} & Column delimiter (always ``\texttt{\textbackslash t}'') \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+%======================================================
+\chapter{Python Extractor Details}
+\label{ch:python}
+%======================================================
+
+\section{Module Structure}
+
+The \sextract{} script (\texttt{ds9\_sextract.py}) is a single-file Python module with one main function:
+
+\begin{codebox}
+\begin{lstlisting}[style=python,numbers=none]
+def extract_sources(fits_file,
+                    detect_thresh=1.5,
+                    detect_minarea=5,
+                    deblend_nthresh=32,
+                    deblend_mincont=0.005,
+                    phot_aperture=5.0,
+                    mag_zeropoint=25.0,
+                    gain=0.0,
+                    pixel_scale=1.0,
+                    seeing_fwhm=3.0,
+                    back_size=64,
+                    back_filtersize=3):
+\end{lstlisting}
+\end{codebox}
+
+\section{FITS File Handling}
+
+The FITS reader searches for a 2D image HDU in the following order:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Iterate through all HDUs; use the first one with 2D data (\texttt{hdu.data.ndim == 2})
+  \item If no 2D HDU is found, try the primary HDU
+  \item If the primary has $>2$ dimensions, extract the first 2D slice (\texttt{data[0]})
+  \item The data is converted to \texttt{float64} C-contiguous format (required by SEP)
+\end{enumerate}
+
+\section{Automatic Header Parsing}
+
+Several parameters are automatically read from the FITS header when not specified by the user:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Header Keywords} & \textbf{Fallback} \\
+\midrule
+Gain & \texttt{GAIN}, \texttt{EGAIN}, \texttt{CCDGAIN} & 0 (Poisson noise disabled) \\
+Saturation level & \texttt{SATURATE}, \texttt{SATUR}, \texttt{SATULEVEL}, \texttt{DATAMAX} & 65535 \\
+Pixel scale & WCS \texttt{proj\_plane\_pixel\_scales()} & 1.0 arcsec/pixel \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Dependencies}
+
+\begin{center}
+\begin{longtable}{L{3cm} L{2.5cm} L{7cm}}
+\toprule
+\textbf{Package} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{sep} & $\geq 1.0$ & Core source extraction: background estimation, detection, deblending, photometry, and morphology. Python binding of the C library derived from SExtractor. \\
+\midrule
+\texttt{astropy} & $\geq 4.0$ & FITS file I/O (\texttt{astropy.io.fits}) and WCS coordinate transformations (\texttt{astropy.wcs.WCS}). \\
+\midrule
+\texttt{numpy} & $\geq 1.20$ & Array operations, mathematical functions, and data type management. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+%======================================================
+\chapter{Image--Catalog Interaction}
+\label{ch:interaction}
+%======================================================
+
+This chapter describes the interactive features that link the image display with the catalog panel, enabling bidirectional navigation, source merging, and advanced filtering.
+
+\section{Overview of Interaction Features}
+
+The following features connect the image markers to the catalog table:
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9.5cm}}
+\toprule
+\textbf{Feature} & \textbf{Description} \\
+\midrule
+\endhead
+Mark All & Places yellow ellipse markers on all detected sources in the image \\
+\midrule
+Marker Click & Clicking a yellow marker in the image selects and scrolls to the corresponding row in the catalog table, and shows cyan cross + green ellipse markers at the source position \\
+\midrule
+Visible Filter & Toggles display to show only sources within the current viewport \\
+\midrule
+Ctrl+Click Merge & Ctrl+Click on markers to select merge candidates (red thick ellipses); Ctrl+M merges them into a single source \\
+\midrule
+Trim & Column-based min/max filtering with a dialog for each catalog column \\
+\midrule
+Settings & Adjustable extraction parameters (threshold, deblending, photometry, etc.) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Title Bar Layout}
+
+\begin{codebox}
+\begin{lstlisting}[numbers=none]
+[Source Extractor]  [Extract] [Settings...] [Mark All] [Visible] [Trim...] [Clear]
+\end{lstlisting}
+\end{codebox}
+
+
+\section{Mark All Sources}
+
+The \textbf{Mark All} button creates yellow ellipse markers on all detected sources using the \texttt{ISO\_RADIUS}, \texttt{B\_IMAGE}/\texttt{A\_IMAGE} ratio, and \texttt{THETA\_IMAGE} parameters:
+
+\begin{codebox}[Marker region string]
+\begin{lstlisting}[style=tcl,numbers=none]
+ellipse($x $y ${semi_a}i ${semi_b}i $theta)
+  # color=yellow width=1 tag={sextract_all} tag={sextract_src.$num}
+    select=0 edit=0 move=0 rotate=0 delete=1 highlite=1
+    callback=highlite CatalogPanelMarkerCB {$num}
+    callback=unhighlite CatalogPanelMarkerUnCB {$num}
+\end{lstlisting}
+\end{codebox}
+
+Each marker has:
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{sextract\_all} tag for bulk operations (deletion, etc.)
+  \item \texttt{sextract\_src.\textit{NUMBER}} tag for individual identification
+  \item \texttt{highlite=1} with callbacks for mouse interaction in \texttt{catalog} mode
+\end{itemize}
+
+
+\section{Marker Click --- Image to Catalog Navigation}
+
+Clicking a yellow ellipse marker in the image navigates the catalog to the corresponding source.
+
+\subsection{Implementation}
+
+DS9's built-in \texttt{highlite} callbacks only fire in \texttt{catalog} mode. Since the default viewing mode is \texttt{none}, explicit click handlers were added in \texttt{frame.tcl}:
+
+\begin{codebox}[frame.tcl --- Button1Frame (none mode)]
+\begin{lstlisting}[style=tcl,numbers=none]
+none {
+    if {$which == $current(frame)} {
+        CatalogPanelMarkerClick $which $x $y
+    } else {
+        ...
+    }
+}
+\end{lstlisting}
+\end{codebox}
+
+The click detection uses DS9's marker API:
+
+\begin{codebox}[CatalogPanelMarkerClick]
+\begin{lstlisting}[style=tcl,numbers=none]
+proc CatalogPanelMarkerClick {which x y} {
+    set id [$which get marker catalog id $x $y]
+    if {$id == 0} return
+    set tags [$which get marker catalog $id tag]
+    foreach tag $tags {
+        if {[string match "sextract_src.*" $tag]} {
+            set src_num [string range $tag 13 end]
+            break
+        }
+    }
+    CatalogPanelMarkerCB $src_num $id
+}
+\end{lstlisting}
+\end{codebox}
+
+\texttt{CatalogPanelMarkerCB} then:
+\begin{enumerate}[leftmargin=2em]
+  \item Finds the \texttt{NUMBER} column in the table header
+  \item Searches all rows for the matching source number
+  \item Selects the row and scrolls the table to it
+  \item Calls \texttt{CatalogPanelGotoSource} to pan the image and show selection markers (cyan cross + green ellipse)
+\end{enumerate}
+
+
+\section{Visible Filter}
+
+The \textbf{Visible} button toggles between showing all sources and showing only sources within the current viewport.
+
+\subsection{Viewport Calculation}
+
+\begin{codebox}[Viewport bounds computation]
+\begin{lstlisting}[style=tcl,numbers=none]
+set center [$frame get cursor image]   ;# {cx cy}
+set zoom   [$frame get zoom]           ;# {zx zy}
+set cw [winfo width $ds9(canvas)]
+set ch [winfo height $ds9(canvas)]
+set x_min [expr {$cx - $cw / 2.0 / $zx}]
+set x_max [expr {$cx + $cw / 2.0 / $zx}]
+set y_min [expr {$cy - $ch / 2.0 / $zy}]
+set y_max [expr {$cy + $ch / 2.0 / $zy}]
+\end{lstlisting}
+\end{codebox}
+
+Sources with \texttt{X\_IMAGE} and \texttt{Y\_IMAGE} within these bounds are displayed. The status bar shows ``Visible: N of M sources in current view.''
+
+
+\section{Source Merging (Ctrl+Click + Ctrl+M)}
+
+Multiple sources can be merged into a single source through a two-step process.
+
+\subsection{Step 1: Select Merge Candidates}
+
+\textbf{Ctrl+Click} on a yellow ellipse marker toggles it as a merge candidate:
+\begin{itemize}[leftmargin=2em]
+  \item Selected: A red thick ellipse (\texttt{width=3}) is overlaid, tagged \texttt{sextract\_merge} and \texttt{sextract\_merge.\textit{NUMBER}}
+  \item Deselected: Ctrl+Click again removes the red marker and the source from the merge list
+  \item Status bar: ``Merge: N sources selected (Ctrl+M to merge, Esc to cancel)''
+\end{itemize}
+
+\subsection{Step 2: Execute Merge (Ctrl+M)}
+
+When at least 2 sources are selected, \textbf{Ctrl+M} merges them:
+
+\begin{center}
+\begin{longtable}{L{3.2cm} L{9.3cm}}
+\toprule
+\textbf{Property} & \textbf{Merge Algorithm} \\
+\midrule
+\endhead
+\texttt{X\_IMAGE}, \texttt{Y\_IMAGE} & Flux-weighted centroid: $\bar{x} = \sum F_i x_i / \sum F_i$ \\
+\midrule
+\texttt{FLUX\_AUTO} & Sum of all fluxes: $F_{\text{total}} = \sum F_i$ \\
+\midrule
+\texttt{MAG\_AUTO} & Recomputed: $m = -2.5\log_{10}(F_{\text{total}}) + m_0$ \\
+\midrule
+\texttt{NPIX\_ISO} & Sum of all pixel counts \\
+\midrule
+\texttt{ISO\_RADIUS} & $r = \sqrt{N_{\text{pix,total}} / (\pi \cdot b/a)}$ \\
+\midrule
+\texttt{A\_IMAGE}, \texttt{B\_IMAGE}, \texttt{THETA\_IMAGE} & Flux-weighted average \\
+\midrule
+\texttt{NUMBER} & New number: $\max(\text{all NUMBERs}) + 1$ \\
+\midrule
+Other columns & Copied from the brightest source \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+After merging:
+\begin{enumerate}[leftmargin=2em]
+  \item The original sources are removed from \texttt{catpanel(alldata)}
+  \item The merged source row is appended
+  \item The table and markers are regenerated
+  \item The merged source is auto-selected and the image pans to its position
+  \item Status bar: ``Merged N sources into \#NEW: pos=(X,Y) mag=M''
+\end{enumerate}
+
+\subsection{Cancel (Escape)}
+
+Pressing \textbf{Escape} cancels the merge selection, removes all red markers, and clears the merge list.
+
+
+\section{Trim --- Column Filter Dialog}
+
+The \textbf{Trim...} button opens a modal dialog for per-column min/max filtering.
+
+\subsection{Dialog Layout}
+
+\begin{codebox}[Trim dialog structure]
+\begin{lstlisting}[numbers=none]
++------------------------------------------+
+|  Trim / Column Filter                    |
++------------------------------------------+
+|  Column       |  Min      |  Max         |
+|  NUMBER       | [______]  | [______]     |
+|  X_IMAGE      | [______]  | [______]     |
+|  Y_IMAGE      | [______]  | [______]     |
+|  ...          | ...       | ...          |
+|  MAG_AUTO     | [______]  | [______]     |
++------------------------------------------+
+|  [Apply] [Reset] [Save] [Load] [Cancel]  |
++------------------------------------------+
+\end{lstlisting}
+\end{codebox}
+
+\begin{itemize}[leftmargin=2em]
+  \item Empty fields mean no constraint
+  \item \textbf{Apply}: filter rows where $\text{min} \leq \text{value} \leq \text{max}$ for each specified column, then close dialog and regenerate markers
+  \item \textbf{Reset}: clear all min/max fields
+  \item \textbf{Save/Load}: persist conditions to \texttt{\textasciitilde/.ds9/sextract\_trim.prf}
+  \item \textbf{Cancel}: close without changes
+\end{itemize}
+
+Status bar after Apply: ``Trimmed: N of M sources match conditions.''
+
+
+\section{Settings Dialog}
+
+The \textbf{Settings...} button opens a modal dialog to adjust extraction parameters before running Extract.
+
+\begin{center}
+\begin{longtable}{L{4.0cm} C{1.8cm} L{6.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+Detect Threshold & 1.5 & Detection threshold ($\sigma$) \\
+Detect Min Area & 5 & Minimum connected pixels \\
+Deblend NThresh & 32 & Number of deblending sub-thresholds \\
+Deblend MinCont & 0.005 & Minimum deblending contrast \\
+Phot Aperture & 5.0 & Fixed aperture diameter (pixels) \\
+Mag Zeropoint & 25.0 & Magnitude zero-point $m_0$ \\
+Gain & 0.0 & Detector gain ($e^-$/ADU) \\
+Pixel Scale & 1.0 & Pixel scale (arcsec/pixel) \\
+Seeing FWHM & 3.0 & Seeing FWHM (arcsec) \\
+Back Size & 64 & Background mesh size (pixels) \\
+Back Filter Size & 3 & Background filter kernel (mesh cells) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+Settings are saved to / loaded from \texttt{\textasciitilde/.ds9/sextract.prf}. The \textbf{Defaults} button restores all parameters to their default values.
+
+
+\section{Marker Tag Reference}
+
+\begin{center}
+\begin{longtable}{L{4.2cm} L{8.8cm}}
+\toprule
+\textbf{Tag} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{sextract\_all} & All yellow ellipse markers from Mark All \\
+\midrule
+\texttt{sextract\_src.\textit{N}} & Individual source marker (N = source NUMBER) \\
+\midrule
+\texttt{sextract\_sel} & Current selection markers (cyan cross + green ellipse) \\
+\midrule
+\texttt{sextract\_merge} & All red merge-candidate markers \\
+\midrule
+\texttt{sextract\_merge.\textit{N}} & Individual merge-candidate marker \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{Key Bindings}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Key} & \textbf{Action} \\
+\midrule
+Click on marker & Navigate catalog to source, show selection markers \\
+Ctrl+Click on marker & Toggle merge candidate (red ellipse) \\
+Ctrl+M & Merge selected sources \\
+Escape & Cancel merge selection \\
+Click table header & Sort by column (toggle ascending/descending) \\
+Click table row & Pan image to source position \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+%======================================================
+\chapter{Building \sextract{} for Each Platform}
+\label{ch:building}
+%======================================================
+
+The \sextract{} binary is a standalone C program that uses the SEP library and CFITSIO for source extraction. It must be compiled separately for each target platform and placed in the \texttt{bin/} directory alongside the \ds{} executable.
+
+\section{Dependencies}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Library} & \textbf{Purpose} & \textbf{Install} \\
+\midrule
+CFITSIO & FITS file I/O & Package manager or source \\
+SEP & Source extraction algorithm & Included in \texttt{ds9\_sextract.c} or separate \\
+libm & Math functions & System standard \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+\section{Linux (x86\_64)}
+
+\begin{codebox}[Install dependencies (Ubuntu/Debian)]
+\begin{lstlisting}[style=bash,numbers=none]
+sudo apt-get install libcfitsio-dev
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Install dependencies (RHEL/CentOS/Rocky)]
+\begin{lstlisting}[style=bash,numbers=none]
+sudo dnf install cfitsio-devel
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Install dependencies (conda)]
+\begin{lstlisting}[style=bash,numbers=none]
+conda install -c conda-forge cfitsio
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Compile]
+\begin{lstlisting}[style=bash,numbers=none]
+gcc -O2 -o ds9_sextract ds9_sextract.c \
+    -I/usr/include -L/usr/lib64 \
+    -lcfitsio -lm
+# Or with conda:
+gcc -O2 -o ds9_sextract ds9_sextract.c \
+    -I$CONDA_PREFIX/include -L$CONDA_PREFIX/lib \
+    -lcfitsio -lm -Wl,-rpath,$CONDA_PREFIX/lib
+cp ds9_sextract /path/to/SAOImageDS9/bin/
+\end{lstlisting}
+\end{codebox}
+
+
+\section{macOS (Intel and Apple Silicon)}
+
+\begin{codebox}[Install dependencies (Homebrew)]
+\begin{lstlisting}[style=bash,numbers=none]
+brew install cfitsio
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Install dependencies (conda)]
+\begin{lstlisting}[style=bash,numbers=none]
+conda install -c conda-forge cfitsio
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Compile (Homebrew)]
+\begin{lstlisting}[style=bash,numbers=none]
+# Intel Mac:
+gcc -O2 -o ds9_sextract ds9_sextract.c \
+    -I/usr/local/include -L/usr/local/lib \
+    -lcfitsio -lm
+
+# Apple Silicon (M1/M2/M3):
+gcc -O2 -o ds9_sextract ds9_sextract.c \
+    -I/opt/homebrew/include -L/opt/homebrew/lib \
+    -lcfitsio -lm
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Compile (conda)]
+\begin{lstlisting}[style=bash,numbers=none]
+gcc -O2 -o ds9_sextract ds9_sextract.c \
+    -I$CONDA_PREFIX/include -L$CONDA_PREFIX/lib \
+    -lcfitsio -lm -Wl,-rpath,$CONDA_PREFIX/lib
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Place binary]
+\begin{lstlisting}[style=bash,numbers=none]
+cp ds9_sextract /path/to/SAOImageDS9/bin/
+\end{lstlisting}
+\end{codebox}
+
+\begin{important}
+On macOS, if you encounter ``library not loaded'' errors at runtime, ensure the CFITSIO library path is embedded using \texttt{-Wl,-rpath} or set \texttt{DYLD\_LIBRARY\_PATH} before launching DS9.
+\end{important}
+
+
+\section{Windows}
+
+\subsection{Using MSYS2/MinGW-w64}
+
+\begin{codebox}[Install MSYS2 and dependencies]
+\begin{lstlisting}[style=bash,numbers=none]
+# In MSYS2 MinGW64 shell:
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cfitsio
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Compile]
+\begin{lstlisting}[style=bash,numbers=none]
+gcc -O2 -o ds9_sextract.exe ds9_sextract.c \
+    -I/mingw64/include -L/mingw64/lib \
+    -lcfitsio -lm
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Deploy]
+\begin{lstlisting}[style=bash,numbers=none]
+# Copy binary and required DLLs to ds9 bin directory
+cp ds9_sextract.exe /path/to/SAOImageDS9/bin/
+cp /mingw64/bin/libcfitsio*.dll /path/to/SAOImageDS9/bin/
+cp /mingw64/bin/zlib1.dll /path/to/SAOImageDS9/bin/
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Using Visual Studio}
+
+\begin{codebox}[Compile with MSVC]
+\begin{lstlisting}[style=bash,numbers=none]
+cl /O2 /Fe:ds9_sextract.exe ds9_sextract.c ^
+   /I"C:\cfitsio\include" ^
+   /link /LIBPATH:"C:\cfitsio\lib" cfitsio.lib
+\end{lstlisting}
+\end{codebox}
+
+\begin{important}
+On Windows, required DLLs (\texttt{libcfitsio*.dll}, \texttt{zlib1.dll}) must be placed in the same directory as \texttt{ds9\_sextract.exe}, or their location must be in the system \texttt{PATH}.
+\end{important}
+
+
+\section{Cross-Platform Tcl Integration}
+
+The \texttt{CatalogPanelExtract} procedure in \texttt{layout.tcl} automatically handles platform differences:
+
+\begin{codebox}[Platform-aware binary discovery]
+\begin{lstlisting}[style=tcl,numbers=none]
+set os $::tcl_platform(os)
+if {$os eq "Windows NT"} {
+    set sextract [file join $bindir ds9_sextract.exe]
+} else {
+    set sextract [file join $bindir ds9_sextract]
+}
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Platform-aware library path]
+\begin{lstlisting}[style=tcl,numbers=none]
+if {$os eq "Darwin"} {
+    # macOS: set DYLD_LIBRARY_PATH
+    set ::env(DYLD_LIBRARY_PATH) [join $libpaths :]
+} elseif {$os ne "Windows NT"} {
+    # Linux/Unix: set LD_LIBRARY_PATH
+    set ::env(LD_LIBRARY_PATH) [join $libpaths :]
+}
+# Windows: DLLs found via PATH automatically
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Cross-platform execution]
+\begin{lstlisting}[style=tcl,numbers=none]
+# Direct exec without sh -c (works on all platforms)
+exec $sextract $fn {*}$paramargs 2>@stderr
+\end{lstlisting}
+\end{codebox}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+ & \textbf{Linux} & \textbf{macOS} & \textbf{Windows} \\
+\midrule
+Binary name & \texttt{ds9\_sextract} & \texttt{ds9\_sextract} & \texttt{ds9\_sextract.exe} \\
+Library path env & \texttt{LD\_LIBRARY\_PATH} & \texttt{DYLD\_LIBRARY\_PATH} & \texttt{PATH} \\
+Shell required & No & No & No \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+\section{Verification}
+
+After building for any platform, verify the binary works:
+
+\begin{codebox}[Test extraction]
+\begin{lstlisting}[style=bash,numbers=none]
+./ds9_sextract test_image.fits | head -5
+\end{lstlisting}
+\end{codebox}
+
+Expected output: a tab-separated header line followed by data rows. If library errors occur, check the library path configuration for your platform.
+
+
+%------------------------------------------------------
+% Back matter
+%------------------------------------------------------
+
+\printbibliography[heading=bibintoc,title={References}]
+
+\end{document}

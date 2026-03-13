@@ -304,9 +304,15 @@ proc CatalogPanelExtract {} {
     global current
     global loadParam
 
-    # Find the ds9_sextract binary
+    # Find the ds9_sextract binary (platform-aware)
     set bindir [file dirname [info nameofexecutable]]
-    set sextract [file join $bindir ds9_sextract]
+    set os $::tcl_platform(os)
+
+    if {$os eq "Windows NT"} {
+	set sextract [file join $bindir ds9_sextract.exe]
+    } else {
+	set sextract [file join $bindir ds9_sextract]
+    }
     if {![file executable $sextract]} {
 	set catpanel(status) "ERROR: ds9_sextract not found in $bindir"
 	return
@@ -333,34 +339,54 @@ proc CatalogPanelExtract {} {
     set catpanel(status) "Extracting sources from [file tail $fn] ..."
     update idletasks
 
-    # Build LD_LIBRARY_PATH: include conda lib and any existing path
-    set libpaths {}
-    if {[info exists ::env(CONDA_PREFIX)]} {
-	lappend libpaths "$::env(CONDA_PREFIX)/lib"
-    }
-    # Also check for miniconda3 relative to home
-    set home_conda [file join [file normalize ~] miniconda3/lib]
-    if {[file isdirectory $home_conda]} {
-	lappend libpaths $home_conda
-    }
-    if {[info exists ::env(LD_LIBRARY_PATH)]} {
-	lappend libpaths $::env(LD_LIBRARY_PATH)
-    }
-    set ldpath [join $libpaths :]
-
-    # Build parameter flags
-    set paramflags {}
+    # Build parameter arguments list
+    set paramargs {}
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		   back-size back-filtersize} {
 	if {[info exists catpanel(param,$pname)]} {
-	    append paramflags " --$pname $catpanel(param,$pname)"
+	    lappend paramargs "--$pname" $catpanel(param,$pname)
 	}
     }
 
-    # Run extraction
-    set cmd "LD_LIBRARY_PATH=$ldpath $sextract \"$fn\"$paramflags"
-    if {[catch {set data [exec sh -c $cmd 2>@stderr]} err]} {
+    # Platform-specific library path setup and execution
+    if {$os eq "Darwin"} {
+	# macOS: set DYLD_LIBRARY_PATH
+	set libpaths {}
+	if {[info exists ::env(CONDA_PREFIX)]} {
+	    lappend libpaths "$::env(CONDA_PREFIX)/lib"
+	}
+	set home_conda [file join [file normalize ~] miniconda3/lib]
+	if {[file isdirectory $home_conda]} {
+	    lappend libpaths $home_conda
+	}
+	if {[info exists ::env(DYLD_LIBRARY_PATH)]} {
+	    lappend libpaths $::env(DYLD_LIBRARY_PATH)
+	}
+	if {[llength $libpaths] > 0} {
+	    set ::env(DYLD_LIBRARY_PATH) [join $libpaths :]
+	}
+    } elseif {$os ne "Windows NT"} {
+	# Linux/Unix: set LD_LIBRARY_PATH
+	set libpaths {}
+	if {[info exists ::env(CONDA_PREFIX)]} {
+	    lappend libpaths "$::env(CONDA_PREFIX)/lib"
+	}
+	set home_conda [file join [file normalize ~] miniconda3/lib]
+	if {[file isdirectory $home_conda]} {
+	    lappend libpaths $home_conda
+	}
+	if {[info exists ::env(LD_LIBRARY_PATH)]} {
+	    lappend libpaths $::env(LD_LIBRARY_PATH)
+	}
+	if {[llength $libpaths] > 0} {
+	    set ::env(LD_LIBRARY_PATH) [join $libpaths :]
+	}
+    }
+    # Windows: DLLs found via PATH automatically
+
+    # Run extraction (cross-platform exec)
+    if {[catch {set data [exec $sextract $fn {*}$paramargs 2>@stderr]} err]} {
 	set catpanel(status) "Extraction error: $err"
 	return
     }

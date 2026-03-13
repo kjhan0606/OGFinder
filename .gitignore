@@ -10,7 +10,17 @@ lib/
 include/
 share/
 man/
-docs/
+# docs build artifacts (keep source .tex, .bib, .pdf)
+docs/manual/*.aux
+docs/manual/*.bbl
+docs/manual/*.bcf
+docs/manual/*.blg
+docs/manual/*.idx
+docs/manual/*.log
+docs/manual/*.out
+docs/manual/*.run.xml
+docs/manual/*.toc
+docs/manual/missfont.log
 
 # Object files and libraries
 *.o
