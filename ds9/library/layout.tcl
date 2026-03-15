@@ -166,38 +166,163 @@ proc CreateCatalogPanel {} {
 
     set f $ds9(catalog_frame)
 
-    # Title bar
-    set catpanel(titlebar) [ttk::frame $f.titlebar]
-    ttk::label $f.titlebar.title -text "Source Extractor" \
-	-font {Helvetica 11 bold} -anchor w
-    ttk::button $f.titlebar.extract -text "Extract" \
-	-command CatalogPanelExtract -width 8
-    ttk::button $f.titlebar.settings -text "Settings..." \
-	-command CatalogPanelSettingsDialog -width 10
-    ttk::button $f.titlebar.markall -text "Mark All" \
-	-command CatalogPanelMarkAll -width 8
-    ttk::button $f.titlebar.visible -text "Visible" \
-	-command CatalogPanelShowVisible -width 8
-    ttk::button $f.titlebar.trim -text "Trim..." \
-	-command CatalogPanelTrimDialog -width 6
-    ttk::button $f.titlebar.aimerge -text "AI Merge" \
-	-command CatalogPanelAIMerge -width 9
-    ttk::button $f.titlebar.save -text "Save" \
-	-command CatalogPanelSaveCatalog -width 6
-    ttk::button $f.titlebar.load -text "Load" \
-	-command CatalogPanelLoadCatalog -width 6
-    ttk::button $f.titlebar.clear -text "Clear" \
-	-command CatalogPanelClear -width 6
-    pack $f.titlebar.title -side left -padx 4 -pady 2
-    pack $f.titlebar.clear -side right -padx 2 -pady 2
-    pack $f.titlebar.load -side right -padx 2 -pady 2
-    pack $f.titlebar.save -side right -padx 2 -pady 2
-    pack $f.titlebar.aimerge -side right -padx 2 -pady 2
-    pack $f.titlebar.trim -side right -padx 2 -pady 2
-    pack $f.titlebar.visible -side right -padx 2 -pady 2
-    pack $f.titlebar.markall -side right -padx 2 -pady 2
-    pack $f.titlebar.settings -side right -padx 2 -pady 2
-    pack $f.titlebar.extract -side right -padx 2 -pady 2
+    # Menubar with dropdown menus
+    set catpanel(menubar) [ttk::frame $f.menubar]
+
+    # Remove indicator arrow from menubuttons
+    ttk::style layout CatMenu.TMenubutton {
+	Menubutton.border -sticky nswe -children {
+	    Menubutton.focus -sticky nswe -children {
+		Menubutton.padding -sticky we -children {
+		    Menubutton.label -side left -sticky {}
+		}
+	    }
+	}
+    }
+
+    # SExtractor menu
+    ttk::menubutton $f.menubar.sextract -text "SExtractor" \
+	-menu $f.menubar.sextract.m -style CatMenu.TMenubutton
+    menu $f.menubar.sextract.m -tearoff 0
+    $f.menubar.sextract.m add command -label "Extract" \
+	-command CatalogPanelExtract
+    $f.menubar.sextract.m add command -label "Settings..." \
+	-command CatalogPanelSettingsDialog
+    $f.menubar.sextract.m add separator
+    $f.menubar.sextract.m add command -label "Trim..." \
+	-command CatalogPanelTrimDialog
+    $f.menubar.sextract.m add separator
+    $f.menubar.sextract.m add command -label "Save Catalog" \
+	-command CatalogPanelSaveCatalog
+    $f.menubar.sextract.m add command -label "Load Catalog" \
+	-command CatalogPanelLoadCatalog
+    $f.menubar.sextract.m add separator
+    $f.menubar.sextract.m add command -label "Clear" \
+	-command CatalogPanelClear
+
+    # Display menu
+    ttk::menubutton $f.menubar.display -text "Display" \
+	-menu $f.menubar.display.m -style CatMenu.TMenubutton
+    menu $f.menubar.display.m -tearoff 0
+    $f.menubar.display.m add command -label "Mark All" \
+	-command CatalogPanelMarkAll
+    $f.menubar.display.m add command -label "Clear Markers" \
+	-command CatalogPanelClearMarkers
+    $f.menubar.display.m add separator
+    $f.menubar.display.m add checkbutton -label "Show Visible Only" \
+	-variable catpanel(visible_mode) -command CatalogPanelShowVisible
+
+    # AI Merge menu
+    ttk::menubutton $f.menubar.aimerge -text "AI Merge" \
+	-menu $f.menubar.aimerge.m -style CatMenu.TMenubutton
+    menu $f.menubar.aimerge.m -tearoff 0
+    $f.menubar.aimerge.m add command -label "Run AI Merge" \
+	-command CatalogPanelAIMerge
+
+    # Galaxy Model menu
+    ttk::menubutton $f.menubar.galaxy -text "Galaxy Model" \
+	-menu $f.menubar.galaxy.m -style CatMenu.TMenubutton
+    menu $f.menubar.galaxy.m -tearoff 0
+    $f.menubar.galaxy.m add command -label "AI Morphology Classification" \
+	-command CatalogPanelGalaxyMorphology
+    $f.menubar.galaxy.m add separator
+    $f.menubar.galaxy.m add command -label "Fit Elliptical Model" \
+	-command [list CatalogPanelGalaxyFit elliptical]
+    $f.menubar.galaxy.m add command -label "Fit Spiral Model" \
+	-command [list CatalogPanelGalaxyFit spiral]
+    $f.menubar.galaxy.m add separator
+    $f.menubar.galaxy.m add command -label "Extract Parameters" \
+	-command CatalogPanelGalaxyParams
+
+    # Reconstruction menu
+    ttk::menubutton $f.menubar.psfdeconv -text "Reconstruction" \
+	-menu $f.menubar.psfdeconv.m -style CatMenu.TMenubutton
+    menu $f.menubar.psfdeconv.m -tearoff 0
+
+    # Star Finding submenu
+    menu $f.menubar.psfdeconv.m.stars -tearoff 0
+    $f.menubar.psfdeconv.m add cascade -label "Star Finding" \
+	-menu $f.menubar.psfdeconv.m.stars
+    $f.menubar.psfdeconv.m.stars add command \
+	-label "Find Stars (Combined)" \
+	-command [list CatalogPanelFindStars combined]
+    $f.menubar.psfdeconv.m.stars add command \
+	-label "Find Stars (CLASS_STAR)" \
+	-command [list CatalogPanelFindStars class_star]
+    $f.menubar.psfdeconv.m.stars add command \
+	-label "Find Stars (FWHM)" \
+	-command [list CatalogPanelFindStars fwhm]
+    $f.menubar.psfdeconv.m.stars add separator
+    $f.menubar.psfdeconv.m.stars add command \
+	-label "Show Stars" -command CatalogPanelShowStars
+    $f.menubar.psfdeconv.m.stars add command \
+	-label "Clear Stars" -command CatalogPanelClearStars
+
+    # PSF Generation submenu
+    menu $f.menubar.psfdeconv.m.psf -tearoff 0
+    $f.menubar.psfdeconv.m add cascade -label "PSF Generation" \
+	-menu $f.menubar.psfdeconv.m.psf
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "Build PSF (Median Stack)" \
+	-command [list CatalogPanelBuildPSF median]
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "Build PSF (Moffat Fit)" \
+	-command [list CatalogPanelBuildPSF moffat]
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "Build PSF (Gaussian Fit)" \
+	-command [list CatalogPanelBuildPSF gaussian]
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "Build PSF (ePSF)" \
+	-command [list CatalogPanelBuildPSF epsf]
+    $f.menubar.psfdeconv.m.psf add separator
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "View PSF" -command CatalogPanelViewPSF
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "Save PSF..." -command CatalogPanelSavePSF
+    $f.menubar.psfdeconv.m.psf add command \
+	-label "Load PSF..." -command CatalogPanelLoadPSF
+
+    $f.menubar.psfdeconv.m add separator
+
+    # Deconvolution submenu
+    menu $f.menubar.psfdeconv.m.deconv -tearoff 0
+    $f.menubar.psfdeconv.m add cascade -label "Deconvolution" \
+	-menu $f.menubar.psfdeconv.m.deconv
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "Richardson-Lucy" \
+	-command [list CatalogPanelDeconvolve rl]
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "Richardson-Lucy (Accelerated)" \
+	-command [list CatalogPanelDeconvolve rl_accelerated]
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "Richardson-Lucy (Regularized)" \
+	-command [list CatalogPanelDeconvolve rl_tv]
+    $f.menubar.psfdeconv.m.deconv add separator
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "Wiener Deconvolution" \
+	-command [list CatalogPanelDeconvolve wiener]
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "Tikhonov Regularization" \
+	-command [list CatalogPanelDeconvolve tikhonov]
+    $f.menubar.psfdeconv.m.deconv add separator
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "CLEAN" \
+	-command [list CatalogPanelDeconvolve clean]
+    $f.menubar.psfdeconv.m.deconv add command \
+	-label "Maximum Entropy (MEM)" \
+	-command [list CatalogPanelDeconvolve mem]
+
+    $f.menubar.psfdeconv.m add separator
+    $f.menubar.psfdeconv.m add command -label "Settings..." \
+	-command CatalogPanelPSFDeconvSettings
+    $f.menubar.psfdeconv.m add command -label "Quick Deconvolve (RL)" \
+	-command CatalogPanelQuickDeconvolve
+
+    pack $f.menubar.sextract -side left
+    pack $f.menubar.display -side left
+    pack $f.menubar.aimerge -side left
+    pack $f.menubar.galaxy -side left
+    pack $f.menubar.psfdeconv -side left
 
     # Search/Filter bar
     set catpanel(searchbar) [ttk::frame $f.searchbar]
@@ -266,7 +391,7 @@ proc CreateCatalogPanel {} {
     pack $f.statusbar.lbl -fill x -expand true -padx 2 -pady 2
 
     # Pack all into catalog frame
-    pack $f.titlebar -fill x -side top
+    pack $f.menubar -fill x -side top
     pack $f.searchbar -fill x -side top
     pack $f.statusbar -fill x -side bottom
     pack $f.tblf -fill both -expand true -side top
@@ -281,6 +406,9 @@ proc CreateCatalogPanel {} {
     # Feature B: visible mode
     set catpanel(visible_mode) 0
 
+    # Mark All cached region string
+    set catpanel(markall,on) 0
+
     # Feature C: merge state
     set catpanel(merge,list) {}
     set catpanel(merge,active) 0
@@ -294,6 +422,27 @@ proc CreateCatalogPanel {} {
     set catpanel(ai,total) 0
     set catpanel(ai,threshold) 0.7
     set catpanel(ai,active) 0
+
+    # PSF/Deconv state
+    set catpanel(psf,stars) {}
+    set catpanel(psf,star_indices) {}
+    set catpanel(psf,file) [file join [file normalize ~] .ds9 psf_current.fits]
+    set catpanel(psf,has_psf) 0
+    set catpanel(psf,param,class-star-thresh) 0.8
+    set catpanel(psf,param,max-ellipticity) 0.2
+    set catpanel(psf,param,fwhm-sigma) 2.0
+    set catpanel(psf,param,min-flux-snr) 10.0
+    set catpanel(psf,param,psf-size) 51
+    set catpanel(psf,param,rl-iterations) 30
+    set catpanel(psf,param,wiener-nsr) 0.01
+    set catpanel(psf,param,tikhonov-lambda) 0.001
+    set catpanel(psf,param,tv-lambda) 0.001
+    set catpanel(psf,param,clean-gain) 0.1
+    set catpanel(psf,param,clean-niter) 1000
+    set catpanel(psf,param,clean-threshold) 0.0
+    set catpanel(psf,param,mem-lambda) 0.1
+    set catpanel(psf,param,mem-niter) 100
+    CatalogPanelPSFParamLoad
 
     # Ctrl key tracking (Feature A/C)
     set ::catpanel_ctrl 0
@@ -311,6 +460,27 @@ proc CreateCatalogPanel {} {
 
     # Initialize extraction parameters
     CatalogPanelParamDef
+
+    # Force ttk widgets to redraw on resize (X11 compositing conflict)
+    bind $f <Configure> [list CatalogPanelRedrawTtk $f]
+}
+
+proc CatalogPanelRedrawTtk {f} {
+    # Debounce: cancel previous scheduled redraw
+    catch {after cancel $::catpanel_redraw_id}
+
+    # Schedule redraw after resize settles
+    set ::catpanel_redraw_id [after 50 [list CatalogPanelRedrawTtkDo $f]]
+}
+
+proc CatalogPanelRedrawTtkDo {f} {
+    # Force titlebar and statusbar to re-expose
+    catch {
+	foreach w [winfo children $f.titlebar] {
+	    event generate $w <Expose>
+	}
+	event generate $f.statusbar.lbl <Expose>
+    }
 }
 
 # Run source extraction on the currently loaded FITS image
@@ -347,13 +517,27 @@ proc CatalogPanelExtract {} {
     # Strip curly braces if present
     set fn [string trim $fn "{}"]
 
+    # Strip FITS HDU extension specifier (e.g. [SCI], [1], [SCI,2])
+    regsub {\[.*\]$} $fn {} fn
+
     if {![file exists $fn]} {
 	set catpanel(status) "File not found: $fn"
 	return
     }
 
+    # Set log scale with optimized limits
+    CatalogPanelSetLogScale
+
     set catpanel(status) "Extracting sources from [file tail $fn] ..."
     update idletasks
+
+    # Save extraction parameters so AI Merge uses the same values
+    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
+		   mag-zeropoint back-size back-filtersize} {
+	if {[info exists catpanel(param,$pname)]} {
+	    set catpanel(extract_param,$pname) $catpanel(param,$pname)
+	}
+    }
 
     # Build parameter arguments list
     set paramargs {}
@@ -490,6 +674,9 @@ proc CatalogPanelClear {} {
     # Reset merge state
     set catpanel(merge,list) {}
     set catpanel(merge,active) 0
+
+    # Reset mark all state
+    set catpanel(markall,on) 0
 
     # Reset visible mode
     set catpanel(visible_mode) 0
@@ -788,6 +975,11 @@ proc CatalogPanelGotoSource {row} {
     set frame $current(frame)
     catch {$frame marker catalog sextract_sel delete}
 
+    # Rebuild sextract_all markers from alldata to keep image in sync
+    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+	CatalogPanelCreateAllMarkers
+    }
+
     # Use global variable for marker creation (var form requires global access)
     global sextract_sel_reg
 
@@ -958,7 +1150,10 @@ proc CatalogPanelSettingsDialog {} {
 
 # --- Mark All Sources ---
 
-proc CatalogPanelMarkAll {} {
+# Build region string and create sextract_all markers from catpanel(alldata).
+# This is the single source of truth for marker creation.
+# Called by: CatalogPanelMarkAll, CatalogPanelMergeSources, AI merge, GotoSource.
+proc CatalogPanelCreateAllMarkers {} {
     global catpanel
     global current
 
@@ -968,13 +1163,17 @@ proc CatalogPanelMarkAll {} {
 
     set frame $current(frame)
 
-    # Delete previous "mark all" markers
+    # Delete previous sextract_all markers
     catch {$frame marker catalog sextract_all delete}
 
-    global $catpanel(tbldb)
+    # Parse directly from alldata (authoritative data source)
+    set lines [split $catpanel(alldata) \n]
+    if {[llength $lines] < 2} return
 
-    # Find column indices
-    set ncols [$catpanel(tbl) cget -cols]
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Find column indices (0-based in tab-split fields)
     set col_x -1
     set col_y -1
     set col_a -1
@@ -982,40 +1181,41 @@ proc CatalogPanelMarkAll {} {
     set col_theta -1
     set col_ir -1
     set col_num -1
-    for {set c 1} {$c <= $ncols} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
-	    set hdr [set ${catpanel(tbldb)}(0,$c)]
-	    switch -- $hdr {
-		NUMBER      { set col_num $c }
-		X_IMAGE     { set col_x $c }
-		Y_IMAGE     { set col_y $c }
-		A_IMAGE     { set col_a $c }
-		B_IMAGE     { set col_b $c }
-		THETA_IMAGE { set col_theta $c }
-		ISO_RADIUS  { set col_ir $c }
-	    }
+    for {set c 0} {$c < $ncols} {incr c} {
+	set hdr [string trim [lindex $headers $c]]
+	switch -- $hdr {
+	    NUMBER      { set col_num $c }
+	    X_IMAGE     { set col_x $c }
+	    Y_IMAGE     { set col_y $c }
+	    A_IMAGE     { set col_a $c }
+	    B_IMAGE     { set col_b $c }
+	    THETA_IMAGE { set col_theta $c }
+	    ISO_RADIUS  { set col_ir $c }
 	}
     }
     if {$col_x < 0 || $col_y < 0} return
 
-    set catpanel(status) "Marking all sources..."
-    update idletasks
-
-    # Build one big region string for all sources
+    # Build region strings in batches to avoid DS9 marker command size limits
+    set batch_size 500
     set reg "image\n"
-    set nrows [$catpanel(tbl) cget -rows]
     set count 0
+    set batch_count 0
+    global sextract_all_reg
 
-    for {set r 1} {$r < $nrows} {incr r} {
-	if {![info exists ${catpanel(tbldb)}($r,$col_x)]} continue
-	set x [set ${catpanel(tbldb)}($r,$col_x)]
-	set y [set ${catpanel(tbldb)}($r,$col_y)]
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+
+	set x [string trim [lindex $fields $col_x]]
+	set y [string trim [lindex $fields $col_y]]
 	if {![string is double -strict $x] || ![string is double -strict $y]} continue
 
 	# Get source NUMBER for individual tag
-	set src_num $r
-	if {$col_num >= 0 && [info exists ${catpanel(tbldb)}($r,$col_num)]} {
-	    set src_num [set ${catpanel(tbldb)}($r,$col_num)]
+	set src_num [expr {$i}]
+	if {$col_num >= 0} {
+	    set nv [string trim [lindex $fields $col_num]]
+	    if {$nv ne {}} { set src_num $nv }
 	}
 
 	# Get ellipse parameters (NaN/Inf safe via catch)
@@ -1024,22 +1224,22 @@ proc CatalogPanelMarkAll {} {
 	set b_image 0
 	set theta 0
 
-	if {$col_ir >= 0 && [info exists ${catpanel(tbldb)}($r,$col_ir)]} {
-	    set val [set ${catpanel(tbldb)}($r,$col_ir)]
+	if {$col_ir >= 0} {
+	    set val [string trim [lindex $fields $col_ir]]
 	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
 		set iso_radius $v
 	    }
 	}
-	if {$col_a >= 0 && [info exists ${catpanel(tbldb)}($r,$col_a)]} {
-	    set val [set ${catpanel(tbldb)}($r,$col_a)]
+	if {$col_a >= 0} {
+	    set val [string trim [lindex $fields $col_a]]
 	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
 	}
-	if {$col_b >= 0 && [info exists ${catpanel(tbldb)}($r,$col_b)]} {
-	    set val [set ${catpanel(tbldb)}($r,$col_b)]
+	if {$col_b >= 0} {
+	    set val [string trim [lindex $fields $col_b]]
 	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
 	}
-	if {$col_theta >= 0 && [info exists ${catpanel(tbldb)}($r,$col_theta)]} {
-	    set val [set ${catpanel(tbldb)}($r,$col_theta)]
+	if {$col_theta >= 0} {
+	    set val [string trim [lindex $fields $col_theta]]
 	    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
 	}
 
@@ -1052,16 +1252,54 @@ proc CatalogPanelMarkAll {} {
 
 	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=yellow width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
 	incr count
+	incr batch_count
+
+	# Flush batch when limit reached
+	if {$batch_count >= $batch_size} {
+	    set sextract_all_reg $reg
+	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    set reg "image\n"
+	    set batch_count 0
+	}
+    }
+
+    # Flush remaining markers
+    if {$batch_count > 0} {
+	set sextract_all_reg $reg
+	catch {$frame marker catalog command ds9 var sextract_all_reg}
     }
 
     if {$count == 0} return
 
-    # Create all markers in one call using global variable
-    global sextract_all_reg
-    set sextract_all_reg $reg
-    catch {$frame marker catalog command ds9 var sextract_all_reg}
-
+    set catpanel(markall,on) 1
     set catpanel(status) "Marked $count sources (yellow ellipses)"
+}
+
+proc CatalogPanelMarkAll {} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set frame $current(frame)
+
+    # If already marked, clear first then re-mark
+    catch {$frame marker catalog sextract_all delete}
+    CatalogPanelCreateAllMarkers
+}
+
+proc CatalogPanelClearMarkers {} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+
+    set frame $current(frame)
+    catch {$frame marker catalog sextract_all delete}
+    set catpanel(markall,on) 0
+    set catpanel(status) "Markers cleared"
 }
 
 # --- Marker Callbacks (Feature A) ---
@@ -1187,15 +1425,12 @@ proc CatalogPanelShowVisible {} {
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
-    # Toggle mode
-    if {$catpanel(visible_mode)} {
-	set catpanel(visible_mode) 0
+    # checkbutton already toggled catpanel(visible_mode) before calling us
+    if {!$catpanel(visible_mode)} {
 	CatalogPanelLoadTSV $catpanel(alldata) "all"
 	set catpanel(status) "Showing all sources"
 	return
     }
-
-    set catpanel(visible_mode) 1
 
     set frame $current(frame)
 
@@ -1447,14 +1682,11 @@ proc CatalogPanelMergeSources {} {
     set new_num [expr {$max_number + 1}]
 
     # Compute merged values
-    # Flux-weighted centroid for X,Y
+    # Pass 1: flux-weighted centroid for X,Y + total flux/npix
     set total_flux 0.0
     set wx 0.0
     set wy 0.0
     set total_npix 0
-    set wa 0.0
-    set wb 0.0
-    set wtheta 0.0
 
     foreach row $merge_rows {
 	set flux 1.0
@@ -1477,33 +1709,79 @@ proc CatalogPanelMergeSources {} {
 		set total_npix [expr {$total_npix + $nv}]
 	    }
 	}
-	if {$idx_a >= 0} {
-	    set av [string trim [lindex $row $idx_a]]
-	    if {[string is double -strict $av]} {
-		set wa [expr {$wa + $av * $flux}]
-	    }
-	}
-	if {$idx_b >= 0} {
-	    set bv [string trim [lindex $row $idx_b]]
-	    if {[string is double -strict $bv]} {
-		set wb [expr {$wb + $bv * $flux}]
-	    }
-	}
-	if {$idx_theta >= 0} {
-	    set tv [string trim [lindex $row $idx_theta]]
-	    if {[string is double -strict $tv]} {
-		set wtheta [expr {$wtheta + $tv * $flux}]
-	    }
-	}
     }
 
     if {$total_flux <= 0} { set total_flux 1.0 }
 
     set new_x [expr {$wx / $total_flux}]
     set new_y [expr {$wy / $total_flux}]
-    set new_a [expr {$wa / $total_flux}]
-    set new_b [expr {$wb / $total_flux}]
-    set new_theta [expr {$wtheta / $total_flux}]
+
+    # Pass 2: second-moment tensor for merged ellipse (A, B, THETA)
+    set Ixx 0.0
+    set Iyy 0.0
+    set Ixy 0.0
+
+    foreach row $merge_rows {
+	set flux 1.0
+	if {$idx_flux >= 0} {
+	    set fv [string trim [lindex $row $idx_flux]]
+	    if {[string is double -strict $fv] && $fv > 0} { set flux $fv }
+	}
+	set x [string trim [lindex $row $idx_x]]
+	set y [string trim [lindex $row $idx_y]]
+	if {![string is double -strict $x]} { set x 0 }
+	if {![string is double -strict $y]} { set y 0 }
+
+	set ak 0.0
+	set bk 0.0
+	set thetak 0.0
+	if {$idx_a >= 0} {
+	    set av [string trim [lindex $row $idx_a]]
+	    if {[string is double -strict $av]} { set ak $av }
+	}
+	if {$idx_b >= 0} {
+	    set bv [string trim [lindex $row $idx_b]]
+	    if {[string is double -strict $bv]} { set bk $bv }
+	}
+	if {$idx_theta >= 0} {
+	    set tv [string trim [lindex $row $idx_theta]]
+	    if {[string is double -strict $tv]} { set thetak $tv }
+	}
+
+	# Intrinsic second moments of this source's ellipse
+	set rad [expr {$thetak * 3.14159265358979 / 180.0}]
+	set cosT [expr {cos($rad)}]
+	set sinT [expr {sin($rad)}]
+	set a2 [expr {$ak * $ak}]
+	set b2 [expr {$bk * $bk}]
+	set ixx_k [expr {$a2 * $cosT * $cosT + $b2 * $sinT * $sinT}]
+	set iyy_k [expr {$a2 * $sinT * $sinT + $b2 * $cosT * $cosT}]
+	set ixy_k [expr {($a2 - $b2) * $sinT * $cosT}]
+
+	# Parallel axis theorem: add offset from merged centroid
+	set dx [expr {$x - $new_x}]
+	set dy [expr {$y - $new_y}]
+	set Ixx [expr {$Ixx + $flux * ($ixx_k + $dx * $dx)}]
+	set Iyy [expr {$Iyy + $flux * ($iyy_k + $dy * $dy)}]
+	set Ixy [expr {$Ixy + $flux * ($ixy_k + $dx * $dy)}]
+    }
+
+    # Normalize by total flux
+    set Ixx [expr {$Ixx / $total_flux}]
+    set Iyy [expr {$Iyy / $total_flux}]
+    set Ixy [expr {$Ixy / $total_flux}]
+
+    # Eigenvalue decomposition → A, B, THETA
+    set trace [expr {$Ixx + $Iyy}]
+    set det [expr {$Ixx * $Iyy - $Ixy * $Ixy}]
+    set disc [expr {sqrt(abs(($Ixx - $Iyy) * ($Ixx - $Iyy) + 4.0 * $Ixy * $Ixy))}]
+    set lam1 [expr {($trace + $disc) / 2.0}]
+    set lam2 [expr {($trace - $disc) / 2.0}]
+    if {$lam1 < 0} { set lam1 0.0 }
+    if {$lam2 < 0} { set lam2 0.0 }
+    set new_a [expr {sqrt($lam1)}]
+    set new_b [expr {sqrt($lam2)}]
+    set new_theta [expr {0.5 * atan2(2.0 * $Ixy, $Ixx - $Iyy) * 180.0 / 3.14159265358979}]
 
     # MAG_AUTO from total flux
     set mag_zp 25.0
@@ -1559,7 +1837,7 @@ proc CatalogPanelMergeSources {} {
 
     # Reload table and markers
     CatalogPanelLoadTSV $catpanel(alldata) "merged"
-    CatalogPanelMarkAll
+    CatalogPanelCreateAllMarkers
 
     # Find merged source row and auto-select/navigate
     global $catpanel(tbldb)
@@ -1622,6 +1900,49 @@ proc CatalogPanelEscapeKey {} {
     }
 }
 
+# --- Log Scale ---
+
+proc CatalogPanelSetLogScale {} {
+    global current
+    global scale
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+
+    # Set scale to log
+    set scale(type) log
+    $current(frame) colorscale log $scale(log)
+    $current(frame) colorscale log
+
+    # Get min/max pixel values
+    $current(frame) clip mode minmax
+    set limits [$current(frame) get clip]
+    set pmin [lindex $limits 0]
+    set pmax [lindex $limits 1]
+
+    # Guard against NaN/Inf/non-numeric
+    if {[catch {expr {$pmin + 0.0}}]} { set pmin 0.001 }
+    if {[catch {expr {$pmax + 0.0}}]} { set pmax 1000.0 }
+
+    # Ensure positive values for log
+    if {$pmin <= 0} { set pmin 0.001 }
+    if {$pmax <= $pmin} { set pmax [expr {$pmin * 1000}] }
+
+    # Compute display max: 0.8*(log(max)-log(min)) + log(min)
+    set log_min [expr {log10($pmin)}]
+    set log_max [expr {log10($pmax)}]
+    set log_disp [expr {0.8 * ($log_max - $log_min) + $log_min}]
+    set disp_max [expr {pow(10.0, $log_disp)}]
+
+    # Apply user-defined limits
+    set scale(min) $pmin
+    set scale(max) $disp_max
+    set scale(mode) user
+    $current(frame) clip user $pmin $disp_max
+    $current(frame) clip mode user
+    UpdateScale
+}
+
 # --- AI Merge ---
 
 proc CatalogPanelAIMerge {} {
@@ -1641,6 +1962,7 @@ proc CatalogPanelAIMerge {} {
 	catch {set fn [$current(frame) get fits file name full]}
     }
     set fn [string trim $fn "{}"]
+    regsub {\[.*\]$} $fn {} fn
     if {$fn eq {} || ![file exists $fn]} {
 	set catpanel(status) "No FITS image loaded"
 	return
@@ -1659,12 +1981,27 @@ proc CatalogPanelAIMerge {} {
 	return
     }
 
-    # Build parameter arguments
+    # Save catalog to temp TSV for --catalog mode
+    set catfile [file join [file normalize ~] .ds9 ai_merge_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "AI Merge error: cannot write catalog: $err"
+	return
+    }
+
+    # Build parameter arguments — use params from Extract time, not current settings
     set paramargs {}
     lappend paramargs "--threshold" $catpanel(ai,threshold)
+    lappend paramargs "--catalog" $catfile
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   mag-zeropoint back-size back-filtersize} {
-	if {[info exists catpanel(param,$pname)]} {
+	if {[info exists catpanel(extract_param,$pname)]} {
+	    lappend paramargs "--$pname" $catpanel(extract_param,$pname)
+	} elseif {[info exists catpanel(param,$pname)]} {
 	    lappend paramargs "--$pname" $catpanel(param,$pname)
 	}
     }
@@ -1678,11 +2015,29 @@ proc CatalogPanelAIMerge {} {
     set catpanel(status) "AI Merge: running prediction on [file tail $fn] ..."
     update idletasks
 
-    # Run prediction
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>@stderr]} err]} {
-	set catpanel(status) "AI Merge error: $err"
+    # Run prediction — capture stderr for error diagnostics
+    set errfile [file join [file normalize ~] .ds9 ai_merge_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    # Show last line of stderr (most relevant error)
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "AI Merge error: $last_err"
+	    puts "AI Merge full stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "AI Merge error: $err"
+	}
 	return
     }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
 
     # Parse output
     set lines [split $data \n]
@@ -1709,15 +2064,16 @@ proc CatalogPanelAIMerge {} {
 	}
 	if {[string trim $line] eq {}} continue
 
-	# Data row: GROUP	N_MEMBERS	CONFIDENCE	MEMBERS_X	MEMBERS_Y
+	# Data row: GROUP	N_MEMBERS	CONFIDENCE	MEMBERS_X	MEMBERS_Y	MEMBERS_NUM
 	set fields [split $line "\t"]
-	if {[llength $fields] < 5} continue
+	if {[llength $fields] < 6} continue
 	set g_idx [lindex $fields 0]
 	set n_mem [lindex $fields 1]
 	set conf  [lindex $fields 2]
 	set mem_x [lindex $fields 3]
 	set mem_y [lindex $fields 4]
-	lappend groups [list $g_idx $n_mem $conf $mem_x $mem_y]
+	set mem_num [lindex $fields 5]
+	lappend groups [list $g_idx $n_mem $conf $mem_x $mem_y $mem_num]
     }
 
     if {[llength $groups] == 0} {
@@ -1739,21 +2095,33 @@ proc CatalogPanelAIMerge {} {
 }
 
 proc CatalogPanelAIBindKeys {} {
-    bind . <Key-n> {CatalogPanelAINext}
-    bind . <Key-p> {CatalogPanelAIPrev}
-    bind . <Key-a> {CatalogPanelAIAccept}
-    bind . <Key-r> {CatalogPanelAIReject}
-    bind . <Right> {CatalogPanelAINext}
-    bind . <Left>  {CatalogPanelAIPrev}
+    global ds9
+
+    # Bind on toplevel AND canvas (canvas has focus when mouse is over image)
+    foreach w [list . $ds9(canvas)] {
+	bind $w <Key-n> {CatalogPanelAINext}
+	bind $w <Key-p> {CatalogPanelAIPrev}
+	bind $w <Key-a> {CatalogPanelAIAccept}
+	bind $w <Key-r> {CatalogPanelAIReject}
+	bind $w <Right> {CatalogPanelAINext}
+	bind $w <Left>  {CatalogPanelAIPrev}
+    }
+
+    # Force focus to canvas so keys work immediately
+    focus -force $ds9(canvas)
 }
 
 proc CatalogPanelAIUnbindKeys {} {
-    bind . <Key-n> {}
-    bind . <Key-p> {}
-    bind . <Key-a> {}
-    bind . <Key-r> {}
-    bind . <Right> {}
-    bind . <Left>  {}
+    global ds9
+
+    foreach w [list . $ds9(canvas)] {
+	bind $w <Key-n> {}
+	bind $w <Key-p> {}
+	bind $w <Key-a> {}
+	bind $w <Key-r> {}
+	bind $w <Right> {}
+	bind $w <Left>  {}
+    }
 }
 
 proc CatalogPanelAIShowGroup {idx} {
@@ -1772,25 +2140,26 @@ proc CatalogPanelAIShowGroup {idx} {
     set catpanel(ai,current) $idx
     set group [lindex $groups $idx]
 
-    # Parse group: {g_idx n_mem conf mem_x mem_y}
+    # Parse group: {g_idx n_mem conf mem_x mem_y mem_num}
     set n_mem [lindex $group 1]
     set conf  [lindex $group 2]
     set xs_str [lindex $group 3]
     set ys_str [lindex $group 4]
+    set nums_str [lindex $group 5]
     set xs [split $xs_str ","]
     set ys [split $ys_str ","]
+    set nums [split $nums_str ","]
 
     if {[llength $xs] < 2 || [llength $xs] != [llength $ys]} return
 
-    # Match each AI coordinate to catalog NUMBER
-    set matched_nums {}
+    # Use MEMBERS_NUM directly — no coordinate matching needed
+    set matched_nums $nums
     set matched_xs {}
     set matched_ys {}
     for {set m 0} {$m < [llength $xs]} {incr m} {
 	set ax [lindex $xs $m]
 	set ay [lindex $ys $m]
-	set num [CatalogPanelAIMatchSource $ax $ay]
-	lappend matched_nums $num
+	if {[catch {expr {$ax + 0.0}}] || [catch {expr {$ay + 0.0}}]} continue
 	lappend matched_xs $ax
 	lappend matched_ys $ay
     }
@@ -1822,74 +2191,29 @@ proc CatalogPanelAIShowGroup {idx} {
     $frame marker catalog command ds9 var ai_merge_reg
 
     # Pan to group center
+    if {[llength $matched_xs] < 2} return
     set cx 0.0
     set cy 0.0
     foreach mx $matched_xs my $matched_ys {
-	set cx [expr {$cx + $mx}]
-	set cy [expr {$cy + $my}]
+	catch {set cx [expr {$cx + $mx}]}
+	catch {set cy [expr {$cy + $my}]}
     }
     set nm [llength $matched_xs]
-    set cx [expr {$cx / $nm}]
-    set cy [expr {$cy / $nm}]
-    PanTo $cx $cy image
+    if {$nm > 0} {
+	set cx [expr {$cx / $nm}]
+	set cy [expr {$cy / $nm}]
+	PanTo $cx $cy image {}
+    }
 
     # Status bar
     set g_num [expr {$idx + 1}]
     set total $catpanel(ai,total)
     set num_str [join $matched_nums ","]
     set catpanel(status) "AI Group $g_num/$total (conf=[format %.2f $conf], ${n_mem} sources: $num_str) \[n:Next p:Prev a:Accept r:Reject Esc:Done\]"
-}
 
-proc CatalogPanelAIMatchSource {ai_x ai_y} {
-    global catpanel
-
-    # Search catpanel(alldata) for nearest source within 3px
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	return {}
-    }
-
-    set lines [split $catpanel(alldata) \n]
-    set header [lindex $lines 0]
-    set headers [split $header "\t"]
-
-    # Find column indices
-    set idx_num -1
-    set idx_x -1
-    set idx_y -1
-    for {set i 0} {$i < [llength $headers]} {incr i} {
-	set h [string trim [lindex $headers $i]]
-	switch -- $h {
-	    NUMBER  { set idx_num $i }
-	    X_IMAGE { set idx_x $i }
-	    Y_IMAGE { set idx_y $i }
-	}
-    }
-    if {$idx_x < 0 || $idx_y < 0} { return {} }
-
-    set best_num {}
-    set best_dist 3.0  ;# max 3px tolerance
-
-    for {set i 1} {$i < [llength $lines]} {incr i} {
-	set line [lindex $lines $i]
-	if {[string trim $line] eq {}} continue
-	set fields [split $line "\t"]
-	set sx [string trim [lindex $fields $idx_x]]
-	set sy [string trim [lindex $fields $idx_y]]
-	if {![string is double -strict $sx] || ![string is double -strict $sy]} continue
-
-	set dx [expr {$ai_x - $sx}]
-	set dy [expr {$ai_y - $sy}]
-	set dist [expr {sqrt($dx*$dx + $dy*$dy)}]
-	if {$dist < $best_dist} {
-	    set best_dist $dist
-	    if {$idx_num >= 0} {
-		set best_num [string trim [lindex $fields $idx_num]]
-	    } else {
-		set best_num $i
-	    }
-	}
-    }
-    return $best_num
+    # Ensure canvas has focus so keys work
+    global ds9
+    focus -force $ds9(canvas)
 }
 
 proc CatalogPanelAINext {} {
@@ -1923,19 +2247,9 @@ proc CatalogPanelAIAccept {} {
     set groups $catpanel(ai,groups)
     set group [lindex $groups $idx]
 
-    # Get member coordinates and match to NUMBERs
-    set xs_str [lindex $group 3]
-    set ys_str [lindex $group 4]
-    set xs [split $xs_str ","]
-    set ys [split $ys_str ","]
-
-    set merge_nums {}
-    for {set m 0} {$m < [llength $xs]} {incr m} {
-	set num [CatalogPanelAIMatchSource [lindex $xs $m] [lindex $ys $m]]
-	if {$num ne {}} {
-	    lappend merge_nums $num
-	}
-    }
+    # Get member NUMBERs directly from MEMBERS_NUM field
+    set nums_str [lindex $group 5]
+    set merge_nums [split $nums_str ","]
 
     if {[llength $merge_nums] < 2} {
 	set catpanel(status) "AI Accept: could not match enough sources"
@@ -2002,8 +2316,8 @@ proc CatalogPanelAIDone {} {
     set catpanel(ai,total) 0
     set catpanel(ai,current) 0
 
-    # Re-mark all sources
-    CatalogPanelMarkAll
+    # Re-mark all sources from authoritative data
+    CatalogPanelCreateAllMarkers
 
     set catpanel(status) "AI Merge session ended"
 }
@@ -2362,11 +2676,8 @@ proc CatalogPanelTrimApply {} {
     set catpanel(trim,active) 1
     CatalogPanelLoadTSV $filtered "trimmed"
 
-    # Re-mark if markers were present
-    if {$current(frame) != {}} {
-	catch {$current(frame) marker catalog sextract_all delete}
-    }
-    CatalogPanelMarkAll
+    # Re-mark from authoritative data
+    CatalogPanelCreateAllMarkers
 
     set catpanel(status) "Trimmed: $count of $total sources match conditions"
 }
@@ -3499,3 +3810,1217 @@ proc ProcessSendViewCmd {proc id param {sock {}} {fn {}}} {
     viewsend::yy_scan_string $param
     viewsend::yyparse
 }
+
+# --- Galaxy Model Fitting ---
+
+proc CatalogPanelGalaxyFit {model} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No sources — run Extract first"
+	return
+    }
+
+    set catpanel(status) "Galaxy $model fitting — not yet implemented"
+}
+
+proc CatalogPanelGalaxyParams {} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No sources — run Extract first"
+	return
+    }
+
+    set catpanel(status) "Galaxy parameter extraction — not yet implemented"
+}
+
+proc CatalogPanelGalaxyMorphology {} {
+    global catpanel
+    global current
+    global ds9
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No sources — run Extract first"
+	return
+    }
+
+    # Get current FITS filename
+    set fn {}
+    if {$current(frame) != {}} {
+	catch {set fn [$current(frame) get fits file name full]}
+    }
+    set fn [string trim $fn "{}"]
+    regsub {\[.*\]$} $fn {} fn
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    # Find ds9_galaxy_morph.py
+    set bindir [file dirname [info nameofexecutable]]
+    set script [file join $bindir ds9_galaxy_morph.py]
+    if {![file exists $script]} {
+	set libdir [file join [file dirname $bindir] ds9 library]
+	set script [file join $libdir ds9_galaxy_morph.py]
+    }
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_galaxy_morph.py not found"
+	return
+    }
+
+    # Save catalog to temp TSV
+    set catfile [file join [file normalize ~] .ds9 morph_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "Morphology error: cannot write catalog: $err"
+	return
+    }
+
+    # Build arguments
+    set paramargs {}
+    lappend paramargs "--catalog" $catfile
+
+    # Find checkpoint
+    set ckpt [file join [file dirname $bindir] galaxy_morph data checkpoints cnn_morph_best.pt]
+    if {[file exists $ckpt]} {
+	lappend paramargs "--checkpoint" $ckpt
+    }
+
+    set catpanel(status) "Morphology: classifying sources on [file tail $fn] ..."
+    update idletasks
+
+    # Run classification
+    set errfile [file join [file normalize ~] .ds9 morph_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Morphology error: $last_err"
+	    puts "Morphology full stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "Morphology error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    # Parse results
+    CatalogPanelMorphParseResults $data
+}
+
+proc CatalogPanelMorphParseResults {data} {
+    global catpanel
+    global current
+
+    set lines [split $data \n]
+    set n_classified 0
+
+    # Parse header: #GALAXY_MORPH	N_CLASSIFIED=245	N_SOURCES=300
+    foreach line $lines {
+	if {[string match "#GALAXY_MORPH*" $line]} {
+	    foreach field [split $line "\t"] {
+		if {[string match "N_CLASSIFIED=*" $field]} {
+		    set n_classified [string range $field 13 end]
+		}
+	    }
+	    continue
+	}
+    }
+
+    # Build morph_map: NUMBER -> {morph_type morph_conf color}
+    array unset catpanel morph,*
+    set catpanel(morph,map) {}
+
+    foreach line $lines {
+	if {[string match "#*" $line]} continue
+	if {[string match "NUMBER*" $line]} continue
+	if {[string trim $line] eq {}} continue
+
+	# NUMBER MORPH_TYPE MORPH_DESC MORPH_CONF TOP1_CLASS TOP1_PROB ... MORPH_COLOR
+	set fields [split $line "\t"]
+	if {[llength $fields] < 11} continue
+
+	set src_num [lindex $fields 0]
+	set morph_type [lindex $fields 1]
+	set morph_desc [lindex $fields 2]
+	set morph_conf [lindex $fields 3]
+	set color [lindex $fields 10]
+
+	set catpanel(morph,$src_num) [list $morph_type $morph_desc $morph_conf $color]
+	lappend catpanel(morph,map) $src_num
+    }
+
+    if {[llength $catpanel(morph,map)] == 0} {
+	set catpanel(status) "Morphology: no galaxies classified"
+	return
+    }
+
+    # Add MORPH_TYPE and MORPH_CONF columns to alldata
+    CatalogPanelMorphAddColumns
+
+    # Recolor markers by morphology
+    CatalogPanelMorphColorMarkers
+
+    set catpanel(status) "Morphology: $n_classified galaxies classified"
+}
+
+proc CatalogPanelMorphAddColumns {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set lines [split $catpanel(alldata) \n]
+    if {[llength $lines] < 2} return
+
+    # Parse header
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Find NUMBER column
+    set col_num -1
+    for {set c 0} {$c < $ncols} {incr c} {
+	if {[string trim [lindex $headers $c]] eq "NUMBER"} {
+	    set col_num $c
+	    break
+	}
+    }
+    if {$col_num < 0} return
+
+    # Check if columns already exist (avoid duplicates)
+    set has_morph 0
+    for {set c 0} {$c < $ncols} {incr c} {
+	if {[string trim [lindex $headers $c]] eq "MORPH_TYPE"} {
+	    set has_morph 1
+	    break
+	}
+    }
+
+    # Build new data with added columns
+    set newdata {}
+
+    if {$has_morph} {
+	# Find existing MORPH_TYPE, MORPH_DESC, MORPH_CONF column indices
+	set col_mt -1
+	set col_md -1
+	set col_mc -1
+	for {set c 0} {$c < $ncols} {incr c} {
+	    set h [string trim [lindex $headers $c]]
+	    if {$h eq "MORPH_TYPE"} { set col_mt $c }
+	    if {$h eq "MORPH_DESC"} { set col_md $c }
+	    if {$h eq "MORPH_CONF"} { set col_mc $c }
+	}
+
+	# Update existing columns
+	append newdata [lindex $lines 0]
+	for {set i 1} {$i < [llength $lines]} {incr i} {
+	    set line [lindex $lines $i]
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line "\t"]
+	    set src_num [string trim [lindex $fields $col_num]]
+
+	    if {[info exists catpanel(morph,$src_num)]} {
+		set info $catpanel(morph,$src_num)
+		if {$col_mt >= 0} {
+		    lset fields $col_mt [lindex $info 0]
+		}
+		if {$col_md >= 0} {
+		    lset fields $col_md [lindex $info 1]
+		}
+		if {$col_mc >= 0} {
+		    lset fields $col_mc [lindex $info 2]
+		}
+	    }
+	    append newdata "\n" [join $fields "\t"]
+	}
+    } else {
+	# Add new columns
+	append newdata [lindex $lines 0] "\tMORPH_TYPE\tMORPH_DESC\tMORPH_CONF"
+	for {set i 1} {$i < [llength $lines]} {incr i} {
+	    set line [lindex $lines $i]
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line "\t"]
+	    set src_num [string trim [lindex $fields $col_num]]
+
+	    set mt ""
+	    set md ""
+	    set mc ""
+	    if {[info exists catpanel(morph,$src_num)]} {
+		set info $catpanel(morph,$src_num)
+		set mt [lindex $info 0]
+		set md [lindex $info 1]
+		set mc [lindex $info 2]
+	    }
+	    append newdata "\n" $line "\t" $mt "\t" $md "\t" $mc
+	}
+    }
+
+    set catpanel(alldata) $newdata
+    CatalogPanelLoadTSV $catpanel(alldata) "morphology"
+}
+
+proc CatalogPanelMorphColorMarkers {} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    set frame $current(frame)
+
+    # Delete previous sextract_all markers and recreate with morph colors
+    catch {$frame marker catalog sextract_all delete}
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set lines [split $catpanel(alldata) \n]
+    if {[llength $lines] < 2} return
+
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Find needed columns
+    set col_x -1
+    set col_y -1
+    set col_a -1
+    set col_b -1
+    set col_theta -1
+    set col_ir -1
+    set col_num -1
+    for {set c 0} {$c < $ncols} {incr c} {
+	set hdr [string trim [lindex $headers $c]]
+	switch -- $hdr {
+	    NUMBER      { set col_num $c }
+	    X_IMAGE     { set col_x $c }
+	    Y_IMAGE     { set col_y $c }
+	    A_IMAGE     { set col_a $c }
+	    B_IMAGE     { set col_b $c }
+	    THETA_IMAGE { set col_theta $c }
+	    ISO_RADIUS  { set col_ir $c }
+	}
+    }
+    if {$col_x < 0 || $col_y < 0} return
+
+    # Build region strings with morph-specific colors
+    set batch_size 500
+    set reg "image\n"
+    set count 0
+    set batch_count 0
+    global sextract_all_reg
+
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+
+	set x [string trim [lindex $fields $col_x]]
+	set y [string trim [lindex $fields $col_y]]
+	if {![string is double -strict $x] || ![string is double -strict $y]} continue
+
+	set src_num [expr {$i}]
+	if {$col_num >= 0} {
+	    set nv [string trim [lindex $fields $col_num]]
+	    if {$nv ne {}} { set src_num $nv }
+	}
+
+	# Ellipse parameters
+	set iso_radius 5.0
+	set a_image 0
+	set b_image 0
+	set theta 0
+
+	if {$col_ir >= 0} {
+	    set val [string trim [lindex $fields $col_ir]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+		set iso_radius $v
+	    }
+	}
+	if {$col_a >= 0} {
+	    set val [string trim [lindex $fields $col_a]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+	}
+	if {$col_b >= 0} {
+	    set val [string trim [lindex $fields $col_b]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+	}
+	if {$col_theta >= 0} {
+	    set val [string trim [lindex $fields $col_theta]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
+	}
+
+	set semi_a $iso_radius
+	set semi_b $iso_radius
+	if {$a_image > 0 && $b_image > 0} {
+	    set semi_b [expr {$iso_radius * $b_image / $a_image}]
+	}
+
+	# Color: use morph color if classified, else yellow
+	set color yellow
+	if {[info exists catpanel(morph,$src_num)]} {
+	    set color [lindex $catpanel(morph,$src_num) 3]
+	}
+
+	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=$color width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
+	incr count
+	incr batch_count
+
+	if {$batch_count >= $batch_size} {
+	    set sextract_all_reg $reg
+	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    set reg "image\n"
+	    set batch_count 0
+	}
+    }
+
+    if {$batch_count > 0} {
+	set sextract_all_reg $reg
+	catch {$frame marker catalog command ds9 var sextract_all_reg}
+    }
+
+    set catpanel(markall,on) 1
+}
+
+# ============================================================================
+# PSF/Deconv procedures
+# ============================================================================
+
+proc CatalogPanelPSFParamLoad {} {
+    global catpanel
+
+    set preffile [file join [file normalize ~] .ds9 psf_deconv.prf]
+    if {![file exists $preffile]} return
+    if {[catch {set fd [open $preffile r]} err]} return
+    while {[gets $fd line] >= 0} {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set parts [split $line]
+	if {[llength $parts] >= 2} {
+	    set key [lindex $parts 0]
+	    set val [lindex $parts 1]
+	    if {[info exists catpanel(psf,param,$key)]} {
+		set catpanel(psf,param,$key) $val
+	    }
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelPSFParamSave {} {
+    global catpanel
+
+    set prefdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $prefdir]} {
+	file mkdir $prefdir
+    }
+    set preffile [file join $prefdir psf_deconv.prf]
+    if {[catch {set fd [open $preffile w]} err]} return
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr \
+		   psf-size rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
+		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+	puts $fd "$pname $catpanel(psf,param,$pname)"
+    }
+    close $fd
+}
+
+proc CatalogPanelPSFGetScript {} {
+    set bindir [file dirname [info nameofexecutable]]
+    set script [file join $bindir ds9_psf_deconv.py]
+    if {![file exists $script]} {
+	set libdir [file join [file dirname $bindir] ds9 library]
+	set script [file join $libdir ds9_psf_deconv.py]
+    }
+    return $script
+}
+
+proc CatalogPanelPSFGetFITS {} {
+    global current
+
+    set fn {}
+    if {$current(frame) != {}} {
+	catch {set fn [$current(frame) get fits file name full]}
+    }
+    set fn [string trim $fn "{}"]
+    regsub {\[.*\]$} $fn {} fn
+    return $fn
+}
+
+# --- Star Finding ---
+
+proc CatalogPanelFindStars {method} {
+    global catpanel
+    global current
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first before finding stars"
+	return
+    }
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    # Save catalog to temp TSV
+    set catfile [file join [file normalize ~] .ds9 psf_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "Star finding error: cannot write catalog: $err"
+	return
+    }
+
+    # Build arguments
+    set paramargs {}
+    lappend paramargs "--mode" "find_stars"
+    lappend paramargs "--catalog" $catfile
+    lappend paramargs "--method" $method
+    lappend paramargs "--class-star-thresh" $catpanel(psf,param,class-star-thresh)
+    lappend paramargs "--max-ellipticity" $catpanel(psf,param,max-ellipticity)
+    lappend paramargs "--fwhm-sigma" $catpanel(psf,param,fwhm-sigma)
+    lappend paramargs "--min-flux-snr" $catpanel(psf,param,min-flux-snr)
+
+    set catpanel(status) "Finding stars ($method) ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Star finding error: $last_err"
+	    puts "Star finding stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "Star finding error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    # Parse output
+    set lines [split $data \n]
+    set star_indices {}
+    set n_stars 0
+
+    foreach line $lines {
+	if {[string match "#PSF_STARS*" $line]} {
+	    foreach field [split $line "\t"] {
+		if {[string match "N_STARS=*" $field]} {
+		    set n_stars [string range $field 8 end]
+		}
+	    }
+	    continue
+	}
+	# Skip column header
+	if {[string match "NUMBER*" $line]} continue
+	if {$line eq {}} continue
+
+	set fields [split $line "\t"]
+	if {[llength $fields] >= 3} {
+	    set num [lindex $fields 0]
+	    lappend star_indices $num
+	}
+    }
+
+    set catpanel(psf,star_indices) $star_indices
+    set catpanel(status) "Found $n_stars stars ($method)"
+
+    # Show star markers
+    CatalogPanelShowStars
+}
+
+proc CatalogPanelShowStars {} {
+    global catpanel
+    global current
+
+    if {$current(frame) eq {}} return
+    set frame $current(frame)
+
+    # Clear existing star markers
+    catch {$frame marker catalog tag psf_star delete}
+
+    if {![info exists catpanel(psf,star_indices)] || $catpanel(psf,star_indices) eq {}} {
+	set catpanel(status) "No stars found — run Star Finding first"
+	return
+    }
+
+    # Parse alldata to find star positions
+    set lines [split $catpanel(alldata) \n]
+    if {[llength $lines] < 2} return
+
+    set header [lindex $lines 0]
+    set cols [split $header "\t"]
+    set num_idx -1
+    set x_idx -1
+    set y_idx -1
+    set a_idx -1
+    set b_idx -1
+    for {set i 0} {$i < [llength $cols]} {incr i} {
+	set col [string trim [lindex $cols $i]]
+	switch $col {
+	    NUMBER {set num_idx $i}
+	    X_IMAGE {set x_idx $i}
+	    Y_IMAGE {set y_idx $i}
+	    A_IMAGE {set a_idx $i}
+	    B_IMAGE {set b_idx $i}
+	}
+    }
+    if {$num_idx < 0 || $x_idx < 0 || $y_idx < 0} return
+
+    set reg "image\n"
+    set count 0
+    foreach line [lrange $lines 1 end] {
+	set fields [split $line "\t"]
+	if {[llength $fields] <= $num_idx} continue
+	set num [string trim [lindex $fields $num_idx]]
+	if {[lsearch -exact $catpanel(psf,star_indices) $num] < 0} continue
+
+	set x [string trim [lindex $fields $x_idx]]
+	set y [string trim [lindex $fields $y_idx]]
+	set a 5.0
+	set b 5.0
+	if {$a_idx >= 0} {set a [expr {max(3.0, [string trim [lindex $fields $a_idx]] * 2)}]}
+	if {$b_idx >= 0} {set b [expr {max(3.0, [string trim [lindex $fields $b_idx]] * 2)}]}
+
+	append reg "circle($x $y ${a}i) # color=cyan width=2 dash=1 tag={psf_star} tag={psf_star.$num} select=0 edit=0 move=0 rotate=0 delete=1\n"
+	incr count
+    }
+
+    if {$count > 0} {
+	set psf_star_reg $reg
+	catch {$frame marker catalog command ds9 var psf_star_reg}
+	set catpanel(status) "Showing $count star markers"
+    }
+}
+
+proc CatalogPanelClearStars {} {
+    global catpanel
+    global current
+
+    set catpanel(psf,star_indices) {}
+    if {$current(frame) ne {}} {
+	catch {$current(frame) marker catalog tag psf_star delete}
+    }
+    set catpanel(status) "Star markers cleared"
+}
+
+# --- PSF Generation ---
+
+proc CatalogPanelBuildPSF {method} {
+    global catpanel
+    global current
+
+    if {![info exists catpanel(psf,star_indices)] || $catpanel(psf,star_indices) eq {}} {
+	set catpanel(status) "Find stars first before building PSF"
+	return
+    }
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    # Save catalog
+    set catfile [file join [file normalize ~] .ds9 psf_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "PSF build error: cannot write catalog: $err"
+	return
+    }
+
+    set star_list [join $catpanel(psf,star_indices) ","]
+
+    set paramargs {}
+    lappend paramargs "--mode" "build_psf"
+    lappend paramargs "--catalog" $catfile
+    lappend paramargs "--star-indices" $star_list
+    lappend paramargs "--psf-method" $method
+    lappend paramargs "--psf-size" $catpanel(psf,param,psf-size)
+    lappend paramargs "--psf-output" $catpanel(psf,file)
+
+    set catpanel(status) "Building PSF ($method) from [llength $catpanel(psf,star_indices)] stars ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "PSF build error: $last_err"
+	    puts "PSF build stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "PSF build error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    set catpanel(psf,has_psf) 1
+
+    # Parse info from output
+    foreach line [split $data \n] {
+	if {[string match "#PSF_BUILT*" $line]} {
+	    set info_str [string range $line 10 end]
+	    set catpanel(status) "PSF built: $info_str"
+	    break
+	}
+    }
+}
+
+proc CatalogPanelViewPSF {} {
+    global catpanel
+
+    if {!$catpanel(psf,has_psf) || ![file exists $catpanel(psf,file)]} {
+	set catpanel(status) "No PSF available — build PSF first"
+	return
+    }
+
+    set w .psfviewer
+    if {[winfo exists $w]} {
+	raise $w
+	CatalogPanelViewPSFRender $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "PSF Viewer"
+
+    # Image display
+    ttk::label $w.img -anchor center
+    pack $w.img -padx 8 -pady 8 -fill both -expand true
+
+    # Info label
+    ttk::label $w.info -text "" -anchor center
+    pack $w.info -padx 8 -pady {0 4}
+
+    # Buttons: Save / Load / Close
+    ttk::frame $w.btn
+    ttk::button $w.btn.save -text "Save PSF..." \
+	-command CatalogPanelSavePSF
+    ttk::button $w.btn.load -text "Load PSF..." \
+	-command [list CatalogPanelViewPSFLoad $w]
+    ttk::button $w.btn.close -text "Close" \
+	-command [list destroy $w]
+    pack $w.btn.save -side left -padx 4
+    pack $w.btn.load -side left -padx 4
+    pack $w.btn.close -side right -padx 4
+    pack $w.btn -fill x -padx 8 -pady 8
+
+    CatalogPanelViewPSFRender $w
+}
+
+proc CatalogPanelViewPSFRender {w} {
+    global catpanel
+
+    set psffile $catpanel(psf,file)
+    set tmpimg [file join [file normalize ~] .ds9 psf_view.ppm]
+
+    # Write render script to temp file
+    set tmpscript [file join [file normalize ~] .ds9 psf_render.py]
+    set fd [open $tmpscript w]
+    puts $fd {import numpy as np
+from astropy.io import fits
+from scipy.ndimage import zoom
+import sys
+
+psffile = sys.argv[1]
+outfile = sys.argv[2]
+
+with fits.open(psffile) as hdul:
+    data = hdul[0].data.astype(np.float64)
+
+h0, w0 = data.shape
+vmin, vmax = float(data.min()), float(data.max())
+
+# Asinh stretch
+if vmax > vmin:
+    norm = (data - vmin) / (vmax - vmin)
+    stretched = np.arcsinh(norm * 10) / np.arcsinh(10)
+    img = (stretched * 255).clip(0, 255).astype(np.uint8)
+else:
+    img = np.zeros_like(data, dtype=np.uint8)
+
+# Scale up to at least 256x256
+scale = max(1, 256 // max(img.shape))
+if scale > 1:
+    img = zoom(img, scale, order=0)
+
+h, w = img.shape
+
+# Write PPM (P6 RGB) — Tk reads this natively
+with open(outfile, 'wb') as f:
+    f.write(f'P6\n{w} {h}\n255\n'.encode())
+    rgb = np.stack([img, img, img], axis=-1)
+    f.write(rgb.tobytes())
+
+print(f'{w0}x{h0}  peak={vmax:.4g}')
+}
+    close $fd
+
+    if {[catch {set info [exec python3 $tmpscript $psffile $tmpimg]} err]} {
+	catch {$w.info configure -text "Render error: $err"}
+	catch {file delete $tmpscript}
+	return
+    }
+    catch {file delete $tmpscript}
+
+    # Load into Tk photo image
+    catch {image delete psfviewimg}
+    image create photo psfviewimg -file $tmpimg
+    $w.img configure -image psfviewimg
+    $w.info configure -text "PSF: $info"
+
+    # Resize window to fit image + buttons
+    set iw [image width psfviewimg]
+    set ih [image height psfviewimg]
+    set ww [expr {max($iw + 16, 280)}]
+    set wh [expr {$ih + 90}]
+    wm geometry $w ${ww}x${wh}
+}
+
+proc CatalogPanelViewPSFLoad {w} {
+    global catpanel
+
+    set types {
+	{{FITS Files} {.fits .fit .fts}}
+	{{All Files} *}
+    }
+    set infile [tk_getOpenFile -filetypes $types \
+		    -title "Load PSF FITS"]
+    if {$infile eq {}} return
+
+    file copy -force $infile $catpanel(psf,file)
+    set catpanel(psf,has_psf) 1
+    set catpanel(status) "PSF loaded from $infile"
+
+    # Refresh the viewer
+    CatalogPanelViewPSFRender $w
+}
+
+proc CatalogPanelSavePSF {} {
+    global catpanel
+
+    if {!$catpanel(psf,has_psf) || ![file exists $catpanel(psf,file)]} {
+	set catpanel(status) "No PSF available — build PSF first"
+	return
+    }
+
+    set types {
+	{{FITS Files} {.fits .fit .fts}}
+	{{All Files} *}
+    }
+    set outfile [tk_getSaveFile -filetypes $types \
+		     -title "Save PSF FITS" \
+		     -initialfile "psf.fits"]
+    if {$outfile eq {}} return
+
+    file copy -force $catpanel(psf,file) $outfile
+    set catpanel(status) "PSF saved to $outfile"
+}
+
+proc CatalogPanelLoadPSF {} {
+    global catpanel
+
+    set types {
+	{{FITS Files} {.fits .fit .fts}}
+	{{All Files} *}
+    }
+    set infile [tk_getOpenFile -filetypes $types \
+		    -title "Load PSF FITS"]
+    if {$infile eq {}} return
+
+    file copy -force $infile $catpanel(psf,file)
+    set catpanel(psf,has_psf) 1
+    set catpanel(status) "PSF loaded from $infile"
+
+    # Refresh viewer if open
+    if {[winfo exists .psfviewer]} {
+	CatalogPanelViewPSFRender .psfviewer
+    }
+}
+
+# --- Deconvolution ---
+
+proc CatalogPanelDeconvolve {algorithm} {
+    global catpanel
+    global current
+
+    if {!$catpanel(psf,has_psf) || ![file exists $catpanel(psf,file)]} {
+	set catpanel(status) "No PSF available — build or load PSF first"
+	return
+    }
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    set outfile [file join [file normalize ~] .ds9 deconv_result.fits]
+
+    set paramargs {}
+    lappend paramargs "--mode" "deconvolve"
+    lappend paramargs "--psf" $catpanel(psf,file)
+    lappend paramargs "--algorithm" $algorithm
+    lappend paramargs "--output" $outfile
+
+    # Algorithm-specific parameters
+    switch $algorithm {
+	rl - rl_accelerated {
+	    lappend paramargs "--iterations" $catpanel(psf,param,rl-iterations)
+	}
+	rl_tv {
+	    lappend paramargs "--iterations" $catpanel(psf,param,rl-iterations)
+	    lappend paramargs "--tv-lambda" $catpanel(psf,param,tv-lambda)
+	}
+	wiener {
+	    lappend paramargs "--wiener-nsr" $catpanel(psf,param,wiener-nsr)
+	}
+	tikhonov {
+	    lappend paramargs "--tikhonov-lambda" $catpanel(psf,param,tikhonov-lambda)
+	}
+	clean {
+	    lappend paramargs "--clean-gain" $catpanel(psf,param,clean-gain)
+	    lappend paramargs "--clean-niter" $catpanel(psf,param,clean-niter)
+	    lappend paramargs "--clean-threshold" $catpanel(psf,param,clean-threshold)
+	}
+	mem {
+	    lappend paramargs "--mem-lambda" $catpanel(psf,param,mem-lambda)
+	    lappend paramargs "--mem-niter" $catpanel(psf,param,mem-niter)
+	}
+    }
+
+    set catpanel(status) "Deconvolving ($algorithm) ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Deconvolution error: $last_err"
+	    puts "Deconvolution stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "Deconvolution error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+
+    # Load result in a new frame (preserve original)
+    if {[file exists $outfile]} {
+	CreateFrame
+	if {[catch {LoadFitsFile $outfile {} {}} loaderr]} {
+	    set catpanel(status) "Deconvolution error: cannot load result: $loaderr"
+	    return
+	}
+	# Apply zscale via DS9's standard scale API
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+	set catpanel(status) "Deconvolution complete ($algorithm) — result in new frame"
+    } else {
+	set catpanel(status) "Deconvolution complete but output file not found"
+    }
+}
+
+# --- Quick Deconvolve (one-click) ---
+
+proc CatalogPanelQuickDeconvolve {} {
+    global catpanel
+    global current
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set catpanel(status) "Quick Deconvolve: Step 1/3 — Finding stars ..."
+    update idletasks
+
+    # Step 1: Find stars
+    CatalogPanelFindStars combined
+
+    if {![info exists catpanel(psf,star_indices)] || $catpanel(psf,star_indices) eq {}} {
+	set catpanel(status) "Quick Deconvolve failed: no stars found"
+	return
+    }
+
+    set catpanel(status) "Quick Deconvolve: Step 2/3 — Building PSF ..."
+    update idletasks
+
+    # Step 2: Build PSF
+    CatalogPanelBuildPSF median
+
+    if {!$catpanel(psf,has_psf)} {
+	set catpanel(status) "Quick Deconvolve failed: PSF build failed"
+	return
+    }
+
+    set catpanel(status) "Quick Deconvolve: Step 3/3 — Richardson-Lucy deconvolution ..."
+    update idletasks
+
+    # Step 3: Deconvolve
+    CatalogPanelDeconvolve rl
+}
+
+# --- Settings Dialog ---
+
+proc CatalogPanelPSFDeconvSettings {} {
+    global catpanel
+    global ed
+
+    set w .psfdeconvsettings
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "PSF/Deconv Settings"
+    wm geometry $w 420x520
+
+    # Copy current values to edit vars
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr \
+		   psf-size rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
+		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+	set ed(psf,$pname) $catpanel(psf,param,$pname)
+    }
+
+    # Notebook with 3 tabs
+    ttk::notebook $w.nb
+    pack $w.nb -fill both -expand true -padx 8 -pady 8
+
+    # --- Tab 1: Star Finding ---
+    set t1 [ttk::frame $w.nb.stars]
+    $w.nb add $t1 -text "Star Finding"
+
+    set r 0
+    ttk::label $t1.lcs -text "CLASS_STAR threshold:"
+    ttk::entry $t1.ecs -textvariable ed(psf,class-star-thresh) -width 10
+    grid $t1.lcs -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.ecs -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lell -text "Max ellipticity:"
+    ttk::entry $t1.eell -textvariable ed(psf,max-ellipticity) -width 10
+    grid $t1.lell -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eell -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lfwhm -text "FWHM sigma:"
+    ttk::entry $t1.efwhm -textvariable ed(psf,fwhm-sigma) -width 10
+    grid $t1.lfwhm -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.efwhm -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lsnr -text "Min flux S/N:"
+    ttk::entry $t1.esnr -textvariable ed(psf,min-flux-snr) -width 10
+    grid $t1.lsnr -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.esnr -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 2: PSF ---
+    set t2 [ttk::frame $w.nb.psf]
+    $w.nb add $t2 -text "PSF"
+
+    set r 0
+    ttk::label $t2.lsz -text "PSF size (pixels):"
+    ttk::entry $t2.esz -textvariable ed(psf,psf-size) -width 10
+    grid $t2.lsz -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.esz -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 3: Deconvolution ---
+    set t3 [ttk::frame $w.nb.deconv]
+    $w.nb add $t3 -text "Deconvolution"
+
+    set r 0
+    ttk::label $t3.h1 -text "Richardson-Lucy:" -font TkHeadingFont
+    grid $t3.h1 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $t3.liter -text "  Iterations:"
+    ttk::entry $t3.eiter -textvariable ed(psf,rl-iterations) -width 10
+    grid $t3.liter -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.eiter -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.ltv -text "  TV lambda:"
+    ttk::entry $t3.etv -textvariable ed(psf,tv-lambda) -width 10
+    grid $t3.ltv -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.etv -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.h2 -text "Wiener:" -font TkHeadingFont
+    grid $t3.h2 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $t3.lnsr -text "  NSR:"
+    ttk::entry $t3.ensr -textvariable ed(psf,wiener-nsr) -width 10
+    grid $t3.lnsr -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.ensr -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.h3 -text "Tikhonov:" -font TkHeadingFont
+    grid $t3.h3 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $t3.ltik -text "  Lambda:"
+    ttk::entry $t3.etik -textvariable ed(psf,tikhonov-lambda) -width 10
+    grid $t3.ltik -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.etik -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.h4 -text "CLEAN:" -font TkHeadingFont
+    grid $t3.h4 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $t3.lcg -text "  Gain:"
+    ttk::entry $t3.ecg -textvariable ed(psf,clean-gain) -width 10
+    grid $t3.lcg -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.ecg -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.lcn -text "  Iterations:"
+    ttk::entry $t3.ecn -textvariable ed(psf,clean-niter) -width 10
+    grid $t3.lcn -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.ecn -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.lct -text "  Threshold:"
+    ttk::entry $t3.ect -textvariable ed(psf,clean-threshold) -width 10
+    grid $t3.lct -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.ect -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.h5 -text "MEM:" -font TkHeadingFont
+    grid $t3.h5 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $t3.lml -text "  Lambda:"
+    ttk::entry $t3.eml -textvariable ed(psf,mem-lambda) -width 10
+    grid $t3.lml -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.eml -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t3.lmn -text "  Iterations:"
+    ttk::entry $t3.emn -textvariable ed(psf,mem-niter) -width 10
+    grid $t3.lmn -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t3.emn -row $r -column 1 -sticky w -padx 4 -pady 2
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelPSFSettingsApply $w]
+    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelPSFSettingsDefaults
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.defaults -side right -padx 4
+    pack $bf.apply -side right -padx 4
+}
+
+proc CatalogPanelPSFSettingsApply {w} {
+    global catpanel
+    global ed
+
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr \
+		   psf-size rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
+		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+	set catpanel(psf,param,$pname) $ed(psf,$pname)
+    }
+
+    CatalogPanelPSFParamSave
+    set catpanel(status) "PSF/Deconv settings applied and saved"
+}
+
+proc CatalogPanelPSFSettingsDefaults {} {
+    global ed
+
+    set ed(psf,class-star-thresh) 0.8
+    set ed(psf,max-ellipticity) 0.2
+    set ed(psf,fwhm-sigma) 2.0
+    set ed(psf,min-flux-snr) 10.0
+    set ed(psf,psf-size) 51
+    set ed(psf,rl-iterations) 30
+    set ed(psf,wiener-nsr) 0.01
+    set ed(psf,tikhonov-lambda) 0.001
+    set ed(psf,tv-lambda) 0.001
+    set ed(psf,clean-gain) 0.1
+    set ed(psf,clean-niter) 1000
+    set ed(psf,clean-threshold) 0.0
+    set ed(psf,mem-lambda) 0.1
+    set ed(psf,mem-niter) 100
+}
+
