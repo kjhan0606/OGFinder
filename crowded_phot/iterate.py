@@ -7,7 +7,25 @@ from .nstar import fit_group
 from .psf_subtract import subtract_sources
 
 
-def crowded_photometry(data, psf, sources, cfg=None):
+def _worker_fit_group(args):
+    """Worker for parallel_map: fit one group from shared data + PSF."""
+    data_spec, psf_spec, group_sources_list, max_shift = args
+    shm_data = None
+    shm_psf = None
+    try:
+        data, shm_data = data_spec.attach()
+        psf, shm_psf = psf_spec.attach()
+        return fit_group(data, psf, group_sources_list, max_shift=max_shift)
+    except Exception:
+        return []
+    finally:
+        if shm_data is not None:
+            shm_data.close()
+        if shm_psf is not None:
+            shm_psf.close()
+
+
+def crowded_photometry(data, psf, sources, cfg=None, n_workers=0):
     """Perform crowded field photometry with iteration.
 
     Parameters
@@ -16,6 +34,8 @@ def crowded_photometry(data, psf, sources, cfg=None):
     psf : 2D array, PSF image
     sources : list of dicts with x, y, number, kron_radius, a
     cfg : CrowdedPhotConfig
+    n_workers : int
+        0 = auto, 1 = sequential, N = N workers
 
     Returns
     -------
@@ -29,6 +49,9 @@ def crowded_photometry(data, psf, sources, cfg=None):
     except ImportError:
         return []
 
+    from parallel import parallel_map, resolve_n_workers, SharedArray
+
+    actual = resolve_n_workers(n_workers)
     psf_sum = np.sum(psf)
     all_results = {}
     current_data = data.copy()
@@ -37,21 +60,34 @@ def crowded_photometry(data, psf, sources, cfg=None):
         # Group sources
         groups = group_sources(sources, radius_scale=cfg.group_radius_scale)
 
-        # Fit each group
-        iter_results = []
+        # Build group task list
+        group_tasks = []
         for group_idx in groups:
             group_sources_list = [sources[i] for i in group_idx]
-
             if len(group_sources_list) == 0:
                 continue
-
-            # Limit group size
             if len(group_sources_list) > cfg.max_group_size:
                 group_sources_list = group_sources_list[:cfg.max_group_size]
+            group_tasks.append(group_sources_list)
 
-            results = fit_group(current_data, psf, group_sources_list,
-                                 max_shift=cfg.max_shift)
-            iter_results.extend(results)
+        # Fit groups — parallel within each iteration
+        if actual == 1 or len(group_tasks) <= 1:
+            iter_results = []
+            for group_sources_list in group_tasks:
+                results = fit_group(current_data, psf, group_sources_list,
+                                     max_shift=cfg.max_shift)
+                iter_results.extend(results)
+        else:
+            with SharedArray(current_data) as data_spec, \
+                 SharedArray(psf) as psf_spec:
+                tasks = [(data_spec, psf_spec, gs, cfg.max_shift)
+                         for gs in group_tasks]
+                group_results = parallel_map(
+                    _worker_fit_group, tasks, n_workers=n_workers,
+                    label=f"Crowded iter {iteration+1}")
+            iter_results = []
+            for gr in group_results:
+                iter_results.extend(gr)
 
         # Compute magnitudes
         for r in iter_results:

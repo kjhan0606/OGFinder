@@ -34,7 +34,7 @@ def measure_concentration(data, x, y, a, b, theta, rmax=50.0):
 
     # Get r20 and r80
     fracs = np.array([0.2, 0.8])
-    radii, _ = sep.flux_radius(data, [x], [y], rmax, fracs, subpix=5)
+    radii, _ = sep.flux_radius(data, [x], [y], [rmax], fracs, subpix=5)
     r20 = radii[0][0]
     r80 = radii[0][1]
 

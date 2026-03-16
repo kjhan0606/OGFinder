@@ -9,6 +9,36 @@ from .m20 import measure_m20
 from .petrosian import measure_petrosian
 
 
+def _worker_measure_source(args):
+    """Worker function for parallel_map: measure one source from shared data.
+
+    Parameters
+    ----------
+    args : tuple of (SharedArraySpec, dict, MorphometryConfig)
+
+    Returns
+    -------
+    dict with morphometry results including NUMBER
+    """
+    data_spec, src, cfg = args
+    shm = None
+    try:
+        data, shm = data_spec.attach()
+        result = measure_source(data, src, cfg)
+        result['NUMBER'] = src.get('number', 0)
+        return result
+    except Exception:
+        result = {
+            'CONC': np.nan, 'ASYM': np.nan, 'GINI': np.nan,
+            'M20': np.nan, 'R_PETRO': np.nan,
+            'NUMBER': src.get('number', 0),
+        }
+        return result
+    finally:
+        if shm is not None:
+            shm.close()
+
+
 def extract_cutout(data, x, y, halfsize):
     """Extract a square cutout centered on (x, y)."""
     ny, nx = data.shape
@@ -89,7 +119,7 @@ def measure_source(data, src, cfg=None):
     return result
 
 
-def measure_catalog(data, catalog, cfg=None):
+def measure_catalog(data, catalog, cfg=None, n_workers=0):
     """Measure morphometry for all sources in catalog.
 
     Parameters
@@ -97,6 +127,8 @@ def measure_catalog(data, catalog, cfg=None):
     data : 2D array, background-subtracted
     catalog : list of dicts with source properties
     cfg : MorphometryConfig
+    n_workers : int
+        0 = auto, 1 = sequential, N = N workers
 
     Returns
     -------
@@ -105,10 +137,23 @@ def measure_catalog(data, catalog, cfg=None):
     if cfg is None:
         cfg = MorphometryConfig()
 
-    results = []
-    for src in catalog:
-        result = measure_source(data, src, cfg)
-        result['NUMBER'] = src.get('number', 0)
-        results.append(result)
+    from parallel import parallel_map, resolve_n_workers, SharedArray
+
+    actual = resolve_n_workers(n_workers)
+
+    if actual == 1:
+        # Sequential — no shared memory overhead
+        results = []
+        for src in catalog:
+            result = measure_source(data, src, cfg)
+            result['NUMBER'] = src.get('number', 0)
+            results.append(result)
+        return results
+
+    # Parallel via shared memory
+    with SharedArray(data) as spec:
+        tasks = [(spec, src, cfg) for src in catalog]
+        results = parallel_map(_worker_measure_source, tasks,
+                               n_workers=n_workers, label="Morphometry")
 
     return results

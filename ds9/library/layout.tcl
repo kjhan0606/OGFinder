@@ -169,15 +169,18 @@ proc CreateCatalogPanel {} {
     # Menubar with dropdown menus
     set catpanel(menubar) [ttk::frame $f.menubar]
 
-    # Remove indicator arrow from menubuttons
+    # Flat menubuttons: no border, no indicator arrow
     ttk::style layout CatMenu.TMenubutton {
-	Menubutton.border -sticky nswe -children {
-	    Menubutton.focus -sticky nswe -children {
-		Menubutton.padding -sticky we -children {
-		    Menubutton.label -side left -sticky {}
-		}
+	Menubutton.focus -sticky nswe -children {
+	    Menubutton.padding -sticky we -children {
+		Menubutton.label -side left -sticky {}
 	    }
 	}
+    }
+    ttk::style configure CatMenu.TMenubutton -relief flat
+    ttk::style map CatMenu.TMenubutton -relief {
+	pressed flat
+	active  flat
     }
 
     # SExtractor menu
@@ -1057,6 +1060,7 @@ proc CatalogPanelParamDef {} {
     set catpanel(param,phot-aperture-3) 6.0
     set catpanel(param,phot-aperture-5) 10.0
     set catpanel(param,conv-filter) default
+    set catpanel(param,n-workers) 0
 
     CatalogPanelParamLoad
 }
@@ -1094,7 +1098,8 @@ proc CatalogPanelParamSave {} {
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		   back-size back-filtersize \
-		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
+		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
+		   n-workers} {
 	puts $fd "$pname $catpanel(param,$pname)"
     }
     close $fd
@@ -1118,6 +1123,7 @@ proc CatalogPanelParamDefaults {} {
     set ed(phot-aperture-3) 6.0
     set ed(phot-aperture-5) 10.0
     set ed(conv-filter) default
+    set ed(n-workers) 0
 }
 
 proc CatalogPanelSettingsDialog {} {
@@ -1132,7 +1138,8 @@ proc CatalogPanelSettingsDialog {} {
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		   back-size back-filtersize \
-		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
+		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
+		   n-workers} {
 	set ed($pname) $catpanel(param,$pname)
     }
 
@@ -1168,6 +1175,11 @@ proc CatalogPanelSettingsDialog {} {
 	-values {default gauss5x5 mexhat tophat} -state readonly
     grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
     incr row
+    # Parallel workers
+    ttk::label $f.l$row -text "Parallel Workers (0=auto):" -anchor w
+    ttk::entry $f.e$row -textvariable ed(n-workers) -width 12
+    grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
+    incr row
 
     # Buttons
     set bf [ttk::frame $w.buttons]
@@ -1178,7 +1190,8 @@ proc CatalogPanelSettingsDialog {} {
 	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		       back-size back-filtersize \
-		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
+		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
+		       n-workers} {
 	    set catpanel(param,$pname) $ed($pname)
 	}
 	CatalogPanelParamSave
@@ -1200,7 +1213,8 @@ proc CatalogPanelSettingsDialog {} {
 	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		       back-size back-filtersize \
-		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
+		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
+		       n-workers} {
 	    set catpanel(param,$pname) $ed($pname)
 	}
 	CatalogPanelParamSave
@@ -1418,6 +1432,109 @@ proc CatalogPanelMarkerUnCB {num_str id} {
 }
 
 # Click handler called from Button1Frame in none mode
+# Find the smallest ellipse source at canvas coordinate (cx, cy).
+# Converts canvas→image coords via the frame, then tests all ellipses.
+# When ellipses overlap, returns the source NUMBER with the smallest area.
+# Returns "" if no ellipse contains the point.
+proc CatalogPanelSmallestEllipseAt {frame cx cy} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} { return {} }
+
+    # Convert canvas coords to 1-indexed image coords
+    set imgcoord [$frame get coordinates $cx $cy image]
+    set imgx [lindex $imgcoord 0]
+    set imgy [lindex $imgcoord 1]
+
+    set lines [split $catpanel(alldata) \n]
+    if {[llength $lines] < 2} { return {} }
+
+    set headers [split [lindex $lines 0] "\t"]
+    set col_x -1; set col_y -1; set col_a -1; set col_b -1
+    set col_theta -1; set col_ir -1; set col_num -1
+    for {set c 0} {$c < [llength $headers]} {incr c} {
+	switch -- [string trim [lindex $headers $c]] {
+	    NUMBER      { set col_num $c }
+	    X_IMAGE     { set col_x $c }
+	    Y_IMAGE     { set col_y $c }
+	    A_IMAGE     { set col_a $c }
+	    B_IMAGE     { set col_b $c }
+	    THETA_IMAGE { set col_theta $c }
+	    ISO_RADIUS  { set col_ir $c }
+	}
+    }
+    if {$col_x < 0 || $col_y < 0} { return {} }
+
+    set best_num {}
+    set best_area 1e30
+    set pi 3.141592653589793
+
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+
+	# X_IMAGE, Y_IMAGE are 1-indexed image coords
+	set sx [string trim [lindex $fields $col_x]]
+	set sy [string trim [lindex $fields $col_y]]
+	if {![string is double -strict $sx] || ![string is double -strict $sy]} continue
+
+	set src_num $i
+	if {$col_num >= 0} {
+	    set nv [string trim [lindex $fields $col_num]]
+	    if {$nv ne {}} { set src_num $nv }
+	}
+
+	# Reconstruct marker ellipse (same logic as CreateAllMarkers)
+	set iso_radius 5.0
+	set a_image 0; set b_image 0; set theta_deg 0
+	if {$col_ir >= 0} {
+	    set val [string trim [lindex $fields $col_ir]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set iso_radius $v }
+	}
+	if {$col_a >= 0} {
+	    set val [string trim [lindex $fields $col_a]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+	}
+	if {$col_b >= 0} {
+	    set val [string trim [lindex $fields $col_b]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+	}
+	if {$col_theta >= 0} {
+	    set val [string trim [lindex $fields $col_theta]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta_deg $v }
+	}
+
+	set semi_a $iso_radius
+	set semi_b $iso_radius
+	if {$a_image > 0 && $b_image > 0} {
+	    set semi_b [expr {$iso_radius * $b_image / $a_image}]
+	}
+
+	# Point-in-ellipse test: rotate (dx,dy) into ellipse frame
+	set dx [expr {$imgx - $sx}]
+	set dy [expr {$imgy - $sy}]
+	set theta_rad [expr {$theta_deg * $pi / 180.0}]
+	set cosT [expr {cos($theta_rad)}]
+	set sinT [expr {sin($theta_rad)}]
+	set rx [expr { $cosT * $dx + $sinT * $dy}]
+	set ry [expr {-$sinT * $dx + $cosT * $dy}]
+
+	if {$semi_a <= 0 || $semi_b <= 0} continue
+	set t [expr {($rx * $rx) / ($semi_a * $semi_a) + ($ry * $ry) / ($semi_b * $semi_b)}]
+
+	if {$t <= 1.0} {
+	    set area [expr {$semi_a * $semi_b}]
+	    if {$area < $best_area} {
+		set best_area $area
+		set best_num $src_num
+	    }
+	}
+    }
+
+    return $best_num
+}
+
 proc CatalogPanelMarkerClick {which x y} {
     global catpanel
 
@@ -1425,24 +1542,24 @@ proc CatalogPanelMarkerClick {which x y} {
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
     if {![$which has fits]} return
 
-    # Check if click is on a catalog marker
+    # Quick test: is there any marker at this canvas position?
     set id [$which get marker catalog id $x $y]
     if {$id == 0} return
 
-    # Get tags of this marker
-    set tags [$which get marker catalog $id tag]
-
-    # Look for sextract_src.NUMBER tag
-    set src_num {}
-    foreach tag $tags {
-	if {[string match "sextract_src.*" $tag]} {
-	    set src_num [string range $tag 13 end]
-	    break
+    # Among all overlapping ellipses, pick the smallest one
+    set src_num [CatalogPanelSmallestEllipseAt $which $x $y]
+    if {$src_num eq {}} {
+	# Fallback: use the marker DS9 picked (original behaviour)
+	set tags [$which get marker catalog $id tag]
+	foreach tag $tags {
+	    if {[string match "sextract_src.*" $tag]} {
+		set src_num [string range $tag 13 end]
+		break
+	    }
 	}
+	if {$src_num eq {}} return
     }
-    if {$src_num eq {}} return
 
-    # Found a sextract marker — navigate to it
     CatalogPanelMarkerCB $src_num $id
 }
 
@@ -1454,24 +1571,24 @@ proc CatalogPanelMarkerCtrlClick {which x y} {
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
     if {![$which has fits]} return
 
-    # Check if click is on a catalog marker
+    # Quick test: is there any marker at this canvas position?
     set id [$which get marker catalog id $x $y]
     if {$id == 0} return
 
-    # Get tags of this marker
-    set tags [$which get marker catalog $id tag]
-
-    # Look for sextract_src.NUMBER tag
-    set src_num {}
-    foreach tag $tags {
-	if {[string match "sextract_src.*" $tag]} {
-	    set src_num [string range $tag 13 end]
-	    break
+    # Among all overlapping ellipses, pick the smallest one
+    set src_num [CatalogPanelSmallestEllipseAt $which $x $y]
+    if {$src_num eq {}} {
+	# Fallback: use the marker DS9 picked (original behaviour)
+	set tags [$which get marker catalog $id tag]
+	foreach tag $tags {
+	    if {[string match "sextract_src.*" $tag]} {
+		set src_num [string range $tag 13 end]
+		break
+	    }
 	}
+	if {$src_num eq {}} return
     }
-    if {$src_num eq {}} return
 
-    # Ctrl+Click: merge selection
     CatalogPanelCtrlSelect $src_num
 }
 
@@ -5465,7 +5582,8 @@ proc CatalogPanelMorphometry {} {
     update idletasks
 
     if {[catch {
-	set data [exec python3 $script $fn --catalog $tmpcat 2>@stderr]
+	set data [exec python3 $script $fn --catalog $tmpcat \
+	    --n-workers $catpanel(param,n-workers) 2>@stderr]
     } err]} {
 	set catpanel(status) "Morphometry error: $err"
 	return
@@ -5516,6 +5634,7 @@ proc CatalogPanelSersicFit {} {
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
+    lappend args --n-workers $catpanel(param,n-workers)
 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Sérsic fit error: $err"
@@ -5568,6 +5687,7 @@ proc CatalogPanelPSFPhotometry {} {
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
+    lappend args --n-workers $catpanel(param,n-workers)
 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "PSF photometry error: $err"
@@ -5668,6 +5788,7 @@ proc CatalogPanelMultiBand {} {
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
+    lappend args --n-workers $catpanel(param,n-workers)
 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Multi-band error: $err"
@@ -5720,6 +5841,7 @@ proc CatalogPanelCrowdedPhot {} {
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
+    lappend args --n-workers $catpanel(param,n-workers)
 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Crowded phot error: $err"
@@ -5977,6 +6099,7 @@ proc CatalogPanelCompleteness {} {
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
+    lappend args --n-workers $catpanel(param,n-workers)
 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Completeness error: $err"

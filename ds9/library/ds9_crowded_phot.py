@@ -44,12 +44,16 @@ def parse_catalog(catalog_file):
 
 def main():
     parser = argparse.ArgumentParser(description='Crowded field photometry')
-    parser.add_argument('fitsfile', help='Input FITS image')
+    parser.add_argument('fitsfile', nargs='?', help='Input FITS image')
     parser.add_argument('--catalog', required=True, help='Input TSV catalog')
     parser.add_argument('--psf', required=True, help='PSF FITS image')
     parser.add_argument('--max-iter', type=int, default=3,
                         help='Maximum iterations (default: 3)')
     parser.add_argument('--mag-zeropoint', type=float, default=25.0)
+
+    from parallel import add_batch_args
+    add_batch_args(parser)
+
     args = parser.parse_args()
 
     try:
@@ -94,7 +98,8 @@ def main():
 
     cfg = CrowdedPhotConfig(max_iterations=args.max_iter,
                              mag_zeropoint=args.mag_zeropoint)
-    results = crowded_photometry(data, psf, sources, cfg)
+    results = crowded_photometry(data, psf, sources, cfg,
+                                  n_workers=args.n_workers)
 
     # Output TSV
     print("NUMBER\tFLUX_CROWD\tFLUXERR_CROWD\tMAG_CROWD\tX_CROWD\tY_CROWD\tN_NEIGHBORS")

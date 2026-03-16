@@ -42,12 +42,16 @@ def parse_catalog(catalog_file):
 
 def main():
     parser = argparse.ArgumentParser(description='PSF photometry')
-    parser.add_argument('fitsfile', help='Input FITS image')
+    parser.add_argument('fitsfile', nargs='?', help='Input FITS image')
     parser.add_argument('--catalog', required=True, help='Input TSV catalog')
     parser.add_argument('--psf', required=True, help='PSF FITS image')
     parser.add_argument('--fit-radius', type=int, default=10,
                         help='Fitting radius in pixels (default: 10)')
     parser.add_argument('--mag-zeropoint', type=float, default=25.0)
+
+    from parallel import add_batch_args
+    add_batch_args(parser)
+
     args = parser.parse_args()
 
     try:
@@ -90,7 +94,8 @@ def main():
     print(f"PSF photometry for {len(sources)} sources...", file=sys.stderr)
 
     cfg = PSFPhotConfig(fit_radius=args.fit_radius, mag_zeropoint=args.mag_zeropoint)
-    results = do_psf_photometry(data, psf, sources, cfg)
+    results = do_psf_photometry(data, psf, sources, cfg,
+                                 n_workers=args.n_workers)
 
     # Output TSV
     print("NUMBER\tFLUX_PSF\tFLUXERR_PSF\tMAG_PSF\tMAGERR_PSF\tCHI2_PSF\tX_PSF\tY_PSF")

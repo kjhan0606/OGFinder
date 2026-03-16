@@ -6,6 +6,69 @@ import os
 import argparse
 import numpy as np
 
+# Add project root to path
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_script_dir, '..', '..'))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+
+def _worker_band(args):
+    """Worker for parallel_map: measure photometry for one band.
+
+    Each worker loads its own FITS file (no shared memory needed).
+    """
+    bname, bpath, x_arr, y_arr, a_arr, b_arr, theta_arr, kronrad, r_aper, zp = args
+
+    try:
+        import sep
+        from astropy.io import fits
+    except ImportError:
+        nobj = len(x_arr)
+        return bname, {
+            'flux_auto': np.full(nobj, np.nan),
+            'mag_auto': np.full(nobj, 99.0),
+            'flux_aper': np.full(nobj, np.nan),
+            'mag_aper': np.full(nobj, 99.0),
+        }
+
+    nobj = len(x_arr)
+
+    with fits.open(bpath) as hdul:
+        bdata = None
+        for hdu in hdul:
+            if hdu.data is not None and hdu.data.ndim >= 2:
+                bdata = hdu.data.astype(np.float64)
+                break
+
+    if bdata is None:
+        return bname, {
+            'flux_auto': np.full(nobj, np.nan),
+            'mag_auto': np.full(nobj, 99.0),
+            'flux_aper': np.full(nobj, np.nan),
+            'mag_aper': np.full(nobj, 99.0),
+        }
+
+    bmask = ~np.isfinite(bdata) | (bdata == 0)
+    bdata[~np.isfinite(bdata)] = 0.0
+    bbkg = sep.Background(bdata, mask=bmask.astype(np.uint8), bw=64, bh=64)
+    bsub = bdata - bbkg
+
+    flux_auto, _, _ = sep.sum_ellipse(bsub, x_arr, y_arr,
+                                       a_arr, b_arr, theta_arr,
+                                       2.5 * kronrad, subpix=5)
+    mag_auto = np.where(flux_auto > 0, -2.5 * np.log10(flux_auto) + zp, 99.0)
+
+    flux_aper, _, _ = sep.sum_circle(bsub, x_arr, y_arr, r_aper, subpix=5)
+    mag_aper = np.where(flux_aper > 0, -2.5 * np.log10(flux_aper) + zp, 99.0)
+
+    return bname, {
+        'flux_auto': flux_auto,
+        'mag_auto': mag_auto,
+        'flux_aper': flux_aper,
+        'mag_aper': mag_aper,
+    }
+
 
 def main():
     parser = argparse.ArgumentParser(description='Multi-band photometry')
@@ -18,6 +81,10 @@ def main():
     parser.add_argument('--detect-minarea', type=int, default=5)
     parser.add_argument('--phot-aperture', type=float, default=5.0)
     parser.add_argument('--mag-zeropoint', type=float, default=25.0)
+
+    from parallel import add_batch_args
+    add_batch_args(parser)
+
     args = parser.parse_args()
 
     try:
@@ -31,6 +98,8 @@ def main():
     except ImportError:
         print("ERROR: astropy is required", file=sys.stderr)
         sys.exit(1)
+
+    from parallel import parallel_map, resolve_n_workers
 
     def load_fits(path):
         with fits.open(path) as hdul:
@@ -109,42 +178,29 @@ def main():
 
     print('\t'.join(hdr_parts))
 
-    # Measure each band
-    band_results = {}
-    for bname, bpath in bands:
-        bdata = load_fits(bpath)
-        if bdata is None:
-            print(f"WARNING: Cannot load {bpath}, skipping", file=sys.stderr)
-            band_results[bname] = {
-                'flux_auto': np.full(nobj, np.nan),
-                'mag_auto': np.full(nobj, 99.0),
-                'flux_aper': np.full(nobj, np.nan),
-                'mag_aper': np.full(nobj, 99.0),
-            }
-            continue
+    # Measure bands — parallel if multiple bands and workers available
+    actual = resolve_n_workers(args.n_workers)
 
-        bmask = ~np.isfinite(bdata) | (bdata == 0)
-        bdata[~np.isfinite(bdata)] = 0.0
-        bbkg = sep.Background(bdata, mask=bmask.astype(np.uint8), bw=64, bh=64)
-        bsub = bdata - bbkg
-
-        # Kron photometry
-        flux_auto, _, _ = sep.sum_ellipse(bsub, x_arr, y_arr,
-                                           a_arr, b_arr, theta_arr,
-                                           2.5 * kronrad, subpix=5)
-        mag_auto = np.where(flux_auto > 0, -2.5 * np.log10(flux_auto) + zp, 99.0)
-
-        # Aperture photometry
-        flux_aper, _, _ = sep.sum_circle(bsub, x_arr, y_arr, r_aper, subpix=5)
-        mag_aper = np.where(flux_aper > 0, -2.5 * np.log10(flux_aper) + zp, 99.0)
-
-        band_results[bname] = {
-            'flux_auto': flux_auto,
-            'mag_auto': mag_auto,
-            'flux_aper': flux_aper,
-            'mag_aper': mag_aper,
-        }
-        print(f"  Band {bname}: measured {nobj} sources", file=sys.stderr)
+    if actual > 1 and len(bands) > 1:
+        # Band-level parallelism (each worker loads its own FITS)
+        tasks = [
+            (bname, bpath, x_arr, y_arr, a_arr, b_arr, theta_arr,
+             kronrad, r_aper, zp)
+            for bname, bpath in bands
+        ]
+        raw_results = parallel_map(_worker_band, tasks,
+                                    n_workers=min(actual, len(bands)),
+                                    label="Multi-band")
+        band_results = {bname: res for bname, res in raw_results}
+    else:
+        # Sequential
+        band_results = {}
+        for bname, bpath in bands:
+            _, res = _worker_band(
+                (bname, bpath, x_arr, y_arr, a_arr, b_arr, theta_arr,
+                 kronrad, r_aper, zp))
+            band_results[bname] = res
+            print(f"  Band {bname}: measured {nobj} sources", file=sys.stderr)
 
     # Sort by detection magnitude (first band)
     first_band = bands[0][0]
