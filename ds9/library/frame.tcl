@@ -841,7 +841,15 @@ proc Button1Frame {which x y} {
 	none {
 	    if {$which == $current(frame)} {
 		# Check for sextract catalog marker click
-		CatalogPanelMarkerClick $which $x $y
+		set _marker_id [$which get marker catalog id $x $y]
+		if {$_marker_id != 0} {
+		    CatalogPanelMarkerClick $which $x $y
+		    set ds9(nonepan) 0
+		} else {
+		    # No marker hit — start drag-to-pan
+		    set ds9(nonepan) 1
+		    $which pan motion begin $x $y
+		}
 	    } else {
 		# we need this cause MarkerMotion maybe called,
 		# and we don't want it
@@ -1088,7 +1096,11 @@ proc Motion1Frame {which x y} {
     }
 
     switch -- $current(mode) {
-	none {}
+	none {
+	    if {$ds9(b1) && [info exists ds9(nonepan)] && $ds9(nonepan)} {
+		$which pan motion $x $y
+	    }
+	}
 	pointer -
 	region {
 	    if {$which == $current(frame)} {
@@ -1183,7 +1195,12 @@ proc Release1Frame {which x y} {
     }
 
     switch -- $current(mode) {
-	none {}
+	none {
+	    if {$ds9(b1) && [info exists ds9(nonepan)] && $ds9(nonepan)} {
+		$which pan motion end $x $y
+		set ds9(nonepan) 0
+	    }
+	}
 	pointer -
 	region {
 	    if {$which == $current(frame)} {
