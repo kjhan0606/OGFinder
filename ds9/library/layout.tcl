@@ -186,6 +186,8 @@ proc CreateCatalogPanel {} {
     menu $f.menubar.sextract.m -tearoff 0
     $f.menubar.sextract.m add command -label "Extract" \
 	-command CatalogPanelExtract
+    $f.menubar.sextract.m add command -label "Dual-Image Extract..." \
+	-command CatalogPanelDualExtract
     $f.menubar.sextract.m add command -label "Settings..." \
 	-command CatalogPanelSettingsDialog
     $f.menubar.sextract.m add separator
@@ -194,6 +196,10 @@ proc CreateCatalogPanel {} {
     $f.menubar.sextract.m add separator
     $f.menubar.sextract.m add command -label "Save Catalog" \
 	-command CatalogPanelSaveCatalog
+    $f.menubar.sextract.m add command -label "Export Regions (.reg)" \
+	-command CatalogPanelExportRegions
+    $f.menubar.sextract.m add command -label "Export FITS Table" \
+	-command CatalogPanelExportFITS
     $f.menubar.sextract.m add command -label "Load Catalog" \
 	-command CatalogPanelLoadCatalog
     $f.menubar.sextract.m add separator
@@ -318,11 +324,44 @@ proc CreateCatalogPanel {} {
     $f.menubar.psfdeconv.m add command -label "Quick Deconvolve (RL)" \
 	-command CatalogPanelQuickDeconvolve
 
+    # Analysis menu
+    ttk::menubutton $f.menubar.analysis -text "Analysis" \
+	-menu $f.menubar.analysis.m -style CatMenu.TMenubutton
+    menu $f.menubar.analysis.m -tearoff 0
+    $f.menubar.analysis.m add command \
+	-label "Non-Parametric Morphology (CAS/Gini/M20)" \
+	-command CatalogPanelMorphometry
+    $f.menubar.analysis.m add command \
+	-label "Sérsic Fitting" \
+	-command CatalogPanelSersicFit
+    $f.menubar.analysis.m add separator
+    $f.menubar.analysis.m add command \
+	-label "PSF Photometry" \
+	-command CatalogPanelPSFPhotometry
+    $f.menubar.analysis.m add command \
+	-label "Multi-Band Photometry..." \
+	-command CatalogPanelMultiBand
+    $f.menubar.analysis.m add command \
+	-label "Crowded Field Photometry" \
+	-command CatalogPanelCrowdedPhot
+    $f.menubar.analysis.m add separator
+    $f.menubar.analysis.m add command \
+	-label "Cross-Match (VizieR)..." \
+	-command CatalogPanelCrossMatch
+    $f.menubar.analysis.m add separator
+    $f.menubar.analysis.m add command \
+	-label "Segmentation Map" \
+	-command CatalogPanelSegmentationMap
+    $f.menubar.analysis.m add command \
+	-label "Completeness Simulation..." \
+	-command CatalogPanelCompleteness
+
     pack $f.menubar.sextract -side left
     pack $f.menubar.display -side left
     pack $f.menubar.aimerge -side left
     pack $f.menubar.galaxy -side left
     pack $f.menubar.psfdeconv -side left
+    pack $f.menubar.analysis -side left
 
     # Search/Filter bar
     set catpanel(searchbar) [ttk::frame $f.searchbar]
@@ -543,7 +582,8 @@ proc CatalogPanelExtract {} {
     set paramargs {}
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		   back-size back-filtersize} {
+		   back-size back-filtersize \
+		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
 	if {[info exists catpanel(param,$pname)]} {
 	    lappend paramargs "--$pname" $catpanel(param,$pname)
 	}
@@ -1013,6 +1053,10 @@ proc CatalogPanelParamDef {} {
     set catpanel(param,seeing-fwhm) 3.0
     set catpanel(param,back-size) 64
     set catpanel(param,back-filtersize) 3
+    set catpanel(param,phot-aperture-2) 4.0
+    set catpanel(param,phot-aperture-3) 6.0
+    set catpanel(param,phot-aperture-5) 10.0
+    set catpanel(param,conv-filter) default
 
     CatalogPanelParamLoad
 }
@@ -1049,7 +1093,8 @@ proc CatalogPanelParamSave {} {
     if {[catch {set fd [open $preffile w]} err]} return
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		   back-size back-filtersize} {
+		   back-size back-filtersize \
+		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
 	puts $fd "$pname $catpanel(param,$pname)"
     }
     close $fd
@@ -1069,6 +1114,10 @@ proc CatalogPanelParamDefaults {} {
     set ed(seeing-fwhm) 3.0
     set ed(back-size) 64
     set ed(back-filtersize) 3
+    set ed(phot-aperture-2) 4.0
+    set ed(phot-aperture-3) 6.0
+    set ed(phot-aperture-5) 10.0
+    set ed(conv-filter) default
 }
 
 proc CatalogPanelSettingsDialog {} {
@@ -1082,7 +1131,8 @@ proc CatalogPanelSettingsDialog {} {
     # Copy current params to ed()
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		   back-size back-filtersize} {
+		   back-size back-filtersize \
+		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
 	set ed($pname) $catpanel(param,$pname)
     }
 
@@ -1096,7 +1146,10 @@ proc CatalogPanelSettingsDialog {} {
 	detect-minarea {Detect Min Area}
 	deblend-nthresh {Deblend NThresh}
 	deblend-mincont {Deblend MinCont}
-	phot-aperture {Phot Aperture}
+	phot-aperture {Phot Aperture (diam)}
+	phot-aperture-2 {Phot Aperture 2}
+	phot-aperture-3 {Phot Aperture 3}
+	phot-aperture-5 {Phot Aperture 5}
 	mag-zeropoint {Mag Zeropoint}
 	gain {Gain}
 	pixel-scale {Pixel Scale}
@@ -1109,6 +1162,12 @@ proc CatalogPanelSettingsDialog {} {
 	grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
 	incr row
     }
+    # Convolution filter dropdown
+    ttk::label $f.l$row -text "Conv Filter:" -anchor w
+    ttk::combobox $f.e$row -textvariable ed(conv-filter) -width 12 \
+	-values {default gauss5x5 mexhat tophat} -state readonly
+    grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
+    incr row
 
     # Buttons
     set bf [ttk::frame $w.buttons]
@@ -1118,7 +1177,8 @@ proc CatalogPanelSettingsDialog {} {
     ttk::button $bf.save -text {Save} -command {
 	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		       back-size back-filtersize} {
+		       back-size back-filtersize \
+		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
 	    set catpanel(param,$pname) $ed($pname)
 	}
 	CatalogPanelParamSave
@@ -1139,7 +1199,8 @@ proc CatalogPanelSettingsDialog {} {
     if {$ed(ok)} {
 	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		       back-size back-filtersize} {
+		       back-size back-filtersize \
+		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
 	    set catpanel(param,$pname) $ed($pname)
 	}
 	CatalogPanelParamSave
@@ -5022,5 +5083,908 @@ proc CatalogPanelPSFSettingsDefaults {} {
     set ed(psf,clean-threshold) 0.0
     set ed(psf,mem-lambda) 0.1
     set ed(psf,mem-niter) 100
+}
+
+# ============================================================================
+# Analysis — Advanced Source Extraction Features (Phase A-D)
+# ============================================================================
+
+# --- Helper: Locate a Python script (check bindir, then library dir) ---
+
+proc CatalogPanelGetScript {scriptname} {
+    set bindir [file dirname [info nameofexecutable]]
+    set script [file join $bindir $scriptname]
+    if {![file exists $script]} {
+	set libdir [file join [file dirname $bindir] ds9 library]
+	set script [file join $libdir $scriptname]
+    }
+    return $script
+}
+
+# --- Helper: Get FITS filename from current frame ---
+
+proc CatalogPanelGetFITS {} {
+    global current
+    set fn {}
+    if {$current(frame) != {}} {
+	catch {set fn [$current(frame) get fits file name full]}
+    }
+    set fn [string trim $fn "{}"]
+    regsub {\[.*\]$} $fn {} fn
+    return $fn
+}
+
+# --- Helper: Save current catalog to temp TSV ---
+
+proc CatalogPanelSaveTempCatalog {suffix} {
+    global catpanel
+    set tmpdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $tmpdir]} { file mkdir $tmpdir }
+    set tmpfile [file join $tmpdir "${suffix}_catalog.tsv"]
+    if {[catch {
+	set fd [open $tmpfile w]
+	puts -nonewline $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	return {}
+    }
+    return $tmpfile
+}
+
+# --- Helper: Add columns from result TSV to alldata ---
+
+proc CatalogPanelAddColumnsFromTSV {result_data col_names} {
+    global catpanel
+
+    # Parse result
+    set rlines [split $result_data \n]
+    set rheaders [split [lindex $rlines 0] "\t"]
+
+    # Find NUMBER column in results
+    set r_num_col -1
+    for {set c 0} {$c < [llength $rheaders]} {incr c} {
+	if {[string trim [lindex $rheaders $c]] eq "NUMBER"} {
+	    set r_num_col $c
+	    break
+	}
+    }
+    if {$r_num_col < 0} return
+
+    # Build lookup: number -> values
+    array set rdata {}
+    for {set i 1} {$i < [llength $rlines]} {incr i} {
+	set line [lindex $rlines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+	set num [string trim [lindex $fields $r_num_col]]
+	set vals {}
+	foreach cn $col_names {
+	    set cidx -1
+	    for {set c 0} {$c < [llength $rheaders]} {incr c} {
+		if {[string trim [lindex $rheaders $c]] eq $cn} {
+		    set cidx $c
+		    break
+		}
+	    }
+	    if {$cidx >= 0 && $cidx < [llength $fields]} {
+		lappend vals [string trim [lindex $fields $cidx]]
+	    } else {
+		lappend vals {}
+	    }
+	}
+	set rdata($num) $vals
+    }
+
+    # Parse alldata
+    set lines [split $catpanel(alldata) \n]
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Find NUMBER col in alldata
+    set num_col -1
+    for {set c 0} {$c < $ncols} {incr c} {
+	if {[string trim [lindex $headers $c]] eq "NUMBER"} {
+	    set num_col $c
+	    break
+	}
+    }
+    if {$num_col < 0} return
+
+    # Check if columns already exist
+    set existing 0
+    foreach cn $col_names {
+	for {set c 0} {$c < $ncols} {incr c} {
+	    if {[string trim [lindex $headers $c]] eq $cn} {
+		set existing 1
+		break
+	    }
+	}
+	if {$existing} break
+    }
+
+    # Build new data
+    set newdata {}
+    if {$existing} {
+	# Update existing columns
+	set col_indices {}
+	foreach cn $col_names {
+	    set cidx -1
+	    for {set c 0} {$c < $ncols} {incr c} {
+		if {[string trim [lindex $headers $c]] eq $cn} {
+		    set cidx $c
+		    break
+		}
+	    }
+	    lappend col_indices $cidx
+	}
+
+	append newdata [lindex $lines 0]
+	for {set i 1} {$i < [llength $lines]} {incr i} {
+	    set line [lindex $lines $i]
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line "\t"]
+	    set sn [string trim [lindex $fields $num_col]]
+	    if {[info exists rdata($sn)]} {
+		set vals $rdata($sn)
+		for {set v 0} {$v < [llength $col_names]} {incr v} {
+		    set ci [lindex $col_indices $v]
+		    if {$ci >= 0} {
+			lset fields $ci [lindex $vals $v]
+		    }
+		}
+	    }
+	    append newdata "\n" [join $fields "\t"]
+	}
+    } else {
+	# Append new columns
+	append newdata [lindex $lines 0]
+	foreach cn $col_names {
+	    append newdata "\t" $cn
+	}
+	for {set i 1} {$i < [llength $lines]} {incr i} {
+	    set line [lindex $lines $i]
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line "\t"]
+	    set sn [string trim [lindex $fields $num_col]]
+	    append newdata "\n" $line
+	    if {[info exists rdata($sn)]} {
+		foreach v $rdata($sn) {
+		    append newdata "\t" $v
+		}
+	    } else {
+		foreach cn $col_names {
+		    append newdata "\t"
+		}
+	    }
+	}
+    }
+
+    set catpanel(alldata) $newdata
+    CatalogPanelLoadTSV $catpanel(alldata) "analysis"
+}
+
+# --- A3: Export Regions (.reg) ---
+
+proc CatalogPanelExportRegions {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog to export"
+	return
+    }
+
+    set fn [tk_getSaveFile \
+	-title "Export DS9 Regions" \
+	-defaultextension ".reg" \
+	-filetypes {
+	    {{DS9 Region Files} {.reg}}
+	    {{All Files} {*}}
+	}]
+    if {$fn eq {}} return
+
+    # Parse alldata
+    set lines [split $catpanel(alldata) \n]
+    set headers [split [lindex $lines 0] "\t"]
+    set col_map {}
+    for {set c 0} {$c < [llength $headers]} {incr c} {
+	dict set col_map [string trim [lindex $headers $c]] $c
+    }
+
+    foreach needed {X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE NUMBER} {
+	if {![dict exists $col_map $needed]} {
+	    set catpanel(status) "Missing column: $needed"
+	    return
+	}
+    }
+
+    set col_x [dict get $col_map X_IMAGE]
+    set col_y [dict get $col_map Y_IMAGE]
+    set col_a [dict get $col_map A_IMAGE]
+    set col_b [dict get $col_map B_IMAGE]
+    set col_t [dict get $col_map THETA_IMAGE]
+    set col_n [dict get $col_map NUMBER]
+
+    if {[catch {
+	set fd [open $fn w]
+	puts $fd "# Region file format: DS9 version 4.1"
+	puts $fd {global color=green dashlist=8 3 width=1 font="helvetica 10 normal roman" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1}
+	puts $fd "image"
+
+	set nreg 0
+	for {set i 1} {$i < [llength $lines]} {incr i} {
+	    set line [lindex $lines $i]
+	    if {[string trim $line] eq {}} continue
+	    set fields [split $line "\t"]
+	    set x [string trim [lindex $fields $col_x]]
+	    set y [string trim [lindex $fields $col_y]]
+	    set a [string trim [lindex $fields $col_a]]
+	    set b [string trim [lindex $fields $col_b]]
+	    set t [string trim [lindex $fields $col_t]]
+	    set n [string trim [lindex $fields $col_n]]
+	    puts $fd "ellipse($x,$y,$a,$b,$t) # text=\{$n\}"
+	    incr nreg
+	}
+	close $fd
+    } err]} {
+	set catpanel(status) "Export error: $err"
+	return
+    }
+
+    set catpanel(status) "Exported $nreg regions to [file tail $fn]"
+}
+
+# --- B9: Export FITS Table ---
+
+proc CatalogPanelExportFITS {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog to export"
+	return
+    }
+
+    set fn [tk_getSaveFile \
+	-title "Export FITS Table" \
+	-defaultextension ".fits" \
+	-filetypes {
+	    {{FITS Files} {.fits}}
+	    {{All Files} {*}}
+	}]
+    if {$fn eq {}} return
+
+    # Save temp TSV
+    set tmpfile [CatalogPanelSaveTempCatalog "fits_export"]
+    if {$tmpfile eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_fits_export.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_fits_export.py"
+	return
+    }
+
+    set catpanel(status) "Exporting FITS table..."
+    update idletasks
+
+    if {[catch {
+	set data [exec python3 $script --input $tmpfile --output $fn 2>@stderr]
+    } err]} {
+	set catpanel(status) "FITS export error: $err"
+	return
+    }
+
+    set catpanel(status) "Exported FITS table to [file tail $fn]"
+}
+
+# --- B8: Segmentation Map ---
+
+proc CatalogPanelSegmentationMap {} {
+    global catpanel current ds9
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_segmap.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_segmap.py"
+	return
+    }
+
+    set catpanel(status) "Generating segmentation map..."
+    update idletasks
+
+    set args [list python3 $script $fn]
+    if {[info exists catpanel(param,detect-thresh)]} {
+	lappend args --detect-thresh $catpanel(param,detect-thresh)
+    }
+    if {[info exists catpanel(param,detect-minarea)]} {
+	lappend args --detect-minarea $catpanel(param,detect-minarea)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Segmentation map error: $err"
+	return
+    }
+
+    # Parse output: "OK N_SOURCES OUTPUT_PATH"
+    set parts [split $data]
+    if {[llength $parts] >= 3 && [lindex $parts 0] eq "OK"} {
+	set nsrc [lindex $parts 1]
+	set outpath [lindex $parts 2]
+
+	# Load in new frame
+	if {[catch {
+	    CreateFrame
+	    LoadFitsFile $outpath {} {}
+	} err2]} {
+	    set catpanel(status) "Error loading segmap: $err2"
+	    return
+	}
+
+	set catpanel(status) "Segmentation map: $nsrc sources"
+    } else {
+	set catpanel(status) "Segmentation map: unexpected output"
+    }
+}
+
+# --- B10: Non-Parametric Morphology (CAS/Gini/M20) ---
+
+proc CatalogPanelMorphometry {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_morphometry.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_morphometry.py"
+	return
+    }
+
+    # Save temp catalog
+    set tmpcat [CatalogPanelSaveTempCatalog "morphometry"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Measuring morphometry (CAS/Gini/M20)..."
+    update idletasks
+
+    if {[catch {
+	set data [exec python3 $script $fn --catalog $tmpcat 2>@stderr]
+    } err]} {
+	set catpanel(status) "Morphometry error: $err"
+	return
+    }
+
+    if {[string trim $data] eq {}} {
+	set catpanel(status) "Morphometry: no output"
+	return
+    }
+
+    # Add columns to alldata
+    CatalogPanelAddColumnsFromTSV $data {CONC ASYM GINI M20 R_PETRO}
+    set catpanel(status) "Morphometry complete (CAS/Gini/M20/Petrosian)"
+}
+
+# --- D17: Sérsic Fitting ---
+
+proc CatalogPanelSersicFit {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_sersic.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_sersic.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "sersic"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Sérsic profile fitting..."
+    update idletasks
+
+    set args [list python3 $script $fn --catalog $tmpcat]
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Sérsic fit error: $err"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data \
+	{SERSIC_N SERSIC_RE SERSIC_IE SERSIC_ELLIP SERSIC_THETA SERSIC_CHI2}
+    set catpanel(status) "Sérsic fitting complete"
+}
+
+# --- C13: PSF Photometry ---
+
+proc CatalogPanelPSFPhotometry {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    # Check for PSF file
+    if {![info exists catpanel(psf,file)] || ![file exists $catpanel(psf,file)]} {
+	set catpanel(status) "No PSF file — build PSF first (Reconstruction > PSF Generation)"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_psf_phot.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_psf_phot.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "psfphot"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "PSF photometry..."
+    update idletasks
+
+    set args [list python3 $script $fn --catalog $tmpcat --psf $catpanel(psf,file)]
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "PSF photometry error: $err"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data \
+	{FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF}
+    set catpanel(status) "PSF photometry complete"
+}
+
+# --- D16: Multi-Band Photometry ---
+
+proc CatalogPanelMultiBand {} {
+    global catpanel ds9
+
+    set w {.multibandphot}
+    set ed(ok) 0
+
+    DialogCreate $w {Multi-Band Photometry} ed(ok)
+
+    set f [ttk::frame $w.param]
+
+    # Detection image
+    ttk::label $f.ldet -text "Detection Image:" -anchor w
+    ttk::entry $f.edet -textvariable ed(mb,detect) -width 40
+    ttk::button $f.bdet -text "Browse..." -command {
+	set ff [tk_getOpenFile -title "Detection Image" \
+	    -filetypes {{{FITS Files} {.fits .fit .fts}} {{All Files} {*}}}]
+	if {$ff ne {}} { set ed(mb,detect) $ff }
+    }
+    grid $f.ldet $f.edet $f.bdet -padx 4 -pady 2 -sticky w
+
+    # Current frame as default
+    set ed(mb,detect) [CatalogPanelGetFITS]
+
+    # Band list
+    ttk::label $f.lbands -text "Bands (name:file, one per line):" -anchor w
+    text $f.tbands -width 50 -height 6
+    grid $f.lbands -padx 4 -pady 2 -sticky w -columnspan 3
+    grid $f.tbands -padx 4 -pady 2 -sticky we -columnspan 3
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    ttk::button $bf.ok -text {Run} -command {set ed(ok) 1} -default active
+    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
+    pack $bf.ok $bf.cancel -side left -expand true -padx 2 -pady 4
+
+    bind $w <Return> {set ed(ok) 1}
+    ttk::separator $w.sep -orient horizontal
+    pack $w.buttons $w.sep -side bottom -fill x
+    pack $w.param -side top -fill both -expand true
+
+    DialogWait $w ed(ok) $f.edet
+    set detect_img $ed(mb,detect)
+    set bands_text [$f.tbands get 1.0 end]
+    destroy $w
+
+    if {!$ed(ok)} { unset ed; return }
+    unset ed
+
+    if {$detect_img eq {} || ![file exists $detect_img]} {
+	set catpanel(status) "Detection image not found"
+	return
+    }
+
+    # Parse band lines
+    set bands {}
+    foreach line [split $bands_text \n] {
+	set line [string trim $line]
+	if {$line eq {}} continue
+	lappend bands $line
+    }
+    if {[llength $bands] == 0} {
+	set catpanel(status) "No bands specified"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_multiband.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_multiband.py"
+	return
+    }
+
+    set catpanel(status) "Multi-band photometry ([llength $bands] bands)..."
+    update idletasks
+
+    set args [list python3 $script --detect-image $detect_img \
+	--bands [join $bands ","]]
+
+    # Use existing catalog if available
+    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+	set tmpcat [CatalogPanelSaveTempCatalog "multiband"]
+	if {$tmpcat ne {}} {
+	    lappend args --catalog $tmpcat
+	}
+    }
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Multi-band error: $err"
+	return
+    }
+
+    # Load as new catalog (replaces current)
+    CatalogPanelLoadTSV $data "multi-band"
+    set catpanel(status) "Multi-band photometry complete"
+}
+
+# --- D19: Crowded Field Photometry ---
+
+proc CatalogPanelCrowdedPhot {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    if {![info exists catpanel(psf,file)] || ![file exists $catpanel(psf,file)]} {
+	set catpanel(status) "No PSF file — build PSF first"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_crowded_phot.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_crowded_phot.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "crowded"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Crowded field photometry..."
+    update idletasks
+
+    set args [list python3 $script $fn --catalog $tmpcat \
+	--psf $catpanel(psf,file)]
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Crowded phot error: $err"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data \
+	{FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS}
+    set catpanel(status) "Crowded field photometry complete"
+}
+
+# --- C14: Cross-Match (VizieR) ---
+
+proc CatalogPanelCrossMatch {} {
+    global catpanel ed
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set w {.crossmatch}
+    set ed(ok) 0
+
+    DialogCreate $w {Cross-Match (VizieR)} ed(ok)
+
+    set f [ttk::frame $w.param]
+
+    # Catalog selection
+    ttk::label $f.lcat -text "VizieR Catalog:" -anchor w
+    ttk::combobox $f.ecat -textvariable ed(xm,catalog) -width 25 \
+	-values {GAIA_DR3 2MASS PanSTARRS_DR1 SDSS_DR17 ALLWISE} -state readonly
+    set ed(xm,catalog) GAIA_DR3
+    grid $f.lcat $f.ecat -padx 4 -pady 2 -sticky w
+
+    # Match radius
+    ttk::label $f.lrad -text "Match Radius (arcsec):" -anchor w
+    ttk::entry $f.erad -textvariable ed(xm,radius) -width 12
+    set ed(xm,radius) 2.0
+    grid $f.lrad $f.erad -padx 4 -pady 2 -sticky w
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    ttk::button $bf.ok -text {Run} -command {set ed(ok) 1} -default active
+    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
+    pack $bf.ok $bf.cancel -side left -expand true -padx 2 -pady 4
+
+    bind $w <Return> {set ed(ok) 1}
+    ttk::separator $w.sep -orient horizontal
+    pack $w.buttons $w.sep -side bottom -fill x
+    pack $w.param -side top -fill both -expand true
+
+    DialogWait $w ed(ok) $f.ecat
+    set vizcat $ed(xm,catalog)
+    set matchrad $ed(xm,radius)
+    destroy $w
+
+    if {!$ed(ok)} { unset ed; return }
+    unset ed
+
+    set script [CatalogPanelGetScript ds9_crossmatch.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_crossmatch.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "crossmatch"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Cross-matching with $vizcat (r=${matchrad}\")..."
+    update idletasks
+
+    if {[catch {
+	set data [exec python3 $script --catalog $tmpcat \
+	    --vizier-cat $vizcat --radius $matchrad 2>@stderr]
+    } err]} {
+	set catpanel(status) "Cross-match error: $err"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data {MATCH_DIST MATCH_ID}
+    set catpanel(status) "Cross-match complete ($vizcat)"
+}
+
+# --- C12: Dual-Image Extract ---
+
+proc CatalogPanelDualExtract {} {
+    global catpanel ds9 current ed
+
+    set w {.dualextract}
+    set ed(ok) 0
+
+    DialogCreate $w {Dual-Image Extract} ed(ok)
+
+    set f [ttk::frame $w.param]
+
+    # Detection image
+    ttk::label $f.ldet -text "Detection Image:" -anchor w
+    ttk::entry $f.edet -textvariable ed(dual,detect) -width 40
+    ttk::button $f.bdet -text "Browse..." -command {
+	set ff [tk_getOpenFile -title "Detection Image" \
+	    -filetypes {{{FITS Files} {.fits .fit .fts}} {{All Files} {*}}}]
+	if {$ff ne {}} { set ed(dual,detect) $ff }
+    }
+    grid $f.ldet $f.edet $f.bdet -padx 4 -pady 2 -sticky w
+
+    # Measurement image
+    ttk::label $f.lmeas -text "Measurement Image:" -anchor w
+    ttk::entry $f.emeas -textvariable ed(dual,measure) -width 40
+    ttk::button $f.bmeas -text "Browse..." -command {
+	set ff [tk_getOpenFile -title "Measurement Image" \
+	    -filetypes {{{FITS Files} {.fits .fit .fts}} {{All Files} {*}}}]
+	if {$ff ne {}} { set ed(dual,measure) $ff }
+    }
+    grid $f.lmeas $f.emeas $f.bmeas -padx 4 -pady 2 -sticky w
+
+    # Set defaults from current frame
+    set ed(dual,detect) [CatalogPanelGetFITS]
+    set ed(dual,measure) {}
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    ttk::button $bf.ok -text {Extract} -command {set ed(ok) 1} -default active
+    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
+    pack $bf.ok $bf.cancel -side left -expand true -padx 2 -pady 4
+
+    bind $w <Return> {set ed(ok) 1}
+    ttk::separator $w.sep -orient horizontal
+    pack $w.buttons $w.sep -side bottom -fill x
+    pack $w.param -side top -fill both -expand true
+
+    DialogWait $w ed(ok) $f.edet
+    set detect_img $ed(dual,detect)
+    set measure_img $ed(dual,measure)
+    destroy $w
+
+    if {!$ed(ok)} { unset ed; return }
+    unset ed
+
+    if {$detect_img eq {} || ![file exists $detect_img]} {
+	set catpanel(status) "Detection image not found"
+	return
+    }
+    if {$measure_img eq {} || ![file exists $measure_img]} {
+	set catpanel(status) "Measurement image not found"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_dual_extract.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_dual_extract.py"
+	return
+    }
+
+    set catpanel(status) "Dual-image extraction..."
+    update idletasks
+
+    set args [list python3 $script \
+	--detect-image $detect_img --measure-image $measure_img]
+    if {[info exists catpanel(param,detect-thresh)]} {
+	lappend args --detect-thresh $catpanel(param,detect-thresh)
+    }
+    if {[info exists catpanel(param,detect-minarea)]} {
+	lappend args --detect-minarea $catpanel(param,detect-minarea)
+    }
+    if {[info exists catpanel(param,phot-aperture)]} {
+	lappend args --phot-aperture $catpanel(param,phot-aperture)
+    }
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Dual extract error: $err"
+	return
+    }
+
+    CatalogPanelLoadTSV $data "dual-image"
+    set catpanel(status) "Dual-image extraction complete"
+}
+
+# --- D18: Completeness Simulation ---
+
+proc CatalogPanelCompleteness {} {
+    global catpanel ed
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set w {.completeness}
+    set ed(ok) 0
+
+    DialogCreate $w {Completeness Simulation} ed(ok)
+
+    set f [ttk::frame $w.param]
+
+    set ed(comp,ninject) 500
+    set ed(comp,magmin) 20.0
+    set ed(comp,magmax) 28.0
+    set ed(comp,nbins) 16
+
+    set row 0
+    foreach {vname vlabel} {
+	comp,ninject {N Inject (per bin)}
+	comp,magmin {Mag Min}
+	comp,magmax {Mag Max}
+	comp,nbins {N Bins}
+    } {
+	ttk::label $f.l$row -text "$vlabel:" -anchor w
+	ttk::entry $f.e$row -textvariable ed($vname) -width 12
+	grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
+	incr row
+    }
+
+    set bf [ttk::frame $w.buttons]
+    ttk::button $bf.ok -text {Run} -command {set ed(ok) 1} -default active
+    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
+    pack $bf.ok $bf.cancel -side left -expand true -padx 2 -pady 4
+
+    bind $w <Return> {set ed(ok) 1}
+    ttk::separator $w.sep -orient horizontal
+    pack $w.buttons $w.sep -side bottom -fill x
+    pack $w.param -side top -fill both -expand true
+
+    DialogWait $w ed(ok) $f.e0
+    set ninject $ed(comp,ninject)
+    set magmin $ed(comp,magmin)
+    set magmax $ed(comp,magmax)
+    set nbins $ed(comp,nbins)
+    destroy $w
+
+    if {!$ed(ok)} { unset ed; return }
+    unset ed
+
+    set script [CatalogPanelGetScript ds9_completeness.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_completeness.py"
+	return
+    }
+
+    set catpanel(status) "Completeness simulation ($nbins bins)..."
+    update idletasks
+
+    set args [list python3 $script $fn \
+	--n-inject $ninject --mag-min $magmin --mag-max $magmax --n-bins $nbins]
+    if {[info exists catpanel(param,detect-thresh)]} {
+	lappend args --detect-thresh $catpanel(param,detect-thresh)
+    }
+    if {[info exists catpanel(param,mag-zeropoint)]} {
+	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Completeness error: $err"
+	return
+    }
+
+    # Load completeness results as a new catalog view
+    CatalogPanelLoadTSV $data "completeness"
+    set catpanel(status) "Completeness simulation complete"
 }
 

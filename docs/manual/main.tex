@@ -400,6 +400,40 @@ I(x,y) - B(x,y) > k \cdot \sigma_B(x,y)
 
 where $k$ is the detection threshold in units of the local background RMS (default: $k = 1.5$, set by \texttt{--detect-thresh}). Connected pixel groups with fewer than \texttt{--detect-minarea} pixels (default: 5) are rejected.
 
+\subsection{Observation Boundary Masking}
+\label{subsec:mask}
+
+Many astronomical images---particularly JWST and HST mosaics---contain regions outside the actual observation footprint that are filled with zero-valued pixels. Without masking, \sep{} may detect spurious sources at the boundary between the observed and unobserved regions, where the sharp transition from zero to real flux mimics a source profile.
+
+\sextract{} automatically constructs a \textbf{pixel mask} from the original FITS data before any processing:
+
+\begin{equation}
+M(x,y) = \begin{cases}
+1 & \text{if } I_{\mathrm{raw}}(x,y) = 0, \; \mathrm{NaN}, \; \text{or} \; \pm\infty \\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+
+This mask is passed to \sep{} via the \texttt{sep\_image.mask} field, which excludes masked pixels from both \textbf{background estimation} and \textbf{source detection}. This prevents the zero-filled regions from biasing the local background model and eliminates most false detections at the observation boundary.
+
+\subsubsection*{Boundary Overlap Filtering}
+
+After source detection and measurement, a second filter removes any source whose \textbf{isophotal footprint} overlaps with the mask. For each source, the isophotal ellipse is defined by:
+
+\begin{itemize}[leftmargin=2em]
+  \item Semi-major axis: \texttt{ISO\_RADIUS}
+  \item Axis ratio: $b/a$ from \texttt{B\_IMAGE} / \texttt{A\_IMAGE}
+  \item Position angle: \texttt{THETA\_IMAGE}
+\end{itemize}
+
+Every pixel inside this ellipse is checked against the mask. If any masked pixel falls within the isophotal ellipse, the source is excluded from the output catalog. This ensures that partially observed sources at the observation boundary---which would have unreliable photometry and morphology---are not included in the final catalog.
+
+The number of filtered sources is reported to \texttt{stderr}:
+\begin{verbatim}
+Masked 5765432 / 27562500 pixels (outside observation)
+Filtered: 342 / 7204 sources outside observation boundary
+\end{verbatim}
+
 \subsection{Deblending}
 
 Overlapping sources are separated using multi-threshold deblending:
@@ -620,6 +654,33 @@ This chapter provides a detailed description of each column in the output catalo
 \texttt{FLUX\_AUTO} & counts & Total flux within the Kron elliptical aperture (in ADU or counts). \\
 \midrule
 
+\texttt{FLUXERR\_AUTO} & counts & $1\sigma$ flux uncertainty for \texttt{FLUX\_AUTO}, from Poisson + background noise. \\
+\midrule
+
+\texttt{FLUXERR\_APER} & counts & $1\sigma$ flux uncertainty for \texttt{MAG\_APER}. \\
+\midrule
+
+\texttt{MAGERR\_AUTO} & mag & Magnitude error for \texttt{MAG\_AUTO}: $\sigma_m = 1.0857 \times \text{FLUXERR\_AUTO} / \text{FLUX\_AUTO}$. \\
+\midrule
+
+\texttt{MAGERR\_APER} & mag & Magnitude error for \texttt{MAG\_APER}. \\
+\midrule
+
+\texttt{FLUX\_APER\_2} & counts & Flux in the 2nd circular aperture (diameter set by \texttt{--phot-aperture-2}, default 4.0\,px). \\
+\midrule
+
+\texttt{FLUX\_APER\_3} & counts & Flux in the 3rd circular aperture (diameter set by \texttt{--phot-aperture-3}, default 6.0\,px). \\
+\midrule
+
+\texttt{FLUX\_APER\_5} & counts & Flux in the 4th circular aperture (diameter set by \texttt{--phot-aperture-5}, default 10.0\,px). \\
+\midrule
+
+\texttt{FLUXERR\_APER\_2/3/5} & counts & $1\sigma$ flux errors for the corresponding multi-aperture measurements. \\
+\midrule
+
+\texttt{MAG\_APER\_2/3/5} & mag & Magnitudes for the corresponding multi-aperture measurements. \\
+\midrule
+
 \texttt{FLUX\_RADIUS} & pixel & Half-light radius: radius of a circular aperture enclosing 50\% of \texttt{FLUX\_AUTO}. Indicator of object size; correlates with effective radius $R_e$ for galaxies. \\
 \midrule
 
@@ -636,6 +697,15 @@ This chapter provides a detailed description of each column in the output catalo
 \midrule
 
 \texttt{KRON\_RADIUS} & pixel & First-moment radius (Kron radius), used to scale the AUTO aperture. Minimum enforced value: 3.5 pixels. \\
+\midrule
+
+\texttt{FWHM\_IMAGE} & pixel & Full Width at Half Maximum, computed as $2\sqrt{\ln 2 \cdot (a^2 + b^2)}$ from the intensity-weighted second moments. Used internally for star/galaxy classification. \\
+\midrule
+
+\texttt{ISO\_RADIUS} & pixel & Equivalent semi-major axis of an ellipse with the same area as the isophotal detection footprint. \\
+\midrule
+
+\texttt{NPIX\_ISO} & pixel$^2$ & Number of pixels in the isophotal detection footprint above the detection threshold. \\
 \midrule
 
 \texttt{MU\_MAX} & mag/arcsec$^2$ & Peak surface brightness: magnitude of the brightest pixel divided by pixel area. Lower values = brighter peaks. \\
@@ -711,6 +781,18 @@ The output is a tab-separated table printed to \texttt{stdout}. The first line i
 \midrule
 
 \texttt{--back-filtersize} & 3 & Median filter kernel size (in mesh cells) applied to the background map before interpolation. Smooths out mesh-to-mesh noise. \\
+\midrule
+
+\texttt{--phot-aperture-2} & 4.0 & Diameter (pixels) of the 2nd circular aperture for multi-aperture photometry (\texttt{FLUX\_APER\_2}, \texttt{MAG\_APER\_2}). \\
+\midrule
+
+\texttt{--phot-aperture-3} & 6.0 & Diameter of the 3rd circular aperture. \\
+\midrule
+
+\texttt{--phot-aperture-5} & 10.0 & Diameter of the 4th circular aperture. \\
+\midrule
+
+\texttt{--conv-filter} & default & Convolution filter for source detection. Options: \texttt{default} (3$\times$3 Gaussian), \texttt{gauss5x5} (5$\times$5 Gaussian), \texttt{mexhat} (5$\times$5 Mexican hat), \texttt{tophat} (5$\times$5 top-hat). \\
 
 \bottomrule
 \end{longtable}
@@ -968,9 +1050,20 @@ Settings & Adjustable extraction parameters (threshold, deblending, photometry, 
 
 \begin{codebox}
 \begin{lstlisting}[numbers=none]
-[Source Extractor]  [Extract] [Settings...] [Mark All] [Visible] [Trim...] [Clear]
+[SExtractor] [Display] [AI Merge] [Galaxy Model] [Reconstruction] [Analysis]
 \end{lstlisting}
 \end{codebox}
+
+The six menu buttons provide access to all features:
+
+\begin{itemize}
+\item \textbf{SExtractor} --- Extract, Dual-Image Extract, Settings, Trim, Save/Load/Export Catalog, Export Regions, Export FITS Table, Clear
+\item \textbf{Display} --- Mark All, Clear Markers, Show Visible Only
+\item \textbf{AI Merge} --- Run AI Merge (MLP-based source deblending)
+\item \textbf{Galaxy Model} --- AI Morphology Classification, Elliptical/Spiral Model Fitting
+\item \textbf{Reconstruction} --- Star Finding, PSF Generation, Deconvolution (7 algorithms), Settings
+\item \textbf{Analysis} --- Non-Parametric Morphology, S\'ersic Fitting, PSF Photometry, Multi-Band Photometry, Crowded Field Photometry, Cross-Match (VizieR), Segmentation Map, Completeness Simulation
+\end{itemize}
 
 
 \section{Mark All Sources}
@@ -1170,12 +1263,16 @@ Detect Min Area & 5 & Minimum connected pixels \\
 Deblend NThresh & 32 & Number of deblending sub-thresholds \\
 Deblend MinCont & 0.005 & Minimum deblending contrast \\
 Phot Aperture & 5.0 & Fixed aperture diameter (pixels) \\
+Phot Aperture 2 & 4.0 & 2nd circular aperture diameter (pixels) \\
+Phot Aperture 3 & 6.0 & 3rd circular aperture diameter (pixels) \\
+Phot Aperture 5 & 10.0 & 4th circular aperture diameter (pixels) \\
 Mag Zeropoint & 25.0 & Magnitude zero-point $m_0$ \\
 Gain & 0.0 & Detector gain ($e^-$/ADU) \\
 Pixel Scale & 1.0 & Pixel scale (arcsec/pixel) \\
 Seeing FWHM & 3.0 & Seeing FWHM (arcsec) \\
 Back Size & 64 & Background mesh size (pixels) \\
 Back Filter Size & 3 & Background filter kernel (mesh cells) \\
+Conv Filter & default & Detection convolution filter (default, gauss5x5, mexhat, tophat) \\
 \bottomrule
 \end{longtable}
 \end{center}
@@ -1218,6 +1315,279 @@ Ctrl+M & Merge selected sources \\
 Escape & Cancel merge selection \\
 Click table header & Sort by column (toggle ascending/descending) \\
 Click table row & Pan image to source position \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+%======================================================
+\chapter{Advanced Analysis Features}
+\label{ch:analysis}
+%======================================================
+
+The \textbf{Analysis} menu provides advanced photometric, morphological, and catalog analysis tools implemented as Python scripts. Each tool reads the current catalog and FITS image, performs its analysis, and appends result columns to the catalog table.
+
+\section{Non-Parametric Morphology (CAS/Gini/M20)}
+
+Measures five non-parametric morphological indices for each source, following the definitions of Conselice (2003), Lotz et~al.\ (2004), and Petrosian (1976).
+
+\begin{center}
+\begin{longtable}{L{2.8cm} L{9.5cm}}
+\toprule
+\textbf{Index} & \textbf{Definition} \\
+\midrule
+\endhead
+\texttt{CONC} & Concentration index: $C = 5\log_{10}(r_{80}/r_{20})$, where $r_{80}$ and $r_{20}$ are the circular radii enclosing 80\% and 20\% of the total flux (computed via \texttt{sep.flux\_radius}). \\
+\midrule
+\texttt{ASYM} & Asymmetry: $A = \min\!\bigl(\sum|I - I_{180}|\bigr) / (2\sum|I|)$, where $I_{180}$ is the image rotated 180\textdegree{} about the center. The center is optimized to minimize $A$. \\
+\midrule
+\texttt{GINI} & Gini coefficient of the pixel intensity distribution within the segmentation footprint: $G = \frac{1}{\bar{x}\,n(n-1)}\sum_{i=1}^{n}(2i - n - 1)\,x_i$, where $x_i$ are the sorted pixel values. \\
+\midrule
+\texttt{M20} & $M_{20} = \log_{10}\!\bigl(\sum_{i} f_i r_i^2 \text{ (brightest 20\%)} / \sum_{i} f_i r_i^2\bigr)$, a second-order moment of the brightest 20\% of pixels. \\
+\midrule
+\texttt{R\_PETRO} & Petrosian radius: the radius $r$ where $\eta(r) = I(r)/\langle I(<r)\rangle = 0.2$, computed from concentric circular annuli. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\textbf{Package}: \texttt{morphometry/} --- modules: \texttt{concentration.py}, \texttt{asymmetry.py}, \texttt{gini.py}, \texttt{m20.py}, \texttt{petrosian.py}, \texttt{measure.py}.
+
+\textbf{CLI}: \texttt{ds9\_morphometry.py FITSFILE --catalog catalog.tsv [--min-npix 100]}
+
+\textbf{Dependencies}: \texttt{sep}, \texttt{scipy.ndimage}, \texttt{astropy.io.fits}
+
+
+\section{S\'ersic Profile Fitting}
+
+Fits a 2D S\'ersic profile to each source:
+
+\begin{equation}
+I(r) = I_e \exp\!\Bigl[-b_n\Bigl(\bigl(r/r_e\bigr)^{1/n} - 1\Bigr)\Bigr]
+\end{equation}
+
+where $n$ is the S\'ersic index, $r_e$ is the effective (half-light) radius, $I_e$ is the intensity at $r_e$, and $b_n \approx 2n - 1/3 + 4/(405n)$.
+
+\begin{center}
+\begin{longtable}{L{3.2cm} L{9.0cm}}
+\toprule
+\textbf{Column} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{SERSIC\_N} & S\'ersic index $n$ (constrained $0.2 < n < 10$). $n=1$: exponential disk, $n=4$: de~Vaucouleurs profile. \\
+\midrule
+\texttt{SERSIC\_RE} & Effective radius $r_e$ in pixels. \\
+\midrule
+\texttt{SERSIC\_IE} & Surface brightness at $r_e$. \\
+\midrule
+\texttt{SERSIC\_ELLIP} & Fitted ellipticity $e = 1 - b/a$. \\
+\midrule
+\texttt{SERSIC\_THETA} & Position angle of the fitted ellipse (degrees). \\
+\midrule
+\texttt{SERSIC\_CHI2} & Reduced $\chi^2$ of the fit. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+The fitting uses \texttt{scipy.optimize.least\_squares} (Levenberg--Marquardt) with 8 free parameters: $I_e$, $r_e$, $n$, $x_c$, $y_c$, ellipticity, $\theta$, and background level.
+
+\textbf{Package}: \texttt{sersic\_fit/} --- modules: \texttt{models.py}, \texttt{fitter.py}, \texttt{utils.py}.
+
+\textbf{CLI}: \texttt{ds9\_sersic.py FITSFILE --catalog catalog.tsv [--max-sources 200]}
+
+
+\section{PSF Photometry}
+
+Performs point-source PSF photometry by fitting a scaled, shifted PSF model to each source.
+
+For each source, the model is:
+\begin{equation}
+M(x,y) = A \cdot \text{PSF}(x - x_0 - \Delta x,\; y - y_0 - \Delta y) + B
+\end{equation}
+
+The four free parameters ($A$, $\Delta x$, $\Delta y$, $B$) are optimized via \texttt{scipy.optimize.least\_squares}. The fitted flux is $F_\text{PSF} = A \cdot \sum\text{PSF}$.
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Column} & \textbf{Description} \\
+\midrule
+\texttt{FLUX\_PSF} & PSF-fitted flux \\
+\texttt{FLUXERR\_PSF} & $1\sigma$ flux error from covariance \\
+\texttt{MAG\_PSF} & PSF magnitude \\
+\texttt{MAGERR\_PSF} & PSF magnitude error \\
+\texttt{CHI2\_PSF} & Reduced $\chi^2$ of the PSF fit \\
+\texttt{X\_PSF}, \texttt{Y\_PSF} & Refined centroid from the fit \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Prerequisite}: A PSF image must exist (generated via Reconstruction $\to$ Build PSF, stored as \texttt{\textasciitilde/.ds9/psf\_current.fits}).
+
+\textbf{Package}: \texttt{psf\_phot/} --- modules: \texttt{fitter.py}, \texttt{photometry.py}, \texttt{subtract.py}.
+
+\textbf{CLI}: \texttt{ds9\_psf\_phot.py FITSFILE --catalog cat.tsv --psf psf.fits}
+
+
+\section{Multi-Band Photometry}
+
+Performs matched-aperture photometry across multiple filter images using source positions detected in a single reference (detection) image.
+
+\begin{enumerate}[leftmargin=2em]
+  \item Source positions and shapes are determined from the detection image (or existing catalog).
+  \item For each band image, Kron elliptical and circular aperture photometry is performed at the same positions.
+  \item Per-band columns are added: \texttt{FLUX\_AUTO\_\textit{BAND}}, \texttt{MAG\_AUTO\_\textit{BAND}}, \texttt{FLUX\_APER\_\textit{BAND}}, etc.
+  \item Color indices are computed automatically: \texttt{COLOR\_\textit{B1}\_\textit{B2}} $= m_{B1} - m_{B2}$.
+\end{enumerate}
+
+A dialog allows adding bands by name and FITS file path.
+
+\textbf{CLI}: \texttt{ds9\_multiband.py --detect-image deep.fits --bands F435W:f435w.fits,F606W:f606w.fits}
+
+
+\section{Crowded Field Photometry (DAOPHOT-Style)}
+
+Implements iterative multi-PSF fitting for crowded stellar fields, following the DAOPHOT approach (Stetson 1987):
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Grouping}: Sources with overlapping Kron radii are assigned to the same group using adjacency-based graph clustering.
+  \item \textbf{Simultaneous fitting}: For each group, all $N$ source PSFs are fitted simultaneously by minimizing:
+  \begin{equation}
+    \chi^2 = \sum_\text{pixels} \Bigl(I_\text{data} - \sum_{j=1}^N A_j \cdot \text{PSF}(x - x_j, y - y_j) - B\Bigr)^2
+  \end{equation}
+  with $3N + 1$ free parameters ($A_j$, $\Delta x_j$, $\Delta y_j$ per source, plus background $B$).
+  \item \textbf{Subtraction}: Fitted PSFs are subtracted from the image.
+  \item \textbf{Re-detection}: New sources are detected in the residual image.
+  \item Steps 1--4 are repeated for a configurable number of iterations (default: 3).
+\end{enumerate}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Column} & \textbf{Description} \\
+\midrule
+\texttt{FLUX\_CROWD} & Multi-PSF fitted flux \\
+\texttt{FLUXERR\_CROWD} & $1\sigma$ flux error \\
+\texttt{MAG\_CROWD} & Crowded-field magnitude \\
+\texttt{X\_CROWD}, \texttt{Y\_CROWD} & Refined positions \\
+\texttt{N\_NEIGHBORS} & Number of sources in the fitting group \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Prerequisite}: A PSF image must exist.
+
+\textbf{Package}: \texttt{crowded\_phot/} --- modules: \texttt{group.py}, \texttt{nstar.py}, \texttt{psf\_subtract.py}, \texttt{iterate.py}.
+
+\textbf{CLI}: \texttt{ds9\_crowded\_phot.py FITSFILE --catalog cat.tsv --psf psf.fits [--max-iter 3]}
+
+
+\section{Catalog Cross-Match (VizieR)}
+
+Cross-matches the current catalog against external reference catalogs hosted on VizieR using TAP/ADQL queries.
+
+\subsection{Supported Catalogs}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Name} & \textbf{VizieR ID} & \textbf{Contents} \\
+\midrule
+Gaia DR3 & I/355/gaiadr3 & Astrometry + photometry \\
+2MASS & II/246/out & Near-infrared $JHK_s$ \\
+Pan-STARRS DR1 & II/349/ps1 & Optical $grizy$ \\
+SDSS DR17 & V/154/sdss16 & Optical $ugriz$ \\
+AllWISE & II/328/allwise & Mid-infrared $W1$--$W4$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Algorithm}
+
+\begin{enumerate}[leftmargin=2em]
+  \item Extract \texttt{ALPHA\_J2000} and \texttt{DELTA\_J2000} from the current catalog.
+  \item Compute the field center and search radius.
+  \item Query VizieR via TAP: \texttt{SELECT * FROM "catalog" WHERE 1=CONTAINS(POINT('ICRS',RA,DEC), CIRCLE('ICRS',$\alpha_c$,$\delta_c$,$r$))}.
+  \item Match each source to the nearest catalog entry within the specified radius (default: 2\,arcsec).
+  \item Append columns: \texttt{MATCH\_ID}, \texttt{MATCH\_DIST}.
+\end{enumerate}
+
+A dialog allows selecting the catalog and matching radius.
+
+\textbf{CLI}: \texttt{ds9\_crossmatch.py --catalog cat.tsv --vizier-cat II/349 --radius 2.0}
+
+\textbf{Requirement}: \texttt{ALPHA\_J2000} and \texttt{DELTA\_J2000} must be present (requires WCS in the FITS header).
+
+
+\section{Dual-Image Mode}
+
+Performs source detection on one image and photometric measurement on another, following the SExtractor dual-image paradigm. This is essential for multi-band surveys where consistent source definitions are needed across filters.
+
+\begin{enumerate}[leftmargin=2em]
+  \item Source detection (\texttt{sep.extract}) is run on the \textbf{detection image} (typically a deep or stacked image).
+  \item Kron radius, aperture photometry, and shape measurements are performed on the \textbf{measurement image} at the detected positions.
+  \item The output catalog uses detection-image positions with measurement-image fluxes and magnitudes.
+\end{enumerate}
+
+A dialog allows selecting the detection and measurement images from open DS9 frames or FITS files.
+
+\textbf{CLI}: \texttt{ds9\_dual\_extract.py --detect-image deep.fits --measure-image filter.fits}
+
+
+\section{Segmentation Map}
+
+Generates a segmentation map where each pixel is labeled with the ID of the source it belongs to (0 = background). The result is loaded as a new DS9 frame with a random colormap for visualization.
+
+\textbf{CLI}: \texttt{ds9\_segmap.py FITSFILE [--detect-thresh 1.5] [--output \textasciitilde/.ds9/segmap.fits]}
+
+
+\section{Completeness Simulation}
+
+Estimates detection completeness as a function of magnitude by injecting artificial sources and attempting to recover them:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Inject $N$ artificial PSF sources at random positions (avoiding existing sources), distributed uniformly in magnitude bins from $m_\text{min}$ to $m_\text{max}$.
+  \item Re-run source extraction with the same parameters.
+  \item Cross-match injected and recovered sources ($< 2$\,pixel separation).
+  \item Compute completeness per magnitude bin: $C(m) = N_\text{recovered} / N_\text{injected}$.
+\end{enumerate}
+
+Output: \texttt{MAG\_BIN \textbackslash t N\_INJECTED \textbackslash t N\_RECOVERED \textbackslash t COMPLETENESS}
+
+A dialog allows configuring the number of injected sources, magnitude range, and number of bins.
+
+\textbf{CLI}: \texttt{ds9\_completeness.py FITSFILE [--n-inject 1000] [--mag-min 20] [--mag-max 28]}
+
+
+\section{Export Features}
+
+\subsection{Export Regions (.reg)}
+
+Exports the current catalog as a DS9 region file. Each source is represented as an ellipse with parameters from \texttt{X\_IMAGE}, \texttt{Y\_IMAGE}, \texttt{A\_IMAGE}, \texttt{B\_IMAGE}, and \texttt{THETA\_IMAGE}. Source numbers are included as text labels.
+
+\textbf{Menu}: SExtractor $\to$ Export Regions (.reg)
+
+\subsection{Export FITS Table}
+
+Exports the current catalog as a FITS binary table using \texttt{astropy.io.fits.BinTableHDU}. Column types are automatically detected (integer, float, or string).
+
+\textbf{CLI}: \texttt{ds9\_fits\_export.py --input catalog.tsv --output catalog.fits}
+
+\textbf{Menu}: SExtractor $\to$ Export FITS Table
+
+
+\section{Python Dependencies}
+
+All Analysis features require Python~3 with the following packages:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Package} & \textbf{Required by} & \textbf{Install} \\
+\midrule
+\texttt{numpy} & All features & \texttt{pip install numpy} \\
+\texttt{scipy} & S\'ersic, PSF phot, crowded phot, morphometry & \texttt{pip install scipy} \\
+\texttt{sep} & Morphometry, segmentation, completeness, dual-image & \texttt{pip install sep} \\
+\texttt{astropy} & FITS export, cross-match, all FITS I/O & \texttt{pip install astropy} \\
 \bottomrule
 \end{tabular}
 \end{center}

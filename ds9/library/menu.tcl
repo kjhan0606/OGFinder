@@ -14,7 +14,8 @@ proc CreateMenuBar {} {
 	win32 {}
 	aqua {AppleMenu $ds9(mb)}
     }
-    $ds9(top) configure -menu $ds9(mb)
+    # Native menubar disabled — placed inside left pane instead
+    # $ds9(top) configure -menu $ds9(mb)
 
     $ds9(mb) add cascade -label [msgcat::mc {File}] -menu $ds9(mb).file
     $ds9(mb) add cascade -label [msgcat::mc {Edit}] -menu $ds9(mb).edit
@@ -71,6 +72,38 @@ proc CreateMenuBar {} {
 	}
 	aqua {}
     }
+
+    CreateLeftPaneMenuBar
+}
+
+proc CreateLeftPaneMenuBar {} {
+    global ds9
+
+    set f $ds9(leftmenubar)
+
+    # Remove indicator arrow from menubuttons
+    ttk::style layout CatMenu.TMenubutton {
+	Menubutton.border -sticky nswe -children {
+	    Menubutton.focus -sticky nswe -children {
+		Menubutton.padding -sticky we -children {
+		    Menubutton.label -side left -sticky {}
+		}
+	    }
+	}
+    }
+
+    foreach {name label} {
+	file File edit Edit view View frame Frame
+	bin Bin zoom Zoom scale Scale color Color
+	region Region wcs WCS illustrate Illustrate analysis Analysis
+    } {
+	ttk::menubutton $f.$name -text [msgcat::mc $label] \
+	    -menu $ds9(mb).$name -style CatMenu.TMenubutton
+	pack $f.$name -side left
+    }
+    ttk::menubutton $f.help -text [msgcat::mc Help] \
+	-menu $ds9(mb).help -style CatMenu.TMenubutton
+    pack $f.help -side right
 }
 
 proc ThemeMenu {w} {

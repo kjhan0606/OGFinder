@@ -4,7 +4,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 
-def find_candidate_pairs(objects, kron_radius, flux_auto, alpha=1.5,
+def find_candidate_pairs(objects, kron_radius, flux_auto, alpha=1.1,
                          radius_scale=2.0, min_flux=0.0):
     """
     Find candidate pairs of potentially overlapping sources.
@@ -14,15 +14,15 @@ def find_candidate_pairs(objects, kron_radius, flux_auto, alpha=1.5,
     Parameters
     ----------
     objects : structured array
-        SEP objects with 'x', 'y', 'a' fields.
+        SEP objects with 'x', 'y', 'a', 'b' fields.
     kron_radius : np.ndarray
-        Kron radii for each source.
+        Kron radii for each source (unused, kept for API compat).
     flux_auto : np.ndarray
         AUTO fluxes for filtering.
     alpha : float
         Distance factor: pair if d < alpha * (R_i + R_j).
     radius_scale : float
-        R = radius_scale * kron_radius * a.
+        Unused (kept for API compat).
     min_flux : float
         Minimum flux to consider a source.
 
@@ -37,11 +37,12 @@ def find_candidate_pairs(objects, kron_radius, flux_auto, alpha=1.5,
 
     x = objects['x']
     y = objects['y']
-    a = objects['a']
+    a = np.maximum(objects['a'], 0.5)
+    b = np.maximum(objects['b'], 0.5)
 
-    # Effective radii
-    radii = radius_scale * kron_radius * np.maximum(a, 1.0)
-    radii = np.maximum(radii, 2.0)
+    # Effective radii: mean of semi-major and semi-minor axes
+    radii = 0.5 * (a + b)
+    radii = np.maximum(radii, 1.0)
 
     # Flux filter
     valid = flux_auto > min_flux

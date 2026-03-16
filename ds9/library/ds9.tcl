@@ -553,9 +553,13 @@ switch $pds9(language) {
 set ds9(toppw) [ttk::panedwindow ${ds9(top)}pw -orient horizontal]
 pack $ds9(toppw) -fill both -expand true
 
-# create our main frame (left pane)
-set ds9(main) [ttk::frame ${ds9(top)}ds9]
-$ds9(toppw) add $ds9(main) -weight 3
+# create left pane wrapper (menubar + content)
+set ds9(leftpane) [ttk::frame ${ds9(top)}ds9]
+$ds9(toppw) add $ds9(leftpane) -weight 3
+set ds9(leftmenubar) [ttk::frame $ds9(leftpane).menubar]
+set ds9(main) [ttk::frame $ds9(leftpane).content]
+pack $ds9(leftmenubar) -fill x -side top
+pack $ds9(main) -fill both -expand true
 
 # create catalog panel frame (right pane)
 set ds9(catalog_frame) [ttk::frame ${ds9(top)}catf]

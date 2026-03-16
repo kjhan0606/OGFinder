@@ -114,6 +114,33 @@ def run_sep_on_stamp(image, detect_thresh=1.5, detect_minarea=5,
     }
 
 
+def run_sep_light(data, back_size=64, back_filtersize=3, **kwargs):
+    """Run SEP extraction returning only segmap + data_sub (no photometry).
+
+    Used by --catalog mode in ds9_ai_merge.py where photometric quantities
+    come from the existing ds9_sextract catalog.
+    """
+    data = np.ascontiguousarray(data, dtype=np.float64)
+    npix = data.shape[0] * data.shape[1]
+    sep.set_extract_pixstack(min(50000000, max(500000, npix)))
+
+    bkg = sep.Background(data, bw=back_size, bh=back_size,
+                         fw=back_filtersize, fh=back_filtersize)
+    data_sub = data - bkg.back()
+    bkg_rms = bkg.rms()
+
+    objects, segmap = sep.extract(
+        data_sub, kwargs.get('detect_thresh', 1.5), err=bkg_rms,
+        minarea=kwargs.get('detect_minarea', 5),
+        deblend_nthresh=kwargs.get('deblend_nthresh', 32),
+        deblend_cont=kwargs.get('deblend_mincont', 0.005),
+        filter_kernel=None,
+        segmentation_map=True
+    )
+    return {'data_sub': data_sub, 'segmap': segmap, 'bkg_rms': bkg_rms,
+            'objects': objects}
+
+
 def run_sep_on_fits(data, back_size=64, back_filtersize=3, **kwargs):
     """
     Run SEP on full FITS image data (larger background mesh).
@@ -128,16 +155,23 @@ def run_sep_on_fits(data, back_size=64, back_filtersize=3, **kwargs):
     mag_zeropoint = kwargs.get('mag_zeropoint', 25.0)
     gain = kwargs.get('gain', None)
 
+    # Match C ds9_sextract pixstack: min(50M, npix)
+    npix = data.shape[0] * data.shape[1]
+    pixstack = min(50000000, max(500000, npix))
+    sep.set_extract_pixstack(pixstack)
+
     bkg = sep.Background(data, bw=back_size, bh=back_size,
                          fw=back_filtersize, fh=back_filtersize)
     data_sub = data - bkg.back()
     bkg_rms = bkg.rms()
 
+    # filter_kernel=None to match C ds9_sextract (no convolution filter)
     objects, segmap = sep.extract(
         data_sub, detect_thresh, err=bkg_rms,
         minarea=detect_minarea,
         deblend_nthresh=deblend_nthresh,
         deblend_cont=deblend_mincont,
+        filter_kernel=None,
         segmentation_map=True
     )
 
