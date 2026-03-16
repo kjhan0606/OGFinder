@@ -846,6 +846,10 @@ proc Button1Frame {which x y} {
 		    CatalogPanelMarkerClick $which $x $y
 		    set ds9(nonepan) 0
 		} else {
+		    # Save click position for Add Objects (a key)
+		    set ds9(none_click_frame) $which
+		    set ds9(none_click_cx) $x
+		    set ds9(none_click_cy) $y
 		    # No marker hit — start drag-to-pan
 		    set ds9(nonepan) 1
 		    $which pan motion begin $x $y
@@ -1471,6 +1475,11 @@ proc KeyFrame {which K A xx yy} {
     }
 
     if {$ds9(modifier)} {
+	if {$current(mode) eq "none"} {
+	    switch -- $K {
+		s { CatalogPanelSeparateSelected }
+	    }
+	}
 	return
     }
 
@@ -1478,6 +1487,17 @@ proc KeyFrame {which K A xx yy} {
     switch -- $current(mode) {
 	none {
 	    switch -- $K {
+		a {
+		    # Add source at last-clicked empty position
+		    global ds9
+		    if {[info exists ds9(none_click_frame)]} {
+			CatalogPanelAddObjectAtCursor \
+			    $ds9(none_click_frame) \
+			    $ds9(none_click_cx) \
+			    $ds9(none_click_cy)
+		    }
+		}
+
 		c {DisplayCoordDialog $which $xx $yy}
 
 		plus {CubeNext}

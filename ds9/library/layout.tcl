@@ -220,6 +220,9 @@ proc CreateCatalogPanel {} {
     $f.menubar.display.m add separator
     $f.menubar.display.m add checkbutton -label "Show Visible Only" \
 	-variable catpanel(visible_mode) -command CatalogPanelShowVisible
+    $f.menubar.display.m add separator
+    $f.menubar.display.m add checkbutton -label "Add Objects (Click + A)" \
+	-variable catpanel(add_objects_mode)
 
     # AI Merge menu
     ttk::menubutton $f.menubar.aimerge -text "AI Merge" \
@@ -243,89 +246,109 @@ proc CreateCatalogPanel {} {
     $f.menubar.galaxy.m add command -label "Extract Parameters" \
 	-command CatalogPanelGalaxyParams
 
-    # Reconstruction menu
-    ttk::menubutton $f.menubar.psfdeconv -text "Reconstruction" \
-	-menu $f.menubar.psfdeconv.m -style CatMenu.TMenubutton
-    menu $f.menubar.psfdeconv.m -tearoff 0
+    # Star(PSF) menu
+    ttk::menubutton $f.menubar.starpsf -text "Star(PSF)" \
+	-menu $f.menubar.starpsf.m -style CatMenu.TMenubutton
+    menu $f.menubar.starpsf.m -tearoff 0
 
-    # Star Finding submenu
-    menu $f.menubar.psfdeconv.m.stars -tearoff 0
-    $f.menubar.psfdeconv.m add cascade -label "Star Finding" \
-	-menu $f.menubar.psfdeconv.m.stars
-    $f.menubar.psfdeconv.m.stars add command \
-	-label "Find Stars (Combined)" \
+    # Star Finding
+    menu $f.menubar.starpsf.m.find -tearoff 0
+    $f.menubar.starpsf.m add cascade -label "Find Stars" \
+	-menu $f.menubar.starpsf.m.find
+    $f.menubar.starpsf.m.find add command \
+	-label "Combined" \
 	-command [list CatalogPanelFindStars combined]
-    $f.menubar.psfdeconv.m.stars add command \
-	-label "Find Stars (CLASS_STAR)" \
+    $f.menubar.starpsf.m.find add command \
+	-label "CLASS_STAR" \
 	-command [list CatalogPanelFindStars class_star]
-    $f.menubar.psfdeconv.m.stars add command \
-	-label "Find Stars (FWHM)" \
+    $f.menubar.starpsf.m.find add command \
+	-label "FWHM" \
 	-command [list CatalogPanelFindStars fwhm]
-    $f.menubar.psfdeconv.m.stars add separator
-    $f.menubar.psfdeconv.m.stars add command \
+    $f.menubar.starpsf.m add separator
+    $f.menubar.starpsf.m add command \
 	-label "Show Stars" -command CatalogPanelShowStars
-    $f.menubar.psfdeconv.m.stars add command \
+    $f.menubar.starpsf.m add command \
 	-label "Clear Stars" -command CatalogPanelClearStars
+    $f.menubar.starpsf.m add separator
 
-    # PSF Generation submenu
-    menu $f.menubar.psfdeconv.m.psf -tearoff 0
-    $f.menubar.psfdeconv.m add cascade -label "PSF Generation" \
-	-menu $f.menubar.psfdeconv.m.psf
-    $f.menubar.psfdeconv.m.psf add command \
-	-label "Build PSF (Median Stack)" \
+    # PSF Generation
+    menu $f.menubar.starpsf.m.psf -tearoff 0
+    $f.menubar.starpsf.m add cascade -label "Build PSF" \
+	-menu $f.menubar.starpsf.m.psf
+    $f.menubar.starpsf.m.psf add command \
+	-label "Median Stack" \
 	-command [list CatalogPanelBuildPSF median]
-    $f.menubar.psfdeconv.m.psf add command \
-	-label "Build PSF (Moffat Fit)" \
+    $f.menubar.starpsf.m.psf add command \
+	-label "Moffat Fit" \
 	-command [list CatalogPanelBuildPSF moffat]
-    $f.menubar.psfdeconv.m.psf add command \
-	-label "Build PSF (Gaussian Fit)" \
+    $f.menubar.starpsf.m.psf add command \
+	-label "Gaussian Fit" \
 	-command [list CatalogPanelBuildPSF gaussian]
-    $f.menubar.psfdeconv.m.psf add command \
-	-label "Build PSF (ePSF)" \
+    $f.menubar.starpsf.m.psf add command \
+	-label "ePSF" \
 	-command [list CatalogPanelBuildPSF epsf]
-    $f.menubar.psfdeconv.m.psf add separator
-    $f.menubar.psfdeconv.m.psf add command \
+    $f.menubar.starpsf.m add separator
+    $f.menubar.starpsf.m add command \
 	-label "View PSF" -command CatalogPanelViewPSF
-    $f.menubar.psfdeconv.m.psf add command \
+    $f.menubar.starpsf.m add command \
 	-label "Save PSF..." -command CatalogPanelSavePSF
-    $f.menubar.psfdeconv.m.psf add command \
+    $f.menubar.starpsf.m add command \
 	-label "Load PSF..." -command CatalogPanelLoadPSF
+    $f.menubar.starpsf.m add separator
+    $f.menubar.starpsf.m add command -label "Settings..." \
+	-command CatalogPanelStarPSFSettings
 
-    $f.menubar.psfdeconv.m add separator
-
-    # Deconvolution submenu
-    menu $f.menubar.psfdeconv.m.deconv -tearoff 0
-    $f.menubar.psfdeconv.m add cascade -label "Deconvolution" \
-	-menu $f.menubar.psfdeconv.m.deconv
-    $f.menubar.psfdeconv.m.deconv add command \
+    # Deconvolution menu
+    ttk::menubutton $f.menubar.deconv -text "Deconvolution" \
+	-menu $f.menubar.deconv.m -style CatMenu.TMenubutton
+    menu $f.menubar.deconv.m -tearoff 0
+    $f.menubar.deconv.m add command \
 	-label "Richardson-Lucy" \
 	-command [list CatalogPanelDeconvolve rl]
-    $f.menubar.psfdeconv.m.deconv add command \
+    $f.menubar.deconv.m add command \
 	-label "Richardson-Lucy (Accelerated)" \
 	-command [list CatalogPanelDeconvolve rl_accelerated]
-    $f.menubar.psfdeconv.m.deconv add command \
+    $f.menubar.deconv.m add command \
 	-label "Richardson-Lucy (Regularized)" \
 	-command [list CatalogPanelDeconvolve rl_tv]
-    $f.menubar.psfdeconv.m.deconv add separator
-    $f.menubar.psfdeconv.m.deconv add command \
-	-label "Wiener Deconvolution" \
+    $f.menubar.deconv.m add separator
+    $f.menubar.deconv.m add command \
+	-label "Wiener" \
 	-command [list CatalogPanelDeconvolve wiener]
-    $f.menubar.psfdeconv.m.deconv add command \
-	-label "Tikhonov Regularization" \
+    $f.menubar.deconv.m add command \
+	-label "Tikhonov" \
 	-command [list CatalogPanelDeconvolve tikhonov]
-    $f.menubar.psfdeconv.m.deconv add separator
-    $f.menubar.psfdeconv.m.deconv add command \
+    $f.menubar.deconv.m add separator
+    $f.menubar.deconv.m add command \
 	-label "CLEAN" \
 	-command [list CatalogPanelDeconvolve clean]
-    $f.menubar.psfdeconv.m.deconv add command \
+    $f.menubar.deconv.m add command \
 	-label "Maximum Entropy (MEM)" \
 	-command [list CatalogPanelDeconvolve mem]
-
-    $f.menubar.psfdeconv.m add separator
-    $f.menubar.psfdeconv.m add command -label "Settings..." \
-	-command CatalogPanelPSFDeconvSettings
-    $f.menubar.psfdeconv.m add command -label "Quick Deconvolve (RL)" \
+    $f.menubar.deconv.m add separator
+    $f.menubar.deconv.m add command -label "Settings..." \
+	-command CatalogPanelDeconvSettings
+    $f.menubar.deconv.m add command -label "Quick Deconvolve (RL)" \
 	-command CatalogPanelQuickDeconvolve
+
+    # Separate menu
+    ttk::menubutton $f.menubar.separate -text "Separate" \
+	-menu $f.menubar.separate.m -style CatMenu.TMenubutton
+    menu $f.menubar.separate.m -tearoff 0
+    $f.menubar.separate.m add command \
+	-label "Separate Selected (Ctrl+S)" \
+	-command CatalogPanelSeparateSelected
+    $f.menubar.separate.m add separator
+    $f.menubar.separate.m add command \
+	-label "Settings..." \
+	-command CatalogPanelSeparateSettings
+    $f.menubar.separate.m add separator
+    $f.menubar.separate.m add command \
+	-label "Save Catalog..." \
+	-command CatalogPanelSeparateSave
+    $f.menubar.separate.m add command \
+	-label "Load Catalog..." \
+	-command CatalogPanelSeparateLoad
 
     # Analysis menu
     ttk::menubutton $f.menubar.analysis -text "Analysis" \
@@ -363,7 +386,9 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.display -side left
     pack $f.menubar.aimerge -side left
     pack $f.menubar.galaxy -side left
-    pack $f.menubar.psfdeconv -side left
+    pack $f.menubar.starpsf -side left
+    pack $f.menubar.deconv -side left
+    pack $f.menubar.separate -side left
     pack $f.menubar.analysis -side left
 
     # Search/Filter bar
@@ -447,6 +472,9 @@ proc CreateCatalogPanel {} {
 
     # Feature B: visible mode
     set catpanel(visible_mode) 0
+
+    # Add Objects mode
+    set catpanel(add_objects_mode) 0
 
     # Mark All cached region string
     set catpanel(markall,on) 0
@@ -723,6 +751,9 @@ proc CatalogPanelClear {} {
 
     # Reset visible mode
     set catpanel(visible_mode) 0
+
+    # Reset add objects mode
+    set catpanel(add_objects_mode) 0
 
     # Reset trim state
     set catpanel(trim,active) 0
@@ -1062,6 +1093,14 @@ proc CatalogPanelParamDef {} {
     set catpanel(param,conv-filter) default
     set catpanel(param,n-workers) 0
 
+    # Separate (deblend) parameters
+    set catpanel(param,sep-deblend-nthresh) 64
+    set catpanel(param,sep-deblend-mincont) 0.0001
+    set catpanel(param,sep-detect-thresh) 0.8
+    set catpanel(param,sep-detect-minarea) 3
+    set catpanel(param,sep-radius-factor) 3.0
+    set catpanel(param,sep-back-size) 32
+
     CatalogPanelParamLoad
 }
 
@@ -1099,7 +1138,9 @@ proc CatalogPanelParamSave {} {
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		   back-size back-filtersize \
 		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
-		   n-workers} {
+		   n-workers \
+		   sep-deblend-nthresh sep-deblend-mincont sep-detect-thresh \
+		   sep-detect-minarea sep-radius-factor sep-back-size} {
 	puts $fd "$pname $catpanel(param,$pname)"
     }
     close $fd
@@ -1567,19 +1608,39 @@ proc CatalogPanelMarkerClick {which x y} {
 proc CatalogPanelMarkerCtrlClick {which x y} {
     global catpanel
 
-    if {![info exists catpanel(tbl)]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
     if {![$which has fits]} return
 
     # Quick test: is there any marker at this canvas position?
     set id [$which get marker catalog id $x $y]
     if {$id == 0} return
 
+    # Check if this is a psf_star marker — if so, remove it
+    set tags [$which get marker catalog $id tag]
+    foreach tag $tags {
+	if {[string match "psf_star.*" $tag]} {
+	    set star_num [string range $tag 9 end]
+	    # Delete the marker
+	    catch {$which marker catalog tag $tag delete}
+	    # Remove from star_indices list
+	    if {[info exists catpanel(psf,star_indices)]} {
+		set idx [lsearch -exact $catpanel(psf,star_indices) $star_num]
+		if {$idx >= 0} {
+		    set catpanel(psf,star_indices) [lreplace $catpanel(psf,star_indices) $idx $idx]
+		}
+		set catpanel(status) "Removed star $star_num ([llength $catpanel(psf,star_indices)] stars remaining)"
+	    }
+	    return
+	}
+    }
+
+    # Not a star marker — proceed with source merge selection
+    if {![info exists catpanel(tbl)]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
     # Among all overlapping ellipses, pick the smallest one
     set src_num [CatalogPanelSmallestEllipseAt $which $x $y]
     if {$src_num eq {}} {
 	# Fallback: use the marker DS9 picked (original behaviour)
-	set tags [$which get marker catalog $id tag]
 	foreach tag $tags {
 	    if {[string match "sextract_src.*" $tag]} {
 		set src_num [string range $tag 13 end]
@@ -4595,7 +4656,7 @@ proc CatalogPanelShowStars {} {
 	if {$a_idx >= 0} {set a [expr {max(3.0, [string trim [lindex $fields $a_idx]] * 2)}]}
 	if {$b_idx >= 0} {set b [expr {max(3.0, [string trim [lindex $fields $b_idx]] * 2)}]}
 
-	append reg "circle($x $y ${a}i) # color=cyan width=2 dash=1 tag={psf_star} tag={psf_star.$num} select=0 edit=0 move=0 rotate=0 delete=1\n"
+	append reg "circle($x $y ${a}i) # color=purple width=2 dash=1 tag={psf_star} tag={psf_star.$num} select=0 edit=0 move=0 rotate=0 delete=1\n"
 	incr count
     }
 
@@ -5016,28 +5077,25 @@ proc CatalogPanelQuickDeconvolve {} {
 
 # --- Settings Dialog ---
 
-proc CatalogPanelPSFDeconvSettings {} {
+proc CatalogPanelStarPSFSettings {} {
     global catpanel
     global ed
 
-    set w .psfdeconvsettings
+    set w .starpsfsettings
     if {[winfo exists $w]} {
 	raise $w
 	return
     }
 
     toplevel $w
-    wm title $w "PSF/Deconv Settings"
-    wm geometry $w 420x520
+    wm title $w "Star / PSF Settings"
+    wm geometry $w 380x320
 
     # Copy current values to edit vars
-    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr \
-		   psf-size rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
-		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr psf-size} {
 	set ed(psf,$pname) $catpanel(psf,param,$pname)
     }
 
-    # Notebook with 3 tabs
     ttk::notebook $w.nb
     pack $w.nb -fill both -expand true -padx 8 -pady 8
 
@@ -5079,111 +5137,30 @@ proc CatalogPanelPSFDeconvSettings {} {
     grid $t2.lsz -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t2.esz -row $r -column 1 -sticky w -padx 4 -pady 4
 
-    # --- Tab 3: Deconvolution ---
-    set t3 [ttk::frame $w.nb.deconv]
-    $w.nb add $t3 -text "Deconvolution"
-
-    set r 0
-    ttk::label $t3.h1 -text "Richardson-Lucy:" -font TkHeadingFont
-    grid $t3.h1 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $t3.liter -text "  Iterations:"
-    ttk::entry $t3.eiter -textvariable ed(psf,rl-iterations) -width 10
-    grid $t3.liter -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.eiter -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.ltv -text "  TV lambda:"
-    ttk::entry $t3.etv -textvariable ed(psf,tv-lambda) -width 10
-    grid $t3.ltv -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.etv -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.h2 -text "Wiener:" -font TkHeadingFont
-    grid $t3.h2 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $t3.lnsr -text "  NSR:"
-    ttk::entry $t3.ensr -textvariable ed(psf,wiener-nsr) -width 10
-    grid $t3.lnsr -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.ensr -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.h3 -text "Tikhonov:" -font TkHeadingFont
-    grid $t3.h3 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $t3.ltik -text "  Lambda:"
-    ttk::entry $t3.etik -textvariable ed(psf,tikhonov-lambda) -width 10
-    grid $t3.ltik -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.etik -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.h4 -text "CLEAN:" -font TkHeadingFont
-    grid $t3.h4 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $t3.lcg -text "  Gain:"
-    ttk::entry $t3.ecg -textvariable ed(psf,clean-gain) -width 10
-    grid $t3.lcg -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.ecg -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.lcn -text "  Iterations:"
-    ttk::entry $t3.ecn -textvariable ed(psf,clean-niter) -width 10
-    grid $t3.lcn -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.ecn -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.lct -text "  Threshold:"
-    ttk::entry $t3.ect -textvariable ed(psf,clean-threshold) -width 10
-    grid $t3.lct -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.ect -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.h5 -text "MEM:" -font TkHeadingFont
-    grid $t3.h5 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $t3.lml -text "  Lambda:"
-    ttk::entry $t3.eml -textvariable ed(psf,mem-lambda) -width 10
-    grid $t3.lml -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.eml -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $t3.lmn -text "  Iterations:"
-    ttk::entry $t3.emn -textvariable ed(psf,mem-niter) -width 10
-    grid $t3.lmn -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $t3.emn -row $r -column 1 -sticky w -padx 4 -pady 2
-
     # Buttons
     set bf [ttk::frame $w.buttons]
     pack $bf -fill x -padx 8 -pady 8
 
-    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelPSFSettingsApply $w]
-    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelPSFSettingsDefaults
+    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelStarPSFSettingsApply $w]
+    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelStarPSFSettingsDefaults
     ttk::button $bf.close -text "Close" -command [list destroy $w]
     pack $bf.close -side right -padx 4
     pack $bf.defaults -side right -padx 4
     pack $bf.apply -side right -padx 4
 }
 
-proc CatalogPanelPSFSettingsApply {w} {
+proc CatalogPanelStarPSFSettingsApply {w} {
     global catpanel
     global ed
 
-    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr \
-		   psf-size rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
-		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr psf-size} {
 	set catpanel(psf,param,$pname) $ed(psf,$pname)
     }
-
     CatalogPanelPSFParamSave
-    set catpanel(status) "PSF/Deconv settings applied and saved"
+    set catpanel(status) "Star/PSF settings applied and saved"
 }
 
-proc CatalogPanelPSFSettingsDefaults {} {
+proc CatalogPanelStarPSFSettingsDefaults {} {
     global ed
 
     set ed(psf,class-star-thresh) 0.8
@@ -5191,6 +5168,132 @@ proc CatalogPanelPSFSettingsDefaults {} {
     set ed(psf,fwhm-sigma) 2.0
     set ed(psf,min-flux-snr) 10.0
     set ed(psf,psf-size) 51
+}
+
+proc CatalogPanelDeconvSettings {} {
+    global catpanel
+    global ed
+
+    set w .deconvsettings
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "Deconvolution Settings"
+    wm geometry $w 380x480
+
+    # Copy current values to edit vars
+    foreach pname {rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
+		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+	set ed(psf,$pname) $catpanel(psf,param,$pname)
+    }
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+    ttk::label $f.h1 -text "Richardson-Lucy:" -font TkHeadingFont
+    grid $f.h1 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.liter -text "  Iterations:"
+    ttk::entry $f.eiter -textvariable ed(psf,rl-iterations) -width 10
+    grid $f.liter -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.eiter -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.ltv -text "  TV lambda:"
+    ttk::entry $f.etv -textvariable ed(psf,tv-lambda) -width 10
+    grid $f.ltv -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.etv -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.h2 -text "Wiener:" -font TkHeadingFont
+    grid $f.h2 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lnsr -text "  NSR:"
+    ttk::entry $f.ensr -textvariable ed(psf,wiener-nsr) -width 10
+    grid $f.lnsr -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ensr -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.h3 -text "Tikhonov:" -font TkHeadingFont
+    grid $f.h3 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.ltik -text "  Lambda:"
+    ttk::entry $f.etik -textvariable ed(psf,tikhonov-lambda) -width 10
+    grid $f.ltik -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.etik -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.h4 -text "CLEAN:" -font TkHeadingFont
+    grid $f.h4 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lcg -text "  Gain:"
+    ttk::entry $f.ecg -textvariable ed(psf,clean-gain) -width 10
+    grid $f.lcg -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ecg -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.lcn -text "  Iterations:"
+    ttk::entry $f.ecn -textvariable ed(psf,clean-niter) -width 10
+    grid $f.lcn -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ecn -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.lct -text "  Threshold:"
+    ttk::entry $f.ect -textvariable ed(psf,clean-threshold) -width 10
+    grid $f.lct -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ect -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.h5 -text "MEM:" -font TkHeadingFont
+    grid $f.h5 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lml -text "  Lambda:"
+    ttk::entry $f.eml -textvariable ed(psf,mem-lambda) -width 10
+    grid $f.lml -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.eml -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.lmn -text "  Iterations:"
+    ttk::entry $f.emn -textvariable ed(psf,mem-niter) -width 10
+    grid $f.lmn -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.emn -row $r -column 1 -sticky w -padx 4 -pady 2
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelDeconvSettingsApply $w]
+    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelDeconvSettingsDefaults
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.defaults -side right -padx 4
+    pack $bf.apply -side right -padx 4
+}
+
+proc CatalogPanelDeconvSettingsApply {w} {
+    global catpanel
+    global ed
+
+    foreach pname {rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
+		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+	set catpanel(psf,param,$pname) $ed(psf,$pname)
+    }
+    CatalogPanelPSFParamSave
+    set catpanel(status) "Deconvolution settings applied and saved"
+}
+
+proc CatalogPanelDeconvSettingsDefaults {} {
+    global ed
+
     set ed(psf,rl-iterations) 30
     set ed(psf,wiener-nsr) 0.01
     set ed(psf,tikhonov-lambda) 0.001
@@ -5200,6 +5303,622 @@ proc CatalogPanelPSFSettingsDefaults {} {
     set ed(psf,clean-threshold) 0.0
     set ed(psf,mem-lambda) 0.1
     set ed(psf,mem-niter) 100
+}
+
+# Keep backward compatibility — old proc name routes to star/PSF settings
+proc CatalogPanelPSFDeconvSettings {} {
+    CatalogPanelStarPSFSettings
+}
+proc CatalogPanelPSFSettingsApply {w} {
+    CatalogPanelStarPSFSettingsApply $w
+}
+proc CatalogPanelPSFSettingsDefaults {} {
+    CatalogPanelStarPSFSettingsDefaults
+}
+
+# ============================================================================
+# Separate — Source Deblending / Splitting
+# ============================================================================
+
+proc CatalogPanelSeparateGetScript {} {
+    set bindir [file dirname [info nameofexecutable]]
+    set script [file join $bindir ds9_separate.py]
+    if {![file exists $script]} {
+	set libdir [file join [file dirname $bindir] ds9 library]
+	set script [file join $libdir ds9_separate.py]
+    }
+    return $script
+}
+
+# Get the currently selected source NUMBER from the table
+proc CatalogPanelGetSelectedSource {} {
+    global catpanel
+
+    if {![info exists catpanel(tbl)]} { return {} }
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} { return {} }
+
+    # Get selected row
+    set sel [$catpanel(tbl) curselection]
+    if {$sel eq {}} { return {} }
+    # sel is "row,col" — extract row
+    set row [lindex [split [lindex $sel 0] ","] 0]
+    if {$row <= 0} { return {} }
+
+    global $catpanel(tbldb)
+    set ncols [$catpanel(tbl) cget -cols]
+
+    # Find column indices
+    set col_num -1; set col_x -1; set col_y -1
+    set col_a -1; set col_b -1; set col_theta -1; set col_ir -1
+    for {set c 1} {$c <= $ncols} {incr c} {
+	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
+	    switch -- [set ${catpanel(tbldb)}(0,$c)] {
+		NUMBER      { set col_num $c }
+		X_IMAGE     { set col_x $c }
+		Y_IMAGE     { set col_y $c }
+		A_IMAGE     { set col_a $c }
+		B_IMAGE     { set col_b $c }
+		THETA_IMAGE { set col_theta $c }
+		ISO_RADIUS  { set col_ir $c }
+	    }
+	}
+    }
+    if {$col_x < 0 || $col_y < 0} { return {} }
+
+    set result [dict create]
+    dict set result row $row
+
+    if {$col_num >= 0 && [info exists ${catpanel(tbldb)}($row,$col_num)]} {
+	dict set result number [set ${catpanel(tbldb)}($row,$col_num)]
+    } else {
+	dict set result number $row
+    }
+    dict set result x [set ${catpanel(tbldb)}($row,$col_x)]
+    dict set result y [set ${catpanel(tbldb)}($row,$col_y)]
+
+    set a 10.0; set b 10.0; set theta 0.0; set ir 10.0
+    if {$col_a >= 0 && [info exists ${catpanel(tbldb)}($row,$col_a)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_a)]
+	if {[string is double -strict $val] && $val > 0} { set a $val }
+    }
+    if {$col_b >= 0 && [info exists ${catpanel(tbldb)}($row,$col_b)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_b)]
+	if {[string is double -strict $val] && $val > 0} { set b $val }
+    }
+    if {$col_theta >= 0 && [info exists ${catpanel(tbldb)}($row,$col_theta)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_theta)]
+	if {[string is double -strict $val]} { set theta $val }
+    }
+    if {$col_ir >= 0 && [info exists ${catpanel(tbldb)}($row,$col_ir)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_ir)]
+	if {[string is double -strict $val] && $val > 0} { set ir $val }
+    }
+    dict set result a $a
+    dict set result b $b
+    dict set result theta $theta
+    dict set result iso_radius $ir
+
+    return $result
+}
+
+proc CatalogPanelSeparateSelected {} {
+    global catpanel
+    global current
+
+    if {$current(frame) eq {}} return
+
+    set src [CatalogPanelGetSelectedSource]
+    if {$src eq {}} {
+	set catpanel(status) "Select a source first (click on an ellipse)"
+	return
+    }
+
+    # Get FITS filename
+    set fn {}
+    if {[$current(frame) has fits]} {
+	set fn [$current(frame) get fits file name full]
+    }
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelSeparateGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_separate.py not found"
+	return
+    }
+
+    set src_num [dict get $src number]
+    set src_x [dict get $src x]
+    set src_y [dict get $src y]
+    set src_a [dict get $src a]
+    set src_b [dict get $src b]
+    set src_theta [dict get $src theta]
+
+    set catpanel(status) "Separating source $src_num ..."
+    update idletasks
+
+    set paramargs {}
+    lappend paramargs "--x" $src_x
+    lappend paramargs "--y" $src_y
+    lappend paramargs "--a" $src_a
+    lappend paramargs "--b" $src_b
+    lappend paramargs "--theta" $src_theta
+    lappend paramargs "--parent-number" $src_num
+    lappend paramargs "--deblend-nthresh" $catpanel(param,sep-deblend-nthresh)
+    lappend paramargs "--deblend-mincont" $catpanel(param,sep-deblend-mincont)
+    lappend paramargs "--detect-thresh" $catpanel(param,sep-detect-thresh)
+    lappend paramargs "--detect-minarea" $catpanel(param,sep-detect-minarea)
+    lappend paramargs "--radius-factor" $catpanel(param,sep-radius-factor)
+    lappend paramargs "--back-size" $catpanel(param,sep-back-size)
+
+    set errfile [file join [file normalize ~] .ds9 separate_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Separate error: $last_err"
+	} else {
+	    set catpanel(status) "Separate error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+
+    # Parse output
+    set lines [split $data \n]
+    set n_sub 0
+    set sub_lines {}
+
+    foreach line $lines {
+	if {[string match "#SEPARATE*" $line]} {
+	    foreach field [split $line "\t"] {
+		if {[string match "N_SUB=*" $field]} {
+		    set n_sub [string range $field 6 end]
+		}
+	    }
+	    continue
+	}
+	if {[string match "NUMBER*" $line]} continue
+	if {$line eq {}} continue
+	lappend sub_lines $line
+    }
+
+    if {$n_sub == 0 || [llength $sub_lines] < 2} {
+	set catpanel(status) "No sub-components found for source $src_num"
+	return
+    }
+
+    # Replace the parent source in alldata with sub-sources
+    CatalogPanelSeparateReplace $src_num $sub_lines
+
+    set catpanel(status) "Source $src_num separated into $n_sub sub-components"
+}
+
+proc CatalogPanelSeparateReplace {parent_num sub_lines} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set all_lines [split $catpanel(alldata) \n]
+    set header [lindex $all_lines 0]
+    set headers [split $header "\t"]
+
+    # Find NUMBER column index
+    set num_idx -1
+    for {set i 0} {$i < [llength $headers]} {incr i} {
+	if {[string trim [lindex $headers $i]] eq "NUMBER"} {
+	    set num_idx $i
+	    break
+	}
+    }
+
+    # Sub-source output has fixed columns; map to parent catalog columns
+    set sub_cols {NUMBER X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE ISO_RADIUS FLUX_AUTO MAG_AUTO FLAGS}
+
+    # Build column index map: sub_col_name → parent_col_index
+    set col_map {}
+    for {set si 0} {$si < [llength $sub_cols]} {incr si} {
+	set scol [lindex $sub_cols $si]
+	for {set pi 0} {$pi < [llength $headers]} {incr pi} {
+	    if {[string trim [lindex $headers $pi]] eq $scol} {
+		lappend col_map [list $si $pi]
+		break
+	    }
+	}
+    }
+
+    # Build new alldata lines
+    set new_lines [list $header]
+    set ncols [llength $headers]
+
+    foreach line [lrange $all_lines 1 end] {
+	if {$line eq {}} continue
+	set fields [split $line "\t"]
+
+	set this_num ""
+	if {$num_idx >= 0 && [llength $fields] > $num_idx} {
+	    set this_num [string trim [lindex $fields $num_idx]]
+	}
+
+	if {$this_num eq [string trim $parent_num]} {
+	    # Replace parent with sub-sources
+	    foreach sub_line $sub_lines {
+		set sub_fields [split $sub_line "\t"]
+		# Start with empty row matching parent column count
+		set new_row {}
+		for {set c 0} {$c < $ncols} {incr c} {
+		    lappend new_row ""
+		}
+		# Fill in mapped columns from sub-source
+		foreach mapping $col_map {
+		    set si [lindex $mapping 0]
+		    set pi [lindex $mapping 1]
+		    if {$si < [llength $sub_fields]} {
+			lset new_row $pi [lindex $sub_fields $si]
+		    }
+		}
+		lappend new_lines [join $new_row "\t"]
+	    }
+	} else {
+	    lappend new_lines $line
+	}
+    }
+
+    set catpanel(alldata) [join $new_lines \n]
+
+    # Reload table and markers
+    CatalogPanelLoadTSV $catpanel(alldata) "separated"
+    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+	CatalogPanelCreateAllMarkers
+    }
+}
+
+# --- Separate Settings Dialog ---
+
+proc CatalogPanelSeparateSettings {} {
+    global catpanel
+    global ed
+
+    set w .separatesettings
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "Separate Settings"
+    wm geometry $w 380x300
+
+    foreach pname {sep-deblend-nthresh sep-deblend-mincont sep-detect-thresh \
+		   sep-detect-minarea sep-radius-factor sep-back-size} {
+	set ed($pname) $catpanel(param,$pname)
+    }
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+    ttk::label $f.h1 -text "Deblending:" -font TkHeadingFont
+    grid $f.h1 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lnt -text "  Sub-thresholds:"
+    ttk::entry $f.ent -textvariable ed(sep-deblend-nthresh) -width 10
+    grid $f.lnt -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ent -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.lmc -text "  Min contrast:"
+    ttk::entry $f.emc -textvariable ed(sep-deblend-mincont) -width 10
+    grid $f.lmc -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.emc -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.h2 -text "Detection:" -font TkHeadingFont
+    grid $f.h2 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.ldt -text "  Threshold (sigma):"
+    ttk::entry $f.edt -textvariable ed(sep-detect-thresh) -width 10
+    grid $f.ldt -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.edt -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.lma -text "  Min area (pixels):"
+    ttk::entry $f.ema -textvariable ed(sep-detect-minarea) -width 10
+    grid $f.lma -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ema -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.h3 -text "Cutout:" -font TkHeadingFont
+    grid $f.h3 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lrf -text "  Radius factor:"
+    ttk::entry $f.erf -textvariable ed(sep-radius-factor) -width 10
+    grid $f.lrf -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.erf -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $f.lbs -text "  Background size:"
+    ttk::entry $f.ebs -textvariable ed(sep-back-size) -width 10
+    grid $f.lbs -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ebs -row $r -column 1 -sticky w -padx 4 -pady 2
+
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelSeparateSettingsApply $w]
+    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelSeparateSettingsDefaults
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.defaults -side right -padx 4
+    pack $bf.apply -side right -padx 4
+}
+
+proc CatalogPanelSeparateSettingsApply {w} {
+    global catpanel
+    global ed
+
+    foreach pname {sep-deblend-nthresh sep-deblend-mincont sep-detect-thresh \
+		   sep-detect-minarea sep-radius-factor sep-back-size} {
+	set catpanel(param,$pname) $ed($pname)
+    }
+    CatalogPanelParamSave
+    set catpanel(status) "Separate settings applied and saved"
+}
+
+proc CatalogPanelSeparateSettingsDefaults {} {
+    global ed
+
+    set ed(sep-deblend-nthresh) 64
+    set ed(sep-deblend-mincont) 0.0001
+    set ed(sep-detect-thresh) 0.8
+    set ed(sep-detect-minarea) 3
+    set ed(sep-radius-factor) 3.0
+    set ed(sep-back-size) 32
+}
+
+# --- Separate Save/Load Catalog ---
+
+proc CatalogPanelSeparateSave {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog to save"
+	return
+    }
+
+    set types {
+	{{TSV Files} {.tsv .txt}}
+	{{All Files} *}
+    }
+    set outfile [tk_getSaveFile -filetypes $types \
+		     -title "Save Catalog" \
+		     -initialfile "catalog_separated.tsv"]
+    if {$outfile eq {}} return
+
+    if {[catch {
+	set fd [open $outfile w]
+	puts -nonewline $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "Save error: $err"
+	return
+    }
+    set catpanel(status) "Catalog saved to $outfile"
+}
+
+proc CatalogPanelSeparateLoad {} {
+    global catpanel
+
+    set types {
+	{{TSV Files} {.tsv .txt}}
+	{{All Files} *}
+    }
+    set infile [tk_getOpenFile -filetypes $types \
+		    -title "Load Catalog"]
+    if {$infile eq {}} return
+
+    if {[catch {
+	set fd [open $infile r]
+	set data [read $fd]
+	close $fd
+    } err]} {
+	set catpanel(status) "Load error: $err"
+	return
+    }
+
+    set catpanel(alldata) [string trim $data]
+    CatalogPanelLoadTSV $catpanel(alldata) "loaded"
+    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+	CatalogPanelCreateAllMarkers
+    }
+    set catpanel(status) "Catalog loaded from $infile"
+}
+
+# ============================================================================
+# Add Objects — Detect and add source at cursor position (Ctrl+A)
+# ============================================================================
+
+proc CatalogPanelAddObjectGetScript {} {
+    set bindir [file dirname [info nameofexecutable]]
+    set script [file join $bindir ds9_add_source.py]
+    if {![file exists $script]} {
+	set libdir [file join [file dirname $bindir] ds9 library]
+	set script [file join $libdir ds9_add_source.py]
+    }
+    return $script
+}
+
+proc CatalogPanelAddObjectAtCursor {which cx cy} {
+    global catpanel
+    global current
+
+    # Check if add objects mode is enabled
+    if {![info exists catpanel(add_objects_mode)] || !$catpanel(add_objects_mode)} {
+	return
+    }
+
+    if {$which ne $current(frame) || $which eq {}} return
+    if {![$which has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first, then enable Add Objects"
+	return
+    }
+
+    # Check no marker at this position (we only add at empty spots)
+    set marker_id [$which get marker catalog id $cx $cy]
+    if {$marker_id != 0} {
+	set catpanel(status) "Source already exists here — click empty area"
+	return
+    }
+
+    # Convert canvas coords to image coords
+    set imgcoord [$which get coordinates $cx $cy image]
+    set imgx [lindex $imgcoord 0]
+    set imgy [lindex $imgcoord 1]
+
+    # Get FITS filename
+    set fn [$which get fits file name full]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelAddObjectGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_add_source.py not found"
+	return
+    }
+
+    # Find max NUMBER in current catalog
+    set max_num 0
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+    set num_idx -1
+    for {set i 0} {$i < [llength $headers]} {incr i} {
+	if {[string trim [lindex $headers $i]] eq "NUMBER"} {
+	    set num_idx $i
+	    break
+	}
+    }
+    if {$num_idx >= 0} {
+	foreach line [lrange $lines 1 end] {
+	    if {$line eq {}} continue
+	    set fields [split $line "\t"]
+	    set nv [string trim [lindex $fields $num_idx]]
+	    # Handle fractional numbers like "42.1" from separate
+	    set int_part [lindex [split $nv "."] 0]
+	    if {[string is integer -strict $int_part] && $int_part > $max_num} {
+		set max_num $int_part
+	    }
+	}
+    }
+    set new_num [expr {$max_num + 1}]
+
+    set catpanel(status) "Detecting source at ($imgx, $imgy) ..."
+    update idletasks
+
+    set paramargs {}
+    lappend paramargs "--x" $imgx
+    lappend paramargs "--y" $imgy
+    lappend paramargs "--number" $new_num
+    lappend paramargs "--detect-thresh" $catpanel(param,detect-thresh)
+    lappend paramargs "--detect-minarea" $catpanel(param,detect-minarea)
+    lappend paramargs "--deblend-nthresh" $catpanel(param,deblend-nthresh)
+    lappend paramargs "--deblend-mincont" $catpanel(param,deblend-mincont)
+    lappend paramargs "--back-size" $catpanel(param,back-size)
+    lappend paramargs "--mag-zeropoint" $catpanel(param,mag-zeropoint)
+    lappend paramargs "--phot-aperture" $catpanel(param,phot-aperture)
+
+    set errfile [file join [file normalize ~] .ds9 add_source_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Add source error: $last_err"
+	} else {
+	    set catpanel(status) "Add source error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+
+    # Parse output
+    set result_lines [split $data \n]
+    set found 0
+    set source_line {}
+
+    foreach line $result_lines {
+	if {[string match "#ADD_SOURCE*" $line]} {
+	    foreach field [split $line "\t"] {
+		if {[string match "FOUND=*" $field]} {
+		    set found [string range $field 6 end]
+		}
+	    }
+	    continue
+	}
+	# Skip column header
+	if {[string match "NUMBER*" $line]} continue
+	if {$line eq {}} continue
+	set source_line $line
+    }
+
+    if {$found == 0 || $source_line eq {}} {
+	set catpanel(status) "No source detected at ($imgx, $imgy)"
+	return
+    }
+
+    # Add the new source to alldata
+    # Map output columns to existing catalog columns
+    set out_cols {NUMBER X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE ELLIPTICITY KRON_RADIUS ISO_RADIUS FLUX_AUTO FLUX_APER MAG_AUTO MAG_APER PEAK CLASS_STAR FLAGS FWHM_IMAGE}
+    set src_fields [split $source_line "\t"]
+
+    set ncols [llength $headers]
+    set new_row {}
+    for {set c 0} {$c < $ncols} {incr c} {
+	lappend new_row ""
+    }
+
+    # Map each output column to the catalog column
+    for {set si 0} {$si < [llength $out_cols]} {incr si} {
+	set scol [lindex $out_cols $si]
+	for {set pi 0} {$pi < $ncols} {incr pi} {
+	    if {[string trim [lindex $headers $pi]] eq $scol} {
+		if {$si < [llength $src_fields]} {
+		    lset new_row $pi [lindex $src_fields $si]
+		}
+		break
+	    }
+	}
+    }
+
+    # Append to alldata
+    append catpanel(alldata) "\n" [join $new_row "\t"]
+
+    # Reload table and markers
+    CatalogPanelLoadTSV $catpanel(alldata) "added"
+    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+	CatalogPanelCreateAllMarkers
+    }
+
+    set catpanel(status) "Added source #$new_num at ($imgx, $imgy)"
 }
 
 # ============================================================================
