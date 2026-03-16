@@ -57,8 +57,7 @@ ds9/unix/ds9.zip
 ds9/unix/ds9base
 ds9/unix/mntpt/
 
-# Source extractor source (can re-download)
-ds9/library/ds9_sextract.c
+# Source extractor Python wrapper (generated)
 ds9/library/ds9_sextract.py
 
 # Various build configs
