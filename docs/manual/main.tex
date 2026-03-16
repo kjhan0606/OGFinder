@@ -1051,11 +1051,12 @@ Settings & Adjustable extraction parameters (threshold, deblending, photometry, 
 \begin{codebox}
 \begin{lstlisting}[numbers=none]
 [SExtractor] [Display] [AI Merge] [Galaxy Model]
-[Star(PSF)] [Deconvolution] [Separate] [Analysis]
+[Star(PSF)] [Deconvolution] [Separate] [ICL] [LSBG]
+[Analysis]
 \end{lstlisting}
 \end{codebox}
 
-The eight menu buttons provide access to all features:
+The ten menu buttons provide access to all features:
 
 \begin{itemize}
 \item \textbf{SExtractor} --- Extract, Dual-Image Extract, Settings, Trim, Save/Load/Export Catalog, Export Regions, Export FITS Table, Clear
@@ -1065,6 +1066,8 @@ The eight menu buttons provide access to all features:
 \item \textbf{Star(PSF)} --- Star Finding (combined/class\_star/fwhm), Build PSF (median/mean/epsf/gaussian/moffat), View/Save/Load PSF, Settings
 \item \textbf{Deconvolution} --- Deconvolve (rl/rl\_accelerated/rl\_tv/wiener/tikhonov/clean/mem), Quick Deconvolve, Settings
 \item \textbf{Separate} --- Separate selected source into sub-components, Settings, Save/Load
+\item \textbf{ICL} --- Source Masking, Background Model (polynomial/chebyshev/SEP), SB Profile, ICL Measurements, Settings
+\item \textbf{LSBG} --- Mask Bright Sources, Background Model (iterative), Detect Candidates, Photometry + Filter, Run Full Pipeline, Settings
 \item \textbf{Analysis} --- Non-Parametric Morphology, S\'ersic Fitting, PSF Photometry, Multi-Band Photometry, Crowded Field Photometry, Cross-Match (VizieR), Segmentation Map, Completeness Simulation
 \end{itemize}
 
@@ -2086,11 +2089,628 @@ Expected output: a tab-separated header line followed by data rows. If library e
 
 
 %======================================================
+%======================================================
+\chapter{Intra-Cluster Light (ICL) Detection}
+\label{ch:icl}
+%======================================================
+
+Intra-Cluster Light (ICL) is the diffuse stellar component in galaxy clusters, produced by tidal stripping of member galaxies during gravitational interactions.  ICL typically has surface brightness $\mu_V \gtrsim 26$\,mag/arcsec$^2$---far below the night sky background---requiring specialized techniques that preserve the faint extended signal.
+
+The \textbf{ICL} menu provides a complete step-by-step pipeline for detecting, modeling, and measuring ICL from deep imaging data.
+
+\section{Pipeline Overview}
+
+The ICL detection pipeline follows four steps, each accessible from the ICL menu:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Source Masking} --- Detect compact sources, expand the segmentation map to cover PSF wings, mask bright stars with magnitude-dependent radii, and interpolate masked regions.
+  \item \textbf{Background Modeling} --- Fit a large-scale background model to the masked image using one of three methods (polynomial, Chebyshev, or SEP large-mesh), then subtract it.
+  \item \textbf{Surface Brightness Profile} --- Measure the azimuthally averaged (or sector-based) SB profile centered on the BCG (brightest cluster galaxy), extending from $r_\mathrm{min}$ to $r_\mathrm{max}$.
+  \item \textbf{ICL Measurements} --- Compute the ICL fraction $f_\mathrm{ICL}$, isophotal radii at specified surface brightness levels, and integrated ICL luminosity.
+\end{enumerate}
+
+\section{Source Masking}
+\label{sec:icl-mask}
+
+\textbf{Menu}: ICL $\to$ 1.\ Source Masking
+
+Compact sources (stars and galaxies) must be aggressively masked before ICL analysis, because their extended PSF wings contaminate the faint diffuse signal.
+
+The masking procedure:
+\begin{enumerate}[leftmargin=2em]
+  \item Run SEP detection on the image at a configurable threshold (default: $1.5\sigma$) to produce a segmentation map.
+  \item Expand each segment by a factor of \texttt{expand-factor} (default: 2.5) times its equivalent circular radius using per-segment binary dilation:
+  \begin{equation}
+    r_\mathrm{dilate} = f_\mathrm{expand} \times \sqrt{N_\mathrm{pix}/\pi}
+  \end{equation}
+  \item Add circular masks for bright stars (MAG\_AUTO $<$ \texttt{bright-star-mag-limit}) with magnitude-dependent radii:
+  \begin{equation}
+    r_\mathrm{star} = f_\mathrm{scale} \times 10^{-0.2(m - m_\mathrm{limit})}
+  \end{equation}
+  \item Interpolate masked pixels using surrounding unmasked pixels (\texttt{scipy.interpolate.griddata}, method: linear/cubic/nearest).  For large images, block-based processing with 4096-pixel blocks and 100-pixel overlap is used.
+\end{enumerate}
+
+\textbf{Outputs}: \texttt{\textasciitilde/.ds9/icl\_mask.fits} (binary mask), \texttt{\textasciitilde/.ds9/icl\_masked.fits} (interpolated image).
+
+\textbf{Package}: \texttt{icl/masking.py} --- functions: \texttt{create\_source\_mask()}, \texttt{mask\_bright\_stars()}, \texttt{interpolate\_masked()}.
+
+
+\section{Background Modeling}
+\label{sec:icl-bkg}
+
+\textbf{Menu}: ICL $\to$ 2.\ Background Model $\to$ Polynomial Fit / Chebyshev Fit / SEP Large Mesh
+
+Standard SExtractor-style backgrounds (mesh size $\sim$64\,px) subtract the ICL signal as part of the ``sky.''  The ICL pipeline uses methods with much larger scales to preserve diffuse emission.
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9.0cm}}
+\toprule
+\textbf{Method} & \textbf{Description} \\
+\midrule
+\endhead
+Polynomial Fit & Fits a 2D polynomial of order $n$ (default: 3) to unmasked pixels.  Downsamples to a $\sim$100$\times$100 grid, applies 3-iteration $\sigma$-clipping, then evaluates the polynomial at full resolution row-by-row. \\
+\midrule
+Chebyshev Fit & Same as polynomial but uses Chebyshev basis functions (\texttt{numpy.polynomial.chebyshev}) for improved numerical stability at higher orders. \\
+\midrule
+SEP Large Mesh & Uses \texttt{sep.Background()} with a very large mesh size (default: 256\,px) so that the ICL signal---which is smooth on $\lesssim 100$\,px scales---is not subtracted. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\textbf{Outputs}: \texttt{\textasciitilde/.ds9/icl\_background.fits} (background model), \texttt{\textasciitilde/.ds9/icl\_bgsub.fits} (background-subtracted image).
+
+\textbf{Package}: \texttt{icl/background.py} --- functions: \texttt{fit\_polynomial\_background()}, \texttt{fit\_chebyshev\_background()}, \texttt{sep\_large\_mesh\_background()}.
+
+
+\section{Surface Brightness Profile}
+\label{sec:icl-profile}
+
+\textbf{Menu}: ICL $\to$ 3.\ Set BCG Center (Click) / Measure Profile / Sector Profile\ldots
+
+The SB profile is measured in concentric elliptical annuli centered on the BCG (brightest cluster galaxy).
+
+\subsection{BCG Center Selection}
+
+The BCG center can be specified in three ways:
+\begin{itemize}[leftmargin=2em]
+  \item Click a source in the catalog and select ``Set BCG Center'' --- uses the selected source position.
+  \item Auto-detection from the catalog: selects the brightest source (lowest MAG\_AUTO).
+  \item Manual: use the \texttt{--center x,y} CLI argument.
+\end{itemize}
+
+\subsection{Profile Measurement}
+
+For each annular bin between $r_\mathrm{min}$ and $r_\mathrm{max}$ (default: 5--1000\,px), the pipeline:
+\begin{enumerate}[leftmargin=2em]
+  \item Creates an elliptical annulus mask with the specified ellipticity and position angle.
+  \item Computes $3\sigma$-clipped mean flux and standard error of unmasked pixels.
+  \item Converts to surface brightness:
+  \begin{equation}
+    \mu(r) = \mathrm{ZP} - 2.5\log_{10}\!\Bigl(\frac{\bar{f}}{s^2}\Bigr)
+  \end{equation}
+  where $\bar{f}$ is the mean flux per pixel, $s$ is the pixel scale (arcsec/px), and ZP is the magnitude zeropoint.
+\end{enumerate}
+
+Radial bins can use logarithmic spacing (default) or linear spacing.  Sector profiles restrict the annulus to a specified azimuthal wedge (PA, width).
+
+\subsection{Output Columns}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Column} & \textbf{Description} \\
+\midrule
+\texttt{R\_PIX} & Mean radius of the annular bin (pixels) \\
+\texttt{R\_ARCSEC} & Mean radius (arcsec) \\
+\texttt{MU} & Surface brightness (mag/arcsec$^2$) \\
+\texttt{MU\_ERR} & $1\sigma$ uncertainty in $\mu$ \\
+\texttt{FLUX} & Mean flux per pixel in the annulus \\
+\texttt{AREA} & Annular area (arcsec$^2$) \\
+\texttt{NPIX} & Number of unmasked pixels \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Output}: \texttt{\textasciitilde/.ds9/icl\_profile.tsv}
+
+\textbf{Package}: \texttt{icl/profile.py} --- functions: \texttt{find\_bcg()}, \texttt{measure\_sb\_profile()}, \texttt{measure\_sector\_profile()}.
+
+
+\section{ICL Fraction Measurement}
+\label{sec:icl-measure}
+
+\textbf{Menu}: ICL $\to$ 4.\ ICL Measurements
+
+Computes integrated ICL quantities from the SB profile:
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{ICL fraction}: $f_\mathrm{ICL} = L_\mathrm{ICL} / (L_\mathrm{ICL} + L_\mathrm{gal})$, where $L_\mathrm{ICL}$ is the luminosity at $\mu > \mu_\mathrm{threshold}$ (default: 26.5\,mag/arcsec$^2$).
+  \item \textbf{Isophotal radii}: Radii where the SB profile crosses specified isophotes (default: $\mu = 26.0, 27.0, 28.0$\,mag/arcsec$^2$).
+  \item \textbf{Integrated luminosities}: $L_\mathrm{ICL}$ and $L_\mathrm{gal}$ computed by integrating the SB profile over annular areas.
+\end{itemize}
+
+\textbf{Package}: \texttt{icl/measure.py} --- functions: \texttt{compute\_icl\_fraction()}, \texttt{compute\_isophotal\_radii()}, \texttt{summarize\_icl()}.
+
+
+\section{Multi-Band ICL Colors}
+
+\textbf{CLI mode}: \texttt{ds9\_icl.py --mode color --bands F606W:f606w.fits,F814W:f814w.fits \ldots}
+
+Measures the SB profile independently in each band and computes color profiles:
+\begin{equation}
+  (m_1 - m_2)(r) = \mu_1(r) - \mu_2(r)
+\end{equation}
+
+Color gradients constrain the stellar population age and metallicity of the ICL.  Requires at least two band images and a common mask.
+
+\textbf{Package}: \texttt{icl/colors.py} --- functions: \texttt{measure\_multiband\_icl\_profiles()}, \texttt{compute\_color\_profiles()}.
+
+
+\section{ICL Settings Dialog}
+\label{sec:icl-settings}
+
+\textbf{Menu}: ICL $\to$ Settings\ldots
+
+A 4-tab dialog configures all pipeline parameters:
+
+\begin{center}
+\begin{longtable}{L{2.5cm} L{3.5cm} L{2cm} L{4.5cm}}
+\toprule
+\textbf{Tab} & \textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+Masking & expand-factor & 2.5 & Segment dilation factor \\
+ & bright-star-mag-limit & 18.0 & Stars brighter get extra masks \\
+ & bright-star-radius-scale & 10.0 & Base mask radius \\
+ & interp-method & linear & Interpolation: linear/cubic/nearest \\
+ & detect-thresh & 1.5 & Detection $\sigma$ for segmap \\
+\midrule
+Background & bkg-order & 3 & Polynomial/Chebyshev order \\
+ & bkg-sigma-clip & 3.0 & $\sigma$-clipping threshold \\
+ & bkg-sep-mesh & 256 & SEP mesh size (px) \\
+\midrule
+Profile & rmin / rmax & 5 / 1000 & Radial range (px) \\
+ & nsteps & 80 & Number of radial bins \\
+ & spacing & log & log or linear spacing \\
+ & ellipticity & 0.0 & Annulus ellipticity \\
+ & pa & 0.0 & Position angle (deg) \\
+\midrule
+Calibration & mag-zeropoint & 25.0 & Photometric zeropoint \\
+ & pixel-scale & 0.06 & Arcsec per pixel \\
+ & mu-threshold & 26.5 & ICL SB threshold (mag/arcsec$^2$) \\
+ & mu-levels & 26,27,28 & Isophotal levels \\
+ & measure-radius & 500.0 & Integration radius (px) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+Settings are saved to \texttt{\textasciitilde/.ds9/icl.prf} and loaded automatically on startup.
+
+
+\section{ICL CLI Reference}
+
+\begin{codebox}[Synopsis]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9_icl.py FITS --mode {mask,background,profile,measure,color} [OPTIONS]
+\end{lstlisting}
+\end{codebox}
+
+\begin{center}
+\begin{longtable}{L{2cm} L{3.5cm} L{7cm}}
+\toprule
+\textbf{Mode} & \textbf{Key options} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{mask} & \texttt{--expand-factor}, \texttt{--bright-star-*}, \texttt{--interp-method} & Create source mask + interpolated image \\
+\midrule
+\texttt{background} & \texttt{--bkg-method}, \texttt{--bkg-order}, \texttt{--mask} & Fit large-scale background model \\
+\midrule
+\texttt{profile} & \texttt{--center x,y}, \texttt{--rmin/rmax}, \texttt{--spacing}, \texttt{--ellipticity} & Measure SB profile \\
+\midrule
+\texttt{measure} & \texttt{--profile-file}, \texttt{--mu-threshold}, \texttt{--mu-levels} & Compute ICL fraction + isophotes \\
+\midrule
+\texttt{color} & \texttt{--bands NAME:file,\ldots}, \texttt{--mask}, \texttt{--center} & Multi-band SB + color profiles \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\textbf{Package structure}:
+\begin{codebox}
+\begin{lstlisting}[numbers=none]
+SAOImageDS9/icl/
+|-- __init__.py
+|-- config.py         # ICLConfig dataclass
+|-- masking.py        # Source mask + bright star + interpolation
+|-- background.py     # Polynomial / Chebyshev / SEP backgrounds
+|-- profile.py        # SB profile measurement (circular/elliptical/sector)
+|-- measure.py        # ICL fraction + isophotal radii
++-- colors.py         # Multi-band profiles + color indices
+\end{lstlisting}
+\end{codebox}
+
+
+%======================================================
+\chapter{Low Surface Brightness Galaxy (LSBG) Detection}
+\label{ch:lsbg}
+%======================================================
+
+Low Surface Brightness Galaxies (LSBGs) have effective surface brightness $\mu_\mathrm{eff} > 24$\,mag/arcsec$^2$, making them extremely difficult to detect with standard source extraction.  The key challenges are:
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Bright-source contamination}: PSF wings and halos from bright objects overlap LSBG signal.
+  \item \textbf{Background over-subtraction}: Standard background estimation (small mesh sizes) treats the LSBG itself as background and subtracts it.
+  \item \textbf{Low SNR}: LSBGs have total SNR of only $2\text{--}5\sigma$, requiring aggressive filtering to separate real detections from noise.
+\end{enumerate}
+
+The \textbf{LSBG} menu implements a literature-based approach inspired by SMUDGes (Zaritsky et al.\ 2019), NoiseChisel (Akhlaghi \& Ichikawa 2015), and DeepScan (Prole et al.\ 2018):
+
+\begin{equation*}
+\text{Mask} \;\longrightarrow\; \text{Iterative Background} \;\longrightarrow\; \text{Low-}\sigma\text{ Detection} \;\longrightarrow\; \text{Photometry \& Filter}
+\end{equation*}
+
+\section{Pipeline Overview}
+
+\begin{center}
+\begin{longtable}{C{0.5cm} L{3.5cm} L{8.5cm}}
+\toprule
+\textbf{\#} & \textbf{Step} & \textbf{Description} \\
+\midrule
+\endhead
+1 & Mask Bright Sources & Selectively mask only bright sources ($m < m_\mathrm{thresh}$), preserving faint LSBG candidates.  Interpolate masked regions. \\
+\midrule
+2 & Iterative Background & Repeat: fit background $\to$ detect residuals $\to$ expand mask $\to$ re-fit (2--3 iterations). \\
+\midrule
+3 & Detect LSBG Candidates & Low-threshold ($0.8\sigma$) detection with large convolution kernels on the cleaned image. \\
+\midrule
+4 & Photometry + Filter & Kron/aperture photometry, curve-of-growth $R_\mathrm{eff}$, $\mu_\mathrm{eff}$, then select by surface brightness, size, shape, and SNR. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+All steps can be run individually from the LSBG menu, or as a single pipeline via ``Run Full Pipeline.''
+
+
+\section{Step 1: Magnitude-Based Selective Masking}
+\label{sec:lsbg-mask}
+
+\textbf{Menu}: LSBG $\to$ 1.\ Mask Bright Sources
+
+Unlike the ICL masking that masks \emph{all} detected sources, LSBG masking selectively masks only sources brighter than a magnitude threshold (\texttt{mask-mag-threshold}, default: 22.0\,mag), preserving faint LSBG candidates.
+
+\begin{enumerate}[leftmargin=2em]
+  \item Run SEP detection at \texttt{mask-detect-thresh}$\,\sigma$ (default: 1.5) to produce a segmentation map.
+  \item For each segment, compute a rough magnitude from SEP flux.  Only segments with $m < m_\mathrm{thresh}$ are selected for masking.
+  \item Dilate selected segments by \texttt{mask-expand-factor} (default: 3.0) times their equivalent circular radius.
+  \item Add bright star masks (same algorithm as ICL: magnitude-dependent circular masks).
+  \item Interpolate all masked regions.
+\end{enumerate}
+
+The masking reuses functions from the ICL pipeline (\texttt{icl.masking}):
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{create\_source\_mask()} --- segment dilation
+  \item \texttt{mask\_bright\_stars()} --- bright star circular masks
+  \item \texttt{interpolate\_masked()} --- block-based 2D interpolation
+\end{itemize}
+
+\textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_mask.fits} (binary mask), \texttt{\textasciitilde/.ds9/lsbg\_masked.fits} (interpolated image).
+
+\textbf{Package}: \texttt{lsbg/masking.py} --- functions: \texttt{mask\_by\_magnitude()}, \texttt{iterative\_mask\_refine()}, \texttt{create\_lsbg\_mask()}.
+
+
+\section{Step 2: Iterative Background Refinement}
+\label{sec:lsbg-bkg}
+
+\textbf{Menu}: LSBG $\to$ 2.\ Background Model $\to$ SEP Large Mesh / Polynomial / Chebyshev
+
+Standard single-pass background estimation fails for LSBG detection because:
+\begin{itemize}[leftmargin=2em]
+  \item Small mesh sizes subtract the diffuse LSBG signal.
+  \item Residual source flux (from imperfect masking) biases the background upward.
+\end{itemize}
+
+The iterative algorithm repeats for \texttt{bkg-n-iterations} (default: 3) cycles:
+\begin{enumerate}[leftmargin=2em]
+  \item Interpolate masked regions in the current mask.
+  \item Fit background using the selected method (SEP large mesh / polynomial / Chebyshev), reusing functions from \texttt{icl.background}.
+  \item Detect residual sources in the background-subtracted residual at \texttt{bkg-refine-thresh}$\,\sigma$ (default: 2.0).
+  \item Expand the mask to include newly detected residuals.
+  \item If no new sources are found, declare convergence and stop early.
+\end{enumerate}
+
+\subsection{Parallel Tiled Background Fitting}
+
+For large images, the background fitting is parallelized:
+\begin{itemize}[leftmargin=2em]
+  \item The image is split into 1024-pixel tiles with 128-pixel overlap.
+  \item Each tile is fitted independently using \texttt{parallel\_map()} from the \texttt{parallel/} package.
+  \item Tiles are blended using 2D cosine weighting to eliminate boundary artifacts:
+  \begin{equation}
+    w(x) = \frac{1}{2}\bigl(1 - \cos(\pi x / L_\mathrm{overlap})\bigr)
+  \end{equation}
+  \item Image data and mask are shared across workers via \texttt{SharedArray} (zero-copy).
+\end{itemize}
+
+\textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_background.fits} (final background), \texttt{\textasciitilde/.ds9/lsbg\_cleaned.fits} (background-subtracted).
+
+\textbf{Package}: \texttt{lsbg/background.py} --- functions: \texttt{fit\_background\_parallel()}, \texttt{iterative\_background()}.
+
+
+\section{Step 3: Low-Threshold Detection}
+\label{sec:lsbg-detect}
+
+\textbf{Menu}: LSBG $\to$ 3.\ Detect LSBG Candidates
+
+After background subtraction, candidate LSBG sources are detected with aggressive low-threshold settings designed to catch faint diffuse objects:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Purpose} \\
+\midrule
+\texttt{detect-thresh} & 0.8$\sigma$ & Very low threshold (cf.\ standard 1.5$\sigma$) \\
+\texttt{detect-minarea} & 50\,px & Large minimum area filters point-like noise \\
+\texttt{detect-filter-kernel} & gauss5x5 & Convolution kernel enhances diffuse signal \\
+\texttt{deblend-nthresh} & 32 & Deblending sub-thresholds \\
+\texttt{deblend-mincont} & 0.005 & Minimum contrast for deblending \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Convolution Kernels}
+
+Larger kernels preferentially enhance extended emission while suppressing point-source noise:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Kernel} & \textbf{Description} \\
+\midrule
+\texttt{gauss3x3}--\texttt{gauss9x9} & Gaussian with FWHM 3--9\,px \\
+\texttt{tophat5}, \texttt{tophat7} & Flat circular kernels (5 or 7\,px diameter) \\
+\texttt{mexhat} & Mexican-hat wavelet ($\sigma=2$\,px) \\
+\texttt{none} & No convolution \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_segmap.fits} (segmentation map), detection catalog displayed in the table.
+
+\textbf{Package}: \texttt{lsbg/detection.py} --- functions: \texttt{build\_convolution\_kernel()}, \texttt{detect\_lsbg\_candidates()}.
+
+
+\section{Step 4: Photometry and LSBG Filtering}
+\label{sec:lsbg-phot}
+
+\textbf{Menu}: LSBG $\to$ 4.\ Photometry + Filter
+
+Each detected candidate undergoes detailed photometric measurement and then LSBG selection criteria are applied.
+
+\subsection{Photometric Measurements}
+
+For each source, the following are measured:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Kron photometry}: Kron radius via \texttt{sep.kron\_radius()}, then elliptical aperture flux at $2.5\times r_\mathrm{Kron}$.
+  \item \textbf{Fixed circular apertures}: Flux in 5, 10, 20, 40-pixel radius circles via \texttt{sep.sum\_circle()}.
+  \item \textbf{Curve of growth}: Cumulative flux measured in 25 logarithmically-spaced radii from 2 to $4\times\max(a,b)$\,px.  The half-light radius $R_\mathrm{eff}$ is interpolated as the radius enclosing 50\% of the total flux.
+  \item \textbf{Effective surface brightness}:
+  \begin{equation}
+    \mu_\mathrm{eff} = \mathrm{ZP} - 2.5\log_{10}\!\Bigl(\frac{F_\mathrm{total}/2}{\pi\,R_\mathrm{eff}^2}\Bigr) \quad [\text{mag/arcsec}^2]
+  \end{equation}
+  where $R_\mathrm{eff}$ is in arcsec.
+\end{enumerate}
+
+Photometry is parallelized: image data and RMS map are shared via \texttt{SharedArray}, and individual sources are processed by \texttt{parallel\_map()}.
+
+\subsection{LSBG Selection Criteria}
+
+After photometry, sources are filtered by four criteria:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Criterion} & \textbf{Range} & \textbf{Default} \\
+\midrule
+$\mu_\mathrm{eff}$ (mag/arcsec$^2$) & $[\mu_\mathrm{min}, \mu_\mathrm{max}]$ & $[24.0, 30.0]$ \\
+$R_\mathrm{eff}$ (arcsec) & $[R_\mathrm{min}, R_\mathrm{max}]$ & $[2.5, 60.0]$ \\
+Ellipticity & $< \epsilon_\mathrm{max}$ & $< 0.7$ \\
+SNR & $> \mathrm{SNR}_\mathrm{min}$ & $> 2.0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Confidence Score}
+
+Each passing source receives an LSBG confidence score (0--1) computed as a weighted combination:
+
+\begin{equation}
+C = 0.35\,S_\mu + 0.25\,S_R + 0.20\,S_\epsilon + 0.20\,S_\mathrm{SNR}
+\end{equation}
+
+where $S_\mu$ peaks at the center of the $[\mu_\mathrm{min}, \mu_\mathrm{max}]$ range, $S_R$ favors larger sizes, $S_\epsilon$ favors rounder shapes, and $S_\mathrm{SNR}$ scales with signal-to-noise.
+
+\textbf{Package}: \texttt{lsbg/photometry.py}, \texttt{lsbg/filtering.py}.
+
+
+\section{Output Catalog}
+
+The final LSBG catalog contains the following columns:
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9cm}}
+\toprule
+\textbf{Column} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{NUMBER} & Source index \\
+\texttt{X\_IMAGE}, \texttt{Y\_IMAGE} & Centroid (1-based, DS9 convention) \\
+\texttt{A\_IMAGE}, \texttt{B\_IMAGE} & Semi-major/minor axes (px) \\
+\texttt{THETA\_IMAGE} & Position angle (degrees) \\
+\texttt{ELLIPTICITY} & $1 - b/a$ \\
+\midrule
+\texttt{FLUX\_AUTO} & Kron elliptical flux \\
+\texttt{FLUXERR\_AUTO} & Kron flux error \\
+\texttt{MAG\_AUTO} & Kron magnitude \\
+\texttt{MAGERR\_AUTO} & Magnitude error \\
+\texttt{KRON\_RADIUS} & Kron radius (px) \\
+\midrule
+\texttt{R\_EFF\_PIX} & Half-light radius (px, from curve-of-growth) \\
+\texttt{R\_EFF\_ARCSEC} & Half-light radius (arcsec) \\
+\texttt{MU\_EFF} & Effective surface brightness (mag/arcsec$^2$) \\
+\texttt{SNR\_TOTAL} & Total signal-to-noise ratio \\
+\midrule
+\texttt{FLUX\_APER\_5/10/20/40} & Circular aperture fluxes \\
+\texttt{LSBG\_CONF} & LSBG confidence score (0--1) \\
+\texttt{FLAGS} & SEP extraction flags \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{LSBG Settings Dialog}
+\label{sec:lsbg-settings}
+
+\textbf{Menu}: LSBG $\to$ Settings\ldots
+
+A 4-tab dialog configures all pipeline parameters:
+
+\begin{center}
+\begin{longtable}{L{2.5cm} L{4cm} L{2cm} L{4cm}}
+\toprule
+\textbf{Tab} & \textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+Masking & mask-mag-threshold & 22.0 & Mask sources brighter than this \\
+ & mask-expand-factor & 3.0 & Segment dilation factor \\
+ & bright-star-mag-limit & 18.0 & Bright star threshold \\
+ & bright-star-radius-scale & 12.0 & Star mask radius scale \\
+ & interp-method & linear & Interpolation method \\
+ & mask-detect-thresh & 1.5 & Detection $\sigma$ for segmap \\
+\midrule
+Background & bkg-method & sep\_large & Background method \\
+ & bkg-mesh-size & 256 & SEP mesh size (px) \\
+ & bkg-poly-order & 3 & Polynomial order \\
+ & bkg-sigma-clip & 3.0 & $\sigma$-clipping threshold \\
+ & bkg-n-iterations & 3 & Iterative refinement cycles \\
+ & bkg-refine-thresh & 2.0 & Residual detection $\sigma$ \\
+\midrule
+Detection & detect-thresh & 0.8 & Detection $\sigma$ \\
+ & detect-minarea & 50 & Minimum area (px) \\
+ & detect-filter-kernel & gauss5x5 & Convolution kernel \\
+ & deblend-nthresh & 32 & Deblend thresholds \\
+ & deblend-mincont & 0.005 & Deblend contrast \\
+\midrule
+Calib.\ \& & mag-zeropoint & 25.0 & Photometric ZP \\
+Filter & pixel-scale & 0.06 & Arcsec per pixel \\
+ & mu-eff-min / max & 24.0 / 30.0 & SB selection (mag/arcsec$^2$) \\
+ & r-eff-min / max & 2.5 / 60.0 & Size selection (arcsec) \\
+ & ellipticity-max & 0.7 & Shape selection \\
+ & min-snr & 2.0 & SNR selection \\
+ & phot-apertures & 5,10,20,40 & Aperture radii (px) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+Settings are saved to \texttt{\textasciitilde/.ds9/lsbg.prf} and loaded automatically on startup.
+
+
+\section{LSBG CLI Reference}
+
+\begin{codebox}[Synopsis]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,run} [OPTIONS]
+\end{lstlisting}
+\end{codebox}
+
+\begin{center}
+\begin{longtable}{L{2cm} L{3.5cm} L{7cm}}
+\toprule
+\textbf{Mode} & \textbf{Key options} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{mask} & \texttt{--mask-mag-threshold}, \texttt{--mask-expand-factor}, \texttt{--bright-star-*} & Create magnitude-based source mask \\
+\midrule
+\texttt{clean} & \texttt{--mask}, \texttt{--bkg-method}, \texttt{--bkg-n-iterations} & Iterative background refinement \\
+\midrule
+\texttt{detect} & \texttt{--cleaned}, \texttt{--detect-thresh}, \texttt{--detect-minarea}, \texttt{--detect-filter-kernel} & Low-threshold source detection \\
+\midrule
+\texttt{photometry} & \texttt{--cleaned}, \texttt{--segmap}, \texttt{--mu-eff-min/max}, \texttt{--r-eff-min/max} & Photometry + LSBG filtering \\
+\midrule
+\texttt{run} & all above + \texttt{--n-workers} & Full pipeline (all 4 steps) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Usage Examples}
+
+\begin{codebox}[Step-by-step execution]
+\begin{lstlisting}[style=bash,numbers=none]
+# Step 1: Mask bright sources
+python3 ds9_lsbg.py data/abell2744_f814w.fits \
+    --mode mask --mask-mag-threshold 22.0
+
+# Step 2: Iterative background cleaning
+python3 ds9_lsbg.py data/abell2744_f814w.fits \
+    --mode clean --mask ~/.ds9/lsbg_mask.fits \
+    --bkg-n-iterations 3 --n-workers 4
+
+# Step 3: Low-threshold detection
+python3 ds9_lsbg.py data/abell2744_f814w.fits \
+    --mode detect --cleaned ~/.ds9/lsbg_cleaned.fits
+
+# Step 4: Photometry + LSBG filtering
+python3 ds9_lsbg.py data/abell2744_f814w.fits \
+    --mode photometry --cleaned ~/.ds9/lsbg_cleaned.fits \
+    --segmap ~/.ds9/lsbg_segmap.fits
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Full pipeline (single command)]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9_lsbg.py data/abell2744_f814w.fits \
+    --mode run --n-workers 4 --mu-eff-min 24.0
+\end{lstlisting}
+\end{codebox}
+
+\textbf{Package structure}:
+\begin{codebox}
+\begin{lstlisting}[numbers=none]
+SAOImageDS9/lsbg/
+|-- __init__.py
+|-- config.py          # LSBGConfig dataclass (25 parameters)
+|-- masking.py         # Magnitude-based selective masking + ICL reuse
+|-- background.py      # Iterative background + parallel tiling
+|-- detection.py       # Low-threshold detection + kernels
+|-- photometry.py      # Parallel photometry + curve-of-growth
++-- filtering.py       # LSBG selection + confidence score
+\end{lstlisting}
+\end{codebox}
+
+
+\section{Intermediate Files}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\texttt{\textasciitilde/.ds9/lsbg\_mask.fits} & Binary mask (bright sources) \\
+\texttt{\textasciitilde/.ds9/lsbg\_masked.fits} & Interpolated image (bright sources removed) \\
+\texttt{\textasciitilde/.ds9/lsbg\_background.fits} & Final background model \\
+\texttt{\textasciitilde/.ds9/lsbg\_cleaned.fits} & Background-subtracted image \\
+\texttt{\textasciitilde/.ds9/lsbg\_segmap.fits} & Low-threshold segmentation map \\
+\texttt{\textasciitilde/.ds9/lsbg\_catalog.tsv} & Final filtered LSBG catalog \\
+\texttt{\textasciitilde/.ds9/lsbg.prf} & Settings file \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+%======================================================
 \chapter{Planned Features and Science-Driven Extensions}
 \label{ch:future}
 %======================================================
 
-This chapter outlines features motivated by upcoming survey science requirements, particularly the Vera C.\ Rubin Observatory Legacy Survey of Space and Time (LSST) and low surface brightness (LSB) science such as Intra-Cluster Light (ICL) detection.
+This chapter outlines features motivated by upcoming survey science requirements, particularly the Vera C.\ Rubin Observatory Legacy Survey of Space and Time (LSST).
 
 \section{LSST / Large-Scale Survey Features}
 
@@ -2112,7 +2732,7 @@ mpirun -np 16 python3 ds9_morphometry.py --batch *.fits \
 \end{lstlisting}
 \end{codebox}
 
-\textbf{Status}: Designed (see \texttt{parallel/} package plan). Adds \texttt{--n-workers} and \texttt{--batch} arguments to all CLI scripts.
+\textbf{Status}: Implemented. All CLI scripts support \texttt{--n-workers} and \texttt{--batch} arguments via the \texttt{parallel/} package.
 
 \subsection{Multi-Extension FITS (MEF) Support}
 
@@ -2164,75 +2784,10 @@ For survey-scale data, visualize data quality across fields:
 \end{itemize}
 
 
-\section{Intra-Cluster Light (ICL) Detection}
-
-ICL is the diffuse stellar component in galaxy clusters, typically at surface brightness levels of $\mu_V \gtrsim 26$\,mag/arcsec$^2$. Detecting and characterizing ICL requires specialized techniques beyond standard source extraction.
-
-\subsection{Low Surface Brightness (LSB) Mode}
-
-A dedicated extraction mode optimized for extended, faint emission:
-\begin{itemize}[leftmargin=2em]
-  \item \textbf{Large-scale background model}: Use back\_size $\gg 256$\,px or 2D polynomial/spline fit to avoid subtracting the ICL signal as ``background''
-  \item \textbf{Multi-scale detection}: Wavelet-based detection (e.g., \`a trous algorithm) to separate ICL from compact sources and background fluctuations
-  \item \textbf{Aggressive masking}: Mask all detected compact sources (stars, galaxies) and their extended halos before measuring the diffuse component
-  \item \textbf{Surface brightness profiles}: Radial SB profile centered on the BCG (brightest cluster galaxy) with azimuthal averaging and sector-based analysis
-\end{itemize}
-
-\subsection{ICL-Specific Measurements}
-
-\begin{center}
-\begin{longtable}{L{3.5cm} L{9.0cm}}
-\toprule
-\textbf{Measurement} & \textbf{Description} \\
-\midrule
-\endhead
-ICL fraction & $f_\mathrm{ICL} = L_\mathrm{ICL} / (L_\mathrm{ICL} + L_\mathrm{galaxies})$ within a defined radius (e.g., $R_{500}$) \\
-\midrule
-SB profile & Azimuthally averaged surface brightness profile $\mu(r)$ from the BCG center, extending to $r \sim 500$\,kpc \\
-\midrule
-Color gradient & ICL color profile across multiple bands, constraining the stellar population age and metallicity \\
-\midrule
-Isophotal radius & Radius at which the SB profile reaches specified isophotes (e.g., $\mu_V = 26, 27, 28$\,mag/arcsec$^2$) \\
-\midrule
-Tidal features & Detection and characterization of tidal streams, shells, and plumes associated with the ICL \\
-\bottomrule
-\end{longtable}
-\end{center}
-
-\subsection{Source Masking for Diffuse Light}
-
-Before measuring ICL, compact sources must be aggressively masked:
-\begin{enumerate}[leftmargin=2em]
-  \item Run standard source extraction to build the segmentation map.
-  \item Expand each segment by a factor of 2--3$\times$ in radius to mask extended wings.
-  \item Bright stars: mask with magnitude-dependent circular masks (from a star catalog or saturation-based).
-  \item Fill masked regions via 2D interpolation (or median of surrounding pixels) for smooth background estimation.
-  \item Optionally iterate: re-detect LSB features in the masked image, update the mask, and repeat.
-\end{enumerate}
-
-\subsection{Background Modeling Strategies for ICL}
-
-Standard SExtractor-style mesh-based backgrounds will subtract ICL signal. Alternative approaches:
-
-\begin{center}
-\begin{longtable}{L{3.5cm} L{9.0cm}}
-\toprule
-\textbf{Method} & \textbf{Description} \\
-\midrule
-\endhead
-Global polynomial & Fit a low-order 2D polynomial to masked-source image; residual contains ICL \\
-\midrule
-Iterative clipping & Iteratively estimate background using $\sigma$-clipped median in large ($\sim 500$\,px) cells, excluding source regions \\
-\midrule
-Ring median & For each radial bin from the cluster center, compute the median of unmasked pixels as the local background \\
-\midrule
-DBSCAN clustering & Use unsupervised clustering on pixel coordinates and intensities to separate ICL from sky background \\
-\bottomrule
-\end{longtable}
-\end{center}
-
-
 \section{Additional Feature Ideas}
+
+\textit{Note}: The Intra-Cluster Light (ICL) Detection and Low Surface Brightness Galaxy (LSBG) Detection pipelines described in the planned features of earlier versions are now fully implemented---see Chapters~\ref{ch:icl} and \ref{ch:lsbg}.
+\bigskip
 
 \subsection{Photometric Redshift Estimation}
 
@@ -2292,11 +2847,12 @@ Multi-core parallelization using \texttt{multiprocessing.shared\_memory} for CPU
   \item Source-level parallelism for morphometry, S\'ersic fitting, PSF photometry
   \item Group-level parallelism for crowded field photometry
   \item Band-level parallelism for multi-band photometry
+  \item Tile-level parallelism for LSBG background fitting
   \item Shared memory arrays avoid data copying overhead
   \item \texttt{--n-workers} CLI argument: 0=auto (cpu$-$1), 1=sequential, N=fixed
 \end{itemize}
 
-\textbf{Status}: Designed (see \texttt{parallel/} package plan).
+\textbf{Status}: Implemented in the \texttt{parallel/} package (\texttt{SharedArray}, \texttt{parallel\_map}). Used by morphometry, S\'ersic, PSF photometry, crowded field, multi-band, completeness, and LSBG pipelines.
 
 
 %------------------------------------------------------

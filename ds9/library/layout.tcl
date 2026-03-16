@@ -397,6 +397,49 @@ proc CreateCatalogPanel {} {
 	-label "Settings..." \
 	-command CatalogPanelICLSettings
 
+    # LSBG menu
+    ttk::menubutton $f.menubar.lsbg -text "LSBG" \
+	-menu $f.menubar.lsbg.m -style CatMenu.TMenubutton
+    menu $f.menubar.lsbg.m -tearoff 0
+    $f.menubar.lsbg.m add command \
+	-label "1. Mask Bright Sources" \
+	-command CatalogPanelLSBGMask
+    $f.menubar.lsbg.m add command \
+	-label "   View Masked Image" \
+	-command CatalogPanelLSBGViewMask
+    $f.menubar.lsbg.m add separator
+    menu $f.menubar.lsbg.m.bkg -tearoff 0
+    $f.menubar.lsbg.m add cascade -label "2. Background Model" \
+	-menu $f.menubar.lsbg.m.bkg
+    $f.menubar.lsbg.m.bkg add command \
+	-label "SEP Large Mesh" \
+	-command [list CatalogPanelLSBGClean sep_large]
+    $f.menubar.lsbg.m.bkg add command \
+	-label "Polynomial Fit" \
+	-command [list CatalogPanelLSBGClean polynomial]
+    $f.menubar.lsbg.m.bkg add command \
+	-label "Chebyshev Fit" \
+	-command [list CatalogPanelLSBGClean chebyshev]
+    $f.menubar.lsbg.m add command \
+	-label "   View Cleaned Image" \
+	-command CatalogPanelLSBGViewClean
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "3. Detect LSBG Candidates" \
+	-command CatalogPanelLSBGDetect
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "4. Photometry + Filter" \
+	-command CatalogPanelLSBGPhotometry
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "Run Full Pipeline" \
+	-command CatalogPanelLSBGRunAll
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "Settings..." \
+	-command CatalogPanelLSBGSettings
+
     # Analysis menu
     ttk::menubutton $f.menubar.analysis -text "Analysis" \
 	-menu $f.menubar.analysis.m -style CatMenu.TMenubutton
@@ -437,6 +480,7 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.deconv -side left
     pack $f.menubar.separate -side left
     pack $f.menubar.icl -side left
+    pack $f.menubar.lsbg -side left
     pack $f.menubar.analysis -side left
 
     # Search/Filter bar
@@ -594,6 +638,47 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,param,mu-levels)              26.0,27.0,28.0
     set catpanel(icl,param,measure-radius)         500.0
     CatalogPanelICLParamLoad
+
+    # LSBG state
+    set catpanel(lsbg,mask_file)    [file join [file normalize ~] .ds9 lsbg_mask.fits]
+    set catpanel(lsbg,masked_file)  [file join [file normalize ~] .ds9 lsbg_masked.fits]
+    set catpanel(lsbg,bkg_file)     [file join [file normalize ~] .ds9 lsbg_background.fits]
+    set catpanel(lsbg,cleaned_file) [file join [file normalize ~] .ds9 lsbg_cleaned.fits]
+    set catpanel(lsbg,segmap_file)  [file join [file normalize ~] .ds9 lsbg_segmap.fits]
+    set catpanel(lsbg,catalog_file) [file join [file normalize ~] .ds9 lsbg_catalog.tsv]
+    set catpanel(lsbg,has_mask)     0
+    set catpanel(lsbg,has_clean)    0
+    set catpanel(lsbg,has_detect)   0
+    set catpanel(lsbg,has_catalog)  0
+    set catpanel(lsbg,detect_data)  {}
+    set catpanel(lsbg,param,mask-detect-thresh)         1.5
+    set catpanel(lsbg,param,mask-detect-minarea)        5
+    set catpanel(lsbg,param,mask-expand-factor)         3.0
+    set catpanel(lsbg,param,bright-star-mag-limit)      18.0
+    set catpanel(lsbg,param,bright-star-radius-scale)   12.0
+    set catpanel(lsbg,param,mask-mag-threshold)         22.0
+    set catpanel(lsbg,param,interp-method)              linear
+    set catpanel(lsbg,param,bkg-method)                 sep_large
+    set catpanel(lsbg,param,bkg-mesh-size)              256
+    set catpanel(lsbg,param,bkg-poly-order)             3
+    set catpanel(lsbg,param,bkg-sigma-clip)             3.0
+    set catpanel(lsbg,param,bkg-n-iterations)           3
+    set catpanel(lsbg,param,bkg-refine-thresh)          2.0
+    set catpanel(lsbg,param,detect-thresh)              0.8
+    set catpanel(lsbg,param,detect-minarea)             50
+    set catpanel(lsbg,param,detect-filter-kernel)       gauss5x5
+    set catpanel(lsbg,param,deblend-nthresh)            32
+    set catpanel(lsbg,param,deblend-mincont)            0.005
+    set catpanel(lsbg,param,phot-apertures)             5,10,20,40
+    set catpanel(lsbg,param,mag-zeropoint)              25.0
+    set catpanel(lsbg,param,pixel-scale)                0.06
+    set catpanel(lsbg,param,mu-eff-min)                 24.0
+    set catpanel(lsbg,param,mu-eff-max)                 30.0
+    set catpanel(lsbg,param,r-eff-min)                  2.5
+    set catpanel(lsbg,param,r-eff-max)                  60.0
+    set catpanel(lsbg,param,ellipticity-max)            0.7
+    set catpanel(lsbg,param,min-snr)                    2.0
+    CatalogPanelLSBGParamLoad
 
     # Ctrl key tracking (Feature A/C)
     set ::catpanel_ctrl 0
@@ -7585,3 +7670,661 @@ proc CatalogPanelICLSettingsDefaults {} {
     set ed(icl,measure-radius) 500.0
 }
 
+# ============================================================
+# LSBG (Low Surface Brightness Galaxy) Detection Pipeline
+# ============================================================
+
+# --- LSBG Param Load/Save ---
+
+proc CatalogPanelLSBGParamLoad {} {
+    global catpanel
+
+    set preffile [file join [file normalize ~] .ds9 lsbg.prf]
+    if {![file exists $preffile]} return
+    if {[catch {set fd [open $preffile r]} err]} return
+    while {[gets $fd line] >= 0} {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set parts [split $line]
+	if {[llength $parts] >= 2} {
+	    set key [lindex $parts 0]
+	    set val [lindex $parts 1]
+	    if {[info exists catpanel(lsbg,param,$key)]} {
+		set catpanel(lsbg,param,$key) $val
+	    }
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelLSBGParamSave {} {
+    global catpanel
+
+    set prefdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $prefdir]} {
+	file mkdir $prefdir
+    }
+    set preffile [file join $prefdir lsbg.prf]
+    if {[catch {set fd [open $preffile w]} err]} return
+    foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
+		   bright-star-mag-limit bright-star-radius-scale \
+		   mask-mag-threshold interp-method \
+		   bkg-method bkg-mesh-size bkg-poly-order \
+		   bkg-sigma-clip bkg-n-iterations bkg-refine-thresh \
+		   detect-thresh detect-minarea detect-filter-kernel \
+		   deblend-nthresh deblend-mincont \
+		   phot-apertures mag-zeropoint pixel-scale \
+		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
+		   ellipticity-max min-snr} {
+	puts $fd "$pname $catpanel(lsbg,param,$pname)"
+    }
+    close $fd
+}
+
+# --- 1. Mask Bright Sources ---
+
+proc CatalogPanelLSBGMask {} {
+    global catpanel current
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Masking bright sources..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode mask \
+	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
+	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
+	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
+	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
+	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
+	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
+	--interp-method $catpanel(lsbg,param,interp-method) \
+	--mask-output $catpanel(lsbg,mask_file) \
+	--masked-output $catpanel(lsbg,masked_file) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG mask error: $err"
+	return
+    }
+
+    set catpanel(lsbg,has_mask) 1
+    set catpanel(status) "LSBG: Bright source mask created"
+}
+
+proc CatalogPanelLSBGViewMask {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_mask) || ![file exists $catpanel(lsbg,masked_file)]} {
+	set catpanel(status) "LSBG: No mask available — run Mask Bright Sources first"
+	return
+    }
+
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(lsbg,masked_file) {} {}} err]} {
+	set catpanel(status) "LSBG: Error loading masked image: $err"
+	return
+    }
+    global scale
+    set scale(mode) zscale
+    ChangeScaleMode
+    set catpanel(status) "LSBG: Masked image loaded in new frame"
+}
+
+# --- 2. Background Model (Iterative Cleaning) ---
+
+proc CatalogPanelLSBGClean {method} {
+    global catpanel
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    if {!$catpanel(lsbg,has_mask) || ![file exists $catpanel(lsbg,mask_file)]} {
+	set catpanel(status) "LSBG: No mask — run Mask Bright Sources first"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Iterative background ($method)..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode clean \
+	--mask $catpanel(lsbg,mask_file) \
+	--bkg-method $method \
+	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
+	--bkg-poly-order $catpanel(lsbg,param,bkg-poly-order) \
+	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
+	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
+	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
+	--interp-method $catpanel(lsbg,param,interp-method) \
+	--bkg-output $catpanel(lsbg,bkg_file) \
+	--cleaned-output $catpanel(lsbg,cleaned_file) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG clean error: $err"
+	return
+    }
+
+    set catpanel(lsbg,has_clean) 1
+    set catpanel(status) "LSBG: Background cleaned ($method)"
+}
+
+proc CatalogPanelLSBGViewClean {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+	return
+    }
+
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}} err]} {
+	set catpanel(status) "LSBG: Error loading cleaned image: $err"
+	return
+    }
+    global scale
+    set scale(mode) zscale
+    ChangeScaleMode
+    set catpanel(status) "LSBG: Cleaned image loaded in new frame"
+}
+
+# --- 3. Detect LSBG Candidates ---
+
+proc CatalogPanelLSBGDetect {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Detecting candidates..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode detect \
+	--cleaned $catpanel(lsbg,cleaned_file) \
+	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
+	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
+	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
+	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
+	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--segmap-output $catpanel(lsbg,segmap_file) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG detect error: $err"
+	return
+    }
+
+    # Parse detection results into table
+    set catpanel(lsbg,detect_data) $result
+    set catpanel(lsbg,has_detect) 1
+
+    # Load into panel table
+    set catpanel(alldata) $result
+    CatalogPanelDisplayTable
+
+    # Count detections
+    set nlines [llength [split $result \n]]
+    set nsrc [expr {$nlines - 1}]
+    set catpanel(status) "LSBG: $nsrc candidates detected"
+}
+
+# --- 4. Photometry + Filter ---
+
+proc CatalogPanelLSBGPhotometry {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+	return
+    }
+
+    if {!$catpanel(lsbg,has_detect) || ![file exists $catpanel(lsbg,segmap_file)]} {
+	set catpanel(status) "LSBG: No detections — run Detect first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Measuring photometry..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode photometry \
+	--cleaned $catpanel(lsbg,cleaned_file) \
+	--segmap $catpanel(lsbg,segmap_file) \
+	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
+	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
+	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
+	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
+	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
+	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
+	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
+	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
+	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
+	--min-snr $catpanel(lsbg,param,min-snr) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG photometry error: $err"
+	return
+    }
+
+    # Load filtered catalog into panel
+    set catpanel(alldata) $result
+    set catpanel(lsbg,has_catalog) 1
+    CatalogPanelDisplayTable
+
+    set nlines [llength [split $result \n]]
+    set nsrc [expr {$nlines - 1}]
+
+    # Mark all sources
+    CatalogPanelMarkAll
+    set catpanel(status) "LSBG: $nsrc sources with photometry + filtering"
+}
+
+# --- Run Full Pipeline ---
+
+proc CatalogPanelLSBGRunAll {} {
+    global catpanel
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Running full pipeline..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode run \
+	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
+	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
+	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
+	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
+	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
+	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
+	--interp-method $catpanel(lsbg,param,interp-method) \
+	--bkg-method $catpanel(lsbg,param,bkg-method) \
+	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
+	--bkg-poly-order $catpanel(lsbg,param,bkg-poly-order) \
+	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
+	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
+	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
+	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
+	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
+	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
+	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
+	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
+	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
+	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
+	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
+	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
+	--min-snr $catpanel(lsbg,param,min-snr) \
+	--mask-output $catpanel(lsbg,mask_file) \
+	--masked-output $catpanel(lsbg,masked_file) \
+	--bkg-output $catpanel(lsbg,bkg_file) \
+	--cleaned-output $catpanel(lsbg,cleaned_file) \
+	--segmap-output $catpanel(lsbg,segmap_file) \
+	--catalog-output $catpanel(lsbg,catalog_file) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG pipeline error: $err"
+	return
+    }
+
+    # Update state
+    set catpanel(lsbg,has_mask) 1
+    set catpanel(lsbg,has_clean) 1
+    set catpanel(lsbg,has_detect) 1
+    set catpanel(lsbg,has_catalog) 1
+
+    # Load cleaned image in new frame
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}} err]} {
+	set catpanel(status) "LSBG: Warning — could not load cleaned image"
+    } else {
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+    }
+
+    # Load catalog
+    set catpanel(alldata) $result
+    CatalogPanelDisplayTable
+
+    set nlines [llength [split $result \n]]
+    set nsrc [expr {$nlines - 1}]
+
+    # Mark all LSBG candidates
+    CatalogPanelMarkAll
+    set catpanel(status) "LSBG: Pipeline complete — $nsrc candidates"
+}
+
+# --- LSBG Settings Dialog ---
+
+proc CatalogPanelLSBGSettings {} {
+    global catpanel
+    global ed
+
+    set w .lsbgsettings
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "LSBG Detection Settings"
+    wm geometry $w 460x560
+
+    # Copy current values
+    foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
+		   bright-star-mag-limit bright-star-radius-scale \
+		   mask-mag-threshold interp-method \
+		   bkg-method bkg-mesh-size bkg-poly-order \
+		   bkg-sigma-clip bkg-n-iterations bkg-refine-thresh \
+		   detect-thresh detect-minarea detect-filter-kernel \
+		   deblend-nthresh deblend-mincont \
+		   phot-apertures mag-zeropoint pixel-scale \
+		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
+		   ellipticity-max min-snr} {
+	set ed(lsbg,$pname) $catpanel(lsbg,param,$pname)
+    }
+
+    ttk::notebook $w.nb
+    pack $w.nb -fill both -expand true -padx 8 -pady 8
+
+    # --- Tab 1: Masking ---
+    set t1 [ttk::frame $w.nb.mask]
+    $w.nb add $t1 -text "Masking"
+
+    set r 0
+    ttk::label $t1.lmt -text "Mask mag threshold:"
+    ttk::entry $t1.emt -textvariable ed(lsbg,mask-mag-threshold) -width 10
+    grid $t1.lmt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.emt -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lef -text "Expand factor:"
+    ttk::entry $t1.eef -textvariable ed(lsbg,mask-expand-factor) -width 10
+    grid $t1.lef -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eef -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lml -text "Bright star mag limit:"
+    ttk::entry $t1.eml -textvariable ed(lsbg,bright-star-mag-limit) -width 10
+    grid $t1.lml -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eml -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lrs -text "Bright star radius scale:"
+    ttk::entry $t1.ers -textvariable ed(lsbg,bright-star-radius-scale) -width 10
+    grid $t1.lrs -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.ers -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lim -text "Interpolation method:"
+    ttk::combobox $t1.eim -textvariable ed(lsbg,interp-method) -width 10 \
+	-values {linear cubic nearest}
+    grid $t1.lim -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eim -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.ldt -text "Mask detect threshold:"
+    ttk::entry $t1.edt -textvariable ed(lsbg,mask-detect-thresh) -width 10
+    grid $t1.ldt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.edt -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 2: Background ---
+    set t2 [ttk::frame $w.nb.bkg]
+    $w.nb add $t2 -text "Background"
+
+    set r 0
+    ttk::label $t2.lbm -text "Method:"
+    ttk::combobox $t2.ebm -textvariable ed(lsbg,bkg-method) -width 12 \
+	-values {sep_large polynomial chebyshev}
+    grid $t2.lbm -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ebm -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lms -text "Mesh size (px):"
+    ttk::entry $t2.ems -textvariable ed(lsbg,bkg-mesh-size) -width 10
+    grid $t2.lms -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ems -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lbo -text "Polynomial order:"
+    ttk::entry $t2.ebo -textvariable ed(lsbg,bkg-poly-order) -width 10
+    grid $t2.lbo -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ebo -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lsc -text "Sigma clip:"
+    ttk::entry $t2.esc -textvariable ed(lsbg,bkg-sigma-clip) -width 10
+    grid $t2.lsc -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.esc -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lni -text "Iterations:"
+    ttk::entry $t2.eni -textvariable ed(lsbg,bkg-n-iterations) -width 10
+    grid $t2.lni -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.eni -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lrt -text "Refine threshold (sigma):"
+    ttk::entry $t2.ert -textvariable ed(lsbg,bkg-refine-thresh) -width 10
+    grid $t2.lrt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ert -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 3: Detection ---
+    set t3 [ttk::frame $w.nb.det]
+    $w.nb add $t3 -text "Detection"
+
+    set r 0
+    ttk::label $t3.ldt -text "Detect threshold (sigma):"
+    ttk::entry $t3.edt -textvariable ed(lsbg,detect-thresh) -width 10
+    grid $t3.ldt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.edt -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lma -text "Min area (px):"
+    ttk::entry $t3.ema -textvariable ed(lsbg,detect-minarea) -width 10
+    grid $t3.lma -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.ema -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lfk -text "Filter kernel:"
+    ttk::combobox $t3.efk -textvariable ed(lsbg,detect-filter-kernel) -width 12 \
+	-values {none gauss3x3 gauss5x5 gauss7x7 gauss9x9 tophat5 tophat7 mexhat}
+    grid $t3.lfk -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.efk -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lnt -text "Deblend N thresholds:"
+    ttk::entry $t3.ent -textvariable ed(lsbg,deblend-nthresh) -width 10
+    grid $t3.lnt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.ent -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lmc -text "Deblend min contrast:"
+    ttk::entry $t3.emc -textvariable ed(lsbg,deblend-mincont) -width 10
+    grid $t3.lmc -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.emc -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 4: Calibration & Filter ---
+    set t4 [ttk::frame $w.nb.cal]
+    $w.nb add $t4 -text "Calibration & Filter"
+
+    set r 0
+    ttk::label $t4.lzp -text "Mag zeropoint:"
+    ttk::entry $t4.ezp -textvariable ed(lsbg,mag-zeropoint) -width 10
+    grid $t4.lzp -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.ezp -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lps -text "Pixel scale (arcsec/px):"
+    ttk::entry $t4.eps -textvariable ed(lsbg,pixel-scale) -width 10
+    grid $t4.lps -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.eps -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lmn -text "mu_eff min (mag/arcsec2):"
+    ttk::entry $t4.emn -textvariable ed(lsbg,mu-eff-min) -width 10
+    grid $t4.lmn -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.emn -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lmx -text "mu_eff max (mag/arcsec2):"
+    ttk::entry $t4.emx -textvariable ed(lsbg,mu-eff-max) -width 10
+    grid $t4.lmx -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.emx -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lrn -text "R_eff min (arcsec):"
+    ttk::entry $t4.ern -textvariable ed(lsbg,r-eff-min) -width 10
+    grid $t4.lrn -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.ern -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lrx -text "R_eff max (arcsec):"
+    ttk::entry $t4.erx -textvariable ed(lsbg,r-eff-max) -width 10
+    grid $t4.lrx -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.erx -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lex -text "Ellipticity max:"
+    ttk::entry $t4.eex -textvariable ed(lsbg,ellipticity-max) -width 10
+    grid $t4.lex -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.eex -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lsn -text "Min SNR:"
+    ttk::entry $t4.esn -textvariable ed(lsbg,min-snr) -width 10
+    grid $t4.lsn -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.esn -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lap -text "Phot apertures (px):"
+    ttk::entry $t4.eap -textvariable ed(lsbg,phot-apertures) -width 18
+    grid $t4.lap -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.eap -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelLSBGSettingsApply $w]
+    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelLSBGSettingsDefaults
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.defaults -side right -padx 4
+    pack $bf.apply -side right -padx 4
+}
+
+proc CatalogPanelLSBGSettingsApply {w} {
+    global catpanel
+    global ed
+
+    foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
+		   bright-star-mag-limit bright-star-radius-scale \
+		   mask-mag-threshold interp-method \
+		   bkg-method bkg-mesh-size bkg-poly-order \
+		   bkg-sigma-clip bkg-n-iterations bkg-refine-thresh \
+		   detect-thresh detect-minarea detect-filter-kernel \
+		   deblend-nthresh deblend-mincont \
+		   phot-apertures mag-zeropoint pixel-scale \
+		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
+		   ellipticity-max min-snr} {
+	set catpanel(lsbg,param,$pname) $ed(lsbg,$pname)
+    }
+    CatalogPanelLSBGParamSave
+    set catpanel(status) "LSBG settings applied and saved"
+}
+
+proc CatalogPanelLSBGSettingsDefaults {} {
+    global ed
+
+    set ed(lsbg,mask-detect-thresh) 1.5
+    set ed(lsbg,mask-detect-minarea) 5
+    set ed(lsbg,mask-expand-factor) 3.0
+    set ed(lsbg,bright-star-mag-limit) 18.0
+    set ed(lsbg,bright-star-radius-scale) 12.0
+    set ed(lsbg,mask-mag-threshold) 22.0
+    set ed(lsbg,interp-method) linear
+    set ed(lsbg,bkg-method) sep_large
+    set ed(lsbg,bkg-mesh-size) 256
+    set ed(lsbg,bkg-poly-order) 3
+    set ed(lsbg,bkg-sigma-clip) 3.0
+    set ed(lsbg,bkg-n-iterations) 3
+    set ed(lsbg,bkg-refine-thresh) 2.0
+    set ed(lsbg,detect-thresh) 0.8
+    set ed(lsbg,detect-minarea) 50
+    set ed(lsbg,detect-filter-kernel) gauss5x5
+    set ed(lsbg,deblend-nthresh) 32
+    set ed(lsbg,deblend-mincont) 0.005
+    set ed(lsbg,phot-apertures) 5,10,20,40
+    set ed(lsbg,mag-zeropoint) 25.0
+    set ed(lsbg,pixel-scale) 0.06
+    set ed(lsbg,mu-eff-min) 24.0
+    set ed(lsbg,mu-eff-max) 30.0
+    set ed(lsbg,r-eff-min) 2.5
+    set ed(lsbg,r-eff-max) 60.0
+    set ed(lsbg,ellipticity-max) 0.7
+    set ed(lsbg,min-snr) 2.0
+}
