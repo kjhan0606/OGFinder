@@ -157,6 +157,10 @@ def main():
         print("#SEPARATE\tN_SUB=0\tMESSAGE=No sub-components found")
         sys.exit(0)
 
+    # Find the brightest sub-source — it keeps the parent's original shape
+    fluxes = np.array([obj['flux'] for obj in sub_sources])
+    brightest_idx = np.argmax(fluxes)
+
     # Output header
     n_sub = len(sub_sources)
     print(f"#SEPARATE\tN_SUB={n_sub}\tPARENT={args.parent_number}")
@@ -170,10 +174,19 @@ def main():
         num = f"{args.parent_number}.{i+1}"
         x_img = obj['x'] + x0 + 1.0  # back to 1-indexed
         y_img = obj['y'] + y0 + 1.0
-        a_img = obj['a']
-        b_img = obj['b']
-        theta_deg = np.degrees(obj['theta'])
-        iso_r = max(a_img, 2.0)
+
+        if i == brightest_idx:
+            # Brightest sub-source: keep parent's original ellipse shape
+            a_img = args.a
+            b_img = args.b
+            theta_deg = args.theta
+            iso_r = max(a_img, 2.0)
+        else:
+            a_img = obj['a']
+            b_img = obj['b']
+            theta_deg = np.degrees(obj['theta'])
+            iso_r = max(a_img, 2.0)
+
         flux = obj['flux']
         if flux > 0:
             mag = -2.5 * np.log10(flux) + mag_zp

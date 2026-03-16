@@ -336,7 +336,7 @@ proc CreateCatalogPanel {} {
 	-menu $f.menubar.separate.m -style CatMenu.TMenubutton
     menu $f.menubar.separate.m -tearoff 0
     $f.menubar.separate.m add command \
-	-label "Separate Selected (Ctrl+S)" \
+	-label "Separate Selected (Click + S)" \
 	-command CatalogPanelSeparateSelected
     $f.menubar.separate.m add separator
     $f.menubar.separate.m add command \
@@ -5759,12 +5759,13 @@ proc CatalogPanelAddObjectGetScript {} {
     return $script
 }
 
-proc CatalogPanelAddObjectAtCursor {which cx cy} {
+proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
     global catpanel
     global current
 
     # Check if add objects mode is enabled
     if {![info exists catpanel(add_objects_mode)] || !$catpanel(add_objects_mode)} {
+	set catpanel(status) "Enable Add Objects in Display menu first"
 	return
     }
 
@@ -5774,18 +5775,6 @@ proc CatalogPanelAddObjectAtCursor {which cx cy} {
 	set catpanel(status) "Extract sources first, then enable Add Objects"
 	return
     }
-
-    # Check no marker at this position (we only add at empty spots)
-    set marker_id [$which get marker catalog id $cx $cy]
-    if {$marker_id != 0} {
-	set catpanel(status) "Source already exists here — click empty area"
-	return
-    }
-
-    # Convert canvas coords to image coords
-    set imgcoord [$which get coordinates $cx $cy image]
-    set imgx [lindex $imgcoord 0]
-    set imgy [lindex $imgcoord 1]
 
     # Get FITS filename
     set fn [$which get fits file name full]
