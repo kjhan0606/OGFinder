@@ -48,6 +48,8 @@ def main():
                         help="Parent source NUMBER for sub-source numbering")
     parser.add_argument("--back-size", type=int, default=32,
                         help="Background mesh size")
+    parser.add_argument("--iso-radius", type=float, default=0.0,
+                        help="Parent ISO_RADIUS (0 = use A_IMAGE)")
     args = parser.parse_args()
 
     if sep is None:
@@ -180,7 +182,7 @@ def main():
             a_img = args.a
             b_img = args.b
             theta_deg = args.theta
-            iso_r = max(a_img, 2.0)
+            iso_r = args.iso_radius if args.iso_radius > 0 else max(a_img, 2.0)
         else:
             a_img = obj['a']
             b_img = obj['b']

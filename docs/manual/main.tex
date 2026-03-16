@@ -1050,18 +1050,21 @@ Settings & Adjustable extraction parameters (threshold, deblending, photometry, 
 
 \begin{codebox}
 \begin{lstlisting}[numbers=none]
-[SExtractor] [Display] [AI Merge] [Galaxy Model] [Reconstruction] [Analysis]
+[SExtractor] [Display] [AI Merge] [Galaxy Model]
+[Star(PSF)] [Deconvolution] [Separate] [Analysis]
 \end{lstlisting}
 \end{codebox}
 
-The six menu buttons provide access to all features:
+The eight menu buttons provide access to all features:
 
 \begin{itemize}
 \item \textbf{SExtractor} --- Extract, Dual-Image Extract, Settings, Trim, Save/Load/Export Catalog, Export Regions, Export FITS Table, Clear
-\item \textbf{Display} --- Mark All, Clear Markers, Show Visible Only
+\item \textbf{Display} --- Mark All, Clear Markers, Show Visible Only, Add Objects (Click + A), Delete Selected (Click + D)
 \item \textbf{AI Merge} --- Run AI Merge (MLP-based source deblending)
 \item \textbf{Galaxy Model} --- AI Morphology Classification, Elliptical/Spiral Model Fitting
-\item \textbf{Reconstruction} --- Star Finding, PSF Generation, Deconvolution (7 algorithms), Settings
+\item \textbf{Star(PSF)} --- Star Finding (combined/class\_star/fwhm), Build PSF (median/mean/epsf/gaussian/moffat), View/Save/Load PSF, Settings
+\item \textbf{Deconvolution} --- Deconvolve (rl/rl\_accelerated/rl\_tv/wiener/tikhonov/clean/mem), Quick Deconvolve, Settings
+\item \textbf{Separate} --- Separate selected source into sub-components, Settings, Save/Load
 \item \textbf{Analysis} --- Non-Parametric Morphology, S\'ersic Fitting, PSF Photometry, Multi-Band Photometry, Crowded Field Photometry, Cross-Match (VizieR), Segmentation Map, Completeness Simulation
 \end{itemize}
 
@@ -1280,6 +1283,172 @@ Conv Filter & default & Detection convolution filter (default, gauss5x5, mexhat,
 Settings are saved to / loaded from \texttt{\textasciitilde/.ds9/sextract.prf}. The \textbf{Defaults} button restores all parameters to their default values.
 
 
+\section{Add Objects (Click + A)}
+
+The Add Objects feature enables manual detection and addition of individual sources that were missed by the automatic extraction. This is useful for faint sources near the detection threshold or sources in complex environments (e.g., near bright stars, in galaxy halos, or at the edge of the field).
+
+\subsection{Activation}
+
+Enable via \textbf{Display $\to$ Add Objects (Click + A)}. This toggles a checkbutton in the Display menu; when enabled, the \texttt{a} key triggers source addition.
+
+\subsection{Workflow}
+
+\begin{enumerate}[leftmargin=2em]
+  \item Enable ``Add Objects'' in the Display menu.
+  \item Click on an empty area of the image where a source should be detected.
+  \item Press \texttt{a}. The system:
+  \begin{enumerate}
+    \item Saves the FITS image to a temporary file.
+    \item Runs \texttt{ds9\_add\_source.py} with the saved image coordinates.
+    \item Extracts a $25 \times 25$ pixel cutout centered on the click position.
+    \item Runs SEP detection with aggressive parameters (threshold $0.8\sigma$, min area 3~px).
+    \item Finds the nearest detected source within 10\,px of the click position.
+    \item Appends the source to the catalog and regenerates markers.
+  \end{enumerate}
+  \item The status bar shows the new source's NUMBER and position.
+\end{enumerate}
+
+\subsection{Detection Parameters}
+
+Add Objects uses more aggressive detection parameters than the standard extraction to maximize sensitivity near the click position:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Parameter} & \textbf{Standard} & \textbf{Add Objects} \\
+\midrule
+Detect threshold & $1.5\sigma$ & $0.8\sigma$ \\
+Minimum area & 5\,px & 3\,px \\
+Deblend nthresh & 32 & 64 \\
+Deblend mincont & 0.005 & 0.0001 \\
+Cutout radius & full image & 25\,px \\
+Max distance & --- & 10\,px \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{remark}[Position Accuracy]
+The click position is recorded in image coordinates (not canvas coordinates) at the moment of the click. This ensures correct positioning even after panning or zooming the image between the click and the key press.
+\end{remark}
+
+\textbf{Script}: \texttt{ds9\_add\_source.py}
+
+
+\section{Delete Objects (Click + D)}
+
+The Delete Objects feature removes a selected source from both the catalog table and the image markers.
+
+\subsection{Workflow}
+
+\begin{enumerate}[leftmargin=2em]
+  \item Click on a source's ellipse marker to select it (or click a row in the catalog table).
+  \item Press \texttt{d}. The system:
+  \begin{enumerate}
+    \item Identifies the selected source by its NUMBER.
+    \item Removes the corresponding row from the internal catalog data (\texttt{catpanel(alldata)}).
+    \item Deletes the source's marker from the image.
+    \item Reloads the catalog table and regenerates all markers.
+  \end{enumerate}
+  \item The status bar shows ``Deleted source N''.
+\end{enumerate}
+
+Also available via \textbf{Display $\to$ Delete Selected (Click + D)}.
+
+\begin{important}
+Deletion is irreversible within the current session. Save the catalog before deleting sources if you need to preserve the original data.
+\end{important}
+
+
+\section{Source Separation (Click + S)}
+
+The Separate feature deblends a selected source into multiple sub-components using SEP with aggressive deblending parameters. This is essential for resolving blended sources in crowded fields or merging galaxies.
+
+\subsection{Workflow}
+
+\begin{enumerate}[leftmargin=2em]
+  \item Click on a source's ellipse marker to select it.
+  \item Press \texttt{s}. The system:
+  \begin{enumerate}
+    \item Reads the selected source's position, shape (A\_IMAGE, B\_IMAGE, THETA\_IMAGE), and ISO\_RADIUS.
+    \item Saves the FITS image temporarily.
+    \item Runs \texttt{ds9\_separate.py} with the source parameters.
+    \item Extracts a cutout of radius $3 \times \max(a, b)$ around the source.
+    \item Runs SEP with aggressive deblending (nthresh=64, mincont=0.0001).
+    \item Filters sub-sources to keep only those within the parent's ellipse region.
+    \item If $\geq 2$ sub-components are found, replaces the parent row with sub-source rows.
+  \end{enumerate}
+  \item Sub-sources are numbered as \texttt{parent.1}, \texttt{parent.2}, etc.
+\end{enumerate}
+
+\subsection{Brightest Sub-Source Shape Preservation}
+
+The brightest sub-source (by flux) retains the parent's original ellipse parameters:
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{A\_IMAGE}, \texttt{B\_IMAGE}, \texttt{THETA\_IMAGE} --- copied from parent
+  \item \texttt{ISO\_RADIUS} --- copied from parent (ensures correct marker rendering)
+\end{itemize}
+
+This preserves the morphological characterization of the dominant component while splitting off fainter companions with independently measured shapes.
+
+\subsection{Separate Settings}
+
+Accessible via \textbf{Separate $\to$ Settings}. Parameters are saved to / loaded from \texttt{\textasciitilde/.ds9/sextract.prf}:
+
+\begin{center}
+\begin{tabular}{lcp{7cm}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+Deblend NThresh & 64 & Number of deblending sub-thresholds \\
+Deblend MinCont & 0.0001 & Minimum contrast for deblending \\
+Detect Threshold & 0.8 & Detection threshold ($\sigma$) \\
+Detect Min Area & 3 & Minimum connected pixels \\
+Radius Factor & 3.0 & Cutout radius = factor $\times \max(a, b)$ \\
+Back Size & 32 & Background mesh size (pixels) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Script}: \texttt{ds9\_separate.py}
+
+
+\section{PSF Star Management}
+
+PSF stars are marked with \textbf{purple dashed circle markers} in the image. They can be managed through the Star(PSF) menu.
+
+\subsection{Star Finding Methods}
+
+\begin{center}
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{Method} & \textbf{Description} \\
+\midrule
+Combined & Multi-criteria selection using CLASS\_STAR, FWHM, ellipticity, and signal-to-noise ratio (recommended) \\
+CLASS\_STAR & Select by star/galaxy classifier output ($\text{CLASS\_STAR} > \text{threshold}$) \\
+FWHM & Select by FWHM consistency with seeing \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{PSF Construction Methods}
+
+\begin{center}
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{Method} & \textbf{Description} \\
+\midrule
+Median & Pixel-wise median stack of star cutouts (robust to outliers) \\
+Mean & Pixel-wise mean stack (higher S/N) \\
+ePSF & Effective PSF via iterative sub-pixel centering and stacking \\
+Gaussian & Analytical 2D Gaussian fit to the stacked profile \\
+Moffat & Analytical 2D Moffat fit (better for wide wings) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Stars can be manually removed via \textbf{Ctrl+Click} on a purple star marker. The PSF is saved as a FITS file (\texttt{\textasciitilde/.ds9/psf\_current.fits}).
+
+
 \section{Marker Tag Reference}
 
 \begin{center}
@@ -1297,25 +1466,141 @@ Settings are saved to / loaded from \texttt{\textasciitilde/.ds9/sextract.prf}. 
 \texttt{sextract\_merge} & All red merge-candidate markers \\
 \midrule
 \texttt{sextract\_merge.\textit{N}} & Individual merge-candidate marker \\
+\midrule
+\texttt{ai\_merge} & AI Merge group visualization markers \\
+\midrule
+\texttt{psf\_star} & Purple circle markers for identified PSF stars \\
 \bottomrule
 \end{longtable}
 \end{center}
 
 
-\section{Key Bindings}
+\section{Keyboard Shortcuts and Mouse Interactions}
+\label{sec:keybindings}
+
+All interactive features use a ``click + key'' paradigm: click on the image to select a position or source, then press a key to execute the action.
+
+\subsection{Mouse Actions}
 
 \begin{center}
-\begin{tabular}{ll}
+\begin{longtable}{L{4.5cm} L{8.5cm}}
 \toprule
-\textbf{Key} & \textbf{Action} \\
+\textbf{Action} & \textbf{Effect} \\
 \midrule
-Click on marker & Navigate catalog to source, show selection markers \\
-Ctrl+Click on marker & Toggle merge candidate (red ellipse) \\
-Ctrl+M & Merge selected sources \\
-Escape & Cancel merge selection \\
-Click table header & Sort by column (toggle ascending/descending) \\
-Click table row & Pan image to source position \\
+\endhead
+Click on marker & Navigate catalog to the corresponding source, show cyan cross + green ellipse selection markers, pan image to source position \\
+\midrule
+Click on empty area & Save image coordinates at click position (for Add/Delete/Separate operations) \\
+\midrule
+Ctrl+Click on marker & Toggle merge candidate selection (red thick ellipse overlay). Click again to deselect. \\
+\midrule
+Ctrl+Click on PSF star & Remove the PSF star marker (purple circle) and deselect the star from PSF building \\
+\midrule
+Click table header & Sort catalog by that column (toggle ascending/descending) \\
+\midrule
+Click table row & Pan image to the source position, show selection markers \\
 \bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Single-Key Shortcuts (after click)}
+
+These shortcuts operate on the position or source selected by the most recent mouse click. No modifier key is required.
+
+\begin{center}
+\begin{longtable}{C{1.5cm} L{3.5cm} L{7.5cm}}
+\toprule
+\textbf{Key} & \textbf{Action} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{a} & Add Object & Detect and add a new source at the last-clicked position. Requires ``Add Objects'' to be enabled in the Display menu. Uses SEP to find the nearest source within 10\,px of the click position and appends it to the catalog. \\
+\midrule
+\texttt{s} & Separate Source & Deblend the currently selected source into sub-components using aggressive SEP deblending. The brightest sub-source retains the parent's original ellipse shape. Sub-sources are numbered as \texttt{parent.1}, \texttt{parent.2}, etc. \\
+\midrule
+\texttt{d} & Delete Source & Remove the currently selected source from both the catalog table and the image markers. Irreversible within the current session (use Save before deleting). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\begin{remark}[Click + Key Workflow]
+The click + key paradigm was chosen over Ctrl+Key combinations because:
+\begin{itemize}[leftmargin=2em]
+  \item Ctrl+S and Ctrl+A are reserved by the system (File Save, Select All)
+  \item The two-step interaction (click, then key) provides a confirmation step that reduces accidental operations
+  \item It is ergonomically more comfortable for repeated use
+\end{itemize}
+\end{remark}
+
+\subsection{Modifier-Key Shortcuts}
+
+\begin{center}
+\begin{longtable}{C{2.0cm} L{3.5cm} L{7.0cm}}
+\toprule
+\textbf{Key} & \textbf{Action} & \textbf{Description} \\
+\midrule
+\endhead
+Ctrl+M & Merge Sources & Merge all selected merge candidates (red ellipses) into a single source. Requires $\geq 2$ candidates selected via Ctrl+Click. Flux-weighted centroid, summed flux, recomputed magnitude. \\
+\midrule
+Escape & Cancel / Done & Cancel merge selection (clear red markers), or exit AI Merge navigation mode. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{AI Merge Navigation Keys}
+
+These keys are active only during AI Merge review mode (after running AI Merge from the menu).
+
+\begin{center}
+\begin{longtable}{C{2.5cm} L{3.5cm} L{6.5cm}}
+\toprule
+\textbf{Key} & \textbf{Action} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{n} or Right & Next Group & Navigate to the next merge candidate group \\
+\midrule
+\texttt{p} or Left & Previous Group & Navigate to the previous merge candidate group \\
+\midrule
+\texttt{a} & Accept Group & Accept the current merge candidate (merge the group) \\
+\midrule
+\texttt{r} & Reject Group & Reject the current merge candidate (keep sources separate) \\
+\midrule
+Escape & Done & Exit AI Merge review mode \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Quick Reference Card}
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\multicolumn{2}{|c|}{\textbf{DS9 Source Extractor --- Quick Reference}} \\
+\hline
+\hline
+\multicolumn{2}{|c|}{\textit{Source Editing}} \\
+\hline
+Click + \texttt{a} & Add source at click position \\
+Click + \texttt{s} & Separate (deblend) selected source \\
+Click + \texttt{d} & Delete selected source \\
+\hline
+\multicolumn{2}{|c|}{\textit{Source Merging}} \\
+\hline
+Ctrl+Click & Toggle merge candidate \\
+Ctrl+M & Execute merge \\
+Escape & Cancel merge \\
+\hline
+\multicolumn{2}{|c|}{\textit{PSF Stars}} \\
+\hline
+Ctrl+Click on star & Remove PSF star \\
+\hline
+\multicolumn{2}{|c|}{\textit{AI Merge Review}} \\
+\hline
+n / Right & Next group \\
+p / Left & Previous group \\
+a & Accept merge \\
+r & Reject merge \\
+Escape & Exit review \\
+\hline
 \end{tabular}
 \end{center}
 
@@ -1798,6 +2083,220 @@ After building for any platform, verify the binary works:
 \end{codebox}
 
 Expected output: a tab-separated header line followed by data rows. If library errors occur, check the library path configuration for your platform.
+
+
+%======================================================
+\chapter{Planned Features and Science-Driven Extensions}
+\label{ch:future}
+%======================================================
+
+This chapter outlines features motivated by upcoming survey science requirements, particularly the Vera C.\ Rubin Observatory Legacy Survey of Space and Time (LSST) and low surface brightness (LSB) science such as Intra-Cluster Light (ICL) detection.
+
+\section{LSST / Large-Scale Survey Features}
+
+The LSST will produce $\sim$20\,TB of imaging data per night across six filters ($ugrizy$), resulting in $\sim$60\,PB over its 10-year survey. Processing and inspecting such data volumes requires features beyond single-image analysis.
+
+\subsection{Batch Processing Pipeline}
+
+Process multiple FITS files in sequence or parallel from the command line, with per-file output catalogs:
+
+\begin{codebox}[Batch mode]
+\begin{lstlisting}[style=bash,numbers=none]
+# Process all FITS files with 8 parallel workers
+python3 ds9_morphometry.py --batch field*.fits \
+    --catalog cat.tsv --n-workers 8 --output-dir results/
+
+# Future MPI extension (no code changes needed):
+mpirun -np 16 python3 ds9_morphometry.py --batch *.fits \
+    --output-dir results/
+\end{lstlisting}
+\end{codebox}
+
+\textbf{Status}: Designed (see \texttt{parallel/} package plan). Adds \texttt{--n-workers} and \texttt{--batch} arguments to all CLI scripts.
+
+\subsection{Multi-Extension FITS (MEF) Support}
+
+LSST CCDs produce Multi-Extension FITS files with one extension per amplifier or detector. Features needed:
+\begin{itemize}[leftmargin=2em]
+  \item Auto-detect and iterate over all image extensions
+  \item Per-extension background subtraction and source extraction
+  \item Unified catalog with extension ID column
+  \item Mosaic assembly for visualization
+\end{itemize}
+
+\subsection{Tile/Tract-Based Catalog Management}
+
+LSST data products are organized as sky tiles (tracts/patches). Features needed:
+\begin{itemize}[leftmargin=2em]
+  \item Load catalogs from Butler data repositories or Parquet files
+  \item Spatial indexing (HEALPix, HTM) for efficient viewport queries
+  \item Cross-tract deduplication within overlap regions
+  \item Catalog streaming --- load only sources within the current viewport for catalogs with $>10^6$ sources
+\end{itemize}
+
+\subsection{Difference Imaging Transient Detection}
+
+LSST alert production relies on image differencing. Features needed:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Template subtraction}: Subtract a template (coadd) image from a visit image using kernel matching (e.g., Alard \& Lupton 1998, ZOGY)
+  \item \textbf{Dipole detection}: Detect positive/negative dipole pairs from astrometric misalignment or moving objects
+  \item \textbf{Transient classification}: Real/bogus classification of difference-image detections using a pre-trained CNN
+  \item \textbf{Light curve viewer}: Plot photometric history of a selected transient across epochs
+\end{itemize}
+
+\subsection{Forced Photometry}
+
+Measure flux at fixed positions across multiple epochs or bands, even when the source is below the detection threshold:
+\begin{itemize}[leftmargin=2em]
+  \item Input: reference catalog positions + per-epoch FITS images
+  \item Output: per-epoch flux measurements with uncertainties
+  \item Essential for faint variable sources and upper limit estimation
+\end{itemize}
+
+\subsection{Quality Assurance Dashboard}
+
+For survey-scale data, visualize data quality across fields:
+\begin{itemize}[leftmargin=2em]
+  \item Seeing FWHM, sky background, and zero-point maps across the focal plane
+  \item Source count density and completeness maps
+  \item Photometric residual plots (catalog $-$ reference)
+  \item Astrometric residual quiver plots
+\end{itemize}
+
+
+\section{Intra-Cluster Light (ICL) Detection}
+
+ICL is the diffuse stellar component in galaxy clusters, typically at surface brightness levels of $\mu_V \gtrsim 26$\,mag/arcsec$^2$. Detecting and characterizing ICL requires specialized techniques beyond standard source extraction.
+
+\subsection{Low Surface Brightness (LSB) Mode}
+
+A dedicated extraction mode optimized for extended, faint emission:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Large-scale background model}: Use back\_size $\gg 256$\,px or 2D polynomial/spline fit to avoid subtracting the ICL signal as ``background''
+  \item \textbf{Multi-scale detection}: Wavelet-based detection (e.g., \`a trous algorithm) to separate ICL from compact sources and background fluctuations
+  \item \textbf{Aggressive masking}: Mask all detected compact sources (stars, galaxies) and their extended halos before measuring the diffuse component
+  \item \textbf{Surface brightness profiles}: Radial SB profile centered on the BCG (brightest cluster galaxy) with azimuthal averaging and sector-based analysis
+\end{itemize}
+
+\subsection{ICL-Specific Measurements}
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9.0cm}}
+\toprule
+\textbf{Measurement} & \textbf{Description} \\
+\midrule
+\endhead
+ICL fraction & $f_\mathrm{ICL} = L_\mathrm{ICL} / (L_\mathrm{ICL} + L_\mathrm{galaxies})$ within a defined radius (e.g., $R_{500}$) \\
+\midrule
+SB profile & Azimuthally averaged surface brightness profile $\mu(r)$ from the BCG center, extending to $r \sim 500$\,kpc \\
+\midrule
+Color gradient & ICL color profile across multiple bands, constraining the stellar population age and metallicity \\
+\midrule
+Isophotal radius & Radius at which the SB profile reaches specified isophotes (e.g., $\mu_V = 26, 27, 28$\,mag/arcsec$^2$) \\
+\midrule
+Tidal features & Detection and characterization of tidal streams, shells, and plumes associated with the ICL \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Source Masking for Diffuse Light}
+
+Before measuring ICL, compact sources must be aggressively masked:
+\begin{enumerate}[leftmargin=2em]
+  \item Run standard source extraction to build the segmentation map.
+  \item Expand each segment by a factor of 2--3$\times$ in radius to mask extended wings.
+  \item Bright stars: mask with magnitude-dependent circular masks (from a star catalog or saturation-based).
+  \item Fill masked regions via 2D interpolation (or median of surrounding pixels) for smooth background estimation.
+  \item Optionally iterate: re-detect LSB features in the masked image, update the mask, and repeat.
+\end{enumerate}
+
+\subsection{Background Modeling Strategies for ICL}
+
+Standard SExtractor-style mesh-based backgrounds will subtract ICL signal. Alternative approaches:
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9.0cm}}
+\toprule
+\textbf{Method} & \textbf{Description} \\
+\midrule
+\endhead
+Global polynomial & Fit a low-order 2D polynomial to masked-source image; residual contains ICL \\
+\midrule
+Iterative clipping & Iteratively estimate background using $\sigma$-clipped median in large ($\sim 500$\,px) cells, excluding source regions \\
+\midrule
+Ring median & For each radial bin from the cluster center, compute the median of unmasked pixels as the local background \\
+\midrule
+DBSCAN clustering & Use unsupervised clustering on pixel coordinates and intensities to separate ICL from sky background \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{Additional Feature Ideas}
+
+\subsection{Photometric Redshift Estimation}
+
+Estimate photometric redshifts from multi-band photometry using template fitting or machine learning:
+\begin{itemize}[leftmargin=2em]
+  \item Template fitting: fit SED templates (e.g., from LePhare or EAZY) to multi-band magnitudes
+  \item ML approach: train a neural network on spectroscopic redshift calibration samples
+  \item Output columns: \texttt{ZPHOT\_BEST}, \texttt{ZPHOT\_ERR}, \texttt{ZPHOT\_PDF} (probability distribution)
+  \item Critical for LSST cosmology: weak lensing, BAO, cluster mass calibration
+\end{itemize}
+
+\subsection{Weak Lensing Shape Measurement}
+
+Measure galaxy shapes for weak gravitational lensing analysis:
+\begin{itemize}[leftmargin=2em]
+  \item PSF deconvolution of galaxy shapes using the built-in PSF model
+  \item Ellipticity components $(e_1, e_2)$ and shear responsivity
+  \item Model fitting: Gaussian or S\'ersic convolved with PSF
+  \item PSF interpolation across the field of view
+  \item Essential for LSST dark energy science
+\end{itemize}
+
+\subsection{Spectral Energy Distribution (SED) Viewer}
+
+Interactive SED plotting from multi-band photometry:
+\begin{itemize}[leftmargin=2em]
+  \item Click a source to display its SED (flux vs.\ wavelength) in a popup window
+  \item Overlay best-fit template from photometric redshift fitting
+  \item Color-coded data points per filter
+  \item Integrated with Multi-Band Photometry results
+\end{itemize}
+
+\subsection{Catalog Annotation and Flagging}
+
+Manual annotation tools for visual inspection workflows:
+\begin{itemize}[leftmargin=2em]
+  \item Add custom text notes to individual sources
+  \item Flag sources as ``artifact'', ``interesting'', ``needs review''
+  \item Export flagged source lists for follow-up observation planning
+  \item Useful for citizen science and expert review of LSST alerts
+\end{itemize}
+
+\subsection{Cluster Finder}
+
+Automated galaxy cluster detection algorithms:
+\begin{itemize}[leftmargin=2em]
+  \item Red-sequence cluster finder (RedMaPPer-style) using multi-band colors
+  \item Friends-of-friends clustering in projected space
+  \item Voronoi tessellation density mapping
+  \item Richness estimation and membership probability
+\end{itemize}
+
+\subsection{Parallel Processing}
+
+Multi-core parallelization using \texttt{multiprocessing.shared\_memory} for CPU-intensive analyses:
+\begin{itemize}[leftmargin=2em]
+  \item Source-level parallelism for morphometry, S\'ersic fitting, PSF photometry
+  \item Group-level parallelism for crowded field photometry
+  \item Band-level parallelism for multi-band photometry
+  \item Shared memory arrays avoid data copying overhead
+  \item \texttt{--n-workers} CLI argument: 0=auto (cpu$-$1), 1=sequential, N=fixed
+\end{itemize}
+
+\textbf{Status}: Designed (see \texttt{parallel/} package plan).
 
 
 %------------------------------------------------------

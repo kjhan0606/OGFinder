@@ -24,15 +24,17 @@ def main():
     parser.add_argument("fits", help="Input FITS file")
     parser.add_argument("--x", type=float, required=True, help="X position (1-indexed)")
     parser.add_argument("--y", type=float, required=True, help="Y position (1-indexed)")
-    parser.add_argument("--radius", type=float, default=50.0,
+    parser.add_argument("--radius", type=float, default=25.0,
                         help="Cutout radius in pixels")
-    parser.add_argument("--detect-thresh", type=float, default=1.0,
+    parser.add_argument("--max-dist", type=float, default=10.0,
+                        help="Max distance from click to detected center (pixels)")
+    parser.add_argument("--detect-thresh", type=float, default=0.8,
                         help="Detection threshold (sigma)")
-    parser.add_argument("--detect-minarea", type=int, default=5,
+    parser.add_argument("--detect-minarea", type=int, default=3,
                         help="Minimum detection area (pixels)")
-    parser.add_argument("--deblend-nthresh", type=int, default=32,
+    parser.add_argument("--deblend-nthresh", type=int, default=64,
                         help="Deblending sub-thresholds")
-    parser.add_argument("--deblend-mincont", type=float, default=0.005,
+    parser.add_argument("--deblend-mincont", type=float, default=0.0001,
                         help="Deblending min contrast")
     parser.add_argument("--back-size", type=int, default=32,
                         help="Background mesh size")
@@ -123,9 +125,10 @@ def main():
     dists = np.sqrt((objects['x'] - target_cx)**2 + (objects['y'] - target_cy)**2)
     best_idx = np.argmin(dists)
 
-    # Reject if too far (> radius)
-    if dists[best_idx] > rad:
-        print("#ADD_SOURCE\tFOUND=0\tMESSAGE=No source near this position")
+    # Reject if too far from click position
+    if dists[best_idx] > args.max_dist:
+        print("#ADD_SOURCE\tFOUND=0\tMESSAGE=No source within "
+              f"{args.max_dist:.0f}px of click position")
         sys.exit(0)
 
     obj = objects[best_idx]

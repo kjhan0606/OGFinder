@@ -1497,6 +1497,10 @@ proc KeyFrame {which K A xx yy} {
 		    # Separate selected source into sub-components
 		    CatalogPanelSeparateSelected
 		}
+		d {
+		    # Delete selected source from catalog
+		    CatalogPanelDeleteSelected
+		}
 
 		c {DisplayCoordDialog $which $xx $yy}
 

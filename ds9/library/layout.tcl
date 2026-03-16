@@ -223,6 +223,8 @@ proc CreateCatalogPanel {} {
     $f.menubar.display.m add separator
     $f.menubar.display.m add checkbutton -label "Add Objects (Click + A)" \
 	-variable catpanel(add_objects_mode)
+    $f.menubar.display.m add command -label "Delete Selected (Click + D)" \
+	-command CatalogPanelDeleteSelected
 
     # AI Merge menu
     ttk::menubutton $f.menubar.aimerge -text "AI Merge" \
@@ -350,6 +352,51 @@ proc CreateCatalogPanel {} {
 	-label "Load Catalog..." \
 	-command CatalogPanelSeparateLoad
 
+    # ICL menu
+    ttk::menubutton $f.menubar.icl -text "ICL" \
+	-menu $f.menubar.icl.m -style CatMenu.TMenubutton
+    menu $f.menubar.icl.m -tearoff 0
+    $f.menubar.icl.m add command \
+	-label "1. Source Masking" \
+	-command CatalogPanelICLMask
+    $f.menubar.icl.m add command \
+	-label "   View Mask" \
+	-command CatalogPanelICLViewMask
+    $f.menubar.icl.m add separator
+    menu $f.menubar.icl.m.bkg -tearoff 0
+    $f.menubar.icl.m add cascade -label "2. Background Model" \
+	-menu $f.menubar.icl.m.bkg
+    $f.menubar.icl.m.bkg add command \
+	-label "Polynomial Fit" \
+	-command [list CatalogPanelICLBackground polynomial]
+    $f.menubar.icl.m.bkg add command \
+	-label "Chebyshev Fit" \
+	-command [list CatalogPanelICLBackground chebyshev]
+    $f.menubar.icl.m.bkg add command \
+	-label "SEP Large Mesh" \
+	-command [list CatalogPanelICLBackground sep_large]
+    $f.menubar.icl.m add command \
+	-label "   View Background" \
+	-command CatalogPanelICLViewBkg
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
+	-label "3. Set BCG Center (Click)" \
+	-command CatalogPanelICLSetCenter
+    $f.menubar.icl.m add command \
+	-label "   Measure Profile" \
+	-command CatalogPanelICLProfile
+    $f.menubar.icl.m add command \
+	-label "   Sector Profile..." \
+	-command CatalogPanelICLSectorProfile
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
+	-label "4. ICL Measurements" \
+	-command CatalogPanelICLMeasure
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
+	-label "Settings..." \
+	-command CatalogPanelICLSettings
+
     # Analysis menu
     ttk::menubutton $f.menubar.analysis -text "Analysis" \
 	-menu $f.menubar.analysis.m -style CatMenu.TMenubutton
@@ -389,6 +436,7 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.starpsf -side left
     pack $f.menubar.deconv -side left
     pack $f.menubar.separate -side left
+    pack $f.menubar.icl -side left
     pack $f.menubar.analysis -side left
 
     # Search/Filter bar
@@ -513,6 +561,39 @@ proc CreateCatalogPanel {} {
     set catpanel(psf,param,mem-lambda) 0.1
     set catpanel(psf,param,mem-niter) 100
     CatalogPanelPSFParamLoad
+
+    # ICL state
+    set catpanel(icl,mask_file)    [file join [file normalize ~] .ds9 icl_mask.fits]
+    set catpanel(icl,masked_file)  [file join [file normalize ~] .ds9 icl_masked.fits]
+    set catpanel(icl,bkg_file)     [file join [file normalize ~] .ds9 icl_background.fits]
+    set catpanel(icl,bgsub_file)   [file join [file normalize ~] .ds9 icl_bgsub.fits]
+    set catpanel(icl,profile_file) [file join [file normalize ~] .ds9 icl_profile.tsv]
+    set catpanel(icl,has_mask)     0
+    set catpanel(icl,has_bkg)      0
+    set catpanel(icl,has_profile)  0
+    set catpanel(icl,center_x)     {}
+    set catpanel(icl,center_y)     {}
+    set catpanel(icl,param,expand-factor)          2.5
+    set catpanel(icl,param,bright-star-mag-limit)  18.0
+    set catpanel(icl,param,bright-star-radius-scale) 10.0
+    set catpanel(icl,param,interp-method)          linear
+    set catpanel(icl,param,detect-thresh)          1.5
+    set catpanel(icl,param,bkg-method)             polynomial
+    set catpanel(icl,param,bkg-order)              3
+    set catpanel(icl,param,bkg-sigma-clip)         3.0
+    set catpanel(icl,param,bkg-sep-mesh)           256
+    set catpanel(icl,param,rmin)                   5.0
+    set catpanel(icl,param,rmax)                   1000.0
+    set catpanel(icl,param,nsteps)                 80
+    set catpanel(icl,param,spacing)                log
+    set catpanel(icl,param,ellipticity)            0.0
+    set catpanel(icl,param,pa)                     0.0
+    set catpanel(icl,param,mag-zeropoint)          25.0
+    set catpanel(icl,param,pixel-scale)            0.06
+    set catpanel(icl,param,mu-threshold)           26.5
+    set catpanel(icl,param,mu-levels)              26.0,27.0,28.0
+    set catpanel(icl,param,measure-radius)         500.0
+    CatalogPanelICLParamLoad
 
     # Ctrl key tracking (Feature A/C)
     set ::catpanel_ctrl 0
@@ -5401,6 +5482,78 @@ proc CatalogPanelGetSelectedSource {} {
     return $result
 }
 
+proc CatalogPanelDeleteSelected {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog data"
+	return
+    }
+
+    # Get selected source info
+    set src [CatalogPanelGetSelectedSource]
+    if {$src eq {}} {
+	set catpanel(status) "No source selected — click a source first"
+	return
+    }
+
+    set src_num [dict get $src number]
+
+    # Remove the row from alldata
+    set lines [split $catpanel(alldata) \n]
+    set header [lindex $lines 0]
+    set headers [split $header "\t"]
+
+    # Find NUMBER column index
+    set num_idx -1
+    for {set i 0} {$i < [llength $headers]} {incr i} {
+	if {[string trim [lindex $headers $i]] eq "NUMBER"} {
+	    set num_idx $i
+	    break
+	}
+    }
+
+    set new_lines [list $header]
+    set deleted 0
+    foreach line [lrange $lines 1 end] {
+	if {$line eq {}} continue
+	set fields [split $line "\t"]
+
+	set this_num ""
+	if {$num_idx >= 0 && [llength $fields] > $num_idx} {
+	    set this_num [string trim [lindex $fields $num_idx]]
+	}
+
+	if {$this_num eq [string trim $src_num]} {
+	    set deleted 1
+	} else {
+	    lappend new_lines $line
+	}
+    }
+
+    if {!$deleted} {
+	set catpanel(status) "Source $src_num not found in catalog"
+	return
+    }
+
+    set catpanel(alldata) [join $new_lines \n]
+
+    # Delete the source marker
+    global current
+    if {$current(frame) ne {}} {
+	catch {$current(frame) marker catalog sextract_src.$src_num delete}
+	catch {$current(frame) marker catalog sextract_sel delete}
+    }
+
+    # Reload table and refresh markers
+    CatalogPanelLoadTSV $catpanel(alldata) "deleted"
+    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+	CatalogPanelCreateAllMarkers
+    }
+
+    set catpanel(status) "Deleted source $src_num"
+}
+
 proc CatalogPanelSeparateSelected {} {
     global catpanel
     global current
@@ -5435,6 +5588,7 @@ proc CatalogPanelSeparateSelected {} {
     set src_a [dict get $src a]
     set src_b [dict get $src b]
     set src_theta [dict get $src theta]
+    set src_ir [dict get $src iso_radius]
 
     set catpanel(status) "Separating source $src_num ..."
     update idletasks
@@ -5445,6 +5599,7 @@ proc CatalogPanelSeparateSelected {} {
     lappend paramargs "--a" $src_a
     lappend paramargs "--b" $src_b
     lappend paramargs "--theta" $src_theta
+    lappend paramargs "--iso-radius" $src_ir
     lappend paramargs "--parent-number" $src_num
     lappend paramargs "--deblend-nthresh" $catpanel(param,sep-deblend-nthresh)
     lappend paramargs "--deblend-mincont" $catpanel(param,sep-deblend-mincont)
@@ -6817,5 +6972,616 @@ proc CatalogPanelCompleteness {} {
     # Load completeness results as a new catalog view
     CatalogPanelLoadTSV $data "completeness"
     set catpanel(status) "Completeness simulation complete"
+}
+
+# ============================================================================
+# ICL (Intra-Cluster Light) Detection Pipeline
+# ============================================================================
+
+proc CatalogPanelICLParamLoad {} {
+    global catpanel
+
+    set preffile [file join [file normalize ~] .ds9 icl.prf]
+    if {![file exists $preffile]} return
+    if {[catch {set fd [open $preffile r]} err]} return
+    while {[gets $fd line] >= 0} {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set parts [split $line]
+	if {[llength $parts] >= 2} {
+	    set key [lindex $parts 0]
+	    set val [lindex $parts 1]
+	    if {[info exists catpanel(icl,param,$key)]} {
+		set catpanel(icl,param,$key) $val
+	    }
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelICLParamSave {} {
+    global catpanel
+
+    set prefdir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $prefdir]} {
+	file mkdir $prefdir
+    }
+    set preffile [file join $prefdir icl.prf]
+    if {[catch {set fd [open $preffile w]} err]} return
+    foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
+		   interp-method detect-thresh \
+		   bkg-method bkg-order bkg-sigma-clip bkg-sep-mesh \
+		   rmin rmax nsteps spacing ellipticity pa \
+		   mag-zeropoint pixel-scale \
+		   mu-threshold mu-levels measure-radius} {
+	puts $fd "$pname $catpanel(icl,param,$pname)"
+    }
+    close $fd
+}
+
+# --- 1. Source Masking ---
+
+proc CatalogPanelICLMask {} {
+    global catpanel current
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "ICL: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Creating source mask..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode mask \
+	--expand-factor $catpanel(icl,param,expand-factor) \
+	--bright-star-mag-limit $catpanel(icl,param,bright-star-mag-limit) \
+	--bright-star-radius-scale $catpanel(icl,param,bright-star-radius-scale) \
+	--interp-method $catpanel(icl,param,interp-method) \
+	--detect-thresh $catpanel(icl,param,detect-thresh) \
+	--mask-output $catpanel(icl,mask_file) \
+	--masked-output $catpanel(icl,masked_file)]
+
+    # Add catalog if available
+    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+	set catfile [CatalogPanelSaveTempCatalog icl]
+	if {$catfile ne {}} {
+	    lappend args --catalog $catfile
+	}
+    }
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL mask error: $err"
+	return
+    }
+
+    set catpanel(icl,has_mask) 1
+    set catpanel(status) "ICL: Source mask created"
+}
+
+proc CatalogPanelICLViewMask {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_mask) || ![file exists $catpanel(icl,masked_file)]} {
+	set catpanel(status) "ICL: No mask available — run Source Masking first"
+	return
+    }
+
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(icl,masked_file) {} {}} err]} {
+	set catpanel(status) "ICL: Error loading masked image: $err"
+	return
+    }
+    global scale
+    set scale(mode) zscale
+    ChangeScaleMode
+    set catpanel(status) "ICL: Masked image loaded in new frame"
+}
+
+# --- 2. Background Model ---
+
+proc CatalogPanelICLBackground {method} {
+    global catpanel
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "ICL: No FITS file loaded"
+	return
+    }
+
+    # Use masked image if available, otherwise raw
+    set input $fn
+    if {$catpanel(icl,has_mask) && [file exists $catpanel(icl,masked_file)]} {
+	set input $catpanel(icl,masked_file)
+    }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Fitting background ($method)..."
+    update idletasks
+
+    set args [list python3 $script $input --mode background \
+	--bkg-method $method \
+	--bkg-order $catpanel(icl,param,bkg-order) \
+	--bkg-sigma-clip $catpanel(icl,param,bkg-sigma-clip) \
+	--bkg-sep-mesh $catpanel(icl,param,bkg-sep-mesh) \
+	--bkg-output $catpanel(icl,bkg_file) \
+	--bgsub-output $catpanel(icl,bgsub_file)]
+
+    if {$catpanel(icl,has_mask) && [file exists $catpanel(icl,mask_file)]} {
+	lappend args --mask $catpanel(icl,mask_file)
+    }
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL background error: $err"
+	return
+    }
+
+    set catpanel(icl,has_bkg) 1
+    set catpanel(status) "ICL: Background model ($method) complete"
+}
+
+proc CatalogPanelICLViewBkg {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_bkg) || ![file exists $catpanel(icl,bgsub_file)]} {
+	set catpanel(status) "ICL: No background model — run Background Model first"
+	return
+    }
+
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(icl,bgsub_file) {} {}} err]} {
+	set catpanel(status) "ICL: Error loading background-subtracted image: $err"
+	return
+    }
+    global scale
+    set scale(mode) zscale
+    ChangeScaleMode
+    set catpanel(status) "ICL: Background-subtracted image loaded in new frame"
+}
+
+# --- 3. BCG Center + Profile ---
+
+proc CatalogPanelICLSetCenter {} {
+    global catpanel
+
+    # Use currently selected source as BCG center
+    if {![info exists catpanel(selected_row)] || $catpanel(selected_row) < 0} {
+	set catpanel(status) "ICL: Select a source (click a row) to set as BCG center"
+	return
+    }
+
+    set lines [split $catpanel(alldata) \n]
+    set headers [split [lindex $lines 0] "\t"]
+
+    # Find X_IMAGE, Y_IMAGE columns
+    set xcol -1
+    set ycol -1
+    for {set c 0} {$c < [llength $headers]} {incr c} {
+	set h [string trim [lindex $headers $c]]
+	if {$h eq "X_IMAGE"} { set xcol $c }
+	if {$h eq "Y_IMAGE"} { set ycol $c }
+    }
+    if {$xcol < 0 || $ycol < 0} {
+	set catpanel(status) "ICL: Cannot find X_IMAGE/Y_IMAGE columns"
+	return
+    }
+
+    set row_idx [expr {$catpanel(selected_row) + 1}]
+    set row_data [split [lindex $lines $row_idx] "\t"]
+    if {[llength $row_data] <= $xcol || [llength $row_data] <= $ycol} {
+	set catpanel(status) "ICL: Cannot read coordinates from selected row"
+	return
+    }
+
+    # Store as 0-indexed
+    set catpanel(icl,center_x) [expr {[lindex $row_data $xcol] - 1.0}]
+    set catpanel(icl,center_y) [expr {[lindex $row_data $ycol] - 1.0}]
+
+    set catpanel(status) "ICL: BCG center set to ([format %.1f [expr {$catpanel(icl,center_x)+1}]], [format %.1f [expr {$catpanel(icl,center_y)+1}]])"
+}
+
+proc CatalogPanelICLProfile {} {
+    global catpanel
+
+    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
+	set catpanel(status) "ICL: Set BCG center first"
+	return
+    }
+
+    # Use bgsub image if available, otherwise raw
+    set fn [CatalogPanelGetFITS]
+    if {$catpanel(icl,has_bkg) && [file exists $catpanel(icl,bgsub_file)]} {
+	set fn $catpanel(icl,bgsub_file)
+    }
+    if {$fn eq {}} {
+	set catpanel(status) "ICL: No image available"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Measuring SB profile..."
+    update idletasks
+
+    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+
+    set args [list python3 $script $fn --mode profile \
+	--center $center \
+	--rmin $catpanel(icl,param,rmin) \
+	--rmax $catpanel(icl,param,rmax) \
+	--nsteps $catpanel(icl,param,nsteps) \
+	--spacing $catpanel(icl,param,spacing) \
+	--ellipticity $catpanel(icl,param,ellipticity) \
+	--pa $catpanel(icl,param,pa) \
+	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
+	--pixel-scale $catpanel(icl,param,pixel-scale) \
+	--profile-output $catpanel(icl,profile_file)]
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL profile error: $err"
+	return
+    }
+
+    set catpanel(icl,has_profile) 1
+
+    # Display profile in catalog table
+    CatalogPanelLoadTSV $data "icl_profile"
+    set catpanel(status) "ICL: SB profile measured"
+}
+
+proc CatalogPanelICLSectorProfile {} {
+    global catpanel ed
+
+    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
+	set catpanel(status) "ICL: Set BCG center first"
+	return
+    }
+
+    set w .iclsector
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "ICL Sector Profile"
+    wm geometry $w 300x180
+
+    set ed(icl,sector-pa) 0.0
+    set ed(icl,sector-width) 90.0
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+    ttk::label $f.lpa -text "Sector PA (deg):"
+    ttk::entry $f.epa -textvariable ed(icl,sector-pa) -width 10
+    grid $f.lpa -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $f.epa -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $f.lw -text "Sector Width (deg):"
+    ttk::entry $f.ew -textvariable ed(icl,sector-width) -width 10
+    grid $f.lw -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $f.ew -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.run -text "Measure" -command [list CatalogPanelICLSectorProfileRun $w]
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.run -side right -padx 4
+}
+
+proc CatalogPanelICLSectorProfileRun {w} {
+    global catpanel ed
+
+    set fn [CatalogPanelGetFITS]
+    if {$catpanel(icl,has_bkg) && [file exists $catpanel(icl,bgsub_file)]} {
+	set fn $catpanel(icl,bgsub_file)
+    }
+    if {$fn eq {}} {
+	set catpanel(status) "ICL: No image available"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Measuring sector profile..."
+    update idletasks
+
+    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+
+    set args [list python3 $script $fn --mode profile \
+	--center $center \
+	--rmin $catpanel(icl,param,rmin) \
+	--rmax $catpanel(icl,param,rmax) \
+	--nsteps $catpanel(icl,param,nsteps) \
+	--spacing $catpanel(icl,param,spacing) \
+	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
+	--pixel-scale $catpanel(icl,param,pixel-scale) \
+	--sector-pa $ed(icl,sector-pa) \
+	--sector-width $ed(icl,sector-width) \
+	--profile-output $catpanel(icl,profile_file)]
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL sector profile error: $err"
+	return
+    }
+
+    destroy $w
+    set catpanel(icl,has_profile) 1
+    CatalogPanelLoadTSV $data "icl_sector_profile"
+    set catpanel(status) "ICL: Sector profile measured (PA=$ed(icl,sector-pa), width=$ed(icl,sector-width))"
+}
+
+# --- 4. ICL Measurements ---
+
+proc CatalogPanelICLMeasure {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
+	set catpanel(status) "ICL: No profile available — run Measure Profile first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} { set fn "dummy.fits" }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Computing ICL measurements..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode measure \
+	--profile-file $catpanel(icl,profile_file) \
+	--mu-threshold $catpanel(icl,param,mu-threshold) \
+	--mu-levels $catpanel(icl,param,mu-levels) \
+	--pixel-scale $catpanel(icl,param,pixel-scale)]
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL measure error: $err"
+	return
+    }
+
+    CatalogPanelLoadTSV $data "icl_measurements"
+    set catpanel(status) "ICL: Measurements complete"
+}
+
+# --- Settings Dialog ---
+
+proc CatalogPanelICLSettings {} {
+    global catpanel
+    global ed
+
+    set w .iclsettings
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "ICL Detection Settings"
+    wm geometry $w 420x520
+
+    # Copy current values
+    foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
+		   interp-method detect-thresh \
+		   bkg-order bkg-sigma-clip bkg-sep-mesh \
+		   rmin rmax nsteps spacing ellipticity pa \
+		   mag-zeropoint pixel-scale \
+		   mu-threshold mu-levels measure-radius} {
+	set ed(icl,$pname) $catpanel(icl,param,$pname)
+    }
+
+    ttk::notebook $w.nb
+    pack $w.nb -fill both -expand true -padx 8 -pady 8
+
+    # --- Tab 1: Masking ---
+    set t1 [ttk::frame $w.nb.mask]
+    $w.nb add $t1 -text "Masking"
+
+    set r 0
+    ttk::label $t1.lef -text "Expand factor:"
+    ttk::entry $t1.eef -textvariable ed(icl,expand-factor) -width 10
+    grid $t1.lef -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eef -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lml -text "Bright star mag limit:"
+    ttk::entry $t1.eml -textvariable ed(icl,bright-star-mag-limit) -width 10
+    grid $t1.lml -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eml -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lrs -text "Bright star radius scale:"
+    ttk::entry $t1.ers -textvariable ed(icl,bright-star-radius-scale) -width 10
+    grid $t1.lrs -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.ers -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lim -text "Interpolation method:"
+    ttk::combobox $t1.eim -textvariable ed(icl,interp-method) -width 10 \
+	-values {linear cubic nearest}
+    grid $t1.lim -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.eim -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.ldt -text "Detect threshold (sigma):"
+    ttk::entry $t1.edt -textvariable ed(icl,detect-thresh) -width 10
+    grid $t1.ldt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.edt -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 2: Background ---
+    set t2 [ttk::frame $w.nb.bkg]
+    $w.nb add $t2 -text "Background"
+
+    set r 0
+    ttk::label $t2.lbo -text "Polynomial order:"
+    ttk::entry $t2.ebo -textvariable ed(icl,bkg-order) -width 10
+    grid $t2.lbo -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ebo -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lsc -text "Sigma clip:"
+    ttk::entry $t2.esc -textvariable ed(icl,bkg-sigma-clip) -width 10
+    grid $t2.lsc -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.esc -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lsm -text "SEP mesh size:"
+    ttk::entry $t2.esm -textvariable ed(icl,bkg-sep-mesh) -width 10
+    grid $t2.lsm -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.esm -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 3: Profile ---
+    set t3 [ttk::frame $w.nb.prof]
+    $w.nb add $t3 -text "Profile"
+
+    set r 0
+    ttk::label $t3.lrn -text "R min (px):"
+    ttk::entry $t3.ern -textvariable ed(icl,rmin) -width 10
+    grid $t3.lrn -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.ern -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lrx -text "R max (px):"
+    ttk::entry $t3.erx -textvariable ed(icl,rmax) -width 10
+    grid $t3.lrx -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.erx -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lns -text "N steps:"
+    ttk::entry $t3.ens -textvariable ed(icl,nsteps) -width 10
+    grid $t3.lns -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.ens -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lsp -text "Spacing:"
+    ttk::combobox $t3.esp -textvariable ed(icl,spacing) -width 10 \
+	-values {log linear}
+    grid $t3.lsp -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.esp -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lel -text "Ellipticity:"
+    ttk::entry $t3.eel -textvariable ed(icl,ellipticity) -width 10
+    grid $t3.lel -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.eel -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lpa -text "PA (deg):"
+    ttk::entry $t3.epa -textvariable ed(icl,pa) -width 10
+    grid $t3.lpa -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.epa -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # --- Tab 4: Calibration & ICL ---
+    set t4 [ttk::frame $w.nb.cal]
+    $w.nb add $t4 -text "Calibration"
+
+    set r 0
+    ttk::label $t4.lzp -text "Mag zeropoint:"
+    ttk::entry $t4.ezp -textvariable ed(icl,mag-zeropoint) -width 10
+    grid $t4.lzp -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.ezp -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lps -text "Pixel scale (arcsec/px):"
+    ttk::entry $t4.eps -textvariable ed(icl,pixel-scale) -width 10
+    grid $t4.lps -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.eps -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lmt -text "ICL mu threshold (mag/arcsec2):"
+    ttk::entry $t4.emt -textvariable ed(icl,mu-threshold) -width 10
+    grid $t4.lmt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.emt -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lml -text "Isophotal mu levels:"
+    ttk::entry $t4.eml -textvariable ed(icl,mu-levels) -width 18
+    grid $t4.lml -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.eml -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lmr -text "Measure radius (px):"
+    ttk::entry $t4.emr -textvariable ed(icl,measure-radius) -width 10
+    grid $t4.lmr -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.emr -row $r -column 1 -sticky w -padx 4 -pady 4
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelICLSettingsApply $w]
+    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelICLSettingsDefaults
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.defaults -side right -padx 4
+    pack $bf.apply -side right -padx 4
+}
+
+proc CatalogPanelICLSettingsApply {w} {
+    global catpanel
+    global ed
+
+    foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
+		   interp-method detect-thresh \
+		   bkg-order bkg-sigma-clip bkg-sep-mesh \
+		   rmin rmax nsteps spacing ellipticity pa \
+		   mag-zeropoint pixel-scale \
+		   mu-threshold mu-levels measure-radius} {
+	set catpanel(icl,param,$pname) $ed(icl,$pname)
+    }
+    CatalogPanelICLParamSave
+    set catpanel(status) "ICL settings applied and saved"
+}
+
+proc CatalogPanelICLSettingsDefaults {} {
+    global ed
+
+    set ed(icl,expand-factor) 2.5
+    set ed(icl,bright-star-mag-limit) 18.0
+    set ed(icl,bright-star-radius-scale) 10.0
+    set ed(icl,interp-method) linear
+    set ed(icl,detect-thresh) 1.5
+    set ed(icl,bkg-order) 3
+    set ed(icl,bkg-sigma-clip) 3.0
+    set ed(icl,bkg-sep-mesh) 256
+    set ed(icl,rmin) 5.0
+    set ed(icl,rmax) 1000.0
+    set ed(icl,nsteps) 80
+    set ed(icl,spacing) log
+    set ed(icl,ellipticity) 0.0
+    set ed(icl,pa) 0.0
+    set ed(icl,mag-zeropoint) 25.0
+    set ed(icl,pixel-scale) 0.06
+    set ed(icl,mu-threshold) 26.5
+    set ed(icl,mu-levels) 26.0,27.0,28.0
+    set ed(icl,measure-radius) 500.0
 }
 
