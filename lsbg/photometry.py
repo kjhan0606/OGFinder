@@ -6,7 +6,10 @@ half-light radii for LSBG surface brightness estimation.
 
 import sys
 import numpy as np
-import sep
+try:
+    import sep
+except ImportError:
+    import sep_pjw as sep
 
 
 def curve_of_growth(data, x, y, max_radius=100, n_steps=20):

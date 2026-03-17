@@ -20,10 +20,9 @@ try:
     import sep
 except ImportError:
     try:
-        from astropy.io import fits as _fits
-        sep = None
+        import sep_pjw as sep
     except ImportError:
-        pass
+        sep = None
 
 
 def main():

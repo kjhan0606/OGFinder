@@ -21,7 +21,10 @@ def measure_petrosian(data, x, y, eta_thresh=0.2, rmax=100.0, nsteps=50):
     try:
         import sep
     except ImportError:
-        return np.nan
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            return np.nan
 
     if data.dtype != np.float64:
         data = data.astype(np.float64)

@@ -47,7 +47,10 @@ def crowded_photometry(data, psf, sources, cfg=None, n_workers=0):
     try:
         import sep
     except ImportError:
-        return []
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            return []
 
     from parallel import parallel_map, resolve_n_workers, SharedArray
 

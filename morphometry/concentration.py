@@ -21,7 +21,10 @@ def measure_concentration(data, x, y, a, b, theta, rmax=50.0):
     try:
         import sep
     except ImportError:
-        return np.nan
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            return np.nan
 
     if data.dtype != np.float64:
         data = data.astype(np.float64)

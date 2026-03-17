@@ -6,7 +6,10 @@ Reuses ICL masking functions for core operations.
 """
 
 import numpy as np
-import sep
+try:
+    import sep
+except ImportError:
+    import sep_pjw as sep
 from scipy.ndimage import binary_dilation
 
 from icl.masking import create_source_mask, mask_bright_stars, interpolate_masked

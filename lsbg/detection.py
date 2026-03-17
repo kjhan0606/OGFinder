@@ -6,7 +6,10 @@ to enhance diffuse, extended sources that standard SExtractor misses.
 
 import sys
 import numpy as np
-import sep
+try:
+    import sep
+except ImportError:
+    import sep_pjw as sep
 
 
 def build_convolution_kernel(name='gauss5x5'):

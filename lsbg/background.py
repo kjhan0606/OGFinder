@@ -9,7 +9,10 @@ Parallelized via tiled processing using SharedArray + parallel_map.
 
 import sys
 import numpy as np
-import sep
+try:
+    import sep
+except ImportError:
+    import sep_pjw as sep
 
 from icl.background import (fit_polynomial_background,
                              fit_chebyshev_background,

@@ -108,6 +108,13 @@ def process_file(fitsfile, catalog_file=None, max_sources=200,
     """Process a single FITS file and return TSV string."""
     try:
         import sep
+    except ImportError:
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            print("ERROR: sep is required", file=sys.stderr)
+            return ""
+    try:
         from astropy.io import fits
     except ImportError as e:
         print(f"ERROR: {e}", file=sys.stderr)

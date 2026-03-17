@@ -27,8 +27,11 @@ def main():
     try:
         import sep
     except ImportError:
-        print("ERROR: sep is required", file=sys.stderr)
-        sys.exit(1)
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            print("ERROR: sep is required", file=sys.stderr)
+            sys.exit(1)
 
     try:
         from astropy.io import fits

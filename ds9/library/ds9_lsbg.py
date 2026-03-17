@@ -269,7 +269,10 @@ def mode_photometry(args):
     config = build_config(args)
 
     # Re-detect on cleaned image to get objects array
-    import sep
+    try:
+        import sep
+    except ImportError:
+        import sep_pjw as sep
     cleaned_c = np.ascontiguousarray(cleaned, dtype=np.float64)
     try:
         bkg = sep.Background(cleaned_c)

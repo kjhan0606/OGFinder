@@ -194,7 +194,10 @@ def sep_large_mesh_background(data, mask, mesh_size=256):
     background : 2D array
         SEP background model.
     """
-    import sep
+    try:
+        import sep
+    except ImportError:
+        import sep_pjw as sep
 
     data_c = np.ascontiguousarray(data, dtype=np.float64)
     mask_byte = mask.astype(np.uint8) if mask is not None else None

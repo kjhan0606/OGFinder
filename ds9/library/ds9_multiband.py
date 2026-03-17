@@ -22,6 +22,18 @@ def _worker_band(args):
 
     try:
         import sep
+    except ImportError:
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            nobj = len(x_arr)
+            return bname, {
+                'flux_auto': np.full(nobj, np.nan),
+                'mag_auto': np.full(nobj, 99.0),
+                'flux_aper': np.full(nobj, np.nan),
+                'mag_aper': np.full(nobj, 99.0),
+            }
+    try:
         from astropy.io import fits
     except ImportError:
         nobj = len(x_arr)
@@ -90,8 +102,11 @@ def main():
     try:
         import sep
     except ImportError:
-        print("ERROR: sep is required", file=sys.stderr)
-        sys.exit(1)
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            print("ERROR: sep is required", file=sys.stderr)
+            sys.exit(1)
 
     try:
         from astropy.io import fits

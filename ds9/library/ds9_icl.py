@@ -131,7 +131,10 @@ def parse_catalog_tsv(path):
 
 def mode_mask(args):
     """Create source mask and interpolated image."""
-    import sep
+    try:
+        import sep
+    except ImportError:
+        import sep_pjw as sep
 
     data, header = load_fits_data(args.fits)
     ny, nx = data.shape

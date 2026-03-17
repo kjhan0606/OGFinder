@@ -67,7 +67,10 @@ def measure_sb_profile(data, cx, cy, config):
     profile : list of dict
         Each dict has: R_PIX, R_ARCSEC, MU, MU_ERR, FLUX, AREA, NPIX
     """
-    import sep
+    try:
+        import sep
+    except ImportError:
+        import sep_pjw as sep
 
     rmin = config.profile_rmin
     rmax = config.profile_rmax

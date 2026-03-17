@@ -1,7 +1,10 @@
 """SEP extraction wrapper mirroring ds9_sextract.py pipeline."""
 
 import numpy as np
-import sep
+try:
+    import sep
+except ImportError:
+    import sep_pjw as sep
 
 
 def _photometry(data_sub, objects, a_safe, b_safe, bkg_rms, mag_zeropoint, gain=None):

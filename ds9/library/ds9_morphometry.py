@@ -69,8 +69,11 @@ def process_file(fitsfile, catalog_file=None, min_npix=100, n_workers=0,
     try:
         import sep
     except ImportError:
-        print("ERROR: sep is required", file=sys.stderr)
-        return ""
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            print("ERROR: sep is required", file=sys.stderr)
+            return ""
 
     try:
         from astropy.io import fits

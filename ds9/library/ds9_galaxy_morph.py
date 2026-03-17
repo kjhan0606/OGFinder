@@ -114,13 +114,16 @@ def subtract_background(data):
     """Simple background subtraction using SEP."""
     try:
         import sep
-        data = np.ascontiguousarray(data, dtype=np.float64)
-        bkg = sep.Background(data, bw=64, bh=64, fw=3, fh=3)
-        return data - bkg.back()
     except ImportError:
-        # Fallback: simple median subtraction
-        print("WARNING: SEP not available, using median background", file=sys.stderr)
-        return data - np.median(data)
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            # Fallback: simple median subtraction
+            print("WARNING: SEP not available, using median background", file=sys.stderr)
+            return data - np.median(data)
+    data = np.ascontiguousarray(data, dtype=np.float64)
+    bkg = sep.Background(data, bw=64, bh=64, fw=3, fh=3)
+    return data - bkg.back()
 
 
 def main():

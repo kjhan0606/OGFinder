@@ -28,7 +28,10 @@ def _worker_completeness_bin(args):
     shm_segmap = None
     try:
         import sep
+    except ImportError:
+        import sep_pjw as sep
 
+    try:
         data, shm_data = data_spec.attach()
         mask, shm_mask = mask_spec.attach()
         segmap, shm_segmap = segmap_spec.attach()
@@ -136,8 +139,11 @@ def main():
     try:
         import sep
     except ImportError:
-        print("ERROR: sep is required", file=sys.stderr)
-        sys.exit(1)
+        try:
+            import sep_pjw as sep
+        except ImportError:
+            print("ERROR: sep is required", file=sys.stderr)
+            sys.exit(1)
 
     try:
         from astropy.io import fits

@@ -16,7 +16,10 @@ import numpy as np
 try:
     import sep
 except ImportError:
-    sep = None
+    try:
+        import sep_pjw as sep
+    except ImportError:
+        sep = None
 
 
 def main():
