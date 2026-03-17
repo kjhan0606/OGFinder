@@ -25,7 +25,7 @@ from psf_deconv.stars.find_stars import (find_stars_class_star,
                                           find_stars_fwhm,
                                           find_stars_combined)
 from psf_deconv.psf.build_psf import (build_psf_median, build_psf_mean,
-                                       build_psf_epsf)
+                                       build_psf_epsf, build_psf_extended)
 from psf_deconv.psf.fit_psf import fit_gaussian_psf, fit_moffat_psf
 from psf_deconv.deconv.richardson_lucy import (richardson_lucy,
                                                 richardson_lucy_accelerated,
@@ -65,6 +65,8 @@ def parse_catalog_tsv(path):
         'ELLIPTICITY': 'ellipticity',
         'CLASS_STAR': 'class_star',
         'FLAGS': 'flags',
+        'MAG_AUTO': 'mag_auto',
+        'FWHM_IMAGE': 'fwhm_image',
     }
 
     available = {}
@@ -331,12 +333,162 @@ def mode_deconvolve(args):
     print(f"Deconvolution complete: {output}", file=sys.stderr)
 
 
+def mode_build_psf_extended(args):
+    """Build extended PSF from core + wing stars."""
+    data, header = load_fits_data(args.fits)
+
+    if not args.catalog:
+        print("ERROR: --catalog required for build_psf_extended mode",
+              file=sys.stderr)
+        sys.exit(1)
+
+    catalog = parse_catalog_tsv(args.catalog)
+    if catalog is None:
+        print("ERROR: Failed to parse catalog", file=sys.stderr)
+        sys.exit(1)
+
+    if 'mag_auto' not in catalog:
+        print("ERROR: Catalog must contain MAG_AUTO column", file=sys.stderr)
+        sys.exit(1)
+
+    config = PSFDeconvConfig(
+        ext_core_mag_min=args.ext_core_mag_min,
+        ext_core_mag_max=args.ext_core_mag_max,
+        ext_wing_mag_max=args.ext_wing_mag_max,
+        ext_core_size=args.ext_core_size,
+        ext_wing_size=args.ext_wing_size,
+        ext_blend_inner=args.ext_blend_inner,
+        ext_blend_outer=args.ext_blend_outer,
+        ext_saturation_limit=args.ext_saturation_limit,
+    )
+
+    print(f"Building extended PSF: core mag [{args.ext_core_mag_min}, "
+          f"{args.ext_core_mag_max}], wing mag < {args.ext_wing_mag_max}",
+          file=sys.stderr)
+
+    psf, n_core, n_wing, info = build_psf_extended(data, catalog, config)
+
+    # Save PSF
+    output = args.psf_output
+    from astropy.io import fits as pf
+    hdu = pf.PrimaryHDU(psf.astype(np.float32))
+    hdu.header['PSFMETH'] = 'extended'
+    hdu.header['PSFSIZE'] = config.ext_wing_size
+    hdu.header['NCORE'] = n_core
+    hdu.header['NWING'] = n_wing
+    hdu.header['CORESIZE'] = config.ext_core_size
+    hdu.header['WINGSIZE'] = config.ext_wing_size
+    hdu.header['BLENDIN'] = config.ext_blend_inner
+    hdu.header['BLENDOUT'] = config.ext_blend_outer
+    hdu.writeto(output, overwrite=True)
+
+    print(f"#PSF_EXTENDED\tN_CORE={n_core}\tN_WING={n_wing}\t"
+          f"SIZE={config.ext_wing_size}\tOUTPUT={output}")
+    print(f"Extended PSF saved to {output}", file=sys.stderr)
+
+
+def mode_sim_psf(args):
+    """Generate simulation PSF (WebbPSF or TinyTim)."""
+    from psf_deconv.psf.sim_psf import (
+        detect_telescope_instrument, normalize_instrument_name,
+        generate_webbpsf, generate_tinytim,
+        check_webbpsf_available, check_tinytim_available,
+        WEBBPSF_INSTRUMENTS, TINYTIM_INSTRUMENTS)
+
+    telescope = args.sim_telescope.lower()
+    instrument = args.sim_instrument
+    filter_name = args.sim_filter
+    output = args.psf_output
+
+    # Auto-detect from FITS header if needed
+    if telescope == 'auto' or instrument == 'auto' or filter_name == 'auto':
+        _, header = load_fits_data(args.fits)
+        detected = detect_telescope_instrument(header)
+        print(f"Auto-detected: {detected}", file=sys.stderr)
+
+        if telescope == 'auto':
+            telescope = detected['telescope'].lower()
+        if instrument == 'auto':
+            instrument = detected['instrument']
+        if filter_name == 'auto':
+            filter_name = detected['filter']
+
+    if telescope == 'unknown':
+        print("ERROR: Cannot determine telescope from FITS header. "
+              "Use --sim-telescope to specify.", file=sys.stderr)
+        sys.exit(1)
+
+    instrument = normalize_instrument_name(instrument, telescope)
+
+    if telescope == 'jwst':
+        if not check_webbpsf_available():
+            print("ERROR: webbpsf package not installed. "
+                  "Install with: pip install webbpsf", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Generating WebbPSF: {instrument} / {filter_name} "
+              f"({args.sim_psf_size}px)", file=sys.stderr)
+        psf = generate_webbpsf(
+            instrument, filter_name,
+            psf_size=args.sim_psf_size,
+            oversample=args.sim_oversample,
+            jitter_sigma=args.sim_jitter_sigma,
+            focus_offset=args.sim_focus_offset,
+            output=output)
+
+        print(f"#PSF_SIM\tTELESCOPE=JWST\tINSTRUMENT={instrument}\t"
+              f"FILTER={filter_name}\tSIZE={args.sim_psf_size}\tOUTPUT={output}")
+
+    elif telescope == 'hst':
+        if not check_tinytim_available():
+            print("ERROR: TinyTim executables (tiny1, tiny2, tiny3) not found on PATH.",
+                  file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Generating TinyTim PSF: {instrument} / {filter_name} "
+              f"({args.sim_psf_size}px)", file=sys.stderr)
+        psf = generate_tinytim(
+            instrument, filter_name,
+            psf_size=args.sim_psf_size,
+            oversample=args.sim_oversample,
+            focus_offset=args.sim_focus_offset,
+            output=output)
+
+        print(f"#PSF_SIM\tTELESCOPE=HST\tINSTRUMENT={instrument}\t"
+              f"FILTER={filter_name}\tSIZE={args.sim_psf_size}\tOUTPUT={output}")
+
+    else:
+        print(f"ERROR: Unsupported telescope: {telescope}. "
+              f"Use 'jwst' or 'hst'.", file=sys.stderr)
+        sys.exit(1)
+
+
+def mode_check_sim(args):
+    """Check simulation PSF tool availability."""
+    from psf_deconv.psf.sim_psf import check_webbpsf_available, check_tinytim_available
+
+    webbpsf_ok = 1 if check_webbpsf_available() else 0
+    tinytim_ok = 1 if check_tinytim_available() else 0
+
+    print(f"#SIM_STATUS\tWEBBPSF={webbpsf_ok}\tTINYTIM={tinytim_ok}")
+
+    if webbpsf_ok:
+        print("WebbPSF: available", file=sys.stderr)
+    else:
+        print("WebbPSF: NOT found (pip install webbpsf)", file=sys.stderr)
+    if tinytim_ok:
+        print("TinyTim: available", file=sys.stderr)
+    else:
+        print("TinyTim: NOT found (tiny1/tiny2/tiny3 not on PATH)", file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='DS9 PSF Deconvolution Pipeline')
     parser.add_argument('fits', help='Input FITS file')
     parser.add_argument('--mode', required=True,
-                        choices=['find_stars', 'build_psf', 'deconvolve'],
+                        choices=['find_stars', 'build_psf', 'deconvolve',
+                                 'build_psf_extended', 'sim_psf', 'check_sim'],
                         help='Operation mode')
 
     # Star finding
@@ -355,6 +507,28 @@ def main():
     parser.add_argument('--psf-size', type=int, default=51)
     parser.add_argument('--psf-output', default=os.path.expanduser(
                         '~/.ds9/psf_current.fits'))
+
+    # Extended PSF
+    parser.add_argument('--ext-core-mag-min', type=float, default=18.0)
+    parser.add_argument('--ext-core-mag-max', type=float, default=22.0)
+    parser.add_argument('--ext-wing-mag-max', type=float, default=16.0)
+    parser.add_argument('--ext-core-size', type=int, default=51)
+    parser.add_argument('--ext-wing-size', type=int, default=201)
+    parser.add_argument('--ext-blend-inner', type=float, default=20.0)
+    parser.add_argument('--ext-blend-outer', type=float, default=30.0)
+    parser.add_argument('--ext-saturation-limit', type=float, default=60000.0)
+
+    # Simulation PSF
+    parser.add_argument('--sim-telescope', default='auto',
+                        help='Telescope: auto, jwst, hst')
+    parser.add_argument('--sim-instrument', default='auto',
+                        help='Instrument: auto, nircam, miri, acs_wfc, ...')
+    parser.add_argument('--sim-filter', default='auto',
+                        help='Filter: auto, F150W, F814W, ...')
+    parser.add_argument('--sim-psf-size', type=int, default=201)
+    parser.add_argument('--sim-oversample', type=int, default=1)
+    parser.add_argument('--sim-jitter-sigma', type=float, default=0.007)
+    parser.add_argument('--sim-focus-offset', type=float, default=0.0)
 
     # Deconvolution
     parser.add_argument('--psf', help='PSF FITS file')
@@ -381,6 +555,12 @@ def main():
         mode_build_psf(args)
     elif args.mode == 'deconvolve':
         mode_deconvolve(args)
+    elif args.mode == 'build_psf_extended':
+        mode_build_psf_extended(args)
+    elif args.mode == 'sim_psf':
+        mode_sim_psf(args)
+    elif args.mode == 'check_sim':
+        mode_check_sim(args)
 
 
 if __name__ == '__main__':

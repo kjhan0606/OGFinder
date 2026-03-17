@@ -289,6 +289,17 @@ proc CreateCatalogPanel {} {
     $f.menubar.starpsf.m.psf add command \
 	-label "ePSF" \
 	-command [list CatalogPanelBuildPSF epsf]
+    $f.menubar.starpsf.m.psf add separator
+    $f.menubar.starpsf.m.psf add command \
+	-label "Extended PSF..." \
+	-command CatalogPanelBuildExtendedPSF
+    $f.menubar.starpsf.m.psf add separator
+    $f.menubar.starpsf.m.psf add command \
+	-label "WebbPSF (JWST)..." \
+	-command CatalogPanelSimPSFWebbPSF
+    $f.menubar.starpsf.m.psf add command \
+	-label "TinyTim (HST)..." \
+	-command CatalogPanelSimPSFTinyTim
     $f.menubar.starpsf.m add separator
     $f.menubar.starpsf.m add command \
 	-label "View PSF" -command CatalogPanelViewPSF
@@ -604,6 +615,30 @@ proc CreateCatalogPanel {} {
     set catpanel(psf,param,clean-threshold) 0.0
     set catpanel(psf,param,mem-lambda) 0.1
     set catpanel(psf,param,mem-niter) 100
+
+    # Extended PSF params
+    set catpanel(psf,param,ext-core-mag-min)     18.0
+    set catpanel(psf,param,ext-core-mag-max)     22.0
+    set catpanel(psf,param,ext-wing-mag-max)     16.0
+    set catpanel(psf,param,ext-core-size)        51
+    set catpanel(psf,param,ext-wing-size)        201
+    set catpanel(psf,param,ext-blend-inner)      20.0
+    set catpanel(psf,param,ext-blend-outer)      30.0
+    set catpanel(psf,param,ext-saturation-limit) 60000.0
+
+    # Simulation PSF params
+    set catpanel(psf,param,sim-telescope)        auto
+    set catpanel(psf,param,sim-instrument)       auto
+    set catpanel(psf,param,sim-filter)           auto
+    set catpanel(psf,param,sim-psf-size)         201
+    set catpanel(psf,param,sim-oversample)       1
+    set catpanel(psf,param,sim-jitter-sigma)     0.007
+    set catpanel(psf,param,sim-focus-offset)     0.0
+
+    # Simulation availability flags (-1 = unchecked)
+    set catpanel(psf,sim_webbpsf_ok) -1
+    set catpanel(psf,sim_tinytim_ok) -1
+
     CatalogPanelPSFParamLoad
 
     # ICL state
@@ -4639,7 +4674,12 @@ proc CatalogPanelPSFParamSave {} {
     if {[catch {set fd [open $preffile w]} err]} return
     foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr \
 		   psf-size rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
-		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
+		   clean-gain clean-niter clean-threshold mem-lambda mem-niter \
+		   ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
+		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
+		   ext-saturation-limit \
+		   sim-telescope sim-instrument sim-filter sim-psf-size \
+		   sim-oversample sim-jitter-sigma sim-focus-offset} {
 	puts $fd "$pname $catpanel(psf,param,$pname)"
     }
     close $fd
@@ -4924,6 +4964,675 @@ proc CatalogPanelBuildPSF {method} {
 	    break
 	}
     }
+}
+
+# --- Extended PSF ---
+
+proc CatalogPanelBuildExtendedPSF {} {
+    global catpanel
+    global ed
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first before building extended PSF"
+	return
+    }
+
+    set w .extpsfdlg
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "Extended PSF"
+    wm geometry $w 360x420
+
+    # Copy current values
+    foreach pname {ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
+		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
+		   ext-saturation-limit} {
+	set ed(psf,$pname) $catpanel(psf,param,$pname)
+    }
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+
+    # Core Stars section
+    ttk::label $f.hcore -text "Core Stars" -font TkHeadingFont
+    grid $f.hcore -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {4 2}
+    incr r
+
+    ttk::label $f.lmagmin -text "Magnitude range:"
+    ttk::entry $f.emagmin -textvariable ed(psf,ext-core-mag-min) -width 8
+    ttk::label $f.ltilde -text "~"
+    ttk::entry $f.emagmax -textvariable ed(psf,ext-core-mag-max) -width 8
+    grid $f.lmagmin -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.emagmin -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.ltilde  -row $r -column 2 -padx 2 -pady 2
+    grid $f.emagmax -row $r -column 3 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.lcsize -text "Cutout size:"
+    ttk::entry $f.ecsize -textvariable ed(psf,ext-core-size) -width 8
+    ttk::label $f.lcpx -text "px"
+    grid $f.lcsize -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ecsize -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lcpx   -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Wing Stars section
+    ttk::label $f.hwing -text "Wing Stars" -font TkHeadingFont
+    grid $f.hwing -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lwmag -text "Max magnitude:"
+    ttk::entry $f.ewmag -textvariable ed(psf,ext-wing-mag-max) -width 8
+    grid $f.lwmag -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ewmag -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.lwsize -text "Cutout size:"
+    ttk::entry $f.ewsize -textvariable ed(psf,ext-wing-size) -width 8
+    ttk::label $f.lwpx -text "px"
+    grid $f.lwsize -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ewsize -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lwpx   -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.lsat -text "Saturation:"
+    ttk::entry $f.esat -textvariable ed(psf,ext-saturation-limit) -width 8
+    ttk::label $f.ladu -text "ADU"
+    grid $f.lsat -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.esat -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.ladu -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Blending section
+    ttk::label $f.hblend -text "Blending" -font TkHeadingFont
+    grid $f.hblend -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $f.lbin -text "Inner radius:"
+    ttk::entry $f.ebin -textvariable ed(psf,ext-blend-inner) -width 8
+    ttk::label $f.lbinpx -text "px"
+    grid $f.lbin   -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ebin   -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lbinpx -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.lbout -text "Outer radius:"
+    ttk::entry $f.ebout -textvariable ed(psf,ext-blend-outer) -width 8
+    ttk::label $f.lbopx -text "px"
+    grid $f.lbout  -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ebout  -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lbopx  -row $r -column 2 -sticky w -padx 2 -pady 2
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.build -text "Build" \
+	-command [list CatalogPanelBuildExtendedPSFExec $w]
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.build -side right -padx 4
+}
+
+proc CatalogPanelBuildExtendedPSFExec {w} {
+    global catpanel
+    global ed
+
+    # Apply params
+    foreach pname {ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
+		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
+		   ext-saturation-limit} {
+	set catpanel(psf,param,$pname) $ed(psf,$pname)
+    }
+    CatalogPanelPSFParamSave
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    # Save catalog
+    set catfile [file join [file normalize ~] .ds9 psf_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "Extended PSF error: cannot write catalog: $err"
+	return
+    }
+
+    set paramargs {}
+    lappend paramargs "--mode" "build_psf_extended"
+    lappend paramargs "--catalog" $catfile
+    lappend paramargs "--ext-core-mag-min" $catpanel(psf,param,ext-core-mag-min)
+    lappend paramargs "--ext-core-mag-max" $catpanel(psf,param,ext-core-mag-max)
+    lappend paramargs "--ext-wing-mag-max" $catpanel(psf,param,ext-wing-mag-max)
+    lappend paramargs "--ext-core-size" $catpanel(psf,param,ext-core-size)
+    lappend paramargs "--ext-wing-size" $catpanel(psf,param,ext-wing-size)
+    lappend paramargs "--ext-blend-inner" $catpanel(psf,param,ext-blend-inner)
+    lappend paramargs "--ext-blend-outer" $catpanel(psf,param,ext-blend-outer)
+    lappend paramargs "--ext-saturation-limit" $catpanel(psf,param,ext-saturation-limit)
+    lappend paramargs "--psf-output" $catpanel(psf,file)
+
+    set catpanel(status) "Building extended PSF ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Extended PSF error: $last_err"
+	    puts "Extended PSF stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "Extended PSF error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    set catpanel(psf,has_psf) 1
+
+    foreach line [split $data \n] {
+	if {[string match "#PSF_EXTENDED*" $line]} {
+	    set catpanel(status) "Extended PSF: [string range $line 15 end]"
+	    break
+	}
+    }
+
+    CatalogPanelViewPSF
+}
+
+# --- Simulation PSF: Check Availability ---
+
+proc CatalogPanelCheckSimAvail {} {
+    global catpanel
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(psf,sim_webbpsf_ok) 0
+	set catpanel(psf,sim_tinytim_ok) 0
+	return
+    }
+
+    # Use a dummy fits arg for check_sim mode
+    if {[catch {set data [exec python3 $script dummy.fits --mode check_sim 2>/dev/null]} err]} {
+	set catpanel(psf,sim_webbpsf_ok) 0
+	set catpanel(psf,sim_tinytim_ok) 0
+	return
+    }
+
+    foreach line [split $data \n] {
+	if {[string match "#SIM_STATUS*" $line]} {
+	    foreach part [split $line \t] {
+		if {[string match "WEBBPSF=*" $part]} {
+		    set catpanel(psf,sim_webbpsf_ok) [string range $part 8 end]
+		}
+		if {[string match "TINYTIM=*" $part]} {
+		    set catpanel(psf,sim_tinytim_ok) [string range $part 8 end]
+		}
+	    }
+	}
+    }
+}
+
+# --- Simulation PSF: WebbPSF (JWST) ---
+
+proc CatalogPanelSimPSFWebbPSF {} {
+    global catpanel
+    global ed
+
+    set w .webbpsfdlg
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    # Check availability if not yet done
+    if {$catpanel(psf,sim_webbpsf_ok) == -1} {
+	CatalogPanelCheckSimAvail
+    }
+
+    toplevel $w
+    wm title $w "WebbPSF (JWST)"
+    wm geometry $w 360x380
+
+    set ed(psf,sim-instrument) $catpanel(psf,param,sim-instrument)
+    set ed(psf,sim-filter) $catpanel(psf,param,sim-filter)
+    set ed(psf,sim-psf-size) $catpanel(psf,param,sim-psf-size)
+    set ed(psf,sim-oversample) $catpanel(psf,param,sim-oversample)
+    set ed(psf,sim-jitter-sigma) $catpanel(psf,param,sim-jitter-sigma)
+    set ed(psf,sim-focus-offset) $catpanel(psf,param,sim-focus-offset)
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+
+    # Availability status
+    if {$catpanel(psf,sim_webbpsf_ok) == 1} {
+	set statxt "WebbPSF: Available"
+    } else {
+	set statxt "WebbPSF: Not found (pip install webbpsf)"
+    }
+    ttk::label $f.status -text $statxt -foreground \
+	[expr {$catpanel(psf,sim_webbpsf_ok) == 1 ? "green" : "red"}]
+    grid $f.status -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {4 8}
+    incr r
+
+    # Instrument
+    ttk::label $f.linst -text "Instrument:"
+    ttk::combobox $f.cinst -textvariable ed(psf,sim-instrument) -width 14 \
+	-values {NIRCAM MIRI NIRISS NIRSPEC FGS} -state readonly
+    grid $f.linst -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.cinst -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Filter
+    ttk::label $f.lfilt -text "Filter:"
+    ttk::combobox $f.cfilt -textvariable ed(psf,sim-filter) -width 14
+    grid $f.lfilt -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.cfilt -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Dynamic filter update
+    bind $f.cinst <<ComboboxSelected>> [list CatalogPanelSimPSFUpdateFilters $f.cfilt jwst]
+    # Initialize filter list
+    CatalogPanelSimPSFUpdateFilters $f.cfilt jwst
+
+    # PSF size
+    ttk::label $f.lsz -text "PSF size:"
+    ttk::entry $f.esz -textvariable ed(psf,sim-psf-size) -width 8
+    ttk::label $f.lpx -text "px"
+    grid $f.lsz -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.esz -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lpx -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Oversample
+    ttk::label $f.lover -text "Oversample:"
+    ttk::entry $f.eover -textvariable ed(psf,sim-oversample) -width 8
+    grid $f.lover -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.eover -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Jitter
+    ttk::label $f.ljit -text "Jitter sigma:"
+    ttk::entry $f.ejit -textvariable ed(psf,sim-jitter-sigma) -width 8
+    ttk::label $f.ljitas -text "arcsec"
+    grid $f.ljit   -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ejit   -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.ljitas -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Focus
+    ttk::label $f.lfoc -text "Focus offset:"
+    ttk::entry $f.efoc -textvariable ed(psf,sim-focus-offset) -width 8
+    ttk::label $f.lfocw -text "waves"
+    grid $f.lfoc  -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.efoc  -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lfocw -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Auto-detect button
+    ttk::button $f.autodet -text "Auto-detect from FITS" \
+	-command [list CatalogPanelSimPSFAutoDetect $f.cinst $f.cfilt jwst]
+    grid $f.autodet -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.gen -text "Generate" \
+	-command [list CatalogPanelSimPSFWebbPSFExec $w]
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.gen -side right -padx 4
+}
+
+proc CatalogPanelSimPSFWebbPSFExec {w} {
+    global catpanel
+    global ed
+
+    foreach pname {sim-instrument sim-filter sim-psf-size sim-oversample \
+		   sim-jitter-sigma sim-focus-offset} {
+	set catpanel(psf,param,$pname) $ed(psf,$pname)
+    }
+    set catpanel(psf,param,sim-telescope) jwst
+    CatalogPanelPSFParamSave
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    set paramargs {}
+    lappend paramargs "--mode" "sim_psf"
+    lappend paramargs "--sim-telescope" "jwst"
+    lappend paramargs "--sim-instrument" $catpanel(psf,param,sim-instrument)
+    lappend paramargs "--sim-filter" $catpanel(psf,param,sim-filter)
+    lappend paramargs "--sim-psf-size" $catpanel(psf,param,sim-psf-size)
+    lappend paramargs "--sim-oversample" $catpanel(psf,param,sim-oversample)
+    lappend paramargs "--sim-jitter-sigma" $catpanel(psf,param,sim-jitter-sigma)
+    lappend paramargs "--sim-focus-offset" $catpanel(psf,param,sim-focus-offset)
+    lappend paramargs "--psf-output" $catpanel(psf,file)
+
+    set catpanel(status) "Generating WebbPSF ($catpanel(psf,param,sim-instrument) / $catpanel(psf,param,sim-filter)) ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "WebbPSF error: $last_err"
+	    puts "WebbPSF stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "WebbPSF error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+
+    set catpanel(psf,has_psf) 1
+
+    foreach line [split $data \n] {
+	if {[string match "#PSF_SIM*" $line]} {
+	    set catpanel(status) "Sim PSF: [string range $line 9 end]"
+	    break
+	}
+    }
+
+    CatalogPanelViewPSF
+}
+
+# --- Simulation PSF: TinyTim (HST) ---
+
+proc CatalogPanelSimPSFTinyTim {} {
+    global catpanel
+    global ed
+
+    set w .tinytimdlg
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    if {$catpanel(psf,sim_tinytim_ok) == -1} {
+	CatalogPanelCheckSimAvail
+    }
+
+    toplevel $w
+    wm title $w "TinyTim (HST)"
+    wm geometry $w 360x340
+
+    set ed(psf,sim-instrument) $catpanel(psf,param,sim-instrument)
+    set ed(psf,sim-filter) $catpanel(psf,param,sim-filter)
+    set ed(psf,sim-psf-size) $catpanel(psf,param,sim-psf-size)
+    set ed(psf,sim-oversample) $catpanel(psf,param,sim-oversample)
+    set ed(psf,sim-focus-offset) $catpanel(psf,param,sim-focus-offset)
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+
+    # Availability status
+    if {$catpanel(psf,sim_tinytim_ok) == 1} {
+	set statxt "TinyTim: Available"
+    } else {
+	set statxt "TinyTim: Not found (tiny1/tiny2/tiny3 not on PATH)"
+    }
+    ttk::label $f.status -text $statxt -foreground \
+	[expr {$catpanel(psf,sim_tinytim_ok) == 1 ? "green" : "red"}]
+    grid $f.status -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {4 8}
+    incr r
+
+    # Instrument
+    ttk::label $f.linst -text "Instrument:"
+    ttk::combobox $f.cinst -textvariable ed(psf,sim-instrument) -width 14 \
+	-values {ACS_WFC ACS_HRC WFC3_UVIS WFC3_IR WFPC2} -state readonly
+    grid $f.linst -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.cinst -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Filter
+    ttk::label $f.lfilt -text "Filter:"
+    ttk::combobox $f.cfilt -textvariable ed(psf,sim-filter) -width 14
+    grid $f.lfilt -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.cfilt -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    bind $f.cinst <<ComboboxSelected>> [list CatalogPanelSimPSFUpdateFilters $f.cfilt hst]
+    CatalogPanelSimPSFUpdateFilters $f.cfilt hst
+
+    # PSF size
+    ttk::label $f.lsz -text "PSF size:"
+    ttk::entry $f.esz -textvariable ed(psf,sim-psf-size) -width 8
+    ttk::label $f.lpx -text "px"
+    grid $f.lsz -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.esz -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lpx -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Oversample
+    ttk::label $f.lover -text "Oversample:"
+    ttk::entry $f.eover -textvariable ed(psf,sim-oversample) -width 8
+    grid $f.lover -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.eover -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Focus
+    ttk::label $f.lfoc -text "Focus offset:"
+    ttk::entry $f.efoc -textvariable ed(psf,sim-focus-offset) -width 8
+    ttk::label $f.lfocum -text "um"
+    grid $f.lfoc   -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.efoc   -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lfocum -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    # Auto-detect
+    ttk::button $f.autodet -text "Auto-detect from FITS" \
+	-command [list CatalogPanelSimPSFAutoDetect $f.cinst $f.cfilt hst]
+    grid $f.autodet -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+
+    # Buttons
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.gen -text "Generate" \
+	-command [list CatalogPanelSimPSFTinyTimExec $w]
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.gen -side right -padx 4
+}
+
+proc CatalogPanelSimPSFTinyTimExec {w} {
+    global catpanel
+    global ed
+
+    foreach pname {sim-instrument sim-filter sim-psf-size sim-oversample \
+		   sim-focus-offset} {
+	set catpanel(psf,param,$pname) $ed(psf,$pname)
+    }
+    set catpanel(psf,param,sim-telescope) hst
+    CatalogPanelPSFParamSave
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    set paramargs {}
+    lappend paramargs "--mode" "sim_psf"
+    lappend paramargs "--sim-telescope" "hst"
+    lappend paramargs "--sim-instrument" $catpanel(psf,param,sim-instrument)
+    lappend paramargs "--sim-filter" $catpanel(psf,param,sim-filter)
+    lappend paramargs "--sim-psf-size" $catpanel(psf,param,sim-psf-size)
+    lappend paramargs "--sim-oversample" $catpanel(psf,param,sim-oversample)
+    lappend paramargs "--sim-focus-offset" $catpanel(psf,param,sim-focus-offset)
+    lappend paramargs "--psf-output" $catpanel(psf,file)
+
+    set catpanel(status) "Generating TinyTim PSF ($catpanel(psf,param,sim-instrument) / $catpanel(psf,param,sim-filter)) ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "TinyTim error: $last_err"
+	    puts "TinyTim stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "TinyTim error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+
+    set catpanel(psf,has_psf) 1
+
+    foreach line [split $data \n] {
+	if {[string match "#PSF_SIM*" $line]} {
+	    set catpanel(status) "Sim PSF: [string range $line 9 end]"
+	    break
+	}
+    }
+
+    CatalogPanelViewPSF
+}
+
+# --- Simulation PSF: Shared Helpers ---
+
+proc CatalogPanelSimPSFUpdateFilters {cfilt telescope} {
+    global ed
+
+    # Filter lists per instrument
+    array set jwst_filters {
+	NIRCAM  {F070W F090W F115W F140M F150W F162M F200W F210M F250M F277W F300M F322W2 F335M F356W F360M F410M F430M F444W F460M F480M}
+	MIRI    {F560W F770W F1000W F1065C F1130W F1140C F1280W F1500W F1550C F1800W F2100W F2300C F2550W}
+	NIRISS  {F090W F115W F140M F150W F158M F200W F277W F356W F380M F430M F444W F480M}
+	NIRSPEC {F070LP F100LP F170LP F290LP CLEAR}
+	FGS     {FGS}
+    }
+    array set hst_filters {
+	ACS_WFC   {F435W F475W F502N F550M F555W F606W F625W F658N F775W F814W F850LP}
+	ACS_HRC   {F220W F250W F330W F435W F475W F555W F606W F625W F775W F814W F850LP}
+	WFC3_UVIS {F218W F225W F275W F336W F390W F438W F475W F555W F606W F625W F775W F814W F850LP}
+	WFC3_IR   {F098M F105W F110W F125W F140W F160W}
+	WFPC2     {F300W F336W F439W F450W F555W F606W F675W F702W F791W F814W}
+    }
+
+    set inst $ed(psf,sim-instrument)
+    set inst [string toupper $inst]
+
+    if {$telescope eq "jwst" && [info exists jwst_filters($inst)]} {
+	$cfilt configure -values $jwst_filters($inst)
+    } elseif {$telescope eq "hst" && [info exists hst_filters($inst)]} {
+	$cfilt configure -values $hst_filters($inst)
+    } else {
+	$cfilt configure -values {}
+    }
+}
+
+proc CatalogPanelSimPSFAutoDetect {cinst cfilt telescope} {
+    global catpanel
+    global ed
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    # Run sim_psf with all auto to just get detection output
+    set paramargs {}
+    lappend paramargs "--mode" "sim_psf"
+    lappend paramargs "--sim-telescope" "auto"
+    lappend paramargs "--sim-instrument" "auto"
+    lappend paramargs "--sim-filter" "auto"
+    lappend paramargs "--psf-output" "/dev/null"
+
+    # We expect this to potentially fail (no webbpsf/tinytim), but stderr has detection info
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    catch {exec python3 $script $fn {*}$paramargs 2>$errfile}
+
+    set stderr_msg ""
+    catch {
+	set fd [open $errfile r]
+	set stderr_msg [read $fd]
+	close $fd
+    }
+
+    # Parse "Auto-detected: {'telescope': ..., 'instrument': ..., 'filter': ...}"
+    if {[regexp {instrument.*?:\s*'([^']+)'} $stderr_msg -> inst_val]} {
+	set ed(psf,sim-instrument) [string toupper $inst_val]
+	$cinst set [string toupper $inst_val]
+    }
+    if {[regexp {filter.*?:\s*'([^']+)'} $stderr_msg -> filt_val]} {
+	set ed(psf,sim-filter) [string toupper $filt_val]
+	$cfilt set [string toupper $filt_val]
+    }
+
+    # Update filter list for the detected instrument
+    CatalogPanelSimPSFUpdateFilters $cfilt $telescope
+
+    set catpanel(status) "Auto-detected: $ed(psf,sim-instrument) / $ed(psf,sim-filter)"
 }
 
 proc CatalogPanelViewPSF {} {
@@ -5255,10 +5964,15 @@ proc CatalogPanelStarPSFSettings {} {
 
     toplevel $w
     wm title $w "Star / PSF Settings"
-    wm geometry $w 380x320
+    wm geometry $w 400x460
 
     # Copy current values to edit vars
-    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr psf-size} {
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr psf-size \
+		   ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
+		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
+		   ext-saturation-limit \
+		   sim-telescope sim-instrument sim-filter sim-psf-size \
+		   sim-oversample sim-jitter-sigma sim-focus-offset} {
 	set ed(psf,$pname) $catpanel(psf,param,$pname)
     }
 
@@ -5302,6 +6016,106 @@ proc CatalogPanelStarPSFSettings {} {
     ttk::entry $t2.esz -textvariable ed(psf,psf-size) -width 10
     grid $t2.lsz -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t2.esz -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    # Extended PSF sub-section
+    ttk::label $t2.hext -text "Extended PSF:" -font TkHeadingFont
+    grid $t2.hext -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+    incr r
+
+    ttk::label $t2.lcmin -text "Core mag min:"
+    ttk::entry $t2.ecmin -textvariable ed(psf,ext-core-mag-min) -width 10
+    grid $t2.lcmin -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ecmin -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lcmax -text "Core mag max:"
+    ttk::entry $t2.ecmax -textvariable ed(psf,ext-core-mag-max) -width 10
+    grid $t2.lcmax -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ecmax -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lwmag -text "Wing mag max:"
+    ttk::entry $t2.ewmag -textvariable ed(psf,ext-wing-mag-max) -width 10
+    grid $t2.lwmag -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ewmag -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lcsz -text "Core cutout size:"
+    ttk::entry $t2.ecsz -textvariable ed(psf,ext-core-size) -width 10
+    grid $t2.lcsz -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ecsz -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lwsz -text "Wing cutout size:"
+    ttk::entry $t2.ewsz -textvariable ed(psf,ext-wing-size) -width 10
+    grid $t2.lwsz -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ewsz -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lbi -text "Blend inner (px):"
+    ttk::entry $t2.ebi -textvariable ed(psf,ext-blend-inner) -width 10
+    grid $t2.lbi -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ebi -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lbo -text "Blend outer (px):"
+    ttk::entry $t2.ebo -textvariable ed(psf,ext-blend-outer) -width 10
+    grid $t2.lbo -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.ebo -row $r -column 1 -sticky w -padx 4 -pady 2
+    incr r
+
+    ttk::label $t2.lsat -text "Saturation (ADU):"
+    ttk::entry $t2.esat -textvariable ed(psf,ext-saturation-limit) -width 10
+    grid $t2.lsat -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $t2.esat -row $r -column 1 -sticky w -padx 4 -pady 2
+
+    # --- Tab 3: Simulation ---
+    set t3 [ttk::frame $w.nb.sim]
+    $w.nb add $t3 -text "Simulation"
+
+    set r 0
+    ttk::label $t3.ltel -text "Telescope:"
+    ttk::combobox $t3.etel -textvariable ed(psf,sim-telescope) -width 10 \
+	-values {auto jwst hst}
+    grid $t3.ltel -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.etel -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.linst -text "Instrument:"
+    ttk::entry $t3.einst -textvariable ed(psf,sim-instrument) -width 14
+    grid $t3.linst -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.einst -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lfilt -text "Filter:"
+    ttk::entry $t3.efilt -textvariable ed(psf,sim-filter) -width 14
+    grid $t3.lfilt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.efilt -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lsz -text "PSF size (px):"
+    ttk::entry $t3.esz -textvariable ed(psf,sim-psf-size) -width 10
+    grid $t3.lsz -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.esz -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lover -text "Oversample:"
+    ttk::entry $t3.eover -textvariable ed(psf,sim-oversample) -width 10
+    grid $t3.lover -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.eover -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.ljit -text "Jitter sigma (arcsec):"
+    ttk::entry $t3.ejit -textvariable ed(psf,sim-jitter-sigma) -width 10
+    grid $t3.ljit -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.ejit -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t3.lfoc -text "Focus offset:"
+    ttk::entry $t3.efoc -textvariable ed(psf,sim-focus-offset) -width 10
+    grid $t3.lfoc -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.efoc -row $r -column 1 -sticky w -padx 4 -pady 4
 
     # Buttons
     set bf [ttk::frame $w.buttons]
@@ -5319,7 +6133,12 @@ proc CatalogPanelStarPSFSettingsApply {w} {
     global catpanel
     global ed
 
-    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr psf-size} {
+    foreach pname {class-star-thresh max-ellipticity fwhm-sigma min-flux-snr psf-size \
+		   ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
+		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
+		   ext-saturation-limit \
+		   sim-telescope sim-instrument sim-filter sim-psf-size \
+		   sim-oversample sim-jitter-sigma sim-focus-offset} {
 	set catpanel(psf,param,$pname) $ed(psf,$pname)
     }
     CatalogPanelPSFParamSave
@@ -5334,6 +6153,23 @@ proc CatalogPanelStarPSFSettingsDefaults {} {
     set ed(psf,fwhm-sigma) 2.0
     set ed(psf,min-flux-snr) 10.0
     set ed(psf,psf-size) 51
+
+    set ed(psf,ext-core-mag-min) 18.0
+    set ed(psf,ext-core-mag-max) 22.0
+    set ed(psf,ext-wing-mag-max) 16.0
+    set ed(psf,ext-core-size) 51
+    set ed(psf,ext-wing-size) 201
+    set ed(psf,ext-blend-inner) 20.0
+    set ed(psf,ext-blend-outer) 30.0
+    set ed(psf,ext-saturation-limit) 60000.0
+
+    set ed(psf,sim-telescope) auto
+    set ed(psf,sim-instrument) auto
+    set ed(psf,sim-filter) auto
+    set ed(psf,sim-psf-size) 201
+    set ed(psf,sim-oversample) 1
+    set ed(psf,sim-jitter-sigma) 0.007
+    set ed(psf,sim-focus-offset) 0.0
 }
 
 proc CatalogPanelDeconvSettings {} {

@@ -1,7 +1,9 @@
 """PSF building via stacking methods."""
 
 import numpy as np
-from .psf_utils import extract_star_cutout, centroid_com, normalize_cutout, shift_to_center
+from .psf_utils import (extract_star_cutout, extract_star_cutout_masked,
+                        centroid_com, normalize_cutout, shift_to_center,
+                        radial_blend_weight)
 
 
 def _collect_cutouts(data, positions, size=51):
@@ -230,3 +232,140 @@ def _cross_correlate_offset(cutout, reference):
     dx = (cx - center_x) + dx_sub
     dy = (cy - center_y) + dy_sub
     return dx, dy
+
+
+def build_psf_extended(data, catalog, config=None):
+    """Build multi-ring PSF combining core and wing stars.
+
+    Core stars (unsaturated, moderate brightness) define the precise center,
+    while wing stars (bright, possibly saturated) capture diffraction spikes
+    and extended halo. The two are blended using a cosine taper.
+
+    Parameters
+    ----------
+    data : 2D ndarray
+        Image data.
+    catalog : dict
+        Catalog with keys: x_image, y_image, mag_auto, flags, etc.
+        Coordinates are 1-based.
+    config : PSFDeconvConfig, optional
+        Configuration parameters.
+
+    Returns
+    -------
+    psf : 2D ndarray
+        Extended PSF normalized to unit sum.
+    n_core : int
+        Number of core stars used.
+    n_wing : int
+        Number of wing stars used.
+    info : dict
+        Additional info (core_size, wing_size, blend_inner, blend_outer).
+    """
+    from ..config import PSFDeconvConfig
+    if config is None:
+        config = PSFDeconvConfig()
+
+    mag = catalog.get('mag_auto', None)
+    if mag is None:
+        raise ValueError("Catalog must contain MAG_AUTO column")
+
+    flags = catalog.get('flags', np.zeros(len(mag), dtype=int))
+
+    # Classify stars
+    core_mask = ((mag >= config.ext_core_mag_min) &
+                 (mag <= config.ext_core_mag_max) &
+                 (flags < 4))
+    wing_mask = (mag < config.ext_wing_mag_max)
+
+    n_core_cand = int(core_mask.sum())
+    n_wing_cand = int(wing_mask.sum())
+
+    if n_core_cand < config.ext_n_core_min:
+        raise ValueError(
+            f"Not enough core stars: found {n_core_cand}, "
+            f"need {config.ext_n_core_min} "
+            f"(mag {config.ext_core_mag_min}–{config.ext_core_mag_max})")
+
+    if n_wing_cand < config.ext_n_wing_min:
+        raise ValueError(
+            f"Not enough wing stars: found {n_wing_cand}, "
+            f"need {config.ext_n_wing_min} (mag < {config.ext_wing_mag_max})")
+
+    # Collect core cutouts (unsaturated, standard extraction)
+    core_positions = []
+    for i in np.where(core_mask)[0]:
+        x = catalog['x_image'][i] - 1.0  # 1-based to 0-based
+        y = catalog['y_image'][i] - 1.0
+        core_positions.append((x, y))
+
+    core_cutouts = _collect_cutouts(data, core_positions, config.ext_core_size)
+    if len(core_cutouts) == 0:
+        raise ValueError("No valid core star cutouts extracted (edge rejection)")
+
+    core_psf = np.median(np.array(core_cutouts), axis=0)
+    core_psf = np.maximum(core_psf, 0.0)
+    total = core_psf.sum()
+    if total > 0:
+        core_psf /= total
+
+    # Collect wing cutouts (may be saturated — mask sat pixels)
+    wing_cutouts = []
+    for i in np.where(wing_mask)[0]:
+        x = catalog['x_image'][i] - 1.0
+        y = catalog['y_image'][i] - 1.0
+        c = extract_star_cutout_masked(data, x, y, config.ext_wing_size,
+                                       config.ext_saturation_limit)
+        if c is None:
+            continue
+        # Centroid using non-NaN pixels
+        c_clean = np.where(np.isnan(c), 0.0, c)
+        dx, dy = centroid_com(c_clean)
+        c = shift_to_center(c, dx, dy)
+        # Normalize non-NaN pixels
+        bg = np.nanmedian(c)
+        c = c - bg
+        total_w = np.nansum(c)
+        if total_w > 0:
+            c /= total_w
+        wing_cutouts.append(c)
+
+    if len(wing_cutouts) == 0:
+        raise ValueError("No valid wing star cutouts extracted (edge rejection)")
+
+    # Median stack wing cutouts (NaN-aware)
+    wing_stack = np.array(wing_cutouts)
+    wing_psf = np.nanmedian(wing_stack, axis=0)
+    wing_psf = np.where(np.isnan(wing_psf), 0.0, wing_psf)
+    wing_psf = np.maximum(wing_psf, 0.0)
+    total = wing_psf.sum()
+    if total > 0:
+        wing_psf /= total
+
+    # Blend: zero-pad core PSF to wing size, then apply cosine blend
+    out_size = config.ext_wing_size
+    core_padded = np.zeros((out_size, out_size), dtype=np.float64)
+    cs = config.ext_core_size
+    offset = (out_size - cs) // 2
+    core_padded[offset:offset + cs, offset:offset + cs] = core_psf
+
+    weight = radial_blend_weight(out_size, config.ext_blend_inner,
+                                 config.ext_blend_outer)
+    psf = weight * core_padded + (1.0 - weight) * wing_psf
+
+    # Final normalization
+    psf = np.maximum(psf, 0.0)
+    total = psf.sum()
+    if total > 0:
+        psf /= total
+
+    info = {
+        'core_size': config.ext_core_size,
+        'wing_size': config.ext_wing_size,
+        'blend_inner': config.ext_blend_inner,
+        'blend_outer': config.ext_blend_outer,
+        'n_core_candidates': n_core_cand,
+        'n_wing_candidates': n_wing_cand,
+    }
+
+    return psf, len(core_cutouts), len(wing_cutouts), info

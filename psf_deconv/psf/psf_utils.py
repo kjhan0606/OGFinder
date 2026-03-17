@@ -95,3 +95,65 @@ def shift_to_center(cutout, dx, dy):
         Shifted cutout.
     """
     return ndimage_shift(cutout, [-dy, -dx], order=3, mode='constant', cval=0.0)
+
+
+def extract_star_cutout_masked(data, x, y, size=201, sat_limit=60000.0):
+    """Extract cutout with saturated pixels masked to NaN.
+
+    Parameters
+    ----------
+    data : 2D ndarray
+        Image data.
+    x, y : float
+        Center position (0-indexed).
+    size : int
+        Cutout size.
+    sat_limit : float
+        Saturation threshold in ADU.
+
+    Returns
+    -------
+    cutout : 2D ndarray or None
+        Cutout with saturated pixels set to NaN, or None if too close to edge.
+    """
+    cutout = extract_star_cutout(data, x, y, size)
+    if cutout is None:
+        return None
+    cutout = cutout.copy()
+    cutout[cutout > sat_limit] = np.nan
+    return cutout
+
+
+def radial_blend_weight(size, r_inner, r_outer):
+    """2D cosine blend weight map for core/wing PSF blending.
+
+    Returns weight=1 inside r_inner (core region),
+    cosine taper from 1→0 between r_inner and r_outer,
+    weight=0 outside r_outer (wing region).
+
+    Parameters
+    ----------
+    size : int
+        Output array size (size x size).
+    r_inner : float
+        Inner blend radius (pixels).
+    r_outer : float
+        Outer blend radius (pixels).
+
+    Returns
+    -------
+    weight : 2D ndarray
+        Weight map (size x size), values in [0, 1].
+    """
+    center = size / 2.0
+    yy, xx = np.mgrid[0:size, 0:size]
+    r = np.sqrt((xx - center) ** 2 + (yy - center) ** 2)
+
+    weight = np.ones((size, size), dtype=np.float64)
+    # Transition zone: cosine taper
+    mask = (r >= r_inner) & (r <= r_outer)
+    weight[mask] = 0.5 * (1.0 + np.cos(np.pi * (r[mask] - r_inner) / (r_outer - r_inner)))
+    # Outside outer radius: wing only
+    weight[r > r_outer] = 0.0
+
+    return weight
