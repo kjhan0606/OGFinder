@@ -405,6 +405,24 @@ proc CreateCatalogPanel {} {
     $f.menubar.icl.m add command \
 	-label "4. ICL Measurements" \
 	-command CatalogPanelICLMeasure
+    $f.menubar.icl.m add command \
+	-label "   Multi-Threshold ICL" \
+	-command CatalogPanelICLMeasureMulti
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
+	-label "5. BCG+ICL Decomposition" \
+	-command CatalogPanelICLDecompose
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
+	-label "Color Profile..." \
+	-command CatalogPanelICLColorProfile
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
+	-label "Save Profile..." \
+	-command CatalogPanelICLSaveProfile
+    $f.menubar.icl.m add command \
+	-label "Load Profile..." \
+	-command CatalogPanelICLLoadProfile
     $f.menubar.icl.m add separator
     $f.menubar.icl.m add command \
 	-label "Settings..." \
@@ -442,8 +460,27 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelLSBGDetect
     $f.menubar.lsbg.m add separator
     $f.menubar.lsbg.m add command \
-	-label "4. Photometry + Filter" \
+	-label "4. Photometry" \
 	-command CatalogPanelLSBGPhotometry
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "5. Sérsic Profile Fit" \
+	-command CatalogPanelLSBGSersic
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "6. Filter + Grade" \
+	-command CatalogPanelLSBGFilter
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "Save Catalog..." \
+	-command CatalogPanelSaveCatalog
+    $f.menubar.lsbg.m add command \
+	-label "Load Catalog..." \
+	-command CatalogPanelLoadCatalog
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "7. Forced Photometry (Multi-Band)" \
+	-command CatalogPanelLSBGForcedPhot
     $f.menubar.lsbg.m add separator
     $f.menubar.lsbg.m add command \
 	-label "Run Full Pipeline" \
@@ -674,6 +711,10 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,param,mu-threshold)           26.5
     set catpanel(icl,param,mu-levels)              26.0,27.0,28.0
     set catpanel(icl,param,measure-radius)         500.0
+    set catpanel(icl,param,bkg-iterative)          0
+    set catpanel(icl,param,bkg-n-iterations)       3
+    set catpanel(icl,param,bkg-convergence-tol)    0.01
+    set catpanel(icl,param,bkg-refine-thresh)      2.0
     CatalogPanelICLParamLoad
 
     # LSBG state
@@ -695,17 +736,29 @@ proc CreateCatalogPanel {} {
     set catpanel(lsbg,param,bright-star-radius-scale)   12.0
     set catpanel(lsbg,param,mask-mag-threshold)         22.0
     set catpanel(lsbg,param,interp-method)              linear
+    set catpanel(lsbg,param,lsb-protect)                1
+    set catpanel(lsbg,param,lsb-mu-threshold)           24.0
     set catpanel(lsbg,param,bkg-method)                 sep_large
     set catpanel(lsbg,param,bkg-mesh-size)              256
     set catpanel(lsbg,param,bkg-poly-order)             3
     set catpanel(lsbg,param,bkg-sigma-clip)             3.0
     set catpanel(lsbg,param,bkg-n-iterations)           3
     set catpanel(lsbg,param,bkg-refine-thresh)          2.0
+    set catpanel(lsbg,param,bkg-rms-quantile)           0.25
+    set catpanel(lsbg,param,bkg-convergence-tol)        0.01
     set catpanel(lsbg,param,detect-thresh)              0.8
     set catpanel(lsbg,param,detect-minarea)             50
     set catpanel(lsbg,param,detect-filter-kernel)       gauss5x5
     set catpanel(lsbg,param,deblend-nthresh)            32
     set catpanel(lsbg,param,deblend-mincont)            0.005
+    set catpanel(lsbg,param,multiscale)                 1
+    set catpanel(lsbg,param,multiscale-factors)         1,2,4
+    set catpanel(lsbg,param,sersic-fit)                 1
+    set catpanel(lsbg,param,sersic-n-min)               0.2
+    set catpanel(lsbg,param,sersic-n-max)               10.0
+    set catpanel(lsbg,param,sersic-re-min)              0.5
+    set catpanel(lsbg,param,sersic-cutout-scale)        5.0
+    set catpanel(lsbg,param,sersic-max-nfev)            500
     set catpanel(lsbg,param,phot-apertures)             5,10,20,40
     set catpanel(lsbg,param,mag-zeropoint)              25.0
     set catpanel(lsbg,param,pixel-scale)                0.06
@@ -715,6 +768,9 @@ proc CreateCatalogPanel {} {
     set catpanel(lsbg,param,r-eff-max)                  60.0
     set catpanel(lsbg,param,ellipticity-max)            0.7
     set catpanel(lsbg,param,min-snr)                    2.0
+    set catpanel(lsbg,param,sersic-n-filter-min)        0.3
+    set catpanel(lsbg,param,sersic-n-filter-max)        6.0
+    set catpanel(lsbg,param,sersic-chi2-max)            10.0
     CatalogPanelLSBGParamLoad
 
     # Ctrl key tracking (Feature A/C)
@@ -1212,6 +1268,7 @@ proc CatalogPanelGotoSource {row} {
     set col_b -1
     set col_theta -1
     set col_ir -1
+    set col_reff -1
     for {set c 1} {$c <= $ncols} {incr c} {
 	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
 	    set hdr [set ${catpanel(tbldb)}(0,$c)]
@@ -1222,6 +1279,7 @@ proc CatalogPanelGotoSource {row} {
 		B_IMAGE     { set col_b $c }
 		THETA_IMAGE { set col_theta $c }
 		ISO_RADIUS  { set col_ir $c }
+		R_EFF_PIX   { set col_reff $c }
 	    }
 	}
     }
@@ -1260,6 +1318,15 @@ proc CatalogPanelGotoSource {row} {
 	if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
     }
 
+    # Get R_EFF_PIX if available (for LSBG circle display)
+    set r_eff_pix 0
+    if {$col_reff >= 0 && [info exists ${catpanel(tbldb)}($row,$col_reff)]} {
+	set val [set ${catpanel(tbldb)}($row,$col_reff)]
+	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+	    set r_eff_pix $v
+	}
+    }
+
     # Compute ellipse: ISO_RADIUS as semi-major, scaled by B/A for semi-minor
     set semi_a $iso_radius
     set semi_b $iso_radius
@@ -1282,6 +1349,12 @@ proc CatalogPanelGotoSource {row} {
     # Create cross point marker (cyan)
     set sextract_sel_reg "image\ncross point($x $y) # color=cyan width=2 point=cross 15 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
     catch {$frame marker catalog command ds9 var sextract_sel_reg}
+
+    # If R_EFF_PIX is available, show a circle with effective radius
+    if {$r_eff_pix > 0} {
+	set sextract_sel_reg "image\ncircle($x $y ${r_eff_pix}i) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
+	catch {$frame marker catalog command ds9 var sextract_sel_reg}
+    }
 
     # Create ellipse marker (green, dashed)
     set sextract_sel_reg "image\nellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
@@ -8210,6 +8283,7 @@ proc CatalogPanelICLParamSave {} {
     foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
 		   interp-method detect-thresh \
 		   bkg-method bkg-order bkg-sigma-clip bkg-sep-mesh \
+		   bkg-iterative bkg-n-iterations bkg-convergence-tol bkg-refine-thresh \
 		   rmin rmax nsteps spacing ellipticity pa \
 		   mag-zeropoint pixel-scale \
 		   mu-threshold mu-levels measure-radius} {
@@ -8261,6 +8335,17 @@ proc CatalogPanelICLMask {} {
     }
 
     set catpanel(icl,has_mask) 1
+
+    # Auto-display masked image in new frame
+    if {[file exists $catpanel(icl,masked_file)]} {
+	CreateFrame
+	if {![catch {LoadFitsFile $catpanel(icl,masked_file) {} {}}]} {
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	}
+    }
+
     set catpanel(status) "ICL: Source mask created"
 }
 
@@ -8321,12 +8406,33 @@ proc CatalogPanelICLBackground {method} {
 	lappend args --mask $catpanel(icl,mask_file)
     }
 
+    # Iterative background refinement
+    if {$catpanel(icl,param,bkg-iterative)} {
+	lappend args --iterative \
+	    --interp-method $catpanel(icl,param,interp-method) \
+	    --bkg-n-iterations $catpanel(icl,param,bkg-n-iterations) \
+	    --bkg-convergence-tol $catpanel(icl,param,bkg-convergence-tol) \
+	    --bkg-refine-thresh $catpanel(icl,param,bkg-refine-thresh) \
+	    --mask-output $catpanel(icl,mask_file)
+    }
+
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL background error: $err"
 	return
     }
 
     set catpanel(icl,has_bkg) 1
+
+    # Auto-display bgsub image in new frame
+    if {[file exists $catpanel(icl,bgsub_file)]} {
+	CreateFrame
+	if {![catch {LoadFitsFile $catpanel(icl,bgsub_file) {} {}}]} {
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	}
+    }
+
     set catpanel(status) "ICL: Background model ($method) complete"
 }
 
@@ -8440,7 +8546,45 @@ proc CatalogPanelICLProfile {} {
 
     # Display profile in catalog table
     CatalogPanelLoadTSV $data "icl_profile"
+
+    # Draw annulus markers
+    CatalogPanelICLDrawAnnuli
+
     set catpanel(status) "ICL: SB profile measured"
+}
+
+proc CatalogPanelICLDrawAnnuli {} {
+    global catpanel current
+
+    set frame $current(frame)
+    if {$frame eq {}} return
+
+    # Delete existing annulus markers
+    catch {$frame marker catalog icl_annulus delete}
+
+    # BCG center (0-indexed → 1-indexed for ds9 markers)
+    set cx [expr {$catpanel(icl,center_x) + 1.0}]
+    set cy [expr {$catpanel(icl,center_y) + 1.0}]
+
+    # Draw BCG center cross
+    set MARKER "physical; cross point $cx $cy 20 # color=cyan tag={icl_annulus}"
+    set marker_var _icl_ann_center
+    global $marker_var
+    set $marker_var $MARKER
+    $frame marker catalog command ds9 var $marker_var
+
+    # Draw annulus rings at 25%, 50%, 75%, 100% of rmax
+    set rmin $catpanel(icl,param,rmin)
+    set rmax $catpanel(icl,param,rmax)
+    foreach frac {0.25 0.50 0.75 1.00} {
+	set r [expr {$rmin + ($rmax - $rmin) * $frac}]
+	set ri [expr {int($r)}]
+	set MARKER "physical; circle $cx $cy $r # color=green dash=1 width=1 tag={icl_annulus} text={r=${ri}}"
+	set marker_var _icl_ann_ring_$ri
+	global $marker_var
+	set $marker_var $MARKER
+	$frame marker catalog command ds9 var $marker_var
+    }
 }
 
 proc CatalogPanelICLSectorProfile {} {
@@ -8568,7 +8712,290 @@ proc CatalogPanelICLMeasure {} {
     }
 
     CatalogPanelLoadTSV $data "icl_measurements"
+
+    # Draw isophotal radius markers
+    CatalogPanelICLDrawIsophotes $data
+
     set catpanel(status) "ICL: Measurements complete"
+}
+
+proc CatalogPanelICLDrawIsophotes {data} {
+    global catpanel current
+
+    set frame $current(frame)
+    if {$frame eq {}} return
+    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} return
+
+    # Delete existing annulus markers
+    catch {$frame marker catalog icl_annulus delete}
+
+    set cx [expr {$catpanel(icl,center_x) + 1.0}]
+    set cy [expr {$catpanel(icl,center_y) + 1.0}]
+
+    # BCG center cross
+    set MARKER "physical; cross point $cx $cy 20 # color=cyan tag={icl_annulus}"
+    set marker_var _icl_iso_center
+    global $marker_var
+    set $marker_var $MARKER
+    $frame marker catalog command ds9 var $marker_var
+
+    # Parse TSV for R_MU* columns
+    set lines [split $data \n]
+    if {[llength $lines] < 2} return
+    set headers [split [lindex $lines 0] "\t"]
+    set vals [split [lindex $lines 1] "\t"]
+
+    for {set c 0} {$c < [llength $headers]} {incr c} {
+	set h [string trim [lindex $headers $c]]
+	if {[string match "R_MU*" $h] && ![string match "*ARCSEC" $h]} {
+	    set v [string trim [lindex $vals $c]]
+	    if {$v ne "NaN" && [string is double $v]} {
+		set r [expr {double($v)}]
+		if {$r > 0 && $r < 1e6} {
+		    # Extract mu level from column name (R_MU26 → 26)
+		    set mu_label [string range $h 4 end]
+		    set MARKER "physical; circle $cx $cy $r # color=magenta dash=1 width=1 tag={icl_annulus} text={mu=$mu_label}"
+		    set marker_var _icl_iso_$c
+		    global $marker_var
+		    set $marker_var $MARKER
+		    $frame marker catalog command ds9 var $marker_var
+		}
+	    }
+	}
+    }
+}
+
+# --- Multi-Threshold ICL ---
+
+proc CatalogPanelICLMeasureMulti {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
+	set catpanel(status) "ICL: No profile available — run Measure Profile first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} { set fn "dummy.fits" }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Computing multi-threshold ICL..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode measure-multi \
+	--profile-file $catpanel(icl,profile_file) \
+	--pixel-scale $catpanel(icl,param,pixel-scale)]
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL multi-threshold error: $err"
+	return
+    }
+
+    CatalogPanelLoadTSV $data "icl_multi_threshold"
+    set catpanel(status) "ICL: Multi-threshold measurements complete"
+}
+
+# --- BCG+ICL Decomposition ---
+
+proc CatalogPanelICLDecompose {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
+	set catpanel(status) "ICL: No profile available — run Measure Profile first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} { set fn "dummy.fits" }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: BCG+ICL decomposition..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode decompose \
+	--profile-file $catpanel(icl,profile_file) \
+	--pixel-scale $catpanel(icl,param,pixel-scale) \
+	--mag-zeropoint $catpanel(icl,param,mag-zeropoint)]
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL decompose error: $err"
+	return
+    }
+
+    CatalogPanelLoadTSV $data "icl_decomposition"
+    set catpanel(status) "ICL: BCG+ICL decomposition complete"
+}
+
+# --- Color Profile Dialog ---
+
+proc CatalogPanelICLColorProfile {} {
+    global catpanel ed
+
+    set w .iclcolor
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "ICL Color Profile"
+    wm geometry $w 450x280
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    ttk::label $f.linfo -text "Specify 2-4 bands for color profile measurement:"
+    grid $f.linfo -row 0 -column 0 -columnspan 3 -sticky w -padx 4 -pady 4
+
+    for {set i 1} {$i <= 4} {incr i} {
+	set ed(icl,color_name_$i) {}
+	set ed(icl,color_file_$i) {}
+
+	ttk::label $f.ln$i -text "Band $i name:"
+	ttk::entry $f.en$i -textvariable ed(icl,color_name_$i) -width 8
+	ttk::entry $f.ef$i -textvariable ed(icl,color_file_$i) -width 25
+	ttk::button $f.bb$i -text "Browse" -command [list CatalogPanelICLColorBrowse $i]
+
+	grid $f.ln$i -row $i -column 0 -sticky w -padx 4 -pady 2
+	grid $f.en$i -row $i -column 1 -sticky w -padx 2 -pady 2
+	grid $f.ef$i -row $i -column 2 -sticky ew -padx 2 -pady 2
+	grid $f.bb$i -row $i -column 3 -sticky w -padx 2 -pady 2
+    }
+
+    grid columnconfigure $f 2 -weight 1
+
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+    ttk::button $bf.run -text "Run" -command [list CatalogPanelICLColorProfileRun $w]
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.run -side right -padx 4
+}
+
+proc CatalogPanelICLColorBrowse {idx} {
+    global ed
+
+    set fname [tk_getOpenFile -filetypes {{{FITS} {.fits .fit .fts}} {{All} *}}]
+    if {$fname ne {}} {
+	set ed(icl,color_file_$idx) $fname
+    }
+}
+
+proc CatalogPanelICLColorProfileRun {w} {
+    global catpanel ed
+
+    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
+	set catpanel(status) "ICL: Set BCG center first"
+	return
+    }
+
+    # Build band spec
+    set bands {}
+    for {set i 1} {$i <= 4} {incr i} {
+	set name [string trim $ed(icl,color_name_$i)]
+	set file [string trim $ed(icl,color_file_$i)]
+	if {$name ne {} && $file ne {} && [file exists $file]} {
+	    if {$bands ne {}} { append bands , }
+	    append bands "$name:$file"
+	}
+    }
+
+    if {$bands eq {}} {
+	set catpanel(status) "ICL: Need at least 2 bands with name and file"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} { set fn "dummy.fits" }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set catpanel(status) "ICL: Measuring color profile..."
+    update idletasks
+
+    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+
+    set args [list python3 $script $fn --mode color \
+	--center $center \
+	--bands $bands \
+	--rmin $catpanel(icl,param,rmin) \
+	--rmax $catpanel(icl,param,rmax) \
+	--nsteps $catpanel(icl,param,nsteps) \
+	--spacing $catpanel(icl,param,spacing) \
+	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
+	--pixel-scale $catpanel(icl,param,pixel-scale)]
+
+    if {$catpanel(icl,has_mask) && [file exists $catpanel(icl,mask_file)]} {
+	lappend args --mask $catpanel(icl,mask_file)
+    }
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL color profile error: $err"
+	return
+    }
+
+    destroy $w
+    CatalogPanelLoadTSV $data "icl_color_profile"
+    set catpanel(status) "ICL: Color profile complete"
+}
+
+# --- Save/Load Profile ---
+
+proc CatalogPanelICLSaveProfile {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
+	set catpanel(status) "ICL: No profile available"
+	return
+    }
+
+    set fname [tk_getSaveFile -defaultextension .tsv \
+	-filetypes {{{TSV} {.tsv}} {{All} *}} \
+	-initialfile icl_profile.tsv]
+    if {$fname eq {}} return
+
+    if {[catch {file copy -force $catpanel(icl,profile_file) $fname} err]} {
+	set catpanel(status) "ICL: Save error: $err"
+	return
+    }
+    set catpanel(status) "ICL: Profile saved to $fname"
+}
+
+proc CatalogPanelICLLoadProfile {} {
+    global catpanel
+
+    set fname [tk_getOpenFile -filetypes {{{TSV} {.tsv}} {{All} *}}]
+    if {$fname eq {} || ![file exists $fname]} return
+
+    if {[catch {set fd [open $fname r]} err]} {
+	set catpanel(status) "ICL: Load error: $err"
+	return
+    }
+    set data [read $fd]
+    close $fd
+
+    # Copy to standard location
+    if {[catch {file copy -force $fname $catpanel(icl,profile_file)} err]} {
+	# Non-fatal
+    }
+
+    set catpanel(icl,has_profile) 1
+    CatalogPanelLoadTSV [string trim $data] "icl_profile"
+    set catpanel(status) "ICL: Profile loaded from $fname"
 }
 
 # --- Settings Dialog ---
@@ -8591,6 +9018,7 @@ proc CatalogPanelICLSettings {} {
     foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
 		   interp-method detect-thresh \
 		   bkg-order bkg-sigma-clip bkg-sep-mesh \
+		   bkg-iterative bkg-n-iterations bkg-convergence-tol bkg-refine-thresh \
 		   rmin rmax nsteps spacing ellipticity pa \
 		   mag-zeropoint pixel-scale \
 		   mu-threshold mu-levels measure-radius} {
@@ -8656,6 +9084,33 @@ proc CatalogPanelICLSettings {} {
     ttk::entry $t2.esm -textvariable ed(icl,bkg-sep-mesh) -width 10
     grid $t2.lsm -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t2.esm -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::separator $t2.sep1 -orient horizontal
+    grid $t2.sep1 -row $r -column 0 -columnspan 2 -sticky ew -padx 8 -pady 6
+    incr r
+
+    ttk::checkbutton $t2.cbi -text "Iterative refinement" \
+	-variable ed(icl,bkg-iterative)
+    grid $t2.cbi -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady 4
+    incr r
+
+    ttk::label $t2.lni -text "N iterations:"
+    ttk::entry $t2.eni -textvariable ed(icl,bkg-n-iterations) -width 10
+    grid $t2.lni -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.eni -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lct -text "Convergence tol:"
+    ttk::entry $t2.ect -textvariable ed(icl,bkg-convergence-tol) -width 10
+    grid $t2.lct -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ect -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lrt -text "Refine threshold (sigma):"
+    ttk::entry $t2.ert -textvariable ed(icl,bkg-refine-thresh) -width 10
+    grid $t2.lrt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ert -row $r -column 1 -sticky w -padx 4 -pady 4
 
     # --- Tab 3: Profile ---
     set t3 [ttk::frame $w.nb.prof]
@@ -8751,6 +9206,7 @@ proc CatalogPanelICLSettingsApply {w} {
     foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
 		   interp-method detect-thresh \
 		   bkg-order bkg-sigma-clip bkg-sep-mesh \
+		   bkg-iterative bkg-n-iterations bkg-convergence-tol bkg-refine-thresh \
 		   rmin rmax nsteps spacing ellipticity pa \
 		   mag-zeropoint pixel-scale \
 		   mu-threshold mu-levels measure-radius} {
@@ -8771,6 +9227,10 @@ proc CatalogPanelICLSettingsDefaults {} {
     set ed(icl,bkg-order) 3
     set ed(icl,bkg-sigma-clip) 3.0
     set ed(icl,bkg-sep-mesh) 256
+    set ed(icl,bkg-iterative) 0
+    set ed(icl,bkg-n-iterations) 3
+    set ed(icl,bkg-convergence-tol) 0.01
+    set ed(icl,bkg-refine-thresh) 2.0
     set ed(icl,rmin) 5.0
     set ed(icl,rmax) 1000.0
     set ed(icl,nsteps) 80
@@ -8823,13 +9283,19 @@ proc CatalogPanelLSBGParamSave {} {
     foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
 		   bright-star-mag-limit bright-star-radius-scale \
 		   mask-mag-threshold interp-method \
+		   lsb-protect lsb-mu-threshold \
 		   bkg-method bkg-mesh-size bkg-poly-order \
 		   bkg-sigma-clip bkg-n-iterations bkg-refine-thresh \
+		   bkg-rms-quantile bkg-convergence-tol \
 		   detect-thresh detect-minarea detect-filter-kernel \
 		   deblend-nthresh deblend-mincont \
+		   multiscale multiscale-factors \
+		   sersic-fit sersic-n-min sersic-n-max sersic-re-min \
+		   sersic-cutout-scale sersic-max-nfev \
 		   phot-apertures mag-zeropoint pixel-scale \
 		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
-		   ellipticity-max min-snr} {
+		   ellipticity-max min-snr \
+		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max} {
 	puts $fd "$pname $catpanel(lsbg,param,$pname)"
     }
     close $fd
@@ -8863,9 +9329,17 @@ proc CatalogPanelLSBGMask {} {
 	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
 	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
 	--interp-method $catpanel(lsbg,param,interp-method) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--lsb-mu-threshold $catpanel(lsbg,param,lsb-mu-threshold) \
 	--mask-output $catpanel(lsbg,mask_file) \
 	--masked-output $catpanel(lsbg,masked_file) \
 	--n-workers $catpanel(param,n-workers)]
+    if {$catpanel(lsbg,param,lsb-protect)} {
+	lappend args --lsb-protect
+    } else {
+	lappend args --no-lsb-protect
+    }
 
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG mask error: $err"
@@ -8873,7 +9347,18 @@ proc CatalogPanelLSBGMask {} {
     }
 
     set catpanel(lsbg,has_mask) 1
-    set catpanel(status) "LSBG: Bright source mask created"
+
+    # Auto-display masked image in new frame
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(lsbg,masked_file) {} {}} err]} {
+	set catpanel(status) "LSBG: Mask done but could not display: $err"
+    } else {
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+    }
+
+    set catpanel(status) "LSBG: Bright source mask created (new frame)"
 }
 
 proc CatalogPanelLSBGViewMask {} {
@@ -8928,7 +9413,11 @@ proc CatalogPanelLSBGClean {method} {
 	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
 	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
 	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
+	--bkg-rms-quantile $catpanel(lsbg,param,bkg-rms-quantile) \
+	--bkg-convergence-tol $catpanel(lsbg,param,bkg-convergence-tol) \
 	--interp-method $catpanel(lsbg,param,interp-method) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
 	--bkg-output $catpanel(lsbg,bkg_file) \
 	--cleaned-output $catpanel(lsbg,cleaned_file) \
 	--n-workers $catpanel(param,n-workers)]
@@ -8939,7 +9428,18 @@ proc CatalogPanelLSBGClean {method} {
     }
 
     set catpanel(lsbg,has_clean) 1
-    set catpanel(status) "LSBG: Background cleaned ($method)"
+
+    # Auto-display cleaned image in new frame
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}} err]} {
+	set catpanel(status) "LSBG: Clean done but could not display: $err"
+    } else {
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+    }
+
+    set catpanel(status) "LSBG: Background cleaned ($method) (new frame)"
 }
 
 proc CatalogPanelLSBGViewClean {} {
@@ -8993,8 +9493,16 @@ proc CatalogPanelLSBGDetect {} {
 	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
 	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
 	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--multiscale-factors $catpanel(lsbg,param,multiscale-factors) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
 	--segmap-output $catpanel(lsbg,segmap_file) \
 	--n-workers $catpanel(param,n-workers)]
+    if {$catpanel(lsbg,param,multiscale)} {
+	lappend args --multiscale
+    } else {
+	lappend args --no-multiscale
+    }
 
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG detect error: $err"
@@ -9005,6 +9513,18 @@ proc CatalogPanelLSBGDetect {} {
     set catpanel(lsbg,detect_data) $result
     set catpanel(lsbg,has_detect) 1
 
+    # Auto-display segmentation map in new frame
+    if {[file exists $catpanel(lsbg,segmap_file)]} {
+	CreateFrame
+	if {[catch {LoadFitsFile $catpanel(lsbg,segmap_file) {} {}} err]} {
+	    set catpanel(status) "LSBG: Detect done but could not display segmap: $err"
+	} else {
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	}
+    }
+
     # Load into panel table
     set catpanel(alldata) $result
     CatalogPanelDisplayTable
@@ -9012,10 +9532,10 @@ proc CatalogPanelLSBGDetect {} {
     # Count detections
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
-    set catpanel(status) "LSBG: $nsrc candidates detected"
+    set catpanel(status) "LSBG: $nsrc candidates detected (segmap in new frame)"
 }
 
-# --- 4. Photometry + Filter ---
+# --- 4. Photometry ---
 
 proc CatalogPanelLSBGPhotometry {} {
     global catpanel
@@ -9056,12 +9576,6 @@ proc CatalogPanelLSBGPhotometry {} {
 	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
 	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
 	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
-	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
-	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
-	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
-	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
-	--min-snr $catpanel(lsbg,param,min-snr) \
 	--n-workers $catpanel(param,n-workers)]
 
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
@@ -9069,7 +9583,6 @@ proc CatalogPanelLSBGPhotometry {} {
 	return
     }
 
-    # Load filtered catalog into panel
     set catpanel(alldata) $result
     set catpanel(lsbg,has_catalog) 1
     CatalogPanelDisplayTable
@@ -9077,9 +9590,150 @@ proc CatalogPanelLSBGPhotometry {} {
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
 
-    # Mark all sources
     CatalogPanelMarkAll
-    set catpanel(status) "LSBG: $nsrc sources with photometry + filtering"
+    set catpanel(status) "LSBG: $nsrc sources — photometry done"
+}
+
+# --- 5. Sérsic Profile Fit ---
+
+proc CatalogPanelLSBGSersic {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+	return
+    }
+
+    if {!$catpanel(lsbg,has_detect) || ![file exists $catpanel(lsbg,segmap_file)]} {
+	set catpanel(status) "LSBG: No detections — run Detect first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Fitting Sérsic profiles..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode sersic \
+	--cleaned $catpanel(lsbg,cleaned_file) \
+	--segmap $catpanel(lsbg,segmap_file) \
+	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
+	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
+	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
+	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
+	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
+	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
+	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
+	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
+	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG Sérsic fit error: $err"
+	return
+    }
+
+    set catpanel(alldata) $result
+    set catpanel(lsbg,has_catalog) 1
+    CatalogPanelDisplayTable
+
+    set nlines [llength [split $result \n]]
+    set nsrc [expr {$nlines - 1}]
+
+    CatalogPanelMarkAll
+    set catpanel(status) "LSBG: $nsrc sources — Sérsic fit done"
+}
+
+# --- 6. Filter + Grade ---
+
+proc CatalogPanelLSBGFilter {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+	return
+    }
+
+    if {!$catpanel(lsbg,has_detect) || ![file exists $catpanel(lsbg,segmap_file)]} {
+	set catpanel(status) "LSBG: No detections — run Detect first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Filtering + grading candidates..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode filter \
+	--cleaned $catpanel(lsbg,cleaned_file) \
+	--segmap $catpanel(lsbg,segmap_file) \
+	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
+	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
+	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
+	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
+	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
+	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
+	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
+	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
+	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
+	--min-snr $catpanel(lsbg,param,min-snr) \
+	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
+	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
+	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
+	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
+	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
+	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
+	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
+	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
+	--n-workers $catpanel(param,n-workers)]
+    if {$catpanel(lsbg,param,sersic-fit)} {
+	lappend args --sersic-fit
+    } else {
+	lappend args --no-sersic-fit
+    }
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG filter error: $err"
+	return
+    }
+
+    set catpanel(alldata) $result
+    set catpanel(lsbg,has_catalog) 1
+    CatalogPanelDisplayTable
+
+    set nlines [llength [split $result \n]]
+    set nsrc [expr {$nlines - 1}]
+
+    CatalogPanelMarkAll
+    set catpanel(status) "LSBG: $nsrc candidates passed filtering"
 }
 
 # --- Run Full Pipeline ---
@@ -9110,17 +9764,26 @@ proc CatalogPanelLSBGRunAll {} {
 	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
 	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
 	--interp-method $catpanel(lsbg,param,interp-method) \
+	--lsb-mu-threshold $catpanel(lsbg,param,lsb-mu-threshold) \
 	--bkg-method $catpanel(lsbg,param,bkg-method) \
 	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
 	--bkg-poly-order $catpanel(lsbg,param,bkg-poly-order) \
 	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
 	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
 	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
+	--bkg-rms-quantile $catpanel(lsbg,param,bkg-rms-quantile) \
+	--bkg-convergence-tol $catpanel(lsbg,param,bkg-convergence-tol) \
 	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
 	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
 	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
 	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
 	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--multiscale-factors $catpanel(lsbg,param,multiscale-factors) \
+	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
+	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
+	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
+	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
+	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
 	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
 	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
 	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
@@ -9130,6 +9793,9 @@ proc CatalogPanelLSBGRunAll {} {
 	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
 	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
 	--min-snr $catpanel(lsbg,param,min-snr) \
+	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
+	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
+	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
 	--mask-output $catpanel(lsbg,mask_file) \
 	--masked-output $catpanel(lsbg,masked_file) \
 	--bkg-output $catpanel(lsbg,bkg_file) \
@@ -9137,6 +9803,21 @@ proc CatalogPanelLSBGRunAll {} {
 	--segmap-output $catpanel(lsbg,segmap_file) \
 	--catalog-output $catpanel(lsbg,catalog_file) \
 	--n-workers $catpanel(param,n-workers)]
+    if {$catpanel(lsbg,param,lsb-protect)} {
+	lappend args --lsb-protect
+    } else {
+	lappend args --no-lsb-protect
+    }
+    if {$catpanel(lsbg,param,multiscale)} {
+	lappend args --multiscale
+    } else {
+	lappend args --no-multiscale
+    }
+    if {$catpanel(lsbg,param,sersic-fit)} {
+	lappend args --sersic-fit
+    } else {
+	lappend args --no-sersic-fit
+    }
 
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG pipeline error: $err"
@@ -9171,6 +9852,95 @@ proc CatalogPanelLSBGRunAll {} {
     set catpanel(status) "LSBG: Pipeline complete — $nsrc candidates"
 }
 
+# --- 7. Forced Photometry (Multi-Band) ---
+
+proc CatalogPanelLSBGForcedPhot {} {
+    global catpanel current
+
+    # Check that we have a catalog
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "LSBG: No catalog — run pipeline first"
+	return
+    }
+
+    # Select the other band FITS file
+    set band_fits [tk_getOpenFile \
+	-title "Select Other Band FITS Image" \
+	-filetypes {
+	    {{FITS Files} {.fits .fit .fts .fits.gz .fit.gz}}
+	    {{All Files} {*}}
+	}]
+    if {$band_fits eq {}} return
+
+    # Ask for band name
+    set w .lsbg_bandname
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Band Name"
+    wm geometry $w 300x100
+    wm transient $w .
+    ttk::label $w.l -text "Enter band name (e.g. F606W):"
+    ttk::entry $w.e -textvariable catpanel(lsbg,tmp_bandname)
+    set catpanel(lsbg,tmp_bandname) ""
+    ttk::frame $w.btns
+    ttk::button $w.btns.ok -text "OK" -command [list set catpanel(lsbg,band_dialog_done) 1]
+    ttk::button $w.btns.cancel -text "Cancel" -command [list set catpanel(lsbg,band_dialog_done) 0]
+    pack $w.l -padx 10 -pady 5
+    pack $w.e -padx 10 -fill x
+    pack $w.btns -pady 5
+    pack $w.btns.ok $w.btns.cancel -side left -padx 10
+    focus $w.e
+    bind $w.e <Return> [list set catpanel(lsbg,band_dialog_done) 1]
+    tkwait variable catpanel(lsbg,band_dialog_done)
+    set band_name $catpanel(lsbg,tmp_bandname)
+    catch {destroy $w}
+    if {!$catpanel(lsbg,band_dialog_done) || $band_name eq {}} return
+
+    # Save current catalog to temp file
+    set tmpcat [CatalogPanelSaveTempCatalog lsbg_forced]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "LSBG: Failed to save temp catalog"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set catpanel(status) "LSBG: Forced photometry ($band_name)..."
+    update idletasks
+
+    set args [list python3 $script $band_fits --mode forced \
+	--catalog $tmpcat \
+	--band-name $band_name \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG forced phot error: $err"
+	return
+    }
+
+    # Merge result columns into current catalog
+    set col_names [list FLUX_$band_name FLUXERR_$band_name MAG_$band_name MAGERR_$band_name]
+    CatalogPanelAddColumnsFromTSV $result $col_names
+
+    # Load the other band image in a new frame
+    CreateFrame
+    if {[catch {LoadFitsFile $band_fits {} {}} err]} {
+	set catpanel(status) "LSBG: Forced phot done but could not display band image"
+    } else {
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+    }
+
+    set catpanel(status) "LSBG: Forced photometry ($band_name) complete — columns added"
+}
+
 # --- LSBG Settings Dialog ---
 
 proc CatalogPanelLSBGSettings {} {
@@ -9185,19 +9955,25 @@ proc CatalogPanelLSBGSettings {} {
 
     toplevel $w
     wm title $w "LSBG Detection Settings"
-    wm geometry $w 460x560
+    wm geometry $w 500x620
 
     # Copy current values
     foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
 		   bright-star-mag-limit bright-star-radius-scale \
 		   mask-mag-threshold interp-method \
+		   lsb-protect lsb-mu-threshold \
 		   bkg-method bkg-mesh-size bkg-poly-order \
 		   bkg-sigma-clip bkg-n-iterations bkg-refine-thresh \
+		   bkg-rms-quantile bkg-convergence-tol \
 		   detect-thresh detect-minarea detect-filter-kernel \
 		   deblend-nthresh deblend-mincont \
+		   multiscale multiscale-factors \
+		   sersic-fit sersic-n-min sersic-n-max sersic-re-min \
+		   sersic-cutout-scale sersic-max-nfev \
 		   phot-apertures mag-zeropoint pixel-scale \
 		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
-		   ellipticity-max min-snr} {
+		   ellipticity-max min-snr \
+		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max} {
 	set ed(lsbg,$pname) $catpanel(lsbg,param,$pname)
     }
 
@@ -9244,6 +10020,17 @@ proc CatalogPanelLSBGSettings {} {
     ttk::entry $t1.edt -textvariable ed(lsbg,mask-detect-thresh) -width 10
     grid $t1.ldt -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t1.edt -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::checkbutton $t1.clp -text "LSB structure protection" \
+	-variable ed(lsbg,lsb-protect)
+    grid $t1.clp -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady 4
+    incr r
+
+    ttk::label $t1.llm -text "LSB mu threshold:"
+    ttk::entry $t1.elm -textvariable ed(lsbg,lsb-mu-threshold) -width 10
+    grid $t1.llm -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.elm -row $r -column 1 -sticky w -padx 4 -pady 4
 
     # --- Tab 2: Background ---
     set t2 [ttk::frame $w.nb.bkg]
@@ -9285,6 +10072,18 @@ proc CatalogPanelLSBGSettings {} {
     ttk::entry $t2.ert -textvariable ed(lsbg,bkg-refine-thresh) -width 10
     grid $t2.lrt -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t2.ert -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lrq -text "RMS quantile:"
+    ttk::entry $t2.erq -textvariable ed(lsbg,bkg-rms-quantile) -width 10
+    grid $t2.lrq -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.erq -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t2.lct -text "Convergence tolerance:"
+    ttk::entry $t2.ect -textvariable ed(lsbg,bkg-convergence-tol) -width 10
+    grid $t2.lct -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t2.ect -row $r -column 1 -sticky w -padx 4 -pady 4
 
     # --- Tab 3: Detection ---
     set t3 [ttk::frame $w.nb.det]
@@ -9320,6 +10119,22 @@ proc CatalogPanelLSBGSettings {} {
     ttk::entry $t3.emc -textvariable ed(lsbg,deblend-mincont) -width 10
     grid $t3.lmc -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t3.emc -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::checkbutton $t3.cms -text "Multi-scale detection" \
+	-variable ed(lsbg,multiscale)
+    grid $t3.cms -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady 4
+    incr r
+
+    ttk::label $t3.lmf -text "Scale factors:"
+    ttk::entry $t3.emf -textvariable ed(lsbg,multiscale-factors) -width 10
+    grid $t3.lmf -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t3.emf -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::checkbutton $t3.csf -text "Sérsic profile fitting" \
+	-variable ed(lsbg,sersic-fit)
+    grid $t3.csf -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady 4
 
     # --- Tab 4: Calibration & Filter ---
     set t4 [ttk::frame $w.nb.cal]
@@ -9378,6 +10193,28 @@ proc CatalogPanelLSBGSettings {} {
     ttk::entry $t4.eap -textvariable ed(lsbg,phot-apertures) -width 18
     grid $t4.lap -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t4.eap -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::separator $t4.sep -orient horizontal
+    grid $t4.sep -row $r -column 0 -columnspan 2 -sticky ew -padx 8 -pady 6
+    incr r
+
+    ttk::label $t4.lsnm -text "Sérsic n min:"
+    ttk::entry $t4.esnm -textvariable ed(lsbg,sersic-n-filter-min) -width 10
+    grid $t4.lsnm -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.esnm -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lsnx -text "Sérsic n max:"
+    ttk::entry $t4.esnx -textvariable ed(lsbg,sersic-n-filter-max) -width 10
+    grid $t4.lsnx -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.esnx -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t4.lsc2 -text "Sérsic chi2 max:"
+    ttk::entry $t4.esc2 -textvariable ed(lsbg,sersic-chi2-max) -width 10
+    grid $t4.lsc2 -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.esc2 -row $r -column 1 -sticky w -padx 4 -pady 4
 
     # Buttons
     set bf [ttk::frame $w.buttons]
@@ -9398,13 +10235,19 @@ proc CatalogPanelLSBGSettingsApply {w} {
     foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
 		   bright-star-mag-limit bright-star-radius-scale \
 		   mask-mag-threshold interp-method \
+		   lsb-protect lsb-mu-threshold \
 		   bkg-method bkg-mesh-size bkg-poly-order \
 		   bkg-sigma-clip bkg-n-iterations bkg-refine-thresh \
+		   bkg-rms-quantile bkg-convergence-tol \
 		   detect-thresh detect-minarea detect-filter-kernel \
 		   deblend-nthresh deblend-mincont \
+		   multiscale multiscale-factors \
+		   sersic-fit sersic-n-min sersic-n-max sersic-re-min \
+		   sersic-cutout-scale sersic-max-nfev \
 		   phot-apertures mag-zeropoint pixel-scale \
 		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
-		   ellipticity-max min-snr} {
+		   ellipticity-max min-snr \
+		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max} {
 	set catpanel(lsbg,param,$pname) $ed(lsbg,$pname)
     }
     CatalogPanelLSBGParamSave
@@ -9421,17 +10264,29 @@ proc CatalogPanelLSBGSettingsDefaults {} {
     set ed(lsbg,bright-star-radius-scale) 12.0
     set ed(lsbg,mask-mag-threshold) 22.0
     set ed(lsbg,interp-method) linear
+    set ed(lsbg,lsb-protect) 1
+    set ed(lsbg,lsb-mu-threshold) 24.0
     set ed(lsbg,bkg-method) sep_large
     set ed(lsbg,bkg-mesh-size) 256
     set ed(lsbg,bkg-poly-order) 3
     set ed(lsbg,bkg-sigma-clip) 3.0
     set ed(lsbg,bkg-n-iterations) 3
     set ed(lsbg,bkg-refine-thresh) 2.0
+    set ed(lsbg,bkg-rms-quantile) 0.25
+    set ed(lsbg,bkg-convergence-tol) 0.01
     set ed(lsbg,detect-thresh) 0.8
     set ed(lsbg,detect-minarea) 50
     set ed(lsbg,detect-filter-kernel) gauss5x5
     set ed(lsbg,deblend-nthresh) 32
     set ed(lsbg,deblend-mincont) 0.005
+    set ed(lsbg,multiscale) 1
+    set ed(lsbg,multiscale-factors) 1,2,4
+    set ed(lsbg,sersic-fit) 1
+    set ed(lsbg,sersic-n-min) 0.2
+    set ed(lsbg,sersic-n-max) 10.0
+    set ed(lsbg,sersic-re-min) 0.5
+    set ed(lsbg,sersic-cutout-scale) 5.0
+    set ed(lsbg,sersic-max-nfev) 500
     set ed(lsbg,phot-apertures) 5,10,20,40
     set ed(lsbg,mag-zeropoint) 25.0
     set ed(lsbg,pixel-scale) 0.06
@@ -9441,6 +10296,9 @@ proc CatalogPanelLSBGSettingsDefaults {} {
     set ed(lsbg,r-eff-max) 60.0
     set ed(lsbg,ellipticity-max) 0.7
     set ed(lsbg,min-snr) 2.0
+    set ed(lsbg,sersic-n-filter-min) 0.3
+    set ed(lsbg,sersic-n-filter-max) 6.0
+    set ed(lsbg,sersic-chi2-max) 10.0
 }
 
 # ===== Per-Frame Catalog Panel State Management =====

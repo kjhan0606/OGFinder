@@ -46,6 +46,64 @@ def compute_icl_fraction(profile, mu_threshold=26.5):
     return f_icl, l_icl, l_gal
 
 
+def compute_icl_fraction_multi(profile, mu_min=25.0, mu_max=28.0,
+                                mu_step=0.5, n_bootstrap=200):
+    """Compute ICL fraction at multiple SB thresholds with bootstrap errors.
+
+    Parameters
+    ----------
+    profile : list of dict
+        SB profile with keys MU, FLUX.
+    mu_min : float
+        Minimum SB threshold (mag/arcsec^2).
+    mu_max : float
+        Maximum SB threshold (mag/arcsec^2).
+    mu_step : float
+        Step between thresholds.
+    n_bootstrap : int
+        Number of bootstrap resamples for error estimation.
+
+    Returns
+    -------
+    results : list of dict
+        Each dict has MU_THRESHOLD, F_ICL, F_ICL_ERR, L_ICL, L_GAL.
+    """
+    thresholds = np.arange(mu_min, mu_max + mu_step / 2.0, mu_step)
+
+    # Filter valid profile entries
+    valid = [p for p in profile if p['MU'] < 99.0 and p['FLUX'] > 0]
+    if not valid:
+        return [{'MU_THRESHOLD': float(t), 'F_ICL': 0.0, 'F_ICL_ERR': 0.0,
+                 'L_ICL': 0.0, 'L_GAL': 0.0} for t in thresholds]
+
+    results = []
+    for mu_thresh in thresholds:
+        f_icl, l_icl, l_gal = compute_icl_fraction(profile, mu_thresh)
+
+        # Bootstrap error
+        if n_bootstrap > 0 and len(valid) > 2:
+            rng = np.random.default_rng(42)
+            f_boot = []
+            for _ in range(n_bootstrap):
+                idx = rng.choice(len(valid), size=len(valid), replace=True)
+                sample = [valid[i] for i in idx]
+                fb, _, _ = compute_icl_fraction(sample, mu_thresh)
+                f_boot.append(fb)
+            f_icl_err = float(np.std(f_boot))
+        else:
+            f_icl_err = 0.0
+
+        results.append({
+            'MU_THRESHOLD': float(mu_thresh),
+            'F_ICL': float(f_icl),
+            'F_ICL_ERR': float(f_icl_err),
+            'L_ICL': float(l_icl),
+            'L_GAL': float(l_gal),
+        })
+
+    return results
+
+
 def compute_isophotal_radii(profile, mu_levels):
     """Compute radii at specified surface brightness levels.
 

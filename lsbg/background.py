@@ -182,14 +182,60 @@ def _fit_single(data, mask, method, order, sigma_clip, mesh_size):
         return sep_large_mesh_background(data, mask, mesh_size=mesh_size)
 
 
+def compute_quantile_rms(data, mask, quantile=0.25):
+    """Compute lower-quantile RMS for more sensitive diffuse emission detection.
+
+    Standard RMS includes noise from bright source residuals.
+    Using a lower quantile gives a noise estimate representative of
+    the quietest regions, making faint diffuse sources more detectable.
+
+    Parameters
+    ----------
+    data : 2D array
+        Background-subtracted image.
+    mask : 2D bool array
+        Source mask.
+    quantile : float
+        Quantile of local RMS distribution to use (0-1).
+
+    Returns
+    -------
+    rms_map : 2D array
+        RMS map scaled to the lower quantile.
+    """
+    data_c = np.ascontiguousarray(data, dtype=np.float64)
+    try:
+        bkg = sep.Background(data_c)
+        rms = bkg.rms()
+    except Exception:
+        rms = np.full_like(data_c,
+                           np.std(data_c[~mask]) if (~mask).any() else 1.0)
+
+    # Compute the quantile of RMS values in unmasked regions
+    if (~mask).any():
+        rms_values = rms[~mask]
+        q_val = np.quantile(rms_values, quantile)
+        median_rms = np.median(rms_values)
+        if median_rms > 0:
+            scale = q_val / median_rms
+            rms_scaled = rms * scale
+        else:
+            rms_scaled = rms
+    else:
+        rms_scaled = rms
+
+    return rms_scaled
+
+
 def iterative_background(data, initial_mask, config):
-    """Iterative background refinement.
+    """Iterative background refinement with convergence monitoring.
 
     Core loop:
     1. Fit background on masked image
     2. Detect residual sources in background-subtracted image
     3. Expand mask to include new detections
-    4. Re-interpolate and repeat
+    4. Check RMS convergence
+    5. Re-interpolate and repeat
 
     Parameters
     ----------
@@ -212,6 +258,7 @@ def iterative_background(data, initial_mask, config):
     from icl.masking import interpolate_masked
 
     mask = initial_mask.copy()
+    prev_rms_median = None
 
     for iteration in range(config.bkg_n_iterations):
         print(f"LSBG background: iteration {iteration + 1}/"
@@ -229,6 +276,21 @@ def iterative_background(data, initial_mask, config):
             mesh_size=config.bkg_mesh_size,
             n_workers=config.n_workers
         )
+
+        # Check RMS convergence
+        residual = data - background
+        unmasked = ~mask
+        if unmasked.any():
+            rms_median = np.median(np.abs(residual[unmasked]))
+            if prev_rms_median is not None and prev_rms_median > 0:
+                frac_change = abs(rms_median - prev_rms_median) / prev_rms_median
+                print(f"  -> RMS change: {frac_change:.4f} "
+                      f"(tol={config.bkg_convergence_tol})", file=sys.stderr)
+                if frac_change < config.bkg_convergence_tol:
+                    print(f"  -> RMS converged at iteration {iteration + 1}",
+                          file=sys.stderr)
+                    break
+            prev_rms_median = rms_median
 
         # Detect residual sources and expand mask
         mask, n_new = iterative_mask_refine(

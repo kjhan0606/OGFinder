@@ -16,7 +16,9 @@ from icl.masking import create_source_mask, mask_bright_stars, interpolate_maske
 
 
 def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
-                      expand_factor=3.0):
+                      expand_factor=3.0, lsb_protect=False,
+                      lsb_mu_threshold=24.0, pixel_scale=0.06,
+                      mag_zeropoint=25.0):
     """Selectively mask only sources brighter than mag_threshold.
 
     Parameters
@@ -31,6 +33,14 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
         Magnitude limit; sources brighter (mag < threshold) are masked.
     expand_factor : float
         Dilation factor relative to segment equivalent radius.
+    lsb_protect : bool
+        If True, protect sources with low mean surface brightness.
+    lsb_mu_threshold : float
+        Surface brightness threshold (mag/arcsec^2); protect if fainter.
+    pixel_scale : float
+        Pixel scale in arcsec/pixel.
+    mag_zeropoint : float
+        Magnitude zeropoint.
 
     Returns
     -------
@@ -58,7 +68,9 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
     # Identify bright sources and compute dilation radii
     bright_labels = []
     radii = []
+    n_protected = 0
     n = min(len(labels), len(mag))
+    pixel_area_arcsec2 = pixel_scale * pixel_scale
     for i in range(n):
         if mag[i] >= mag_threshold:
             continue
@@ -66,6 +78,16 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
         npix = label_counts[lab] if lab < len(label_counts) else 0
         if npix == 0:
             continue
+
+        # LSB structure protection (Greco+2018 style)
+        if lsb_protect and npix > 0 and flux[i] > 0:
+            area_arcsec2 = npix * pixel_area_arcsec2
+            mu_mean = (mag_zeropoint - 2.5 * np.log10(flux[i])
+                       + 2.5 * np.log10(area_arcsec2))
+            if mu_mean >= lsb_mu_threshold:
+                n_protected += 1
+                continue  # Skip masking — potential LSBG
+
         bright_labels.append(lab)
         r_eq = np.sqrt(npix / np.pi)
         radii.append(max(1, int(r_eq * expand_factor)))
@@ -108,6 +130,10 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
             mask |= binary_dilation(submask, structure=struct)
         print(f"  dilation group {gi + 1}/{n_groups} "
               f"(r={r}, {len(labs)} sources)", file=sys.stderr)
+
+    if n_protected > 0:
+        print(f"  LSB protection: {n_protected} sources preserved "
+              f"(mu > {lsb_mu_threshold})", file=sys.stderr)
 
     return mask, [int(l) for l in bright_labels]
 
@@ -204,11 +230,15 @@ def create_lsbg_mask(data, config):
     print(f"LSBG mask: detected {len(objects)} initial sources",
           file=sys.stderr)
 
-    # Magnitude-based selective masking
+    # Magnitude-based selective masking (with LSB protection)
     mask, bright_labels = mask_by_magnitude(
         data, segmap, objects,
         mag_threshold=config.mask_mag_threshold,
-        expand_factor=config.mask_expand_factor
+        expand_factor=config.mask_expand_factor,
+        lsb_protect=config.lsb_protect,
+        lsb_mu_threshold=config.lsb_mu_threshold,
+        pixel_scale=config.pixel_scale,
+        mag_zeropoint=config.mag_zeropoint,
     )
     print(f"LSBG mask: masked {len(bright_labels)} bright sources "
           f"(mag < {config.mask_mag_threshold})", file=sys.stderr)

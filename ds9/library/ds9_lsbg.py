@@ -8,6 +8,14 @@ Modes:
     ds9_lsbg.py FITS --mode detect --cleaned cleaned.fits [--detect-thresh 0.8] ...
     ds9_lsbg.py FITS --mode photometry --cleaned cleaned.fits --segmap seg.fits [--catalog detect.tsv] ...
     ds9_lsbg.py FITS --mode run [--n-workers 4] [--mu-eff-min 24.0] ...
+
+Enhanced pipeline features:
+    - LSB structure protection (--lsb-protect)
+    - Multi-scale detection (--multiscale, --multiscale-factors)
+    - Sérsic profile fitting (--sersic-fit)
+    - Lower-quantile RMS background (--bkg-rms-quantile)
+    - RMS convergence check (--bkg-convergence-tol)
+    - Sérsic-based filtering + A/B/C/D grading
 """
 
 import sys
@@ -23,7 +31,7 @@ if _project_root not in sys.path:
 from lsbg.config import LSBGConfig
 from lsbg.masking import create_lsbg_mask
 from lsbg.background import iterative_background
-from lsbg.detection import detect_lsbg_candidates
+from lsbg.detection import detect_lsbg_candidates, detect_multiscale
 from lsbg.photometry import measure_photometry
 from lsbg.filtering import filter_lsbg_candidates
 
@@ -75,17 +83,29 @@ def build_config(args):
         bright_star_radius_scale=args.bright_star_radius_scale,
         mask_mag_threshold=args.mask_mag_threshold,
         interp_method=args.interp_method,
+        lsb_protect=args.lsb_protect,
+        lsb_mu_threshold=args.lsb_mu_threshold,
         bkg_method=args.bkg_method,
         bkg_mesh_size=args.bkg_mesh_size,
         bkg_poly_order=args.bkg_poly_order,
         bkg_sigma_clip=args.bkg_sigma_clip,
         bkg_n_iterations=args.bkg_n_iterations,
         bkg_refine_thresh=args.bkg_refine_thresh,
+        bkg_rms_quantile=args.bkg_rms_quantile,
+        bkg_convergence_tol=args.bkg_convergence_tol,
         detect_thresh=args.detect_thresh,
         detect_minarea=args.detect_minarea,
         detect_filter_kernel=args.detect_filter_kernel,
         deblend_nthresh=args.deblend_nthresh,
         deblend_mincont=args.deblend_mincont,
+        multiscale=args.multiscale,
+        multiscale_factors=args.multiscale_factors,
+        sersic_fit=args.sersic_fit,
+        sersic_n_min=args.sersic_n_min,
+        sersic_n_max=args.sersic_n_max,
+        sersic_re_min=args.sersic_re_min,
+        sersic_cutout_scale=args.sersic_cutout_scale,
+        sersic_max_nfev=args.sersic_max_nfev,
         phot_apertures=args.phot_apertures,
         mag_zeropoint=args.mag_zeropoint,
         pixel_scale=args.pixel_scale,
@@ -95,6 +115,9 @@ def build_config(args):
         r_eff_max=args.r_eff_max,
         ellipticity_max=args.ellipticity_max,
         min_snr=args.min_snr,
+        sersic_n_filter_min=args.sersic_n_filter_min,
+        sersic_n_filter_max=args.sersic_n_filter_max,
+        sersic_chi2_max=args.sersic_chi2_max,
         n_workers=args.n_workers,
     )
 
@@ -107,7 +130,9 @@ COLUMNS = [
     'KRON_RADIUS', 'R_EFF_PIX', 'R_EFF_ARCSEC', 'MU_EFF',
     'SNR_TOTAL',
     'FLUX_APER_5', 'FLUX_APER_10', 'FLUX_APER_20', 'FLUX_APER_40',
-    'LSBG_CONF', 'FLAGS',
+    'SERSIC_N', 'SERSIC_RE', 'SERSIC_CHI2',
+    'MAG_SERSIC', 'MU_EFF_SERSIC',
+    'LSBG_CONF', 'LSBG_GRADE', 'FLAGS',
 ]
 
 
@@ -115,6 +140,11 @@ def format_catalog_tsv(catalog):
     """Format photometry catalog as TSV string."""
     lines = ["\t".join(COLUMNS)]
     for i, src in enumerate(catalog):
+        sn = src.get('sersic_n', np.nan)
+        sre = src.get('sersic_re', np.nan)
+        schi2 = src.get('sersic_chi2', np.nan)
+        mag_s = src.get('mag_sersic', np.nan)
+        mu_s = src.get('mu_eff_sersic', np.nan)
         vals = [
             str(i + 1),
             f"{src.get('x', 0) + 1:.3f}",
@@ -136,7 +166,13 @@ def format_catalog_tsv(catalog):
             f"{src.get('flux_aper_10', 0):.6e}",
             f"{src.get('flux_aper_20', 0):.6e}",
             f"{src.get('flux_aper_40', 0):.6e}",
+            f"{sn:.3f}" if np.isfinite(sn) else "NaN",
+            f"{sre:.3f}" if np.isfinite(sre) else "NaN",
+            f"{schi2:.3f}" if np.isfinite(schi2) else "NaN",
+            f"{mag_s:.4f}" if np.isfinite(mag_s) else "NaN",
+            f"{mu_s:.4f}" if np.isfinite(mu_s) else "NaN",
             f"{src.get('lsbg_conf', 0):.3f}",
+            src.get('lsbg_grade', 'D'),
             str(int(src.get('flags', 0))),
         ]
         lines.append("\t".join(vals))
@@ -210,18 +246,30 @@ def mode_detect(args):
 
     config = build_config(args)
 
-    objects, segmap, rms = detect_lsbg_candidates(
-        cleaned,
-        detect_thresh=config.detect_thresh,
-        detect_minarea=config.detect_minarea,
-        filter_kernel=config.detect_filter_kernel,
-        deblend_nthresh=config.deblend_nthresh,
-        deblend_mincont=config.deblend_mincont,
-    )
+    if config.multiscale:
+        objects, segmap, rms = detect_multiscale(
+            cleaned,
+            detect_thresh=config.detect_thresh,
+            detect_minarea=config.detect_minarea,
+            filter_kernel=config.detect_filter_kernel,
+            deblend_nthresh=config.deblend_nthresh,
+            deblend_mincont=config.deblend_mincont,
+            scale_factors=config.multiscale_factors,
+        )
+    else:
+        objects, segmap, rms = detect_lsbg_candidates(
+            cleaned,
+            detect_thresh=config.detect_thresh,
+            detect_minarea=config.detect_minarea,
+            filter_kernel=config.detect_filter_kernel,
+            deblend_nthresh=config.deblend_nthresh,
+            deblend_mincont=config.deblend_mincont,
+        )
 
     # Save segmap
     segmap_path = args.segmap_output
-    save_fits(segmap.astype(np.int32), header, segmap_path)
+    if segmap is not None:
+        save_fits(segmap.astype(np.int32), header, segmap_path)
 
     # Output basic detection catalog as TSV
     cols = ['NUMBER', 'X_IMAGE', 'Y_IMAGE', 'A_IMAGE', 'B_IMAGE',
@@ -247,28 +295,8 @@ def mode_detect(args):
 
 # ---- Mode: photometry ----
 
-def mode_photometry(args):
-    """Measure photometry and filter LSBG candidates."""
-    # Load original data for photometry
-    data, header = load_fits_data(args.fits)
-
-    if args.cleaned:
-        cleaned, _ = load_fits_data(args.cleaned)
-    else:
-        print("ERROR: --cleaned required for photometry mode", file=sys.stderr)
-        sys.exit(1)
-
-    if args.segmap:
-        from astropy.io import fits as pyfits
-        with pyfits.open(args.segmap) as hdul:
-            segmap = hdul[0].data.astype(np.int32)
-    else:
-        print("ERROR: --segmap required for photometry mode", file=sys.stderr)
-        sys.exit(1)
-
-    config = build_config(args)
-
-    # Re-detect on cleaned image to get objects array
+def _detect_on_cleaned(cleaned, config):
+    """Re-detect sources on cleaned image and return objects + rms."""
     try:
         import sep
     except ImportError:
@@ -289,22 +317,173 @@ def mode_photometry(args):
         deblend_nthresh=config.deblend_nthresh,
         deblend_mincont=config.deblend_mincont,
     )
+    return objects, rms
+
+
+def mode_photometry(args):
+    """Measure photometry on detected LSBG candidates (Step 4)."""
+    data, header = load_fits_data(args.fits)
+
+    if args.cleaned:
+        cleaned, _ = load_fits_data(args.cleaned)
+    else:
+        print("ERROR: --cleaned required for photometry mode", file=sys.stderr)
+        sys.exit(1)
+
+    if args.segmap:
+        from astropy.io import fits as pyfits
+        with pyfits.open(args.segmap) as hdul:
+            segmap = hdul[0].data.astype(np.int32)
+    else:
+        print("ERROR: --segmap required for photometry mode", file=sys.stderr)
+        sys.exit(1)
+
+    config = build_config(args)
+    objects, rms = _detect_on_cleaned(cleaned, config)
 
     if len(objects) == 0:
         print("No sources detected for photometry", file=sys.stderr)
         print("\t".join(COLUMNS))
         return
 
-    # Measure photometry on cleaned image
+    # Measure photometry only (no Sérsic, no filtering)
     catalog = measure_photometry(cleaned, rms, objects, segmap, config)
     print(f"Measured {len(catalog)} sources", file=sys.stderr)
 
-    # Filter LSBG candidates
-    filtered, rejected = filter_lsbg_candidates(catalog, config)
+    # Output unfiltered catalog with NaN Sérsic + neutral grade
+    for src in catalog:
+        src['sersic_n'] = np.nan
+        src['sersic_re'] = np.nan
+        src['sersic_chi2'] = np.nan
+        src['mag_sersic'] = np.nan
+        src['mu_eff_sersic'] = np.nan
+        src['lsbg_conf'] = 0.0
+        src['lsbg_grade'] = '-'
+    tsv = format_catalog_tsv(catalog)
+    print(tsv)
+
+
+# ---- Mode: sersic ----
+
+def mode_sersic(args):
+    """Sérsic profile fitting on detected sources (Step 5)."""
+    if args.cleaned:
+        cleaned, _ = load_fits_data(args.cleaned)
+    else:
+        print("ERROR: --cleaned required for sersic mode", file=sys.stderr)
+        sys.exit(1)
+
+    config = build_config(args)
+    objects, rms = _detect_on_cleaned(cleaned, config)
+
+    if len(objects) == 0:
+        print("No sources for Sérsic fitting", file=sys.stderr)
+        print("\t".join(COLUMNS))
+        return
+
+    # Sérsic fitting
+    from lsbg.sersic import fit_sources_sersic
+    sersic_results = fit_sources_sersic(cleaned, objects, config)
+
+    # Read photometry catalog from stdin or file
+    if args.segmap:
+        from astropy.io import fits as pyfits
+        with pyfits.open(args.segmap) as hdul:
+            segmap = hdul[0].data.astype(np.int32)
+    else:
+        print("ERROR: --segmap required for sersic mode", file=sys.stderr)
+        sys.exit(1)
+
+    data, _ = load_fits_data(args.fits)
+    catalog = measure_photometry(cleaned, rms, objects, segmap, config)
+
+    # Add Sérsic results to catalog
+    zp = config.mag_zeropoint
+    ps = config.pixel_scale
+    for i, src in enumerate(catalog):
+        sersic = None
+        if sersic_results is not None and i < len(sersic_results):
+            sersic = sersic_results[i]
+        if sersic is not None:
+            src['sersic_n'] = sersic.get('n', np.nan)
+            src['sersic_re'] = sersic.get('re', np.nan)
+            src['sersic_chi2'] = sersic.get('chi2', np.nan)
+            flux_total = sersic.get('flux_total', np.nan)
+            if np.isfinite(flux_total) and flux_total > 0:
+                src['mag_sersic'] = -2.5 * np.log10(flux_total) + zp
+                re_arcsec = sersic.get('re', 0) * ps
+                ellip_s = sersic.get('ellip', 0)
+                area = np.pi * re_arcsec**2 * (1.0 - ellip_s)
+                if area > 0:
+                    src['mu_eff_sersic'] = src['mag_sersic'] + 2.5 * np.log10(2.0 * area)
+                else:
+                    src['mu_eff_sersic'] = np.nan
+            else:
+                src['mag_sersic'] = np.nan
+                src['mu_eff_sersic'] = np.nan
+        else:
+            src['sersic_n'] = np.nan
+            src['sersic_re'] = np.nan
+            src['sersic_chi2'] = np.nan
+            src['mag_sersic'] = np.nan
+            src['mu_eff_sersic'] = np.nan
+        src['lsbg_conf'] = 0.0
+        src['lsbg_grade'] = '-'
+
+    tsv = format_catalog_tsv(catalog)
+    print(tsv)
+
+
+# ---- Mode: filter ----
+
+def mode_filter(args):
+    """Filter + grade LSBG candidates (Step 6)."""
+    if args.cleaned:
+        cleaned, _ = load_fits_data(args.cleaned)
+    else:
+        print("ERROR: --cleaned required for filter mode", file=sys.stderr)
+        sys.exit(1)
+
+    if args.segmap:
+        from astropy.io import fits as pyfits
+        with pyfits.open(args.segmap) as hdul:
+            segmap = hdul[0].data.astype(np.int32)
+    else:
+        print("ERROR: --segmap required for filter mode", file=sys.stderr)
+        sys.exit(1)
+
+    config = build_config(args)
+    objects, rms = _detect_on_cleaned(cleaned, config)
+
+    if len(objects) == 0:
+        print("No sources for filtering", file=sys.stderr)
+        print("\t".join(COLUMNS))
+        return
+
+    # Photometry
+    catalog = measure_photometry(cleaned, rms, objects, segmap, config)
+
+    # Sérsic fitting (if enabled)
+    sersic_results = None
+    if config.sersic_fit:
+        from lsbg.sersic import fit_sources_sersic
+        sersic_results = fit_sources_sersic(cleaned, objects, config)
+
+    # Filter + grade
+    filtered, rejected = filter_lsbg_candidates(catalog, config,
+                                                sersic_results=sersic_results)
+
+    grades = {}
+    for src in filtered:
+        g = src.get('lsbg_grade', 'D')
+        grades[g] = grades.get(g, 0) + 1
+    grade_str = ', '.join(f"{g}:{n}" for g, n in sorted(grades.items()))
+
     print(f"LSBG candidates: {len(filtered)} passed, {len(rejected)} rejected",
           file=sys.stderr)
+    if grade_str:
+        print(f"  Grades: {grade_str}", file=sys.stderr)
 
-    # Output filtered catalog
     tsv = format_catalog_tsv(filtered)
     print(tsv)
 
@@ -319,7 +498,7 @@ def mode_run(args):
 
     config = build_config(args)
 
-    # Step 1: Mask bright sources
+    # Step 1: Mask bright sources (with LSB protection)
     print("=== Step 1: Masking bright sources ===", file=sys.stderr)
     mask, masked_data = create_lsbg_mask(data, config)
 
@@ -328,7 +507,7 @@ def mode_run(args):
     masked_path = args.masked_output
     save_fits(masked_data, header, masked_path)
 
-    # Step 2: Iterative background refinement
+    # Step 2: Iterative background refinement (with convergence check)
     print("=== Step 2: Iterative background ===", file=sys.stderr)
     background, final_mask, cleaned = iterative_background(data, mask, config)
 
@@ -337,32 +516,69 @@ def mode_run(args):
     cleaned_path = args.cleaned_output
     save_fits(cleaned, header, cleaned_path)
 
-    # Step 3: Low-threshold detection
-    print("=== Step 3: Low-threshold detection ===", file=sys.stderr)
-    objects, segmap, rms = detect_lsbg_candidates(
-        cleaned,
-        detect_thresh=config.detect_thresh,
-        detect_minarea=config.detect_minarea,
-        filter_kernel=config.detect_filter_kernel,
-        deblend_nthresh=config.deblend_nthresh,
-        deblend_mincont=config.deblend_mincont,
-    )
+    # Step 3: Detection (multi-scale or single-scale)
+    if config.multiscale:
+        print("=== Step 3: Multi-scale detection ===", file=sys.stderr)
+        # Use lower-quantile RMS for more sensitive detection
+        from lsbg.background import compute_quantile_rms
+        rms_q = compute_quantile_rms(cleaned, final_mask,
+                                     quantile=config.bkg_rms_quantile)
+        objects, segmap, rms = detect_multiscale(
+            cleaned, bkg_rms=rms_q,
+            detect_thresh=config.detect_thresh,
+            detect_minarea=config.detect_minarea,
+            filter_kernel=config.detect_filter_kernel,
+            deblend_nthresh=config.deblend_nthresh,
+            deblend_mincont=config.deblend_mincont,
+            scale_factors=config.multiscale_factors,
+        )
+    else:
+        print("=== Step 3: Low-threshold detection ===", file=sys.stderr)
+        objects, segmap, rms = detect_lsbg_candidates(
+            cleaned,
+            detect_thresh=config.detect_thresh,
+            detect_minarea=config.detect_minarea,
+            filter_kernel=config.detect_filter_kernel,
+            deblend_nthresh=config.deblend_nthresh,
+            deblend_mincont=config.deblend_mincont,
+        )
 
     segmap_path = args.segmap_output
-    save_fits(segmap.astype(np.int32), header, segmap_path)
+    if segmap is not None:
+        save_fits(segmap.astype(np.int32), header, segmap_path)
 
     if len(objects) == 0:
         print("No sources detected", file=sys.stderr)
         print("\t".join(COLUMNS))
         return
 
-    # Step 4: Photometry + filtering
-    print("=== Step 4: Photometry + LSBG filtering ===", file=sys.stderr)
+    # Step 4: Photometry
+    print("=== Step 4: Photometry ===", file=sys.stderr)
     catalog = measure_photometry(cleaned, rms, objects, segmap, config)
-    filtered, rejected = filter_lsbg_candidates(catalog, config)
+
+    # Step 5: Sérsic profile fitting
+    sersic_results = None
+    if config.sersic_fit:
+        print("=== Step 5: Sérsic profile fitting ===", file=sys.stderr)
+        from lsbg.sersic import fit_sources_sersic
+        sersic_results = fit_sources_sersic(cleaned, objects, config)
+
+    # Step 6: Filtering + confidence grading
+    print("=== Step 6: LSBG filtering + grading ===", file=sys.stderr)
+    filtered, rejected = filter_lsbg_candidates(catalog, config,
+                                                sersic_results=sersic_results)
+
+    # Count grades
+    grades = {}
+    for src in filtered:
+        g = src.get('lsbg_grade', 'D')
+        grades[g] = grades.get(g, 0) + 1
+    grade_str = ', '.join(f"{g}:{n}" for g, n in sorted(grades.items()))
 
     print(f"LSBG candidates: {len(filtered)} passed, {len(rejected)} rejected",
           file=sys.stderr)
+    if grade_str:
+        print(f"  Grades: {grade_str}", file=sys.stderr)
 
     # Save full catalog
     catalog_path = args.catalog_output
@@ -377,12 +593,130 @@ def mode_run(args):
     print(tsv)
 
 
+# ---- Mode: forced ----
+
+def mode_forced(args):
+    """Forced photometry at LSBG positions on another band image."""
+    data, header = load_fits_data(args.fits)
+    ny, nx = data.shape
+    config = build_config(args)
+    band = args.band_name if args.band_name else 'BAND'
+
+    # Load source catalog
+    if not args.catalog:
+        print("ERROR: --catalog required for forced mode", file=sys.stderr)
+        sys.exit(1)
+
+    with open(args.catalog, 'r') as f:
+        cat_lines = f.read().strip().split('\n')
+    if len(cat_lines) < 2:
+        print("ERROR: Catalog has no data rows", file=sys.stderr)
+        sys.exit(1)
+
+    # Parse catalog header and data
+    hdr_fields = cat_lines[0].split('\t')
+    col_idx = {name: i for i, name in enumerate(hdr_fields)}
+    required = ['X_IMAGE', 'Y_IMAGE', 'A_IMAGE', 'B_IMAGE', 'THETA_IMAGE']
+    for req in required:
+        if req not in col_idx:
+            print(f"ERROR: Catalog missing column {req}", file=sys.stderr)
+            sys.exit(1)
+
+    sources = []
+    for line in cat_lines[1:]:
+        fields = line.split('\t')
+        if len(fields) < len(hdr_fields):
+            continue
+        src = {}
+        for name, idx in col_idx.items():
+            try:
+                src[name] = float(fields[idx])
+            except ValueError:
+                src[name] = fields[idx]
+        sources.append(src)
+
+    if len(sources) == 0:
+        print("No sources in catalog", file=sys.stderr)
+        print(f"NUMBER\tFLUX_{band}\tFLUXERR_{band}\tMAG_{band}\tMAGERR_{band}")
+        return
+
+    print(f"Forced photometry on {len(sources)} sources, band={band}",
+          file=sys.stderr)
+
+    # Background estimate
+    try:
+        import sep
+    except ImportError:
+        import sep_pjw as sep
+    data_c = np.ascontiguousarray(data, dtype=np.float64)
+    try:
+        bkg = sep.Background(data_c, bw=64, bh=64)
+        data_sub = data_c - bkg.back()
+        rms = bkg.rms()
+    except Exception:
+        med = np.median(data_c)
+        data_sub = data_c - med
+        rms = np.full_like(data_c, np.std(data_c))
+
+    zp = config.mag_zeropoint
+
+    # Output header
+    out_cols = ['NUMBER',
+                f'FLUX_{band}', f'FLUXERR_{band}',
+                f'MAG_{band}', f'MAGERR_{band}']
+    print("\t".join(out_cols))
+
+    for i, src in enumerate(sources):
+        # Convert from 1-indexed DS9 to 0-indexed
+        x = src['X_IMAGE'] - 1.0
+        y = src['Y_IMAGE'] - 1.0
+        a = src['A_IMAGE']
+        b = src['B_IMAGE']
+        theta = np.radians(src['THETA_IMAGE'])
+
+        # Kron photometry at fixed position
+        kronrad = src.get('KRON_RADIUS', 2.5)
+        if not np.isfinite(kronrad) or kronrad < 1.0:
+            kronrad = 2.5
+
+        try:
+            flux, fluxerr, _ = sep.sum_ellipse(
+                data_sub, [x], [y], [a], [b], [theta],
+                kronrad * 2.5, err=rms, subpix=5
+            )
+            flux = float(flux[0])
+            fluxerr = float(fluxerr[0])
+        except Exception:
+            flux = np.nan
+            fluxerr = np.nan
+
+        if np.isfinite(flux) and flux > 0:
+            mag = -2.5 * np.log10(flux) + zp
+            if np.isfinite(fluxerr) and fluxerr > 0:
+                magerr = 2.5 / np.log(10.0) * fluxerr / flux
+            else:
+                magerr = 99.0
+        else:
+            mag = 99.0
+            magerr = 99.0
+
+        vals = [
+            str(i + 1),
+            f"{flux:.6e}",
+            f"{fluxerr:.6e}",
+            f"{mag:.4f}",
+            f"{magerr:.4f}",
+        ]
+        print("\t".join(vals))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='DS9 LSBG (Low Surface Brightness Galaxy) Detection Pipeline')
     parser.add_argument('fits', help='Input FITS file')
     parser.add_argument('--mode', required=True,
-                        choices=['mask', 'clean', 'detect', 'photometry', 'run'],
+                        choices=['mask', 'clean', 'detect', 'photometry',
+                                 'sersic', 'filter', 'run', 'forced'],
                         help='Operation mode')
 
     # Masking args
@@ -395,6 +729,13 @@ def main():
     parser.add_argument('--mask-mag-threshold', type=float, default=22.0)
     parser.add_argument('--interp-method', default='linear',
                         choices=['linear', 'cubic', 'nearest'])
+    parser.add_argument('--lsb-protect', action='store_true', default=True,
+                        help='Protect low-SB sources from masking')
+    parser.add_argument('--no-lsb-protect', dest='lsb_protect',
+                        action='store_false',
+                        help='Disable LSB structure protection')
+    parser.add_argument('--lsb-mu-threshold', type=float, default=24.0,
+                        help='SB threshold for LSB protection (mag/arcsec^2)')
     parser.add_argument('--mask-output',
                         default=os.path.expanduser('~/.ds9/lsbg_mask.fits'))
     parser.add_argument('--masked-output',
@@ -409,6 +750,10 @@ def main():
     parser.add_argument('--bkg-sigma-clip', type=float, default=3.0)
     parser.add_argument('--bkg-n-iterations', type=int, default=3)
     parser.add_argument('--bkg-refine-thresh', type=float, default=2.0)
+    parser.add_argument('--bkg-rms-quantile', type=float, default=0.25,
+                        help='Lower-quantile RMS for sensitive detection')
+    parser.add_argument('--bkg-convergence-tol', type=float, default=0.01,
+                        help='Fractional RMS change threshold for convergence')
     parser.add_argument('--bkg-output',
                         default=os.path.expanduser('~/.ds9/lsbg_background.fits'))
     parser.add_argument('--cleaned-output',
@@ -423,9 +768,28 @@ def main():
                                  'gauss9x9', 'tophat5', 'tophat7', 'mexhat'])
     parser.add_argument('--deblend-nthresh', type=int, default=32)
     parser.add_argument('--deblend-mincont', type=float, default=0.005)
+    parser.add_argument('--multiscale', action='store_true', default=True,
+                        help='Enable multi-scale detection')
+    parser.add_argument('--no-multiscale', dest='multiscale',
+                        action='store_false',
+                        help='Disable multi-scale detection')
+    parser.add_argument('--multiscale-factors', default='1,2,4',
+                        help='Comma-separated rebinning factors')
     parser.add_argument('--segmap', help='Segmentation map FITS')
     parser.add_argument('--segmap-output',
                         default=os.path.expanduser('~/.ds9/lsbg_segmap.fits'))
+
+    # Sérsic fitting args
+    parser.add_argument('--sersic-fit', action='store_true', default=True,
+                        help='Enable Sérsic profile fitting')
+    parser.add_argument('--no-sersic-fit', dest='sersic_fit',
+                        action='store_false',
+                        help='Disable Sérsic profile fitting')
+    parser.add_argument('--sersic-n-min', type=float, default=0.2)
+    parser.add_argument('--sersic-n-max', type=float, default=10.0)
+    parser.add_argument('--sersic-re-min', type=float, default=0.5)
+    parser.add_argument('--sersic-cutout-scale', type=float, default=5.0)
+    parser.add_argument('--sersic-max-nfev', type=int, default=500)
 
     # Photometry args
     parser.add_argument('--phot-apertures', default='5,10,20,40')
@@ -439,10 +803,20 @@ def main():
     parser.add_argument('--r-eff-max', type=float, default=60.0)
     parser.add_argument('--ellipticity-max', type=float, default=0.7)
     parser.add_argument('--min-snr', type=float, default=2.0)
+    parser.add_argument('--sersic-n-filter-min', type=float, default=0.3,
+                        help='Min Sérsic n for LSBG (reject artifacts)')
+    parser.add_argument('--sersic-n-filter-max', type=float, default=6.0,
+                        help='Max Sérsic n for LSBG (reject compact sources)')
+    parser.add_argument('--sersic-chi2-max', type=float, default=10.0,
+                        help='Max reduced chi2 for Sérsic fit quality')
 
     # Output
     parser.add_argument('--catalog-output',
                         default=os.path.expanduser('~/.ds9/lsbg_catalog.tsv'))
+
+    # Forced photometry
+    parser.add_argument('--band-name', default='',
+                        help='Band name for forced photometry column suffix')
 
     # Parallel
     parser.add_argument('--n-workers', type=int, default=0)
@@ -457,8 +831,14 @@ def main():
         mode_detect(args)
     elif args.mode == 'photometry':
         mode_photometry(args)
+    elif args.mode == 'sersic':
+        mode_sersic(args)
+    elif args.mode == 'filter':
+        mode_filter(args)
     elif args.mode == 'run':
         mode_run(args)
+    elif args.mode == 'forced':
+        mode_forced(args)
 
 
 if __name__ == '__main__':

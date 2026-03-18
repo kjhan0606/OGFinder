@@ -18,6 +18,9 @@ class ICLConfig:
     bkg_poly_order: int = 3
     bkg_sep_mesh: int = 256
     bkg_sigma_clip: float = 3.0
+    bkg_n_iterations: int = 3
+    bkg_convergence_tol: float = 0.01
+    bkg_refine_thresh: float = 2.0
 
     # SB Profile
     profile_rmin: float = 5.0

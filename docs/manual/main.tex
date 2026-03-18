@@ -2100,14 +2100,18 @@ The \textbf{ICL} menu provides a complete step-by-step pipeline for detecting, m
 
 \section{Pipeline Overview}
 
-The ICL detection pipeline follows four steps, each accessible from the ICL menu:
+The ICL detection pipeline follows a multi-step workflow, each accessible from the ICL menu:
 
 \begin{enumerate}[leftmargin=2em]
-  \item \textbf{Source Masking} --- Detect compact sources, expand the segmentation map to cover PSF wings, mask bright stars with magnitude-dependent radii, and interpolate masked regions.
-  \item \textbf{Background Modeling} --- Fit a large-scale background model to the masked image using one of three methods (polynomial, Chebyshev, or SEP large-mesh), then subtract it.
-  \item \textbf{Surface Brightness Profile} --- Measure the azimuthally averaged (or sector-based) SB profile centered on the BCG (brightest cluster galaxy), extending from $r_\mathrm{min}$ to $r_\mathrm{max}$.
-  \item \textbf{ICL Measurements} --- Compute the ICL fraction $f_\mathrm{ICL}$, isophotal radii at specified surface brightness levels, and integrated ICL luminosity.
+  \item \textbf{Source Masking} --- Detect compact sources, expand the segmentation map to cover PSF wings, mask bright stars with magnitude-dependent radii, and interpolate masked regions.  The masked image is automatically displayed in a new frame.
+  \item \textbf{Background Modeling} --- Fit a large-scale background model (polynomial, Chebyshev, or SEP large-mesh), optionally with iterative refinement and convergence monitoring.  The background-subtracted image is automatically displayed in a new frame.
+  \item \textbf{Surface Brightness Profile} --- Measure the azimuthally averaged (or sector-based) SB profile centered on the BCG.  Annulus ring markers are drawn at 25\%, 50\%, 75\%, and 100\% of $r_\mathrm{max}$.
+  \item \textbf{ICL Measurements} --- Compute $f_\mathrm{ICL}$, isophotal radii at specified SB levels, and integrated luminosity.  Isophotal radius circles are drawn as magenta dashed markers.
+  \item \textbf{Multi-Threshold ICL} --- Sweep $\mu_\mathrm{threshold}$ over a range and compute $f_\mathrm{ICL}$ with bootstrap uncertainty at each level.
+  \item \textbf{BCG+ICL Decomposition} --- Fit a double S\'ersic profile to separate BCG and ICL components, yielding $n_\mathrm{BCG}$, $n_\mathrm{ICL}$, $R_\mathrm{transition}$, and a profile-based $f_\mathrm{ICL}$.
 \end{enumerate}
+
+Additional tools: Color Profile (multi-band SB + color gradients), Save/Load Profile, and a comprehensive Settings dialog.
 
 \section{Source Masking}
 \label{sec:icl-mask}
@@ -2157,9 +2161,24 @@ SEP Large Mesh & Uses \texttt{sep.Background()} with a very large mesh size (def
 \end{longtable}
 \end{center}
 
+\subsection{Iterative Background Refinement}
+
+When the ``Iterative refinement'' option is enabled in the Settings dialog (Background tab), the pipeline performs iterative background fitting with convergence monitoring---the same approach used in the LSBG pipeline (Section~\ref{sec:lsbg-bkg}).
+
+\begin{enumerate}[leftmargin=2em]
+  \item Interpolate masked regions in the current mask (using the configured interpolation method).
+  \item Fit background using the selected method.
+  \item Compute residuals; detect residual sources at \texttt{bkg-refine-thresh}\,$\sigma$ (default: 2.0).
+  \item Expand the mask to include newly detected sources.
+  \item Check RMS convergence: if the fractional change in median $|\mathrm{residual}|$ is less than \texttt{bkg-convergence-tol} (default: 0.01), stop early.
+  \item Repeat for up to \texttt{bkg-n-iterations} (default: 3) cycles.
+\end{enumerate}
+
+This is particularly useful for cluster fields where imperfect initial masking leaves residual source flux that biases the background estimate.
+
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/icl\_background.fits} (background model), \texttt{\textasciitilde/.ds9/icl\_bgsub.fits} (background-subtracted image).
 
-\textbf{Package}: \texttt{icl/background.py} --- functions: \texttt{fit\_polynomial\_background()}, \texttt{fit\_chebyshev\_background()}, \texttt{sep\_large\_mesh\_background()}.
+\textbf{Package}: \texttt{icl/background.py} --- functions: \texttt{fit\_polynomial\_background()}, \texttt{fit\_chebyshev\_background()}, \texttt{sep\_large\_mesh\_background()}, \texttt{iterative\_background\_icl()}.
 
 
 \section{Surface Brightness Profile}
@@ -2232,11 +2251,88 @@ Computes integrated ICL quantities from the SB profile:
 \textbf{Package}: \texttt{icl/measure.py} --- functions: \texttt{compute\_icl\_fraction()}, \texttt{compute\_isophotal\_radii()}, \texttt{summarize\_icl()}.
 
 
+\section{Multi-Threshold ICL Fraction}
+\label{sec:icl-multi}
+
+\textbf{Menu}: ICL $\to$ Multi-Threshold ICL
+
+Instead of computing $f_\mathrm{ICL}$ at a single threshold, this mode sweeps over a range of SB thresholds and reports the ICL fraction at each level, with bootstrap uncertainty estimates:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Generate threshold array: $\mu_\mathrm{min}$ to $\mu_\mathrm{max}$ with step $\Delta\mu$ (defaults: 25.0 to 28.0, step 0.5\,mag/arcsec$^2$).
+  \item At each threshold $\mu_t$, compute $f_\mathrm{ICL}(\mu_t)$ from the SB profile.
+  \item Bootstrap error: resample the profile 200 times (with replacement) and compute $\sigma(f_\mathrm{ICL})$.
+\end{enumerate}
+
+\subsection{Output Columns}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Column} & \textbf{Description} \\
+\midrule
+\texttt{MU\_THRESHOLD} & Surface brightness threshold (mag/arcsec$^2$) \\
+\texttt{F\_ICL} & ICL fraction at this threshold \\
+\texttt{F\_ICL\_ERR} & $1\sigma$ bootstrap uncertainty \\
+\texttt{L\_ICL} & Integrated ICL luminosity \\
+\texttt{L\_GAL} & Integrated galaxy luminosity \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This allows assessment of how $f_\mathrm{ICL}$ depends on the choice of threshold---an important systematic in ICL studies \citep[see, e.g.,][]{brough2024}.
+
+\textbf{Package}: \texttt{icl/measure.py} --- function: \texttt{compute\_icl\_fraction\_multi()}.
+
+
+\section{BCG+ICL Decomposition}
+\label{sec:icl-decompose}
+
+\textbf{Menu}: ICL $\to$ 5.\ BCG+ICL Decomposition
+
+An alternative to the SB threshold method is to decompose the radial profile into two S\'ersic components: a concentrated BCG and an extended ICL envelope.  The model is:
+\begin{equation}
+  I(r) = I_\mathrm{e,BCG}\,\exp\!\biggl[-b_{n_1}\Bigl(\bigl(\frac{r}{r_\mathrm{e,BCG}}\bigr)^{1/n_1} - 1\Bigr)\biggr]
+       + I_\mathrm{e,ICL}\,\exp\!\biggl[-b_{n_2}\Bigl(\bigl(\frac{r}{r_\mathrm{e,ICL}}\bigr)^{1/n_2} - 1\Bigr)\biggr]
+\end{equation}
+where $b_n \approx 1.9992n - 0.3271$.
+
+\subsection{Fitting Algorithm}
+
+\begin{enumerate}[leftmargin=2em]
+  \item Convert $\mu(r)$ (mag/arcsec$^2$) to linear intensity $I(r)$.
+  \item Fit a single 1D S\'ersic (using \texttt{lsbg.sersic.fit\_sersic\_1d()}) for initial parameter estimates.
+  \item Initialize: BCG ($I_e \times 1.5$, $r_e \times 0.5$, $n \geq 2$) and ICL ($I_e \times 0.3$, $r_e \times 3$, $n \geq 0.5$).
+  \item Fit the double S\'ersic via \texttt{scipy.optimize.curve\_fit} with bounds: $n_\mathrm{BCG} \in [1, 10]$, $n_\mathrm{ICL} \in [0.2, 6]$.
+  \item Post-fit: if $r_\mathrm{e,ICL} < r_\mathrm{e,BCG}$, swap components.
+  \item Compute the transition radius $R_\mathrm{transition}$ where the two components are equal (using \texttt{scipy.optimize.brentq}).
+  \item Integrate each component analytically for the profile-based ICL fraction: $f_\mathrm{ICL,S\'ersic} = F_\mathrm{ICL} / (F_\mathrm{BCG} + F_\mathrm{ICL})$.
+\end{enumerate}
+
+\subsection{Output}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Key} & \textbf{Description} \\
+\midrule
+\texttt{n\_bcg}, \texttt{n\_icl} & S\'ersic indices \\
+\texttt{re\_bcg}, \texttt{re\_icl} & Effective radii (px and arcsec) \\
+\texttt{R\_transition} & Radius where BCG = ICL (px and arcsec) \\
+\texttt{f\_ICL\_sersic} & ICL fraction from integrated S\'ersic fluxes \\
+\texttt{chi2} & Reduced $\chi^2$ of the fit \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Package}: \texttt{icl/decompose.py} --- functions: \texttt{double\_sersic\_1d()}, \texttt{fit\_double\_sersic()}.
+
+
 \section{Multi-Band ICL Colors}
 
-\textbf{CLI mode}: \texttt{ds9\_icl.py --mode color --bands F606W:f606w.fits,F814W:f814w.fits \ldots}
+\textbf{Menu}: ICL $\to$ Color Profile\ldots
 
-Measures the SB profile independently in each band and computes color profiles:
+A dialog window allows specifying up to 4 photometric bands (name + FITS file) for multi-band analysis.  The pipeline measures the SB profile independently in each band and computes color profiles:
 \begin{equation}
   (m_1 - m_2)(r) = \mu_1(r) - \mu_2(r)
 \end{equation}
@@ -2244,6 +2340,28 @@ Measures the SB profile independently in each band and computes color profiles:
 Color gradients constrain the stellar population age and metallicity of the ICL.  Requires at least two band images and a common mask.
 
 \textbf{Package}: \texttt{icl/colors.py} --- functions: \texttt{measure\_multiband\_icl\_profiles()}, \texttt{compute\_color\_profiles()}.
+
+
+\section{Save and Load Profile}
+
+\textbf{Menu}: ICL $\to$ Save Profile\ldots{} / Load Profile\ldots
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Save Profile}: Copies the current profile TSV (\texttt{\textasciitilde/.ds9/icl\_profile.tsv}) to a user-selected file.
+  \item \textbf{Load Profile}: Loads a previously saved profile TSV, sets \texttt{has\_profile=1}, and displays the profile in the catalog table---enabling subsequent ICL measurements without re-running the profile extraction.
+\end{itemize}
+
+
+\section{Marker Visualization}
+
+The ICL pipeline uses two types of markers (tag: \texttt{icl\_annulus}) for visual feedback:
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{After Profile Measurement}: A cyan cross marks the BCG center; green dashed circles mark annulus rings at 25\%, 50\%, 75\%, and 100\% of $r_\mathrm{max}$ with radius labels.
+  \item \textbf{After ICL Measurements}: A cyan cross marks the BCG center; magenta dashed circles mark the isophotal radii for each $\mu$ level (parsed from the R\_MU* columns), with $\mu$ labels.
+\end{itemize}
+
+Markers are automatically cleared and redrawn when a new profile or measurement is computed.
 
 
 \section{ICL Settings Dialog}
@@ -2268,6 +2386,10 @@ Masking & expand-factor & 2.5 & Segment dilation factor \\
 Background & bkg-order & 3 & Polynomial/Chebyshev order \\
  & bkg-sigma-clip & 3.0 & $\sigma$-clipping threshold \\
  & bkg-sep-mesh & 256 & SEP mesh size (px) \\
+ & bkg-iterative & 0 (off) & Enable iterative refinement \\
+ & bkg-n-iterations & 3 & Max iterations \\
+ & bkg-convergence-tol & 0.01 & Fractional RMS convergence \\
+ & bkg-refine-thresh & 2.0 & Residual detection $\sigma$ \\
 \midrule
 Profile & rmin / rmax & 5 / 1000 & Radial range (px) \\
  & nsteps & 80 & Number of radial bins \\
@@ -2291,23 +2413,28 @@ Settings are saved to \texttt{\textasciitilde/.ds9/icl.prf} and loaded automatic
 
 \begin{codebox}[Synopsis]
 \begin{lstlisting}[style=bash,numbers=none]
-python3 ds9_icl.py FITS --mode {mask,background,profile,measure,color} [OPTIONS]
+python3 ds9_icl.py FITS --mode {mask,background,profile,measure,
+                                 measure-multi,decompose,color} [OPTIONS]
 \end{lstlisting}
 \end{codebox}
 
 \begin{center}
-\begin{longtable}{L{2cm} L{3.5cm} L{7cm}}
+\begin{longtable}{L{2.2cm} L{3.8cm} L{6.5cm}}
 \toprule
 \textbf{Mode} & \textbf{Key options} & \textbf{Description} \\
 \midrule
 \endhead
 \texttt{mask} & \texttt{--expand-factor}, \texttt{--bright-star-*}, \texttt{--interp-method} & Create source mask + interpolated image \\
 \midrule
-\texttt{background} & \texttt{--bkg-method}, \texttt{--bkg-order}, \texttt{--mask} & Fit large-scale background model \\
+\texttt{background} & \texttt{--bkg-method}, \texttt{--bkg-order}, \texttt{--mask}, \texttt{--iterative} & Fit background (optionally iterative) \\
 \midrule
 \texttt{profile} & \texttt{--center x,y}, \texttt{--rmin/rmax}, \texttt{--spacing}, \texttt{--ellipticity} & Measure SB profile \\
 \midrule
 \texttt{measure} & \texttt{--profile-file}, \texttt{--mu-threshold}, \texttt{--mu-levels} & Compute ICL fraction + isophotes \\
+\midrule
+\texttt{measure-multi} & \texttt{--profile-file}, \texttt{--mu-min/max}, \texttt{--mu-step}, \texttt{--n-bootstrap} & Multi-threshold $f_\mathrm{ICL}$ + bootstrap \\
+\midrule
+\texttt{decompose} & \texttt{--profile-file}, \texttt{--pixel-scale}, \texttt{--mag-zeropoint} & Double S\'ersic BCG+ICL decomposition \\
 \midrule
 \texttt{color} & \texttt{--bands NAME:file,\ldots}, \texttt{--mask}, \texttt{--center} & Multi-band SB + color profiles \\
 \bottomrule
@@ -2319,11 +2446,12 @@ python3 ds9_icl.py FITS --mode {mask,background,profile,measure,color} [OPTIONS]
 \begin{lstlisting}[numbers=none]
 SAOImageDS9/icl/
 |-- __init__.py
-|-- config.py         # ICLConfig dataclass
+|-- config.py         # ICLConfig dataclass (incl. iterative params)
 |-- masking.py        # Source mask + bright star + interpolation
-|-- background.py     # Polynomial / Chebyshev / SEP backgrounds
+|-- background.py     # Polynomial / Chebyshev / SEP + iterative refinement
 |-- profile.py        # SB profile measurement (circular/elliptical/sector)
-|-- measure.py        # ICL fraction + isophotal radii
+|-- measure.py        # ICL fraction + isophotal radii + multi-threshold
+|-- decompose.py      # Double Sersic BCG+ICL decomposition
 +-- colors.py         # Multi-band profiles + color indices
 \end{lstlisting}
 \end{codebox}
@@ -2379,6 +2507,7 @@ Unlike the ICL masking that masks \emph{all} detected sources, LSBG masking sele
 \begin{enumerate}[leftmargin=2em]
   \item Run SEP detection at \texttt{mask-detect-thresh}$\,\sigma$ (default: 1.5) to produce a segmentation map.
   \item For each segment, compute a rough magnitude from SEP flux.  Only segments with $m < m_\mathrm{thresh}$ are selected for masking.
+  \item \textbf{LSB structure protection}: When enabled (\texttt{lsb-protect}), compute the mean surface brightness of each segment.  Sources with $\mu_\mathrm{mean} \geq \mu_\mathrm{LSB}$ (default: 24.0\,mag/arcsec$^2$) are skipped to preserve potential LSBGs that would otherwise be masked.
   \item Dilate selected segments by \texttt{mask-expand-factor} (default: 3.0) times their equivalent circular radius.
   \item Add bright star masks (same algorithm as ICL: magnitude-dependent circular masks).
   \item Interpolate all masked regions.
@@ -2413,8 +2542,13 @@ The iterative algorithm repeats for \texttt{bkg-n-iterations} (default: 3) cycle
   \item Fit background using the selected method (SEP large mesh / polynomial / Chebyshev), reusing functions from \texttt{icl.background}.
   \item Detect residual sources in the background-subtracted residual at \texttt{bkg-refine-thresh}$\,\sigma$ (default: 2.0).
   \item Expand the mask to include newly detected residuals.
-  \item If no new sources are found, declare convergence and stop early.
+  \item \textbf{RMS convergence check}: Compute the median $|\mathrm{residual}|$ in unmasked regions.  If the fractional change is less than \texttt{bkg-convergence-tol} (default: 0.01), stop early.
+  \item If no new sources are found, also declare convergence and stop early.
 \end{enumerate}
+
+\subsection{Lower-Quantile RMS}
+
+Standard RMS estimates include noise from bright-source residuals, reducing sensitivity to faint diffuse emission.  The \texttt{compute\_quantile\_rms()} function computes the RMS from the lower quantile of local noise values (\texttt{bkg-rms-quantile}, default: 0.25), giving a noise estimate representative of the quietest regions and making faint LSBG sources $1.5\text{--}2\times$ more detectable.
 
 \subsection{Parallel Tiled Background Fitting}
 
@@ -2472,9 +2606,21 @@ Larger kernels preferentially enhance extended emission while suppressing point-
 \end{tabular}
 \end{center}
 
+\subsection{Multi-Scale Detection}
+
+When enabled (\texttt{multiscale}=true, default), the pipeline detects sources at multiple spatial scales and merges the results:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Native scale (1$\times$)}: Standard detection at the original pixel resolution.
+  \item \textbf{Rebinned scales (2$\times$, 4$\times$)}: The image is rebinned by block-averaging.  Detection is run with a slightly lower threshold ($0.9\times$) to account for reduced noise ($\sigma_\mathrm{rebin} = \sigma / \sqrt{N}$), and minimum area is scaled by $1/\mathrm{factor}^2$.
+  \item \textbf{Merge}: Rebinned detections are mapped back to native coordinates.  Duplicates are removed by cross-matching within \texttt{match\_radius}~$\times$~scale.  Native-scale detections are prioritized.
+\end{enumerate}
+
+This multi-scale approach recovers very extended low-SB galaxies that are diluted below the detection threshold at the native resolution, while preserving spatial accuracy for compact LSBGs.
+
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_segmap.fits} (segmentation map), detection catalog displayed in the table.
 
-\textbf{Package}: \texttt{lsbg/detection.py} --- functions: \texttt{build\_convolution\_kernel()}, \texttt{detect\_lsbg\_candidates()}.
+\textbf{Package}: \texttt{lsbg/detection.py} --- functions: \texttt{build\_convolution\_kernel()}, \texttt{detect\_lsbg\_candidates()}, \texttt{detect\_multiscale()}.
 
 
 \section{Step 4: Photometry and LSBG Filtering}
@@ -2518,17 +2664,52 @@ SNR & $> \mathrm{SNR}_\mathrm{min}$ & $> 2.0$ \\
 \end{tabular}
 \end{center}
 
-\subsection{Confidence Score}
+\subsection{S\'ersic Profile Fitting}
+
+When enabled (\texttt{sersic-fit}=true, default), each candidate undergoes 1D~$\to$~2D S\'ersic profile fitting:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Extract a square cutout ($5\times$ Kron radius) around the source.
+  \item Extract the azimuthally-averaged radial profile in elliptical annuli.
+  \item Fit 1D S\'ersic $I(r) = I_e \exp[-b_n((r/r_e)^{1/n} - 1)]$ for initial guesses ($I_e, r_e, n$).
+  \item Fit full 2D S\'ersic model (8 parameters: $I_e, r_e, n, x_c, y_c, \epsilon, \theta, \mathrm{bg}$) using \texttt{scipy.optimize.least\_squares} (TRF method).
+  \item Compute reduced $\chi^2$, analytical total flux, and S\'ersic-based effective surface brightness.
+\end{enumerate}
+
+\subsection{S\'ersic-Based Filtering}
+
+In addition to the photometric criteria, sources are filtered by S\'ersic fit quality:
+\begin{itemize}[leftmargin=2em]
+  \item Reject if $n < 0.3$ (likely artifact or noise).
+  \item Reject if $n > 6.0$ (too concentrated for an LSBG).
+  \item Reject if $\chi^2 > 10$ (poor S\'ersic fit quality).
+\end{itemize}
+
+\subsection{Confidence Score and Grading}
 
 Each passing source receives an LSBG confidence score (0--1) computed as a weighted combination:
 
 \begin{equation}
-C = 0.35\,S_\mu + 0.25\,S_R + 0.20\,S_\epsilon + 0.20\,S_\mathrm{SNR}
+C = w_\mu\,S_\mu + w_R\,S_R + w_\epsilon\,S_\epsilon + w_\mathrm{SNR}\,S_\mathrm{SNR} + w_\mathrm{S\'ersic}\,S_\mathrm{S\'ersic}
 \end{equation}
 
-where $S_\mu$ peaks at the center of the $[\mu_\mathrm{min}, \mu_\mathrm{max}]$ range, $S_R$ favors larger sizes, $S_\epsilon$ favors rounder shapes, and $S_\mathrm{SNR}$ scales with signal-to-noise.
+where $S_\mu$ peaks at the center of the $[\mu_\mathrm{min}, \mu_\mathrm{max}]$ range, $S_R$ favors larger sizes, $S_\epsilon$ favors rounder shapes, $S_\mathrm{SNR}$ scales with signal-to-noise, and $S_\mathrm{S\'ersic}$ (25\% weight when available) combines a S\'ersic $n$ score (favoring the typical LSBG range $0.5 \leq n \leq 2$) with a $\chi^2$ quality score.
 
-\textbf{Package}: \texttt{lsbg/photometry.py}, \texttt{lsbg/filtering.py}.
+The confidence score is mapped to a letter grade:
+\begin{center}
+\begin{tabular}{ccl}
+\toprule
+\textbf{Grade} & \textbf{Confidence} & \textbf{Interpretation} \\
+\midrule
+A & $\geq 0.7$ & High-confidence LSBG candidate \\
+B & $\geq 0.5$ & Probable LSBG candidate \\
+C & $\geq 0.3$ & Marginal candidate (needs visual inspection) \\
+D & $< 0.3$ & Likely artifact or non-LSBG \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Package}: \texttt{lsbg/photometry.py}, \texttt{lsbg/filtering.py}, \texttt{lsbg/sersic.py}.
 
 
 \section{Output Catalog}
@@ -2559,7 +2740,15 @@ The final LSBG catalog contains the following columns:
 \texttt{SNR\_TOTAL} & Total signal-to-noise ratio \\
 \midrule
 \texttt{FLUX\_APER\_5/10/20/40} & Circular aperture fluxes \\
+\midrule
+\texttt{SERSIC\_N} & S\'ersic index $n$ \\
+\texttt{SERSIC\_RE} & S\'ersic effective radius (px) \\
+\texttt{SERSIC\_CHI2} & Reduced $\chi^2$ of S\'ersic fit \\
+\texttt{MAG\_SERSIC} & S\'ersic-integrated magnitude \\
+\texttt{MU\_EFF\_SERSIC} & S\'ersic-based $\mu_\mathrm{eff}$ (mag/arcsec$^2$) \\
+\midrule
 \texttt{LSBG\_CONF} & LSBG confidence score (0--1) \\
+\texttt{LSBG\_GRADE} & Letter grade (A/B/C/D) \\
 \texttt{FLAGS} & SEP extraction flags \\
 \bottomrule
 \end{longtable}
@@ -2585,6 +2774,8 @@ Masking & mask-mag-threshold & 22.0 & Mask sources brighter than this \\
  & bright-star-radius-scale & 12.0 & Star mask radius scale \\
  & interp-method & linear & Interpolation method \\
  & mask-detect-thresh & 1.5 & Detection $\sigma$ for segmap \\
+ & lsb-protect & true & Protect faint diffuse sources \\
+ & lsb-mu-threshold & 24.0 & LSB protection SB limit \\
 \midrule
 Background & bkg-method & sep\_large & Background method \\
  & bkg-mesh-size & 256 & SEP mesh size (px) \\
@@ -2592,12 +2783,22 @@ Background & bkg-method & sep\_large & Background method \\
  & bkg-sigma-clip & 3.0 & $\sigma$-clipping threshold \\
  & bkg-n-iterations & 3 & Iterative refinement cycles \\
  & bkg-refine-thresh & 2.0 & Residual detection $\sigma$ \\
+ & bkg-convergence-tol & 0.01 & Fractional RMS convergence \\
+ & bkg-rms-quantile & 0.25 & Lower-quantile RMS factor \\
 \midrule
 Detection & detect-thresh & 0.8 & Detection $\sigma$ \\
  & detect-minarea & 50 & Minimum area (px) \\
  & detect-filter-kernel & gauss5x5 & Convolution kernel \\
  & deblend-nthresh & 32 & Deblend thresholds \\
  & deblend-mincont & 0.005 & Deblend contrast \\
+ & multiscale & true & Multi-scale detection \\
+ & multiscale-factors & 1,2,4 & Rebinning factors \\
+\midrule
+S\'ersic & sersic-fit & true & Enable S\'ersic fitting \\
+ & sersic-n-min / max & 0.2 / 10.0 & Fit bounds on $n$ \\
+ & sersic-re-min & 0.5 & Min $r_e$ (px) \\
+ & sersic-n-filter-min/max & 0.3 / 6.0 & Filter bounds on $n$ \\
+ & sersic-chi2-max & 10.0 & Max $\chi^2$ for acceptance \\
 \midrule
 Calib.\ \& & mag-zeropoint & 25.0 & Photometric ZP \\
 Filter & pixel-scale & 0.06 & Arcsec per pixel \\
@@ -2617,25 +2818,32 @@ Settings are saved to \texttt{\textasciitilde/.ds9/lsbg.prf} and loaded automati
 
 \begin{codebox}[Synopsis]
 \begin{lstlisting}[style=bash,numbers=none]
-python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,run} [OPTIONS]
+python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,
+                                  sersic,filter,run,forced} [OPTIONS]
 \end{lstlisting}
 \end{codebox}
 
 \begin{center}
-\begin{longtable}{L{2cm} L{3.5cm} L{7cm}}
+\begin{longtable}{L{2.2cm} L{3.8cm} L{6.5cm}}
 \toprule
 \textbf{Mode} & \textbf{Key options} & \textbf{Description} \\
 \midrule
 \endhead
-\texttt{mask} & \texttt{--mask-mag-threshold}, \texttt{--mask-expand-factor}, \texttt{--bright-star-*} & Create magnitude-based source mask \\
+\texttt{mask} & \texttt{--mask-mag-threshold}, \texttt{--lsb-protect}, \texttt{--bright-star-*} & Magnitude-based masking with LSB protection \\
 \midrule
 \texttt{clean} & \texttt{--mask}, \texttt{--bkg-method}, \texttt{--bkg-n-iterations} & Iterative background refinement \\
 \midrule
-\texttt{detect} & \texttt{--cleaned}, \texttt{--detect-thresh}, \texttt{--detect-minarea}, \texttt{--detect-filter-kernel} & Low-threshold source detection \\
+\texttt{detect} & \texttt{--cleaned}, \texttt{--detect-thresh}, \texttt{--multiscale} & Low-threshold detection (optional multi-scale) \\
 \midrule
-\texttt{photometry} & \texttt{--cleaned}, \texttt{--segmap}, \texttt{--mu-eff-min/max}, \texttt{--r-eff-min/max} & Photometry + LSBG filtering \\
+\texttt{photometry} & \texttt{--cleaned}, \texttt{--segmap}, \texttt{--mu-eff-*}, \texttt{--r-eff-*} & Kron + aperture + CoG photometry \\
 \midrule
-\texttt{run} & all above + \texttt{--n-workers} & Full pipeline (all 4 steps) \\
+\texttt{sersic} & \texttt{--cleaned}, \texttt{--segmap}, \texttt{--sersic-n-min/max} & 1D$\to$2D S\'ersic profile fitting \\
+\midrule
+\texttt{filter} & \texttt{--mu-eff-*}, \texttt{--sersic-n-*}, \texttt{--sersic-chi2-max} & LSBG filtering + A/B/C/D grading \\
+\midrule
+\texttt{run} & all above + \texttt{--n-workers} & Full pipeline (all steps) \\
+\midrule
+\texttt{forced} & \texttt{--forced-image}, catalog & Forced photometry at LSBG positions \\
 \bottomrule
 \end{longtable}
 \end{center}
@@ -2676,12 +2884,13 @@ python3 ds9_lsbg.py data/abell2744_f814w.fits \
 \begin{lstlisting}[numbers=none]
 SAOImageDS9/lsbg/
 |-- __init__.py
-|-- config.py          # LSBGConfig dataclass (25 parameters)
-|-- masking.py         # Magnitude-based selective masking + ICL reuse
-|-- background.py      # Iterative background + parallel tiling
-|-- detection.py       # Low-threshold detection + kernels
+|-- config.py          # LSBGConfig dataclass (40+ parameters)
+|-- masking.py         # Magnitude-based masking + LSB protection + ICL reuse
+|-- background.py      # Iterative background + parallel tiling + quantile RMS
+|-- detection.py       # Low-threshold + multi-scale detection + kernels
 |-- photometry.py      # Parallel photometry + curve-of-growth
-+-- filtering.py       # LSBG selection + confidence score
+|-- filtering.py       # LSBG selection + Sersic filter + A/B/C/D grading
++-- sersic.py          # 1D/2D Sersic fitting (reuses sersic_fit utils)
 \end{lstlisting}
 \end{codebox}
 

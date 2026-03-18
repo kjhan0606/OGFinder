@@ -7,6 +7,8 @@ Modes:
     ds9_icl.py FITS --mode background --mask mask.fits [--bkg-method polynomial] ...
     ds9_icl.py FITS --mode profile --center 500,400 [--rmax 1000] ...
     ds9_icl.py FITS --mode measure --profile-file profile.tsv [--mu-threshold 26.5] ...
+    ds9_icl.py FITS --mode measure-multi --profile-file profile.tsv [--mu-min 25] ...
+    ds9_icl.py FITS --mode decompose --profile-file profile.tsv [--pixel-scale 0.06] ...
     ds9_icl.py FITS --mode color --mask mask.fits --center 500,400 --bands F606W:f606w.fits,...
 """
 
@@ -205,28 +207,50 @@ def mode_background(args):
         mask = np.zeros((ny, nx), dtype=bool)
 
     method = args.bkg_method
-    print(f"Fitting background ({method}, order={args.bkg_order})...",
-          file=sys.stderr)
 
-    if method == 'polynomial':
-        background = fit_polynomial_background(
-            data, mask, order=args.bkg_order, sigma_clip=args.bkg_sigma_clip)
-    elif method == 'chebyshev':
-        background = fit_chebyshev_background(
-            data, mask, order=args.bkg_order, sigma_clip=args.bkg_sigma_clip)
-    elif method == 'sep_large':
-        background = sep_large_mesh_background(
-            data, mask, mesh_size=args.bkg_sep_mesh)
+    if args.iterative:
+        from icl.background import iterative_background_icl
+        print(f"Iterative background ({method}, {args.bkg_n_iterations} iters)...",
+              file=sys.stderr)
+        config = ICLConfig(
+            bkg_method=method,
+            bkg_poly_order=args.bkg_order,
+            bkg_sigma_clip=args.bkg_sigma_clip,
+            bkg_sep_mesh=args.bkg_sep_mesh,
+            bkg_n_iterations=args.bkg_n_iterations,
+            bkg_convergence_tol=args.bkg_convergence_tol,
+            bkg_refine_thresh=args.bkg_refine_thresh,
+            interp_method=args.interp_method,
+        )
+        background, final_mask, bgsub = iterative_background_icl(data, mask, config)
+
+        # Save updated mask
+        mask_out = args.mask_output if args.mask_output else \
+            os.path.expanduser('~/.ds9/icl_mask.fits')
+        save_fits(final_mask.astype(np.int32), header, mask_out)
     else:
-        print(f"ERROR: Unknown background method: {method}", file=sys.stderr)
-        sys.exit(1)
+        print(f"Fitting background ({method}, order={args.bkg_order})...",
+              file=sys.stderr)
+
+        if method == 'polynomial':
+            background = fit_polynomial_background(
+                data, mask, order=args.bkg_order, sigma_clip=args.bkg_sigma_clip)
+        elif method == 'chebyshev':
+            background = fit_chebyshev_background(
+                data, mask, order=args.bkg_order, sigma_clip=args.bkg_sigma_clip)
+        elif method == 'sep_large':
+            background = sep_large_mesh_background(
+                data, mask, mesh_size=args.bkg_sep_mesh)
+        else:
+            print(f"ERROR: Unknown background method: {method}", file=sys.stderr)
+            sys.exit(1)
+        bgsub = data - background
 
     # Save background model
     bkg_path = args.bkg_output
     save_fits(background, header, bkg_path)
 
     # Save background-subtracted image
-    bgsub = data - background
     sub_path = args.bgsub_output
     save_fits(bgsub, header, sub_path)
 
@@ -372,6 +396,122 @@ def mode_measure(args):
     print("\t".join(vals))
 
 
+# ---- Mode: measure-multi ----
+
+def _load_profile_tsv(path):
+    """Load profile TSV file and return list of dicts."""
+    with open(path, 'r') as f:
+        lines = f.readlines()
+    if not lines:
+        return []
+    header = lines[0].strip().split('\t')
+    col_idx = {h: i for i, h in enumerate(header)}
+    profile = []
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        fields = line.split('\t')
+        try:
+            profile.append({
+                'R_PIX': float(fields[col_idx['R_PIX']]),
+                'R_ARCSEC': float(fields[col_idx['R_ARCSEC']]),
+                'MU': float(fields[col_idx['MU']]),
+                'MU_ERR': float(fields[col_idx['MU_ERR']]),
+                'FLUX': float(fields[col_idx['FLUX']]),
+                'AREA': float(fields[col_idx['AREA']]),
+                'NPIX': int(float(fields[col_idx['NPIX']])),
+            })
+        except (IndexError, ValueError, KeyError):
+            continue
+    return profile
+
+
+def mode_measure_multi(args):
+    """Compute ICL fraction at multiple SB thresholds with bootstrap errors."""
+    from icl.measure import compute_icl_fraction_multi
+
+    if not args.profile_file:
+        print("ERROR: --profile-file required for measure-multi mode",
+              file=sys.stderr)
+        sys.exit(1)
+
+    profile = _load_profile_tsv(args.profile_file)
+    if not profile:
+        print("ERROR: No valid profile data", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Multi-threshold ICL: mu={args.mu_min}-{args.mu_max}, "
+          f"step={args.mu_step}, bootstrap={args.n_bootstrap}",
+          file=sys.stderr)
+
+    results = compute_icl_fraction_multi(
+        profile,
+        mu_min=args.mu_min,
+        mu_max=args.mu_max,
+        mu_step=args.mu_step,
+        n_bootstrap=args.n_bootstrap
+    )
+
+    # Output TSV
+    print("MU_THRESHOLD\tF_ICL\tF_ICL_ERR\tL_ICL\tL_GAL")
+    for r in results:
+        print(f"{r['MU_THRESHOLD']:.2f}\t{r['F_ICL']:.6f}\t"
+              f"{r['F_ICL_ERR']:.6f}\t{r['L_ICL']:.6e}\t{r['L_GAL']:.6e}")
+
+
+# ---- Mode: decompose ----
+
+def mode_decompose(args):
+    """Fit double Sérsic BCG+ICL decomposition to SB profile."""
+    from icl.decompose import fit_double_sersic
+
+    if not args.profile_file:
+        print("ERROR: --profile-file required for decompose mode",
+              file=sys.stderr)
+        sys.exit(1)
+
+    profile = _load_profile_tsv(args.profile_file)
+    if not profile:
+        print("ERROR: No valid profile data", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Double Sérsic BCG+ICL decomposition...", file=sys.stderr)
+
+    result = fit_double_sersic(
+        profile,
+        pixel_scale=args.pixel_scale,
+        mag_zeropoint=args.mag_zeropoint
+    )
+
+    if result is None:
+        print("ERROR: Decomposition failed", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"  BCG: n={result['n_bcg']:.2f}, re={result['re_bcg']:.1f}px "
+          f"({result['re_bcg_arcsec']:.2f}\")", file=sys.stderr)
+    print(f"  ICL: n={result['n_icl']:.2f}, re={result['re_icl']:.1f}px "
+          f"({result['re_icl_arcsec']:.2f}\")", file=sys.stderr)
+    print(f"  R_transition={result['R_transition']:.1f}px, "
+          f"f_ICL={result['f_ICL_sersic']:.4f}, chi2={result['chi2']:.4f}",
+          file=sys.stderr)
+
+    # Output TSV
+    keys = sorted(result.keys())
+    print("\t".join(keys))
+    vals = []
+    for k in keys:
+        v = result[k]
+        if isinstance(v, float):
+            if np.isnan(v):
+                vals.append("NaN")
+            else:
+                vals.append(f"{v:.6e}")
+        else:
+            vals.append(str(v))
+    print("\t".join(vals))
+
+
 # ---- Mode: color ----
 
 def mode_color(args):
@@ -472,7 +612,8 @@ def main():
     parser.add_argument('fits', help='Input FITS file')
     parser.add_argument('--mode', required=True,
                         choices=['mask', 'background', 'profile',
-                                 'measure', 'color'],
+                                 'measure', 'measure-multi',
+                                 'decompose', 'color'],
                         help='Operation mode')
 
     # Masking args
@@ -501,6 +642,14 @@ def main():
                         default=os.path.expanduser('~/.ds9/icl_background.fits'))
     parser.add_argument('--bgsub-output',
                         default=os.path.expanduser('~/.ds9/icl_bgsub.fits'))
+    parser.add_argument('--iterative', action='store_true',
+                        help='Use iterative background refinement')
+    parser.add_argument('--bkg-n-iterations', type=int, default=3,
+                        help='Max iterations for iterative background')
+    parser.add_argument('--bkg-convergence-tol', type=float, default=0.01,
+                        help='RMS convergence tolerance')
+    parser.add_argument('--bkg-refine-thresh', type=float, default=2.0,
+                        help='Sigma threshold for residual source detection')
 
     # Profile args
     parser.add_argument('--center', help='BCG center as x,y (0-indexed)')
@@ -523,6 +672,16 @@ def main():
     parser.add_argument('--mu-threshold', type=float, default=26.5)
     parser.add_argument('--mu-levels', default='26.0,27.0,28.0')
 
+    # Multi-threshold args
+    parser.add_argument('--mu-min', type=float, default=25.0,
+                        help='Min SB threshold for multi-threshold')
+    parser.add_argument('--mu-max', type=float, default=28.0,
+                        help='Max SB threshold for multi-threshold')
+    parser.add_argument('--mu-step', type=float, default=0.5,
+                        help='SB threshold step')
+    parser.add_argument('--n-bootstrap', type=int, default=200,
+                        help='Bootstrap resamples for error estimation')
+
     # Color args
     parser.add_argument('--bands', help='Band specs: NAME:path,NAME:path,...')
 
@@ -539,6 +698,10 @@ def main():
         mode_profile(args)
     elif args.mode == 'measure':
         mode_measure(args)
+    elif args.mode == 'measure-multi':
+        mode_measure_multi(args)
+    elif args.mode == 'decompose':
+        mode_decompose(args)
     elif args.mode == 'color':
         mode_color(args)
 

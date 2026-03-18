@@ -2,6 +2,9 @@
 
 Uses SEP with low detection threshold and large convolution kernels
 to enhance diffuse, extended sources that standard SExtractor misses.
+
+Multi-scale detection (Greco+2018, Prole+2018): rebin at 1×, 2×, 4×
+scales, detect at each scale, merge catalogs.
 """
 
 import sys
@@ -135,3 +138,200 @@ def detect_lsbg_candidates(data, bkg_rms=None, detect_thresh=0.8,
           f"minarea={detect_minarea}", file=sys.stderr)
 
     return objects, segmap, rms
+
+
+def rebin_image(data, factor):
+    """Rebin image by block-averaging factor×factor pixels.
+
+    Parameters
+    ----------
+    data : 2D array
+        Input image.
+    factor : int
+        Rebinning factor (2, 4, etc.).
+
+    Returns
+    -------
+    rebinned : 2D array
+        Rebinned image.
+    """
+    ny, nx = data.shape
+    # Trim to multiple of factor
+    ny_trim = (ny // factor) * factor
+    nx_trim = (nx // factor) * factor
+    trimmed = data[:ny_trim, :nx_trim]
+    # Block average
+    rebinned = trimmed.reshape(ny_trim // factor, factor,
+                               nx_trim // factor, factor).mean(axis=(1, 3))
+    return rebinned
+
+
+def detect_multiscale(data, bkg_rms=None, detect_thresh=0.8,
+                      detect_minarea=50, filter_kernel='gauss5x5',
+                      deblend_nthresh=32, deblend_mincont=0.005,
+                      scale_factors='1,2,4', match_radius=5.0):
+    """Multi-scale LSBG detection.
+
+    Detects sources at multiple rebinning scales to capture both
+    compact and very diffuse LSBGs. Merges catalogs, removing duplicates.
+
+    Parameters
+    ----------
+    data : 2D array
+        Background-subtracted (cleaned) image.
+    bkg_rms : 2D array or None
+        RMS map at native resolution.
+    detect_thresh : float
+        Detection threshold in sigma.
+    detect_minarea : int
+        Minimum area at native scale.
+    filter_kernel : str
+        Convolution kernel name.
+    deblend_nthresh, deblend_mincont : int, float
+        Deblending parameters.
+    scale_factors : str
+        Comma-separated rebinning factors (e.g., '1,2,4').
+    match_radius : float
+        Cross-match radius in native pixels for duplicate removal.
+
+    Returns
+    -------
+    objects : structured array
+        Merged detection catalog (coordinates in native pixels).
+    segmap : 2D int array
+        Segmentation map from native-scale detection.
+    rms : 2D array
+        RMS map from native-scale detection.
+    """
+    if isinstance(scale_factors, str):
+        factors = [int(f) for f in scale_factors.split(',')]
+    else:
+        factors = [int(f) for f in scale_factors]
+    if 1 not in factors:
+        factors = [1] + factors
+
+    all_detections = []  # list of (x, y, a, b, theta, flux, flag, scale)
+    native_segmap = None
+    native_rms = None
+
+    for factor in sorted(factors):
+        if factor == 1:
+            # Native-scale detection
+            objects, segmap, rms = detect_lsbg_candidates(
+                data, bkg_rms=bkg_rms,
+                detect_thresh=detect_thresh,
+                detect_minarea=detect_minarea,
+                filter_kernel=filter_kernel,
+                deblend_nthresh=deblend_nthresh,
+                deblend_mincont=deblend_mincont,
+            )
+            native_segmap = segmap
+            native_rms = rms
+
+            for obj in objects:
+                all_detections.append({
+                    'x': float(obj['x']),
+                    'y': float(obj['y']),
+                    'a': float(obj['a']),
+                    'b': float(obj['b']),
+                    'theta': float(obj['theta']),
+                    'flux': float(obj['flux']),
+                    'flag': int(obj['flag']),
+                    'scale': 1,
+                })
+        else:
+            # Rebinned detection
+            rebinned = rebin_image(data, factor)
+            # Scale minimum area down by factor^2
+            scaled_minarea = max(5, detect_minarea // (factor * factor))
+            # Use slightly lower threshold for rebinned (noise averages down)
+            scaled_thresh = detect_thresh * 0.9
+
+            rms_rebin = None
+            if bkg_rms is not None:
+                # Rebin RMS: RMS scales as 1/sqrt(N) for block average
+                rms_rebin = rebin_image(bkg_rms, factor) / np.sqrt(factor * factor)
+
+            objects_r, _, _ = detect_lsbg_candidates(
+                rebinned, bkg_rms=rms_rebin,
+                detect_thresh=scaled_thresh,
+                detect_minarea=scaled_minarea,
+                filter_kernel=filter_kernel,
+                deblend_nthresh=deblend_nthresh,
+                deblend_mincont=deblend_mincont,
+            )
+
+            # Scale coordinates back to native resolution
+            for obj in objects_r:
+                all_detections.append({
+                    'x': float(obj['x']) * factor + (factor - 1) * 0.5,
+                    'y': float(obj['y']) * factor + (factor - 1) * 0.5,
+                    'a': float(obj['a']) * factor,
+                    'b': float(obj['b']) * factor,
+                    'theta': float(obj['theta']),
+                    'flux': float(obj['flux']) * factor * factor,
+                    'flag': int(obj['flag']),
+                    'scale': factor,
+                })
+
+    if not all_detections:
+        return np.array([]), np.zeros(data.shape, dtype=np.int32), \
+               native_rms if native_rms is not None else np.ones_like(data)
+
+    # Merge: remove duplicates (keep native-scale when overlapping)
+    merged = _merge_detections(all_detections, match_radius)
+
+    print(f"Multi-scale: {len(all_detections)} total → "
+          f"{len(merged)} merged", file=sys.stderr)
+
+    # Convert to structured array matching SEP format
+    objects_merged = _dicts_to_sep_array(merged)
+
+    return objects_merged, native_segmap, native_rms
+
+
+def _merge_detections(detections, match_radius):
+    """Merge multi-scale detections, removing duplicates.
+
+    Priority: native scale > 2× > 4× (prefer higher resolution).
+    """
+    # Sort by scale (native first)
+    sorted_dets = sorted(detections, key=lambda d: d['scale'])
+
+    merged = []
+    for det in sorted_dets:
+        is_dup = False
+        for existing in merged:
+            dx = det['x'] - existing['x']
+            dy = det['y'] - existing['y']
+            dist = np.sqrt(dx * dx + dy * dy)
+            # Use larger match radius for larger-scale detections
+            effective_radius = match_radius * max(det['scale'], existing['scale'])
+            if dist < effective_radius:
+                is_dup = True
+                break
+        if not is_dup:
+            merged.append(det)
+
+    return merged
+
+
+def _dicts_to_sep_array(detections):
+    """Convert list of dicts to numpy structured array matching SEP format."""
+    n = len(detections)
+    dtype = np.dtype([
+        ('x', np.float64), ('y', np.float64),
+        ('a', np.float64), ('b', np.float64),
+        ('theta', np.float64), ('flux', np.float64),
+        ('flag', np.int32),
+    ])
+    arr = np.zeros(n, dtype=dtype)
+    for i, d in enumerate(detections):
+        arr[i]['x'] = d['x']
+        arr[i]['y'] = d['y']
+        arr[i]['a'] = d['a']
+        arr[i]['b'] = d['b']
+        arr[i]['theta'] = d['theta']
+        arr[i]['flux'] = d['flux']
+        arr[i]['flag'] = d['flag']
+    return arr

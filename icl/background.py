@@ -5,6 +5,7 @@ Standard SExtractor background estimation uses small mesh sizes
 much larger scales or global polynomial fits to preserve ICL.
 """
 
+import sys
 import numpy as np
 
 
@@ -205,3 +206,97 @@ def sep_large_mesh_background(data, mask, mesh_size=256):
     bkg = sep.Background(data_c, mask=mask_byte,
                          bw=mesh_size, bh=mesh_size)
     return bkg.back()
+
+
+def _fit_background_single(data, mask, method, order, sigma_clip, mesh_size):
+    """Dispatch to the appropriate background method."""
+    if method == 'polynomial':
+        return fit_polynomial_background(data, mask, order=order,
+                                          sigma_clip=sigma_clip)
+    elif method == 'chebyshev':
+        return fit_chebyshev_background(data, mask, order=order,
+                                         sigma_clip=sigma_clip)
+    else:
+        return sep_large_mesh_background(data, mask, mesh_size=mesh_size)
+
+
+def iterative_background_icl(data, mask, config):
+    """Iterative background refinement with convergence monitoring.
+
+    Follows the lsbg.background.iterative_background pattern adapted
+    for the ICL pipeline: interpolate masked regions, fit background,
+    detect residual sources, expand mask, check RMS convergence.
+
+    Parameters
+    ----------
+    data : 2D array
+        Original image.
+    mask : 2D bool array
+        Initial source mask.
+    config : ICLConfig
+        Configuration with bkg_method, bkg_poly_order, bkg_sigma_clip,
+        bkg_sep_mesh, bkg_n_iterations, bkg_convergence_tol,
+        bkg_refine_thresh.
+
+    Returns
+    -------
+    background : 2D array
+        Final refined background model.
+    final_mask : 2D bool array
+        Final expanded mask.
+    bgsub : 2D array
+        Background-subtracted image.
+    """
+    from icl.masking import interpolate_masked
+    from lsbg.masking import iterative_mask_refine
+
+    current_mask = mask.copy()
+    prev_rms_median = None
+
+    for iteration in range(config.bkg_n_iterations):
+        print(f"ICL iterative background: iteration {iteration + 1}/"
+              f"{config.bkg_n_iterations}", file=sys.stderr)
+
+        # Interpolate masked regions before fitting
+        filled = interpolate_masked(data, current_mask,
+                                     method=config.interp_method)
+
+        # Fit background
+        background = _fit_background_single(
+            filled, current_mask,
+            method=config.bkg_method,
+            order=config.bkg_poly_order,
+            sigma_clip=config.bkg_sigma_clip,
+            mesh_size=config.bkg_sep_mesh
+        )
+
+        # Check RMS convergence
+        residual = data - background
+        unmasked = ~current_mask
+        if unmasked.any():
+            rms_median = np.median(np.abs(residual[unmasked]))
+            if prev_rms_median is not None and prev_rms_median > 0:
+                frac_change = abs(rms_median - prev_rms_median) / prev_rms_median
+                print(f"  -> RMS change: {frac_change:.4f} "
+                      f"(tol={config.bkg_convergence_tol})", file=sys.stderr)
+                if frac_change < config.bkg_convergence_tol:
+                    print(f"  -> RMS converged at iteration {iteration + 1}",
+                          file=sys.stderr)
+                    break
+            prev_rms_median = rms_median
+
+        # Detect residual sources and expand mask
+        current_mask, n_new = iterative_mask_refine(
+            data, current_mask, background,
+            sigma_thresh=config.bkg_refine_thresh,
+            minarea=10
+        )
+        print(f"  -> {n_new} new residual sources detected", file=sys.stderr)
+
+        if n_new == 0:
+            print(f"  -> converged at iteration {iteration + 1}",
+                  file=sys.stderr)
+            break
+
+    bgsub = data - background
+    return background, current_mask, bgsub
