@@ -307,6 +307,8 @@ proc CreateCatalogPanel {} {
 	-label "Save PSF..." -command CatalogPanelSavePSF
     $f.menubar.starpsf.m add command \
 	-label "Load PSF..." -command CatalogPanelLoadPSF
+    $f.menubar.starpsf.m add command \
+	-label "AI Star Classification" -command CatalogPanelStarFinder
     $f.menubar.starpsf.m add separator
     $f.menubar.starpsf.m add command -label "Settings..." \
 	-command CatalogPanelStarPSFSettings
@@ -4616,6 +4618,263 @@ proc CatalogPanelMorphColorMarkers {} {
 	set color yellow
 	if {[info exists catpanel(morph,$src_num)]} {
 	    set color [lindex $catpanel(morph,$src_num) 3]
+	}
+
+	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=$color width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
+	incr count
+	incr batch_count
+
+	if {$batch_count >= $batch_size} {
+	    set sextract_all_reg $reg
+	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    set reg "image\n"
+	    set batch_count 0
+	}
+    }
+
+    if {$batch_count > 0} {
+	set sextract_all_reg $reg
+	catch {$frame marker catalog command ds9 var sextract_all_reg}
+    }
+
+    set catpanel(markall,on) 1
+}
+
+# ============================================================================
+# AI Star/Galaxy Classification
+# ============================================================================
+
+proc CatalogPanelStarFinder {} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    if {![$current(frame) has fits]} return
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No sources — run Extract first"
+	return
+    }
+
+    # Get FITS filename
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    # Find script
+    set script [CatalogPanelGetScript ds9_star_finder.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ERROR: ds9_star_finder.py not found"
+	return
+    }
+
+    # Save catalog to temp TSV
+    set catfile [CatalogPanelSaveTempCatalog star]
+    if {$catfile eq {}} {
+	set catpanel(status) "Star Finder: cannot write catalog"
+	return
+    }
+
+    # Build arguments
+    set paramargs {}
+    lappend paramargs "--catalog" $catfile
+
+    # Find checkpoint
+    set bindir [file dirname [info nameofexecutable]]
+    set ckpt [file join [file dirname $bindir] star_finder data checkpoints star_finder_best.pt]
+    if {[file exists $ckpt]} {
+	lappend paramargs "--checkpoint" $ckpt
+    }
+
+    set catpanel(status) "AI Star Classification: classifying sources on [file tail $fn] ..."
+    update idletasks
+
+    # Run classification
+    set errfile [file join [file normalize ~] .ds9 star_finder_stderr.txt]
+    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    set catpanel(status) "Star Finder error: $last_err"
+	    puts "Star Finder full stderr:\n$stderr_msg"
+	} else {
+	    set catpanel(status) "Star Finder error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    # Parse results and add columns
+    CatalogPanelStarFinderParse $data
+}
+
+proc CatalogPanelStarFinderParse {data} {
+    global catpanel
+
+    set lines [split $data \n]
+    set n_classified 0
+
+    # Parse header: #STAR_FINDER	N_CLASSIFIED=245	N_SOURCES=300
+    foreach line $lines {
+	if {[string match "#STAR_FINDER*" $line]} {
+	    foreach field [split $line "\t"] {
+		if {[string match "N_CLASSIFIED=*" $field]} {
+		    set n_classified [string range $field 13 end]
+		}
+	    }
+	    continue
+	}
+    }
+
+    # Collect result lines (skip header/comments)
+    set result_lines {}
+    set header_line ""
+    foreach line $lines {
+	if {[string match "#*" $line]} continue
+	if {[string match "NUMBER*" $line]} {
+	    set header_line $line
+	    continue
+	}
+	if {[string trim $line] eq {}} continue
+	lappend result_lines $line
+    }
+
+    if {[llength $result_lines] == 0} {
+	set catpanel(status) "Star Finder: no sources classified"
+	return
+    }
+
+    # Rebuild TSV result for AddColumnsFromTSV
+    set result_data $header_line
+    foreach line $result_lines {
+	append result_data "\n" $line
+    }
+
+    # Add AI_STAR and AI_STAR_CONF columns
+    CatalogPanelAddColumnsFromTSV $result_data {AI_STAR AI_STAR_CONF}
+
+    # Recolor markers
+    CatalogPanelStarFinderColorMarkers $result_lines
+
+    set catpanel(status) "AI Star Classification: $n_classified sources classified"
+}
+
+proc CatalogPanelStarFinderColorMarkers {result_lines} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    set frame $current(frame)
+
+    # Build color lookup: NUMBER -> color
+    array set star_color {}
+    foreach line $result_lines {
+	set fields [split $line "\t"]
+	if {[llength $fields] < 4} continue
+	set src_num [lindex $fields 0]
+	set color [lindex $fields 3]
+	set star_color($src_num) $color
+    }
+
+    # Delete existing markers and recreate with star/galaxy colors
+    catch {$frame marker catalog sextract_all delete}
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set lines [split $catpanel(alldata) \n]
+    if {[llength $lines] < 2} return
+
+    set headers [split [lindex $lines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Find needed columns
+    set col_x -1
+    set col_y -1
+    set col_a -1
+    set col_b -1
+    set col_theta -1
+    set col_ir -1
+    set col_num -1
+    for {set c 0} {$c < $ncols} {incr c} {
+	set hdr [string trim [lindex $headers $c]]
+	switch -- $hdr {
+	    NUMBER      { set col_num $c }
+	    X_IMAGE     { set col_x $c }
+	    Y_IMAGE     { set col_y $c }
+	    A_IMAGE     { set col_a $c }
+	    B_IMAGE     { set col_b $c }
+	    THETA_IMAGE { set col_theta $c }
+	    ISO_RADIUS  { set col_ir $c }
+	}
+    }
+    if {$col_x < 0 || $col_y < 0} return
+
+    # Build region strings with star/galaxy colors
+    set batch_size 500
+    set reg "image\n"
+    set count 0
+    set batch_count 0
+    global sextract_all_reg
+
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set line [lindex $lines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+
+	set x [string trim [lindex $fields $col_x]]
+	set y [string trim [lindex $fields $col_y]]
+	if {![string is double -strict $x] || ![string is double -strict $y]} continue
+
+	set src_num [expr {$i}]
+	if {$col_num >= 0} {
+	    set nv [string trim [lindex $fields $col_num]]
+	    if {$nv ne {}} { set src_num $nv }
+	}
+
+	# Ellipse parameters
+	set iso_radius 5.0
+	set a_image 0
+	set b_image 0
+	set theta 0
+
+	if {$col_ir >= 0} {
+	    set val [string trim [lindex $fields $col_ir]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+		set iso_radius $v
+	    }
+	}
+	if {$col_a >= 0} {
+	    set val [string trim [lindex $fields $col_a]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+	}
+	if {$col_b >= 0} {
+	    set val [string trim [lindex $fields $col_b]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+	}
+	if {$col_theta >= 0} {
+	    set val [string trim [lindex $fields $col_theta]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
+	}
+
+	set semi_a $iso_radius
+	set semi_b $iso_radius
+	if {$a_image > 0 && $b_image > 0} {
+	    set semi_b [expr {$iso_radius * $b_image / $a_image}]
+	}
+
+	# Color: star=cyan, galaxy=yellow, unclassified=yellow
+	set color yellow
+	if {[info exists star_color($src_num)]} {
+	    set color $star_color($src_num)
 	}
 
 	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=$color width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
