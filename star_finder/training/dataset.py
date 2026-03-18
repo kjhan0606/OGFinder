@@ -1,23 +1,21 @@
-"""Synthetic star/galaxy dataset for training."""
+"""Synthetic star/galaxy dataset for training.
 
-import os
+Stars: Moffat PSF (point sources) with various FWHM/beta/ellipticity
+Galaxies: Sersic profiles (extended sources) with various n/r_e/ellipticity
+
+The CNN learns the fundamental distinction: point source vs extended source.
+No external data dependency (Galaxy10 h5 not required).
+"""
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-
-from ..cutout.extract import _resize_2d
 
 
 class StarGalaxyDataset(Dataset):
     """Binary classification: star(1) vs galaxy(0)."""
 
     def __init__(self, images, labels, augment=False):
-        """
-        Args:
-            images: (N, 1, H, W) float32
-            labels: (N,) int labels (0=galaxy, 1=star)
-            augment: apply random augmentation
-        """
         self.images = images
         self.labels = labels
         self.augment = augment
@@ -29,162 +27,196 @@ class StarGalaxyDataset(Dataset):
         img = self.images[idx].copy()  # (1, H, W)
 
         if self.augment:
-            # Random 90-degree rotations
             k = np.random.randint(4)
             img = np.rot90(img, k=k, axes=(1, 2)).copy()
-            # Random flips
             if np.random.random() > 0.5:
                 img = img[:, :, ::-1].copy()
             if np.random.random() > 0.5:
                 img = img[:, ::-1, :].copy()
-            # Small Gaussian noise
+            # Gaussian noise
             if np.random.random() > 0.5:
                 noise = np.random.normal(0, 0.02, img.shape).astype(np.float32)
                 img = img + noise
+            # Random brightness shift
+            if np.random.random() > 0.5:
+                shift = np.random.uniform(-0.05, 0.05)
+                img = img + shift
+            img = np.clip(img, 0, 1)
 
         return torch.FloatTensor(img), torch.FloatTensor([self.labels[idx]])
+
+
+def _asinh_normalize(stamp, asinh_a=0.1):
+    """Asinh stretch + [0,1] normalization (same as inference pipeline)."""
+    median = np.median(stamp)
+    mad = np.median(np.abs(stamp - median))
+    sigma = mad * 1.4826 if mad > 0 else 1.0
+    stamp = (stamp - median) / sigma
+    stamp = np.arcsinh(stamp / asinh_a)
+    vmin, vmax = stamp.min(), stamp.max()
+    if vmax > vmin:
+        stamp = (stamp - vmin) / (vmax - vmin)
+    else:
+        stamp = np.zeros_like(stamp)
+    return stamp.astype(np.float32)
+
+
+def _make_elliptical_r(size, cx, cy, ellip, theta):
+    """Compute elliptical radius grid.
+
+    Args:
+        size: grid size
+        cx, cy: center
+        ellip: ellipticity (0=circular, 0.9=very elongated)
+        theta: position angle in radians
+
+    Returns:
+        r: 2D array of elliptical radii
+    """
+    y_grid, x_grid = np.mgrid[:size, :size].astype(np.float64)
+    dx = x_grid - cx
+    dy = y_grid - cy
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    x_rot = dx * cos_t + dy * sin_t
+    y_rot = -dx * sin_t + dy * cos_t
+    q = 1.0 - ellip  # axis ratio
+    q = max(q, 0.1)
+    r = np.sqrt(x_rot ** 2 + (y_rot / q) ** 2)
+    return r
 
 
 def generate_synthetic_stars(n=8000, size=64, fwhm_range=(1.5, 5.0), seed=42):
     """Generate synthetic star images (Moffat PSF + noise).
 
-    Args:
-        n: number of stars to generate
-        size: stamp size
-        fwhm_range: (min, max) FWHM in pixels
-        seed: random seed
-
-    Returns:
-        stars: (n, 1, size, size) float32 normalized [0, 1]
+    Includes: variable FWHM, beta, slight ellipticity (tracking errors),
+    variable flux/SNR, Poisson-like + Gaussian noise.
     """
     rng = np.random.RandomState(seed)
     stars = np.zeros((n, 1, size, size), dtype=np.float32)
     half = size / 2.0
 
-    y_grid, x_grid = np.mgrid[:size, :size].astype(np.float64)
-
     for i in range(n):
         fwhm = rng.uniform(fwhm_range[0], fwhm_range[1])
-        # Moffat profile: beta=2.5..4.5
         beta = rng.uniform(2.5, 4.5)
         alpha = fwhm / (2.0 * np.sqrt(2.0 ** (1.0 / beta) - 1.0))
 
         # Small random offset from center
-        cx = half + rng.uniform(-1.5, 1.5)
-        cy = half + rng.uniform(-1.5, 1.5)
+        cx = half + rng.uniform(-2.0, 2.0)
+        cy = half + rng.uniform(-2.0, 2.0)
 
-        r2 = (x_grid - cx) ** 2 + (y_grid - cy) ** 2
-        psf = (1.0 + r2 / alpha ** 2) ** (-beta)
+        # Slight ellipticity for stars (tracking errors, optics)
+        ellip = rng.uniform(0.0, 0.15)
+        theta = rng.uniform(0, np.pi)
 
-        # Random flux (log-uniform)
+        r = _make_elliptical_r(size, cx, cy, ellip, theta)
+        psf = (1.0 + (r / alpha) ** 2) ** (-beta)
+
+        # Random flux (log-uniform, wide range)
         flux = 10.0 ** rng.uniform(2.0, 5.0)
         stamp = psf * flux / psf.sum()
 
-        # Add Poisson-like noise + Gaussian background
-        bkg_level = rng.uniform(50, 200)
-        bkg_noise = rng.uniform(5, 30)
+        # Poisson noise (shot noise from source)
+        stamp_pos = np.maximum(stamp, 0)
+        if stamp_pos.max() > 0:
+            poisson_noise = rng.poisson(stamp_pos) - stamp_pos
+            stamp = stamp + poisson_noise * 0.3  # attenuated
+
+        # Background + readout noise
+        bkg_level = rng.uniform(50, 300)
+        bkg_noise = rng.uniform(5, 40)
         stamp = stamp + bkg_level
         stamp = stamp + rng.normal(0, bkg_noise, stamp.shape)
 
-        # Normalize: asinh stretch
-        median = np.median(stamp)
-        mad = np.median(np.abs(stamp - median))
-        sigma = mad * 1.4826 if mad > 0 else 1.0
-        stamp = (stamp - median) / sigma
-        stamp = np.arcsinh(stamp / 0.1)
-        vmin, vmax = stamp.min(), stamp.max()
-        if vmax > vmin:
-            stamp = (stamp - vmin) / (vmax - vmin)
-        else:
-            stamp = np.zeros_like(stamp)
-
-        stars[i, 0] = stamp.astype(np.float32)
+        stars[i, 0] = _asinh_normalize(stamp)
 
     return stars
 
 
-def load_galaxy_samples(h5_path, n=8000, size=64, seed=42):
-    """Load galaxy images from Galaxy10 DECaLS H5 -> grayscale.
+def generate_synthetic_galaxies(n=8000, size=64, seed=42):
+    """Generate synthetic galaxy images (Sersic profiles + noise).
 
-    Args:
-        h5_path: path to Galaxy10_DECals.h5
-        n: number of galaxies to sample
-        size: output stamp size
-        seed: random seed
+    Mix of galaxy types:
+    - Exponential disk (Sersic n=1): 40%
+    - De Vaucouleurs (Sersic n=4): 25%
+    - General Sersic (n=0.5~6): 35%
 
-    Returns:
-        galaxies: (n, 1, size, size) float32 normalized [0, 1]
+    With variable half-light radius, ellipticity, position angle,
+    flux, and noise (same noise model as stars for consistency).
     """
-    import h5py
-
-    with h5py.File(h5_path, 'r') as f:
-        images_rgb = f['images'][:]  # (N, 256, 256, 3) uint8
-
-    total = len(images_rgb)
     rng = np.random.RandomState(seed)
-    indices = rng.choice(total, size=min(n, total), replace=False)
+    galaxies = np.zeros((n, 1, size, size), dtype=np.float32)
+    half = size / 2.0
 
-    galaxies = np.zeros((len(indices), 1, size, size), dtype=np.float32)
+    for i in range(n):
+        # Random Sersic index
+        roll = rng.random()
+        if roll < 0.40:
+            sersic_n = rng.uniform(0.8, 1.2)   # exponential disk
+        elif roll < 0.65:
+            sersic_n = rng.uniform(3.5, 4.5)   # de Vaucouleurs
+        else:
+            sersic_n = rng.uniform(0.5, 6.0)   # general
 
-    for i, idx in enumerate(indices):
-        rgb = images_rgb[idx].astype(np.float32)  # (256, 256, 3)
-        # Convert to grayscale: 0.299R + 0.587G + 0.114B
-        gray = 0.299 * rgb[:, :, 0] + 0.587 * rgb[:, :, 1] + 0.114 * rgb[:, :, 2]
-        gray = gray / 255.0  # [0, 1]
+        # b_n approximation: b_n ~ 2n - 1/3 + 4/(405n)
+        bn = 2.0 * sersic_n - 1.0 / 3.0 + 4.0 / (405.0 * sersic_n)
 
-        # Resize to target size
-        if gray.shape[0] != size or gray.shape[1] != size:
-            gray = _resize_2d(gray, size, size)
+        # Half-light radius: MUST be larger than typical PSF FWHM
+        # to be clearly extended
+        r_e = rng.uniform(3.0, 18.0)
 
-        # Asinh stretch (already roughly [0,1], apply mild stretch)
-        median = np.median(gray)
-        mad = np.median(np.abs(gray - median))
-        sigma = mad * 1.4826 if mad > 0 else 1.0
-        if sigma > 0:
-            gray = (gray - median) / sigma
-            gray = np.arcsinh(gray / 0.1)
-            vmin, vmax = gray.min(), gray.max()
-            if vmax > vmin:
-                gray = (gray - vmin) / (vmax - vmin)
-            else:
-                gray = np.zeros_like(gray)
+        # Ellipticity and orientation
+        ellip = rng.uniform(0.0, 0.7)
+        theta = rng.uniform(0, np.pi)
 
-        galaxies[i, 0] = gray.astype(np.float32)
+        # Center offset
+        cx = half + rng.uniform(-2.0, 2.0)
+        cy = half + rng.uniform(-2.0, 2.0)
+
+        r = _make_elliptical_r(size, cx, cy, ellip, theta)
+        r = np.maximum(r, 0.01)  # avoid division by zero
+
+        # Sersic profile: I(r) = I_e * exp(-b_n * ((r/r_e)^(1/n) - 1))
+        profile = np.exp(-bn * ((r / r_e) ** (1.0 / sersic_n) - 1.0))
+
+        # Random flux
+        flux = 10.0 ** rng.uniform(2.0, 5.0)
+        stamp = profile * flux / profile.sum()
+
+        # Poisson noise
+        stamp_pos = np.maximum(stamp, 0)
+        if stamp_pos.max() > 0:
+            poisson_noise = rng.poisson(np.minimum(stamp_pos, 1e6)) - stamp_pos
+            stamp = stamp + poisson_noise * 0.3
+
+        # Background + readout noise (same model as stars)
+        bkg_level = rng.uniform(50, 300)
+        bkg_noise = rng.uniform(5, 40)
+        stamp = stamp + bkg_level
+        stamp = stamp + rng.normal(0, bkg_noise, stamp.shape)
+
+        galaxies[i, 0] = _asinh_normalize(stamp)
 
     return galaxies
 
 
 def make_train_val_test_split(star_images, galaxy_images,
                                val_frac=0.15, test_frac=0.15, seed=42):
-    """Combine and split star/galaxy data.
-
-    Args:
-        star_images: (N_star, 1, H, W) float32
-        galaxy_images: (N_gal, 1, H, W) float32
-        val_frac: validation fraction
-        test_frac: test fraction
-        seed: random seed
-
-    Returns:
-        train_ds, val_ds, test_ds
-    """
+    """Combine and split star/galaxy data."""
     n_star = len(star_images)
     n_gal = len(galaxy_images)
 
-    # Combine
     images = np.concatenate([star_images, galaxy_images], axis=0)
     labels = np.concatenate([
         np.ones(n_star, dtype=np.int64),   # star=1
         np.zeros(n_gal, dtype=np.int64),   # galaxy=0
     ])
 
-    # Shuffle
     rng = np.random.RandomState(seed)
     perm = rng.permutation(len(labels))
     images = images[perm]
     labels = labels[perm]
 
-    # Split
     n = len(labels)
     n_test = int(n * test_frac)
     n_val = int(n * val_frac)

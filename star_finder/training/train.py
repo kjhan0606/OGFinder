@@ -1,4 +1,8 @@
-"""Training loop for Star/Galaxy binary classifier."""
+"""Training loop for Star/Galaxy binary classifier.
+
+Uses fully synthetic data: Moffat stars + Sersic galaxies.
+No external dataset dependency (Galaxy10 h5 not required).
+"""
 
 import os
 import sys
@@ -10,31 +14,13 @@ from torch.utils.data import DataLoader
 
 from ..config import TrainConfig
 from ..models.cnn import StarFinderCNN
-from .dataset import generate_synthetic_stars, load_galaxy_samples, make_train_val_test_split
+from .dataset import generate_synthetic_stars, generate_synthetic_galaxies, make_train_val_test_split
 
 
-def train(h5_path=None, config=None):
-    """Main training loop with early stopping.
-
-    Args:
-        h5_path: path to Galaxy10_DECals.h5 (for galaxy samples)
-        config: TrainConfig instance
-    """
+def train(config=None):
+    """Main training loop with early stopping."""
     if config is None:
         config = TrainConfig()
-
-    if h5_path is None:
-        h5_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "galaxy_morph", "data", "galaxy10", "Galaxy10_DECals.h5"
-        )
-
-    if not os.path.exists(h5_path):
-        print(f"ERROR: Galaxy10 dataset not found at {h5_path}")
-        print("Download it with:")
-        print(f"  wget -P {os.path.dirname(h5_path)} "
-              "https://astro.utoronto.ca/~hleung/shared/Galaxy10/Galaxy10_DECals.h5")
-        sys.exit(1)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device: {device}")
@@ -47,10 +33,10 @@ def train(h5_path=None, config=None):
         fwhm_range=(config.fwhm_range_min, config.fwhm_range_max),
         seed=config.seed)
 
-    # Load galaxy samples
-    print(f"Loading {config.n_galaxies} galaxy samples from {h5_path} ...")
-    galaxy_images = load_galaxy_samples(
-        h5_path, n=config.n_galaxies, size=config.cutout_size,
+    # Generate synthetic galaxies (Sersic profiles)
+    print(f"Generating {config.n_galaxies} synthetic galaxies (Sersic profiles) ...")
+    galaxy_images = generate_synthetic_galaxies(
+        n=config.n_galaxies, size=config.cutout_size,
         seed=config.seed + 1)
 
     print(f"Stars: {len(star_images)}, Galaxies: {len(galaxy_images)}")
@@ -213,7 +199,6 @@ def train(h5_path=None, config=None):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='Train Star/Galaxy Classifier')
-    parser.add_argument('--data', default=None, help='Path to Galaxy10_DECals.h5')
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -230,4 +215,4 @@ if __name__ == '__main__':
         n_stars=args.n_stars,
         n_galaxies=args.n_galaxies,
     )
-    train(h5_path=args.data, config=cfg)
+    train(config=cfg)
