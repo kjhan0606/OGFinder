@@ -2,12 +2,14 @@
 """
 DS9 AI Star/Galaxy Classification CLI.
 
-Runs CNN-based binary star/galaxy classification on extracted sources.
-Outputs TSV to stdout for Tcl parsing in layout.tcl.
+Uses PSF cross-correlation: builds empirical PSF from the image itself,
+then classifies each source by how well it matches the PSF.
+No pre-trained model needed — image-adaptive.
 
 Usage:
-    ds9_star_finder.py FITSFILE --catalog catalog.tsv [--checkpoint path]
-                       [--threshold 0.5] [--cutout-size 64] [--device cpu]
+    ds9_star_finder.py FITSFILE --catalog catalog.tsv
+                       [--threshold 0.6] [--cutout-size 64]
+                       [--psf psf.fits]
 """
 
 import sys
@@ -21,63 +23,62 @@ _project_root = os.path.abspath(os.path.join(_script_dir, '..', '..'))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from star_finder.config import StarFinderConfig
-from star_finder.cutout.extract import batch_extract_cutouts
-from star_finder.training.evaluate import load_star_model, predict_batch
+from star_finder.psf_match import classify_sources, build_empirical_psf
 
 
 def parse_catalog_tsv(path):
-    """Parse TSV catalog (NUMBER, X_IMAGE, Y_IMAGE required)."""
-    required = ['NUMBER', 'X_IMAGE', 'Y_IMAGE']
+    """Parse TSV catalog. Required: NUMBER, X_IMAGE, Y_IMAGE."""
+    columns_map = {
+        'NUMBER': 'number', 'X_IMAGE': 'x', 'Y_IMAGE': 'y',
+        'FLUX_AUTO': 'flux', 'A_IMAGE': 'a_image', 'B_IMAGE': 'b_image',
+        'CLASS_STAR': 'class_star', 'FWHM_IMAGE': 'fwhm_image',
+    }
 
     with open(path, 'r') as f:
         lines = f.readlines()
-
     if not lines:
         return None
 
     header = lines[0].strip().split('\t')
     col_idx = {}
-    for col in required:
-        for i, h in enumerate(header):
-            if h.strip() == col:
-                col_idx[col] = i
-                break
+    for i, h in enumerate(header):
+        h = h.strip()
+        if h in columns_map:
+            col_idx[columns_map[h]] = i
 
-    missing = [c for c in required if c not in col_idx]
-    if missing:
-        print(f"ERROR: Missing required columns: {missing}", file=sys.stderr)
+    if 'number' not in col_idx or 'x' not in col_idx or 'y' not in col_idx:
+        print("ERROR: Missing NUMBER/X_IMAGE/Y_IMAGE columns", file=sys.stderr)
         return None
 
-    numbers = []
-    xs = []
-    ys = []
+    result = {k: [] for k in col_idx}
     for line in lines[1:]:
         line = line.strip()
         if not line:
             continue
         fields = line.split('\t')
         try:
-            numbers.append(float(fields[col_idx['NUMBER']]))
-            xs.append(float(fields[col_idx['X_IMAGE']]))
-            ys.append(float(fields[col_idx['Y_IMAGE']]))
+            for key, ci in col_idx.items():
+                result[key].append(float(fields[ci]))
         except (IndexError, ValueError):
             continue
 
-    if not numbers:
+    if not result['number']:
         return None
 
-    return {
-        'number': np.array(numbers, dtype=np.int64),
-        'x': np.array(xs) - 1.0,  # 1-based -> 0-based
-        'y': np.array(ys) - 1.0,
-    }
+    # Convert to numpy
+    for key in result:
+        result[key] = np.array(result[key])
+
+    result['number'] = result['number'].astype(np.int64)
+    result['x'] -= 1.0  # 1-based -> 0-based
+    result['y'] -= 1.0
+
+    return result
 
 
 def load_fits(fits_path):
-    """Load FITS data, handling multi-dimensional cubes."""
+    """Load FITS data."""
     from astropy.io import fits as pyfits
-
     with pyfits.open(fits_path) as hdul:
         data = None
         for hdu in hdul:
@@ -91,8 +92,18 @@ def load_fits(fits_path):
         return np.ascontiguousarray(data, dtype=np.float64)
 
 
+def load_psf_fits(psf_path):
+    """Load PSF from FITS file."""
+    from astropy.io import fits as pyfits
+    with pyfits.open(psf_path) as hdul:
+        for hdu in hdul:
+            if hdu.data is not None and hdu.data.ndim == 2:
+                return hdu.data.astype(np.float64)
+    return None
+
+
 def subtract_background(data):
-    """Simple background subtraction using SEP."""
+    """Background subtraction using SEP."""
     try:
         import sep
     except ImportError:
@@ -109,30 +120,17 @@ def subtract_background(data):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='DS9 AI Star/Galaxy Classification')
+        description='DS9 Star/Galaxy Classification (PSF matching)')
     parser.add_argument('fits', help='Path to FITS file')
     parser.add_argument('--catalog', required=True,
-                        help='Path to catalog TSV from ds9_sextract')
-    parser.add_argument('--checkpoint', default=None,
-                        help='Path to CNN model checkpoint')
-    parser.add_argument('--threshold', type=float, default=0.5,
-                        help='Star classification threshold (default: 0.5)')
+                        help='Path to catalog TSV')
+    parser.add_argument('--threshold', type=float, default=0.6,
+                        help='PSF correlation threshold (default: 0.6)')
     parser.add_argument('--cutout-size', type=int, default=64,
                         help='Cutout size in pixels')
-    parser.add_argument('--device', default='cpu',
-                        help='Device: cpu or cuda')
+    parser.add_argument('--psf', default=None,
+                        help='Path to PSF FITS file (auto-detect if omitted)')
     args = parser.parse_args()
-
-    # Find checkpoint
-    checkpoint = args.checkpoint
-    if checkpoint is None:
-        checkpoint = os.path.join(_project_root, 'star_finder', 'data',
-                                   'checkpoints', 'star_finder_best.pt')
-    if not os.path.exists(checkpoint):
-        print(f"ERROR: Checkpoint not found: {checkpoint}", file=sys.stderr)
-        print("Train the model first with: python3 -m star_finder.training.train",
-              file=sys.stderr)
-        sys.exit(1)
 
     # Load FITS
     print(f"Loading FITS: {args.fits}", file=sys.stderr)
@@ -155,68 +153,40 @@ def main():
     n_sources = len(catalog['number'])
     print(f"  Total sources: {n_sources}", file=sys.stderr)
 
-    # Extract cutouts
-    print(f"Extracting {n_sources} cutouts ({args.cutout_size}x{args.cutout_size}) ...",
-          file=sys.stderr)
-    cutouts, valid_mask = batch_extract_cutouts(
-        data_sub, catalog, size=args.cutout_size)
-    n_valid = int(np.sum(valid_mask))
-    print(f"  Valid cutouts: {n_valid}", file=sys.stderr)
+    # Load PSF if provided
+    psf_template = None
+    if args.psf and os.path.exists(args.psf):
+        print(f"Loading PSF: {args.psf}", file=sys.stderr)
+        psf_template = load_psf_fits(args.psf)
+        if psf_template is not None:
+            # Resize PSF to match cutout size if needed
+            if (psf_template.shape[0] != args.cutout_size or
+                    psf_template.shape[1] != args.cutout_size):
+                from star_finder.cutout.extract import _resize_2d
+                psf_template = _resize_2d(psf_template, args.cutout_size,
+                                           args.cutout_size)
+            print(f"  PSF shape: {psf_template.shape}", file=sys.stderr)
 
-    if n_valid == 0:
-        print(f"#STAR_FINDER\tN_CLASSIFIED=0\tN_SOURCES={n_sources}")
-        print("NUMBER\tAI_STAR\tAI_STAR_CONF\tAI_STAR_COLOR")
-        sys.exit(0)
+    # Classify
+    print("Classifying sources by PSF correlation ...", file=sys.stderr)
+    results = classify_sources(data_sub, catalog, size=args.cutout_size,
+                                psf_template=psf_template,
+                                star_threshold=args.threshold)
 
-    # Load model and run inference
-    import torch
-    device = torch.device(args.device if args.device != 'cpu' and
-                          torch.cuda.is_available() else 'cpu')
-    print(f"Loading model: {checkpoint} (device={device})", file=sys.stderr)
-    model = load_star_model(checkpoint, device)
-
-    print(f"Running inference on {n_valid} cutouts ...", file=sys.stderr)
-    proba = predict_batch(model, cutouts, device, batch_size=256)
-
-    # Build results
-    n_stars = 0
-    n_galaxies = 0
-    results = []
-
-    valid_count = 0
-    for i in range(n_sources):
-        if not valid_mask[i]:
-            continue
-        p = float(proba[valid_count])
-        valid_count += 1
-
-        src_num = int(catalog['number'][i])
-        if p >= args.threshold:
-            label = "star"
-            color = "cyan"
-            n_stars += 1
-        else:
-            label = "galaxy"
-            color = "yellow"
-            n_galaxies += 1
-
-        results.append({
-            'number': src_num,
-            'label': label,
-            'conf': p,
-            'color': color,
-        })
-
+    # Count
+    n_stars = sum(1 for r in results if r['label'] == 'star')
+    n_galaxies = sum(1 for r in results if r['label'] == 'galaxy')
     n_classified = len(results)
     print(f"  Classified: {n_classified} (star={n_stars}, galaxy={n_galaxies})",
           file=sys.stderr)
 
-    # Output TSV to stdout
+    # Output TSV
     print(f"#STAR_FINDER\tN_CLASSIFIED={n_classified}\tN_SOURCES={n_sources}")
     print("NUMBER\tAI_STAR\tAI_STAR_CONF\tAI_STAR_COLOR")
 
     for r in results:
-        print(f"{r['number']}\t{r['label']}\t{r['conf']:.4f}\t{r['color']}")
+        print(f"{r['number']}\t{r['label']}\t{r['correlation']:.4f}\t"
+              f"{r['color']}")
 
 
 if __name__ == '__main__':
