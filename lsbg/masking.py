@@ -92,13 +92,20 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
             merged_r[b] = max(merged_r.get(b, 0), r)
         radius_groups = {merged_r[b]: labs for b, labs in merged.items()}
 
-    # Dilate each group (one np.isin + one binary_dilation per group)
+    # Dilate each group
+    from scipy.ndimage import distance_transform_edt
     n_groups = len(radius_groups)
     for gi, (r, labs) in enumerate(sorted(radius_groups.items())):
         submask = np.isin(segmap, labs)
-        y, x = np.ogrid[-r:r + 1, -r:r + 1]
-        struct = (x * x + y * y) <= r * r
-        mask |= binary_dilation(submask, structure=struct)
+        if r > 30:
+            # Large radius: distance transform is O(N) regardless of r
+            dist = distance_transform_edt(~submask)
+            mask |= (dist <= r)
+        else:
+            # Small radius: binary_dilation is fine
+            y, x = np.ogrid[-r:r + 1, -r:r + 1]
+            struct = (x * x + y * y) <= r * r
+            mask |= binary_dilation(submask, structure=struct)
         print(f"  dilation group {gi + 1}/{n_groups} "
               f"(r={r}, {len(labs)} sources)", file=sys.stderr)
 
