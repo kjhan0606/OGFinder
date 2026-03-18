@@ -1,10 +1,12 @@
 """Synthetic star/galaxy dataset for training.
 
-Stars: Moffat PSF (point sources) with various FWHM/beta/ellipticity
-Galaxies: Sersic profiles (extended sources) with various n/r_e/ellipticity
+Stars: Moffat PSF + diffraction spikes + Airy rings on zero-background
+Galaxies: Sersic profile CONVOLVED with clean PSF (no spikes)
 
-The CNN learns the fundamental distinction: point source vs extended source.
-No external data dependency (Galaxy10 h5 not required).
+Key distinction the CNN learns:
+  - PSF structure (spikes, rings) → star
+  - Extended smooth profile → galaxy
+  - NOT just compactness (which CLASS_STAR already does)
 """
 
 import numpy as np
@@ -33,21 +35,19 @@ class StarGalaxyDataset(Dataset):
                 img = img[:, :, ::-1].copy()
             if np.random.random() > 0.5:
                 img = img[:, ::-1, :].copy()
-            # Gaussian noise
             if np.random.random() > 0.5:
-                noise = np.random.normal(0, 0.02, img.shape).astype(np.float32)
-                img = img + noise
-            # Random brightness shift
-            if np.random.random() > 0.5:
-                shift = np.random.uniform(-0.05, 0.05)
-                img = img + shift
-            img = np.clip(img, 0, 1)
+                noise = np.random.normal(0, 0.01, img.shape).astype(np.float32)
+                img = np.clip(img + noise, 0, 1)
 
         return torch.FloatTensor(img), torch.FloatTensor([self.labels[idx]])
 
 
+# ---------------------------------------------------------------------------
+#  Normalization (identical to cutout/extract.normalize_cutout)
+# ---------------------------------------------------------------------------
+
 def _asinh_normalize(stamp, asinh_a=0.1):
-    """Asinh stretch + [0,1] normalization (same as inference pipeline)."""
+    """Asinh stretch + [0,1]."""
     median = np.median(stamp)
     mad = np.median(np.abs(stamp - median))
     sigma = mad * 1.4826 if mad > 0 else 1.0
@@ -61,144 +61,245 @@ def _asinh_normalize(stamp, asinh_a=0.1):
     return stamp.astype(np.float32)
 
 
-def _make_elliptical_r(size, cx, cy, ellip, theta):
-    """Compute elliptical radius grid.
+# ---------------------------------------------------------------------------
+#  PSF components
+# ---------------------------------------------------------------------------
+
+def _make_moffat(size, fwhm, beta, cx=None, cy=None):
+    """Normalized Moffat PSF core."""
+    if cx is None:
+        cx = size / 2.0
+    if cy is None:
+        cy = size / 2.0
+    alpha = fwhm / (2.0 * np.sqrt(2.0 ** (1.0 / beta) - 1.0))
+    y, x = np.mgrid[:size, :size].astype(np.float64)
+    r2 = (x - cx) ** 2 + (y - cy) ** 2
+    psf = (1.0 + r2 / alpha ** 2) ** (-beta)
+    s = psf.sum()
+    if s > 0:
+        psf /= s
+    return psf
+
+
+def _add_diffraction_spikes(stamp, cx, cy, n_spikes, spike_angle_offset,
+                             spike_length, spike_width, spike_brightness,
+                             peak_val):
+    """Add diffraction spikes to a star stamp.
 
     Args:
-        size: grid size
-        cx, cy: center
-        ellip: ellipticity (0=circular, 0.9=very elongated)
-        theta: position angle in radians
-
-    Returns:
-        r: 2D array of elliptical radii
+        stamp: 2D array (modified in-place)
+        cx, cy: star center
+        n_spikes: number of spikes (4=HST, 6=JWST, 8=ground)
+        spike_angle_offset: rotation angle (radians)
+        spike_length: spike length in pixels
+        spike_width: Gaussian sigma of spike cross-section
+        spike_brightness: fraction of peak brightness at r=0 for spike
+        peak_val: peak pixel value of the star
     """
+    size = stamp.shape[0]
     y_grid, x_grid = np.mgrid[:size, :size].astype(np.float64)
-    dx = x_grid - cx
-    dy = y_grid - cy
-    cos_t = np.cos(theta)
-    sin_t = np.sin(theta)
-    x_rot = dx * cos_t + dy * sin_t
-    y_rot = -dx * sin_t + dy * cos_t
-    q = 1.0 - ellip  # axis ratio
-    q = max(q, 0.1)
-    r = np.sqrt(x_rot ** 2 + (y_rot / q) ** 2)
-    return r
+
+    for k in range(n_spikes):
+        angle = k * np.pi / (n_spikes / 2.0) + spike_angle_offset
+
+        # Direction vector
+        dx = np.cos(angle)
+        dy = np.sin(angle)
+
+        # Distance along spike direction from center
+        along = (x_grid - cx) * dx + (y_grid - cy) * dy
+        # Perpendicular distance
+        perp = np.abs(-(x_grid - cx) * dy + (y_grid - cy) * dx)
+
+        # Spike profile: Gaussian cross-section x exponential falloff along
+        mask = along > 0  # only in positive direction (full spike = 2 per pair)
+        falloff = np.exp(-along / (spike_length / 3.0))
+        cross = np.exp(-0.5 * (perp / spike_width) ** 2)
+        spike = spike_brightness * peak_val * falloff * cross * mask
+
+        stamp += spike
 
 
-def generate_synthetic_stars(n=8000, size=64, fwhm_range=(1.5, 5.0), seed=42):
-    """Generate synthetic star images (Moffat PSF + noise).
+def _add_airy_rings(stamp, cx, cy, fwhm, n_rings=3, ring_brightness=0.02,
+                     peak_val=1.0):
+    """Add faint Airy ring structure around bright stars."""
+    size = stamp.shape[0]
+    y, x = np.mgrid[:size, :size].astype(np.float64)
+    r = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+    r = np.maximum(r, 0.01)
 
-    Includes: variable FWHM, beta, slight ellipticity (tracking errors),
-    variable flux/SNR, Poisson-like + Gaussian noise.
+    # Approximate Airy pattern as sinc-like rings
+    # First ring at ~1.22 * lambda/D ≈ 1.6 * FWHM
+    ring_spacing = fwhm * 1.6
+    for n in range(1, n_rings + 1):
+        ring_r = n * ring_spacing
+        ring_width = fwhm * 0.3
+        ring = np.exp(-0.5 * ((r - ring_r) / ring_width) ** 2)
+        brightness = ring_brightness * peak_val / (n ** 1.5)
+        stamp += brightness * ring
+
+
+# ---------------------------------------------------------------------------
+#  Star generation
+# ---------------------------------------------------------------------------
+
+def generate_synthetic_stars(n=10000, size=64, fwhm_range=(1.5, 5.0), seed=42):
+    """Synthetic stars: Moffat PSF + diffraction spikes + Airy rings.
+
+    - Faint stars (SNR < 30): Moffat only (spikes not visible)
+    - Moderate stars (30 < SNR < 100): Moffat + faint spikes
+    - Bright stars (SNR > 100): Moffat + bright spikes + Airy rings
+
+    Spike types: 4-spike (HST-like), 6-spike (JWST-like), variable
     """
     rng = np.random.RandomState(seed)
     stars = np.zeros((n, 1, size, size), dtype=np.float32)
-    half = size / 2.0
 
     for i in range(n):
         fwhm = rng.uniform(fwhm_range[0], fwhm_range[1])
         beta = rng.uniform(2.5, 4.5)
-        alpha = fwhm / (2.0 * np.sqrt(2.0 ** (1.0 / beta) - 1.0))
+        cx = size / 2.0 + rng.uniform(-1.5, 1.5)
+        cy = size / 2.0 + rng.uniform(-1.5, 1.5)
 
-        # Small random offset from center
-        cx = half + rng.uniform(-2.0, 2.0)
-        cy = half + rng.uniform(-2.0, 2.0)
+        # Moffat core
+        psf = _make_moffat(size, fwhm, beta, cx, cy)
 
-        # Slight ellipticity for stars (tracking errors, optics)
-        ellip = rng.uniform(0.0, 0.15)
-        theta = rng.uniform(0, np.pi)
+        # SNR range (log-uniform)
+        snr = 10.0 ** rng.uniform(0.7, 2.7)
+        noise_sigma = rng.uniform(0.005, 0.05)
+        peak_flux = snr * noise_sigma
 
-        r = _make_elliptical_r(size, cx, cy, ellip, theta)
-        psf = (1.0 + (r / alpha) ** 2) ** (-beta)
+        stamp = psf * peak_flux
+        peak_val = stamp.max()
 
-        # Random flux (log-uniform, wide range)
-        flux = 10.0 ** rng.uniform(2.0, 5.0)
-        stamp = psf * flux / psf.sum()
+        # Add diffraction spikes for bright stars
+        if snr > 25:
+            # Choose spike type: 4 (HST), 6 (JWST), or 8 (ground)
+            spike_type = rng.choice([4, 4, 4, 6, 6, 8])
+            spike_angle = rng.uniform(0, np.pi / spike_type)
 
-        # Poisson noise (shot noise from source)
-        stamp_pos = np.maximum(stamp, 0)
-        if stamp_pos.max() > 0:
-            poisson_noise = rng.poisson(stamp_pos) - stamp_pos
-            stamp = stamp + poisson_noise * 0.3  # attenuated
+            # Spike brightness scales with SNR
+            if snr > 100:
+                spike_bright = rng.uniform(0.05, 0.20)
+                spike_len = rng.uniform(15, 28)
+            elif snr > 50:
+                spike_bright = rng.uniform(0.02, 0.10)
+                spike_len = rng.uniform(10, 20)
+            else:
+                spike_bright = rng.uniform(0.01, 0.05)
+                spike_len = rng.uniform(5, 15)
 
-        # Background + readout noise
-        bkg_level = rng.uniform(50, 300)
-        bkg_noise = rng.uniform(5, 40)
-        stamp = stamp + bkg_level
-        stamp = stamp + rng.normal(0, bkg_noise, stamp.shape)
+            spike_width = rng.uniform(0.5, 1.5)
+
+            _add_diffraction_spikes(stamp, cx, cy, spike_type,
+                                     spike_angle, spike_len, spike_width,
+                                     spike_bright, peak_val)
+
+        # Add Airy rings for very bright stars
+        if snr > 80:
+            n_rings = rng.randint(1, 4)
+            ring_bright = rng.uniform(0.005, 0.03)
+            _add_airy_rings(stamp, cx, cy, fwhm, n_rings, ring_bright, peak_val)
+
+        # Gaussian noise (background-subtracted)
+        stamp += rng.normal(0, noise_sigma, stamp.shape)
 
         stars[i, 0] = _asinh_normalize(stamp)
 
     return stars
 
 
-def generate_synthetic_galaxies(n=8000, size=64, seed=42):
-    """Generate synthetic galaxy images (Sersic profiles + noise).
+# ---------------------------------------------------------------------------
+#  Sersic galaxy generation
+# ---------------------------------------------------------------------------
 
-    Mix of galaxy types:
-    - Exponential disk (Sersic n=1): 40%
-    - De Vaucouleurs (Sersic n=4): 25%
-    - General Sersic (n=0.5~6): 35%
+def _make_sersic(size, r_e, sersic_n, ellip, theta, cx=None, cy=None):
+    """Sersic profile, normalized to sum=1."""
+    if cx is None:
+        cx = size / 2.0
+    if cy is None:
+        cy = size / 2.0
+    bn = 2.0 * sersic_n - 1.0 / 3.0 + 4.0 / (405.0 * sersic_n)
+    y, x = np.mgrid[:size, :size].astype(np.float64)
+    dx = x - cx
+    dy = y - cy
+    cos_t = np.cos(theta)
+    sin_t = np.sin(theta)
+    x_rot = dx * cos_t + dy * sin_t
+    y_rot = -dx * sin_t + dy * cos_t
+    q = max(1.0 - ellip, 0.1)
+    r = np.sqrt(x_rot ** 2 + (y_rot / q) ** 2)
+    r = np.maximum(r, 0.01)
+    profile = np.exp(-bn * ((r / r_e) ** (1.0 / sersic_n) - 1.0))
+    s = profile.sum()
+    if s > 0:
+        profile /= s
+    return profile
 
-    With variable half-light radius, ellipticity, position angle,
-    flux, and noise (same noise model as stars for consistency).
+
+def _fft_convolve2d(image, kernel):
+    """2D convolution via FFT, same-size output."""
+    s1 = np.array(image.shape)
+    s2 = np.array(kernel.shape)
+    shape = s1 + s2 - 1
+    result = np.fft.irfft2(np.fft.rfft2(image, shape) *
+                           np.fft.rfft2(kernel, shape), shape)
+    cy = (s2[0] - 1) // 2
+    cx = (s2[1] - 1) // 2
+    return result[cy:cy + s1[0], cx:cx + s1[1]]
+
+
+def generate_synthetic_galaxies(n=10000, size=64, fwhm_range=(1.5, 5.0),
+                                 seed=42):
+    """Synthetic galaxies: Sersic profile convolved with CLEAN Moffat PSF.
+
+    NO diffraction spikes — galaxies are extended smooth profiles.
+    The PSF convolution ensures the same seeing/optics as stars.
     """
     rng = np.random.RandomState(seed)
     galaxies = np.zeros((n, 1, size, size), dtype=np.float32)
-    half = size / 2.0
+    psf_size = 31
 
     for i in range(n):
-        # Random Sersic index
+        fwhm = rng.uniform(fwhm_range[0], fwhm_range[1])
+        beta = rng.uniform(2.5, 4.5)
+        psf_kernel = _make_moffat(psf_size, fwhm, beta)
+
+        # Sersic parameters
         roll = rng.random()
-        if roll < 0.40:
-            sersic_n = rng.uniform(0.8, 1.2)   # exponential disk
-        elif roll < 0.65:
-            sersic_n = rng.uniform(3.5, 4.5)   # de Vaucouleurs
+        if roll < 0.35:
+            sersic_n = rng.uniform(0.8, 1.2)
+        elif roll < 0.60:
+            sersic_n = rng.uniform(3.5, 4.5)
         else:
-            sersic_n = rng.uniform(0.5, 6.0)   # general
+            sersic_n = rng.uniform(0.5, 6.0)
 
-        # b_n approximation: b_n ~ 2n - 1/3 + 4/(405n)
-        bn = 2.0 * sersic_n - 1.0 / 3.0 + 4.0 / (405.0 * sersic_n)
-
-        # Half-light radius: MUST be larger than typical PSF FWHM
-        # to be clearly extended
-        r_e = rng.uniform(3.0, 18.0)
-
-        # Ellipticity and orientation
+        # Half-light radius: 1.5x to 8x FWHM
+        r_e = fwhm * rng.uniform(1.5, 8.0)
         ellip = rng.uniform(0.0, 0.7)
         theta = rng.uniform(0, np.pi)
+        cx = size / 2.0 + rng.uniform(-1.5, 1.5)
+        cy = size / 2.0 + rng.uniform(-1.5, 1.5)
 
-        # Center offset
-        cx = half + rng.uniform(-2.0, 2.0)
-        cy = half + rng.uniform(-2.0, 2.0)
+        galaxy = _make_sersic(size, r_e, sersic_n, ellip, theta, cx, cy)
+        galaxy_conv = _fft_convolve2d(galaxy, psf_kernel)
 
-        r = _make_elliptical_r(size, cx, cy, ellip, theta)
-        r = np.maximum(r, 0.01)  # avoid division by zero
+        # Same SNR and noise as stars
+        snr = 10.0 ** rng.uniform(0.7, 2.7)
+        noise_sigma = rng.uniform(0.005, 0.05)
+        peak_flux = snr * noise_sigma
 
-        # Sersic profile: I(r) = I_e * exp(-b_n * ((r/r_e)^(1/n) - 1))
-        profile = np.exp(-bn * ((r / r_e) ** (1.0 / sersic_n) - 1.0))
-
-        # Random flux
-        flux = 10.0 ** rng.uniform(2.0, 5.0)
-        stamp = profile * flux / profile.sum()
-
-        # Poisson noise
-        stamp_pos = np.maximum(stamp, 0)
-        if stamp_pos.max() > 0:
-            poisson_noise = rng.poisson(np.minimum(stamp_pos, 1e6)) - stamp_pos
-            stamp = stamp + poisson_noise * 0.3
-
-        # Background + readout noise (same model as stars)
-        bkg_level = rng.uniform(50, 300)
-        bkg_noise = rng.uniform(5, 40)
-        stamp = stamp + bkg_level
-        stamp = stamp + rng.normal(0, bkg_noise, stamp.shape)
+        stamp = galaxy_conv * peak_flux
+        stamp += rng.normal(0, noise_sigma, stamp.shape)
 
         galaxies[i, 0] = _asinh_normalize(stamp)
 
     return galaxies
 
+
+# ---------------------------------------------------------------------------
+#  Train / val / test split
+# ---------------------------------------------------------------------------
 
 def make_train_val_test_split(star_images, galaxy_images,
                                val_frac=0.15, test_frac=0.15, seed=42):
@@ -208,8 +309,8 @@ def make_train_val_test_split(star_images, galaxy_images,
 
     images = np.concatenate([star_images, galaxy_images], axis=0)
     labels = np.concatenate([
-        np.ones(n_star, dtype=np.int64),   # star=1
-        np.zeros(n_gal, dtype=np.int64),   # galaxy=0
+        np.ones(n_star, dtype=np.int64),
+        np.zeros(n_gal, dtype=np.int64),
     ])
 
     rng = np.random.RandomState(seed)
