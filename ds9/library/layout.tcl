@@ -731,6 +731,25 @@ proc CreateCatalogPanel {} {
     # Bind table header click for sorting (ButtonRelease to not conflict with tktable)
     bind $catpanel(tbl) <ButtonRelease-1> {+CatalogPanelTableClick %x %y}
 
+    # Mouse wheel scroll for catalog table (natural/macOS direction)
+    bind $catpanel(tbl) <Button-4> {
+	%W yview scroll 3 units
+	break
+    }
+    bind $catpanel(tbl) <Button-5> {
+	%W yview scroll -3 units
+	break
+    }
+    # Horizontal scroll (Shift + wheel, natural/macOS direction)
+    bind $catpanel(tbl) <Shift-Button-4> {
+	%W xview scroll 3 units
+	break
+    }
+    bind $catpanel(tbl) <Shift-Button-5> {
+	%W xview scroll -3 units
+	break
+    }
+
     # Initialize extraction parameters
     CatalogPanelParamDef
 
@@ -3656,6 +3675,7 @@ proc LayoutFramesNone {} {
     global colorbar
     global view
 
+    catch {CatalogPanelSaveFrameState $current(frame)}
     set current(frame) {}
     set current(colorbar) colorbar
 
@@ -9421,4 +9441,171 @@ proc CatalogPanelLSBGSettingsDefaults {} {
     set ed(lsbg,r-eff-max) 60.0
     set ed(lsbg,ellipticity-max) 0.7
     set ed(lsbg,min-snr) 2.0
+}
+
+# ===== Per-Frame Catalog Panel State Management =====
+
+proc CatalogPanelSaveFrameState {frame} {
+    global catpanel catpanel_fdata
+
+    if {$frame eq {}} return
+    if {![info exists catpanel(alldata)]} return
+
+    # Core catalog + display + merge + AI merge
+    foreach key {
+	alldata filename sort,col sort,dir
+	visible_mode markall,on add_objects_mode trim,active
+	merge,list merge,active
+	ai,groups ai,current ai,total ai,active
+	psf,stars psf,star_indices psf,file psf,has_psf
+	icl,has_mask icl,has_bkg icl,has_profile icl,center_x icl,center_y
+	icl,mask_file icl,masked_file icl,bkg_file icl,bgsub_file icl,profile_file
+	lsbg,has_mask lsbg,has_clean lsbg,has_detect lsbg,has_catalog lsbg,detect_data
+	lsbg,mask_file lsbg,masked_file lsbg,bkg_file lsbg,cleaned_file
+	lsbg,segmap_file lsbg,catalog_file
+	status search_var
+    } {
+	if {[info exists catpanel($key)]} {
+	    set catpanel_fdata($frame,$key) $catpanel($key)
+	}
+    }
+
+    # Morph data: save map + per-source entries
+    if {[info exists catpanel(morph,map)]} {
+	set catpanel_fdata($frame,morph,map) $catpanel(morph,map)
+	foreach src_num $catpanel(morph,map) {
+	    if {[info exists catpanel(morph,$src_num)]} {
+		set catpanel_fdata($frame,morph,$src_num) $catpanel(morph,$src_num)
+	    }
+	}
+    } else {
+	set catpanel_fdata($frame,morph,map) {}
+    }
+}
+
+proc CatalogPanelRestoreFrameState {frame} {
+    global catpanel catpanel_fdata
+
+    if {$frame eq {}} return
+
+    # Unbind AI keys if active
+    if {[info exists catpanel(ai,active)] && $catpanel(ai,active)} {
+	CatalogPanelAIUnbindKeys
+    }
+
+    # Check if we have saved data for this frame
+    if {![info exists catpanel_fdata($frame,alldata)]} {
+	# No saved state — initialize to empty (without deleting markers)
+	global $catpanel(tbldb)
+	$catpanel(tbl) configure -variable {}
+	unset -nocomplain $catpanel(tbldb)
+	$catpanel(tbl) configure -variable $catpanel(tbldb) \
+	    -cols 19 -rows 20
+
+	set catpanel(alldata) {}
+	set catpanel(filename) {}
+	set catpanel(sort,col) {}
+	set catpanel(sort,dir) {}
+	set catpanel(visible_mode) 0
+	set catpanel(markall,on) 0
+	set catpanel(add_objects_mode) 0
+	set catpanel(trim,active) 0
+	set catpanel(merge,list) {}
+	set catpanel(merge,active) 0
+	set catpanel(ai,groups) {}
+	set catpanel(ai,current) 0
+	set catpanel(ai,total) 0
+	set catpanel(ai,active) 0
+	set catpanel(psf,stars) {}
+	set catpanel(psf,star_indices) {}
+	set catpanel(psf,file) [file join [file normalize ~] .ds9 psf_current.fits]
+	set catpanel(psf,has_psf) 0
+	set catpanel(icl,has_mask) 0
+	set catpanel(icl,has_bkg) 0
+	set catpanel(icl,has_profile) 0
+	set catpanel(icl,center_x) {}
+	set catpanel(icl,center_y) {}
+	set catpanel(icl,mask_file) [file join [file normalize ~] .ds9 icl_mask.fits]
+	set catpanel(icl,masked_file) [file join [file normalize ~] .ds9 icl_masked.fits]
+	set catpanel(icl,bkg_file) [file join [file normalize ~] .ds9 icl_background.fits]
+	set catpanel(icl,bgsub_file) [file join [file normalize ~] .ds9 icl_bgsub.fits]
+	set catpanel(icl,profile_file) [file join [file normalize ~] .ds9 icl_profile.tsv]
+	set catpanel(lsbg,has_mask) 0
+	set catpanel(lsbg,has_clean) 0
+	set catpanel(lsbg,has_detect) 0
+	set catpanel(lsbg,has_catalog) 0
+	set catpanel(lsbg,detect_data) {}
+	set catpanel(lsbg,mask_file) [file join [file normalize ~] .ds9 lsbg_mask.fits]
+	set catpanel(lsbg,masked_file) [file join [file normalize ~] .ds9 lsbg_masked.fits]
+	set catpanel(lsbg,bkg_file) [file join [file normalize ~] .ds9 lsbg_background.fits]
+	set catpanel(lsbg,cleaned_file) [file join [file normalize ~] .ds9 lsbg_cleaned.fits]
+	set catpanel(lsbg,segmap_file) [file join [file normalize ~] .ds9 lsbg_segmap.fits]
+	set catpanel(lsbg,catalog_file) [file join [file normalize ~] .ds9 lsbg_catalog.tsv]
+	set catpanel(status) {Ready}
+	set catpanel(search_var) {}
+
+	# Clear morph state
+	if {[info exists catpanel(morph,map)]} {
+	    foreach src_num $catpanel(morph,map) {
+		unset -nocomplain catpanel(morph,$src_num)
+	    }
+	}
+	set catpanel(morph,map) {}
+
+	return
+    }
+
+    # Restore saved state
+    foreach key {
+	alldata filename sort,col sort,dir
+	visible_mode markall,on add_objects_mode trim,active
+	merge,list merge,active
+	ai,groups ai,current ai,total ai,active
+	psf,stars psf,star_indices psf,file psf,has_psf
+	icl,has_mask icl,has_bkg icl,has_profile icl,center_x icl,center_y
+	icl,mask_file icl,masked_file icl,bkg_file icl,bgsub_file icl,profile_file
+	lsbg,has_mask lsbg,has_clean lsbg,has_detect lsbg,has_catalog lsbg,detect_data
+	lsbg,mask_file lsbg,masked_file lsbg,bkg_file lsbg,cleaned_file
+	lsbg,segmap_file lsbg,catalog_file
+	status search_var
+    } {
+	if {[info exists catpanel_fdata($frame,$key)]} {
+	    set catpanel($key) $catpanel_fdata($frame,$key)
+	}
+    }
+
+    # Restore morph data
+    # First clear old morph entries
+    if {[info exists catpanel(morph,map)]} {
+	foreach src_num $catpanel(morph,map) {
+	    unset -nocomplain catpanel(morph,$src_num)
+	}
+    }
+    set catpanel(morph,map) {}
+    if {[info exists catpanel_fdata($frame,morph,map)]} {
+	set catpanel(morph,map) $catpanel_fdata($frame,morph,map)
+	foreach src_num $catpanel(morph,map) {
+	    if {[info exists catpanel_fdata($frame,morph,$src_num)]} {
+		set catpanel(morph,$src_num) $catpanel_fdata($frame,morph,$src_num)
+	    }
+	}
+    }
+
+    # Reload the table from alldata
+    if {$catpanel(alldata) ne {}} {
+	CatalogPanelLoadTSV $catpanel(alldata) [file tail $catpanel(filename)]
+    } else {
+	global $catpanel(tbldb)
+	$catpanel(tbl) configure -variable {}
+	unset -nocomplain $catpanel(tbldb)
+	$catpanel(tbl) configure -variable $catpanel(tbldb) \
+	    -cols 19 -rows 20
+    }
+}
+
+proc CatalogPanelFrameChanged {old_frame new_frame} {
+    if {$old_frame ne {} && $old_frame ne $new_frame} {
+	CatalogPanelSaveFrameState $old_frame
+    }
+    CatalogPanelRestoreFrameState $new_frame
 }

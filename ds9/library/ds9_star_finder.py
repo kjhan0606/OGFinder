@@ -2,8 +2,11 @@
 """
 DS9 AI Star/Galaxy Classification CLI.
 
-Uses PSF cross-correlation: builds empirical PSF from the image itself,
-then classifies each source by how well it matches the PSF.
+Uses PSF residual fitting: builds empirical PSF from the image itself,
+fits scaled PSF to each source, and classifies by residual fraction.
+Stars have low residual (PSF fits well), galaxies have high residual
+(extended flux remains after PSF subtraction).
+
 No pre-trained model needed — image-adaptive.
 
 Usage:
@@ -124,8 +127,8 @@ def main():
     parser.add_argument('fits', help='Path to FITS file')
     parser.add_argument('--catalog', required=True,
                         help='Path to catalog TSV')
-    parser.add_argument('--threshold', type=float, default=0.6,
-                        help='PSF correlation threshold (default: 0.6)')
+    parser.add_argument('--threshold', type=float, default=0.10,
+                        help='Wing excess threshold (default: 0.10)')
     parser.add_argument('--cutout-size', type=int, default=64,
                         help='Cutout size in pixels')
     parser.add_argument('--psf', default=None,
@@ -168,7 +171,7 @@ def main():
             print(f"  PSF shape: {psf_template.shape}", file=sys.stderr)
 
     # Classify
-    print("Classifying sources by PSF correlation ...", file=sys.stderr)
+    print("Classifying sources by PSF residual fitting ...", file=sys.stderr)
     results = classify_sources(data_sub, catalog, size=args.cutout_size,
                                 psf_template=psf_template,
                                 star_threshold=args.threshold)
@@ -177,8 +180,6 @@ def main():
     n_stars = sum(1 for r in results if r['label'] == 'star')
     n_galaxies = sum(1 for r in results if r['label'] == 'galaxy')
     n_classified = len(results)
-    print(f"  Classified: {n_classified} (star={n_stars}, galaxy={n_galaxies})",
-          file=sys.stderr)
 
     # Output TSV
     print(f"#STAR_FINDER\tN_CLASSIFIED={n_classified}\tN_SOURCES={n_sources}")

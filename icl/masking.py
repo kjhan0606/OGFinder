@@ -175,44 +175,33 @@ def interpolate_masked(data, mask, method='linear', block_size=4096,
 def _interpolate_block(data, mask, method):
     """Interpolate masked pixels in a single block in-place.
 
-    Uses scipy griddata. If insufficient unmasked pixels exist,
-    fills with median of unmasked pixels.
+    Uses Gaussian-weighted averaging of unmasked pixels for fast,
+    smooth interpolation. Falls back to median for edge cases.
     """
-    from scipy.interpolate import griddata
+    from scipy.ndimage import gaussian_filter
 
-    ny, nx = data.shape
-    unmask = ~mask
-
-    n_good = unmask.sum()
+    n_good = (~mask).sum()
     n_bad = mask.sum()
 
     if n_bad == 0:
         return
     if n_good < 10:
-        # Too few good pixels; fill with median
-        med = np.median(data[unmask]) if n_good > 0 else 0.0
+        med = np.median(data[~mask]) if n_good > 0 else 0.0
         data[mask] = med
         return
 
-    # Subsample good pixels if too many (for performance)
-    gy, gx = np.where(unmask)
-    max_pts = 50000
-    if len(gy) > max_pts:
-        idx = np.random.RandomState(42).choice(len(gy), max_pts, replace=False)
-        gy = gy[idx]
-        gx = gx[idx]
+    # Gaussian-weighted fill: convolve data*(~mask) and (~mask),
+    # then divide to get weighted average at masked locations.
+    # Choose sigma proportional to typical masked region size.
+    sigma = max(5.0, np.sqrt(n_bad / max(1, n_good)) * 10.0)
+    sigma = min(sigma, 50.0)
 
-    good_vals = data[gy, gx]
-    bad_y, bad_x = np.where(mask)
+    weight = (~mask).astype(np.float64)
+    filled = data.copy().astype(np.float64)
+    filled[mask] = 0.0
 
-    try:
-        interp_vals = griddata(
-            np.column_stack([gx, gy]),
-            good_vals,
-            np.column_stack([bad_x, bad_y]),
-            method=method,
-            fill_value=np.median(good_vals)
-        )
-        data[bad_y, bad_x] = interp_vals
-    except Exception:
-        data[mask] = np.median(good_vals)
+    smooth_data = gaussian_filter(filled, sigma=sigma)
+    smooth_weight = gaussian_filter(weight, sigma=sigma)
+    smooth_weight[smooth_weight < 1e-10] = 1.0
+
+    data[mask] = (smooth_data / smooth_weight)[mask]

@@ -339,6 +339,9 @@ proc CreateNameNumberFrame {which type} {
     # update frame colormap
     $which colormap [${which}cb get colormap]
 
+    # save catalog panel state for previous frame before switching
+    catch {CatalogPanelFrameChanged $current(frame) $which}
+
     # set to current frame
     set current(frame) $which
     set current(colorbar) ${which}cb
@@ -425,7 +428,9 @@ proc DeleteFrame {which} {
     if {$current(frame) == $which} {
 	set ii [lsearch $ds9(active) $which]
 	if {$ii>0} {
-	    set current(frame) [lindex $ds9(active) [expr $ii-1]]
+	    set newframe [lindex $ds9(active) [expr $ii-1]]
+	    catch {CatalogPanelFrameChanged $current(frame) $newframe}
+	    set current(frame) $newframe
 	    set current(colorbar) ${current(frame)}cb
 	}
     }
@@ -1894,6 +1899,7 @@ proc GotoFrame {which} {
     }
 
     if {$current(frame) != $which} {
+	catch {CatalogPanelFrameChanged $current(frame) $which}
 	set current(frame) $which
 	set current(colorbar) ${current(frame)}cb
 

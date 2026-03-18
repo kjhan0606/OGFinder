@@ -1,11 +1,12 @@
-"""PSF-matching star/galaxy classification.
+"""PSF-based star/galaxy classification.
 
-Instead of a pre-trained CNN, this approach:
-1. Auto-detects PSF stars from the image itself
-2. Builds an empirical PSF template (median stack)
-3. Cross-correlates every source cutout with the PSF
-4. Stars = high correlation (source matches PSF shape)
-   Galaxies = low correlation (source differs from PSF)
+Approach:
+1. Find the "star locus" from compact+round+bright sources in the catalog
+2. Build empirical PSF from these stars (optional, for verification)
+3. Classify each source based on:
+   a. Size ratio: A*B relative to the star locus
+   b. Ellipticity: stars are round (b/a close to 1)
+   c. Cutout concentration check (for bright sources)
 
 Image-adaptive: works on any telescope without pre-training.
 No model checkpoint needed.
@@ -30,23 +31,6 @@ def _extract_cutout(data, x, y, size):
     return raw
 
 
-def _normalize_cutout(cutout):
-    """Normalize cutout for correlation: zero-mean, unit-variance."""
-    c = cutout.astype(np.float64)
-    c = c - np.mean(c)
-    std = np.std(c)
-    if std > 0:
-        c /= std
-    return c
-
-
-def _pearson_correlation(a, b):
-    """Pearson correlation between two 2D arrays (both already zero-mean)."""
-    n = a.size
-    dot = np.sum(a * b)
-    return dot / n
-
-
 def _compute_fwhm(cutout):
     """Estimate FWHM from cutout via half-maximum contour area."""
     peak = cutout.max()
@@ -54,126 +38,76 @@ def _compute_fwhm(cutout):
         return 0.0
     half_max = peak / 2.0
     n_above = np.sum(cutout > half_max)
-    # Circular area: n = pi * (fwhm/2)^2 -> fwhm = 2 * sqrt(n/pi)
     return 2.0 * np.sqrt(n_above / np.pi)
 
 
-def auto_detect_psf_stars(data, catalog, n_stars=25, size=32):
-    """Auto-detect likely PSF stars from the image.
+def _find_star_locus(catalog, n_stars=30):
+    """Find the star locus: compact + round + bright sources.
 
-    Strategy:
-    1. If CLASS_STAR available: use CLASS_STAR > 0.7 as initial filter
-    2. Otherwise: use compact + bright criteria
-    3. Check FWHM consistency (stars have similar FWHM)
-    4. Return top N most reliable star positions
-
-    Args:
-        data: 2D background-subtracted image
-        catalog: dict with 'x', 'y', and optionally 'flux', 'a_image',
-                 'b_image', 'class_star' arrays (0-based coords)
-        n_stars: max number of PSF stars to return
-        size: cutout size for FWHM measurement
+    Among the brightest sources, select those with the smallest A*B
+    (most compact) and lowest ellipticity (most round). These define
+    the PSF size and shape.
 
     Returns:
         star_indices: array of indices into catalog
+        psf_ab: median A*B of the star locus
     """
     n = len(catalog['x'])
     if n == 0:
-        return np.array([], dtype=int)
+        return np.array([], dtype=int), 1.0
 
-    # Extract basic measurements for all sources
     fluxes = catalog.get('flux', np.ones(n))
     a_image = catalog.get('a_image', np.full(n, 3.0))
     b_image = catalog.get('b_image', np.full(n, 3.0))
-    class_star = catalog.get('class_star', None)
+    ab = a_image * b_image
+    ellip = 1.0 - b_image / np.maximum(a_image, 0.01)
 
-    # Step 1: Initial candidates
-    if class_star is not None and np.any(class_star > 0.5):
-        # Use CLASS_STAR as initial filter
-        candidates = np.where(class_star > 0.7)[0]
-        if len(candidates) < 5:
-            candidates = np.where(class_star > 0.5)[0]
-    else:
-        # Fallback: compact + bright
-        compactness = a_image * b_image
-        bright = fluxes > np.percentile(fluxes, 50)
-        compact = compactness < np.percentile(compactness, 30)
-        circularity = b_image / np.maximum(a_image, 0.1)
-        circular = circularity > 0.6
-        candidates = np.where(bright & compact & circular)[0]
+    # Step 1: Take the brightest N sources (top N or top 10%)
+    n_bright = max(min(500, n // 5), 50)
+    bright_order = np.argsort(fluxes)[::-1][:n_bright]
+
+    # Step 2: Among bright sources, find the most compact ones
+    ab_bright = ab[bright_order]
+    ab_threshold = np.percentile(ab_bright, 15)
+
+    # Step 3: Also require roundness
+    ellip_bright = ellip[bright_order]
+
+    compact_mask = (ab_bright < ab_threshold) & (ellip_bright < 0.25)
+    candidates = bright_order[compact_mask]
 
     if len(candidates) < 3:
-        # Very few candidates, use top bright compact sources
-        compactness = a_image * b_image
-        order = np.argsort(compactness)
-        bright_mask = fluxes > np.percentile(fluxes, 30)
-        candidates = order[bright_mask[order]][:max(10, n_stars)]
+        # Relax: just take the most compact bright sources
+        ab_threshold = np.percentile(ab_bright, 30)
+        compact_mask = ab_bright < ab_threshold
+        candidates = bright_order[compact_mask]
 
-    # Step 2: Measure FWHM for each candidate
-    fwhms = []
-    valid_cands = []
-    h, w = data.shape
+    if len(candidates) < 3:
+        return np.array([], dtype=int), np.median(ab)
 
-    for idx in candidates:
-        x, y = catalog['x'][idx], catalog['y'][idx]
-        # Skip edge sources
-        if x < size or x > w - size or y < size or y > h - size:
-            continue
-        cut = _extract_cutout(data, x, y, size)
-        if cut is None:
-            continue
-        fwhm = _compute_fwhm(cut)
-        if fwhm > 0.5:
-            fwhms.append(fwhm)
-            valid_cands.append(idx)
+    # Step 4: Sort by compactness and take top N
+    ab_cands = ab[candidates]
+    order = np.argsort(ab_cands)
+    candidates = candidates[order[:n_stars]]
 
-    if len(valid_cands) < 3:
-        return np.array(valid_cands, dtype=int)
+    psf_ab = np.median(ab[candidates])
+    return candidates, psf_ab
 
-    fwhms = np.array(fwhms)
-    valid_cands = np.array(valid_cands)
 
-    # Step 3: Find sources with consistent FWHM (the "star locus")
-    median_fwhm = np.median(fwhms)
-    fwhm_tolerance = max(0.5, median_fwhm * 0.3)
-    consistent = np.abs(fwhms - median_fwhm) < fwhm_tolerance
-    star_cands = valid_cands[consistent]
-
-    if len(star_cands) < 3:
-        # Relax tolerance
-        consistent = np.abs(fwhms - median_fwhm) < median_fwhm * 0.5
-        star_cands = valid_cands[consistent]
-
-    # Step 4: Sort by flux (prefer bright stars) and take top N
-    star_fluxes = fluxes[star_cands]
-    order = np.argsort(star_fluxes)[::-1]
-    star_cands = star_cands[order[:n_stars]]
-
-    return star_cands
+def auto_detect_psf_stars(data, catalog, n_stars=25, size=32):
+    """Auto-detect likely PSF stars. Delegates to _find_star_locus."""
+    star_indices, _ = _find_star_locus(catalog, n_stars)
+    return star_indices
 
 
 def build_empirical_psf(data, catalog, star_indices, size=64):
-    """Build PSF template by median-stacking star cutouts.
-
-    Each star cutout is normalized (divided by its total positive flux)
-    before stacking, so bright and faint stars contribute equally.
-
-    Args:
-        data: 2D image
-        catalog: dict with 'x', 'y'
-        star_indices: indices of PSF star candidates
-        size: cutout size
-
-    Returns:
-        psf: (size, size) float64 normalized PSF template
-    """
+    """Build PSF template by median-stacking star cutouts."""
     cutouts = []
     for idx in star_indices:
         x, y = catalog['x'][idx], catalog['y'][idx]
         cut = _extract_cutout(data, x, y, size)
         if cut is None:
             continue
-        # Normalize by positive flux
         pos_sum = np.sum(np.maximum(cut, 0))
         if pos_sum > 0:
             cut = cut / pos_sum
@@ -182,10 +116,7 @@ def build_empirical_psf(data, catalog, star_indices, size=64):
     if len(cutouts) == 0:
         return None
 
-    # Median stack (robust against outliers: cosmic rays, neighbors)
     stack = np.median(cutouts, axis=0)
-
-    # Re-normalize
     pos_sum = np.sum(np.maximum(stack, 0))
     if pos_sum > 0:
         stack /= pos_sum
@@ -194,24 +125,31 @@ def build_empirical_psf(data, catalog, star_indices, size=64):
 
 
 def classify_sources(data, catalog, size=64, psf_template=None,
-                     star_threshold=0.6):
-    """Classify all sources by PSF cross-correlation.
+                     star_threshold=0.10):
+    """Classify sources using catalog morphometry + PSF comparison.
+
+    Primary classification (all sources):
+    - Size ratio: A*B / psf_A*B
+    - Ellipticity: 1 - B/A
+
+    Star if ALL of:
+    1. size_ratio < 2.0 (compact, within 2x PSF size)
+    2. ellipticity < 0.25 (round)
+    3. Among the brightest 50% or flux > min_star_flux
+
+    Secondary verification (bright sources, if PSF available):
+    - Cutout concentration comparison with PSF
 
     Args:
         data: 2D background-subtracted image
-        catalog: dict with 'number', 'x', 'y', and optionally
-                 'flux', 'a_image', 'b_image', 'class_star'
-        size: cutout size for correlation
-        psf_template: pre-built PSF template (if None, auto-detect)
-        star_threshold: correlation threshold for star classification
+        catalog: dict with 'number', 'x', 'y', 'a_image', 'b_image',
+                 optionally 'flux'
+        size: cutout size (for PSF building)
+        psf_template: pre-built PSF template (optional)
+        star_threshold: not used directly (kept for CLI compatibility)
 
     Returns:
-        results: list of dicts with:
-            'number': source number
-            'correlation': PSF correlation score (0-1)
-            'concentration': concentration index
-            'label': 'star' or 'galaxy'
-            'color': marker color
+        results: list of dicts
     """
     import sys
 
@@ -219,108 +157,90 @@ def classify_sources(data, catalog, size=64, psf_template=None,
     if n == 0:
         return []
 
-    # Build PSF template if not provided
-    if psf_template is None:
-        print("Auto-detecting PSF stars ...", file=sys.stderr)
-        star_indices = auto_detect_psf_stars(data, catalog, n_stars=25,
-                                              size=min(size, 32))
-        print(f"  Found {len(star_indices)} PSF star candidates",
-              file=sys.stderr)
+    fluxes = catalog.get('flux', np.ones(n))
+    a_image = catalog.get('a_image', np.full(n, 3.0))
+    b_image = catalog.get('b_image', np.full(n, 3.0))
+    ab = a_image * b_image
+    ellip = 1.0 - b_image / np.maximum(a_image, 0.01)
 
-        if len(star_indices) < 3:
-            print("WARNING: Too few PSF stars found, classification "
-                  "may be unreliable", file=sys.stderr)
-            if len(star_indices) == 0:
-                return [{'number': int(catalog['number'][i]),
-                         'correlation': 0.0, 'concentration': 0.0,
-                         'label': 'galaxy', 'color': 'yellow'}
-                        for i in range(n)]
+    # Find star locus
+    print("Finding star locus ...", file=sys.stderr)
+    star_indices, psf_ab = _find_star_locus(catalog, n_stars=30)
+    print(f"  Star locus: {len(star_indices)} candidates, "
+          f"PSF A*B = {psf_ab:.2f}", file=sys.stderr)
 
+    if len(star_indices) == 0:
+        print("WARNING: Could not find star locus", file=sys.stderr)
+        return [{'number': int(catalog['number'][i]),
+                 'correlation': 1.0,
+                 'label': 'galaxy', 'color': 'yellow'}
+                for i in range(n)]
+
+    # Build PSF if not provided (for potential future use)
+    if psf_template is None and len(star_indices) >= 3:
         psf_template = build_empirical_psf(data, catalog, star_indices,
                                             size=size)
-        if psf_template is None:
-            print("ERROR: Could not build PSF template", file=sys.stderr)
-            return []
+        if psf_template is not None:
+            psf_fwhm = _compute_fwhm(psf_template)
+            print(f"  PSF FWHM: {psf_fwhm:.2f} pixels", file=sys.stderr)
 
-    # Normalize PSF template for correlation
-    psf_norm = _normalize_cutout(psf_template)
+    # Star locus statistics
+    star_ab = ab[star_indices]
+    star_ellip = ellip[star_indices]
+    star_flux = fluxes[star_indices]
+
+    # Classification thresholds based on star locus
+    max_star_ab = np.percentile(star_ab, 90) * 1.5  # generous upper bound
+    min_star_ab = psf_ab * 0.3  # must be at least ~30% of PSF (not noise)
+    max_star_ellip = 0.25
+    # Stars are foreground: must be above median flux of star locus candidates
+    min_star_flux = np.percentile(star_flux, 10)
+
+    print(f"  Thresholds: {min_star_ab:.2f} < A*B < {max_star_ab:.2f}, "
+          f"ellip < {max_star_ellip}, flux > {min_star_flux:.3f}",
+          file=sys.stderr)
 
     # Classify each source
     results = []
+    n_stars_found = 0
+    n_galaxies = 0
+
     for i in range(n):
-        x, y = catalog['x'][i], catalog['y'][i]
         src_num = int(catalog['number'][i])
+        src_ab = ab[i]
+        src_ellip = ellip[i]
+        src_flux = fluxes[i]
 
-        cut = _extract_cutout(data, x, y, size)
-        if cut is None:
-            results.append({
-                'number': src_num,
-                'correlation': 0.0,
-                'concentration': 0.0,
-                'label': 'galaxy',
-                'color': 'yellow',
-            })
-            continue
+        # Star criteria:
+        # 1. Compact: A*B within range of star locus (not too large, not too small)
+        # 2. Round: low ellipticity
+        # 3. Bright enough: above minimum star locus flux
+        is_star = (src_ab < max_star_ab and
+                   src_ab > min_star_ab and
+                   src_ellip < max_star_ellip and
+                   src_flux > min_star_flux)
 
-        # PSF correlation
-        cut_norm = _normalize_cutout(cut)
-        corr = _pearson_correlation(cut_norm, psf_norm)
-        corr = max(0.0, min(1.0, corr))  # clamp to [0, 1]
+        # Galaxy score: how much larger than PSF
+        size_ratio = src_ab / psf_ab if psf_ab > 0 else 999.0
+        galaxy_score = max(0.0, size_ratio - 1.0)
 
-        # Concentration index
-        conc = _concentration_index(cut)
-
-        # Classification
-        if corr >= star_threshold:
+        if is_star:
             label = 'star'
             color = 'cyan'
+            n_stars_found += 1
         else:
             label = 'galaxy'
             color = 'yellow'
+            n_galaxies += 1
 
         results.append({
             'number': src_num,
-            'correlation': float(corr),
-            'concentration': float(conc),
+            'correlation': float(galaxy_score),
             'label': label,
             'color': color,
         })
 
+    print(f"  Classified: {n} (star={n_stars_found}, galaxy={n_galaxies})",
+          file=sys.stderr)
+
     return results
-
-
-def _concentration_index(cutout):
-    """Concentration index C = 5 * log10(r80 / r20).
-
-    r_N = radius containing N% of total flux.
-    Stars: C ~ 3-4 (concentrated), Galaxies: C ~ 2-3 (extended).
-    """
-    h, w = cutout.shape
-    cy, cx = h / 2.0, w / 2.0
-    y, x = np.mgrid[:h, :w].astype(np.float64)
-    r = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-
-    # Sort pixels by radius
-    r_flat = r.ravel()
-    flux_flat = cutout.ravel()
-    order = np.argsort(r_flat)
-    r_sorted = r_flat[order]
-    cumflux = np.cumsum(flux_flat[order])
-
-    total_flux = cumflux[-1]
-    if total_flux <= 0:
-        return 0.0
-
-    cumflux_norm = cumflux / total_flux
-
-    # Find r20 and r80
-    r20_idx = np.searchsorted(cumflux_norm, 0.20)
-    r80_idx = np.searchsorted(cumflux_norm, 0.80)
-
-    r20 = r_sorted[min(r20_idx, len(r_sorted) - 1)]
-    r80 = r_sorted[min(r80_idx, len(r_sorted) - 1)]
-
-    if r20 <= 0 or r80 <= 0:
-        return 0.0
-
-    return 5.0 * np.log10(max(r80 / r20, 1.01))

@@ -39,8 +39,10 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
     bright_labels : list
         Segment labels that were masked.
     """
+    import sys
+    from collections import defaultdict
+
     mask = np.zeros(data.shape, dtype=bool)
-    bright_labels = []
 
     # Compute rough magnitudes from flux
     flux = catalog['flux']
@@ -50,29 +52,57 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
     labels = np.unique(segmap)
     labels = labels[labels > 0]
 
-    for i, lab in enumerate(labels):
-        if i >= len(mag):
-            break
+    # O(N) pixel count per label via bincount (single image scan)
+    label_counts = np.bincount(segmap.ravel())
+
+    # Identify bright sources and compute dilation radii
+    bright_labels = []
+    radii = []
+    n = min(len(labels), len(mag))
+    for i in range(n):
         if mag[i] >= mag_threshold:
             continue
-
-        seg_pix = segmap == lab
-        npix = seg_pix.sum()
+        lab = labels[i]
+        npix = label_counts[lab] if lab < len(label_counts) else 0
         if npix == 0:
             continue
-
         bright_labels.append(lab)
-
         r_eq = np.sqrt(npix / np.pi)
-        r_dilate = max(1, int(r_eq * expand_factor))
+        radii.append(max(1, int(r_eq * expand_factor)))
 
-        y, x = np.ogrid[-r_dilate:r_dilate + 1, -r_dilate:r_dilate + 1]
-        struct = (x * x + y * y) <= r_dilate * r_dilate
+    if not bright_labels:
+        return mask, bright_labels
 
-        dilated = binary_dilation(seg_pix, structure=struct)
-        mask |= dilated
+    # Group labels by dilation radius to batch dilations
+    radius_groups = defaultdict(list)
+    for lab, r in zip(bright_labels, radii):
+        radius_groups[r].append(lab)
 
-    return mask, bright_labels
+    # Merge into at most ~15 groups for efficiency
+    sorted_radii = sorted(radius_groups.keys())
+    if len(sorted_radii) > 15:
+        all_radii = np.array(radii)
+        bin_edges = np.percentile(all_radii, np.linspace(0, 100, 16))
+        bin_edges = np.unique(np.round(bin_edges).astype(int))
+        merged = defaultdict(list)
+        merged_r = {}
+        for r in sorted_radii:
+            b = int(np.searchsorted(bin_edges, r, side='right'))
+            merged[b].extend(radius_groups[r])
+            merged_r[b] = max(merged_r.get(b, 0), r)
+        radius_groups = {merged_r[b]: labs for b, labs in merged.items()}
+
+    # Dilate each group (one np.isin + one binary_dilation per group)
+    n_groups = len(radius_groups)
+    for gi, (r, labs) in enumerate(sorted(radius_groups.items())):
+        submask = np.isin(segmap, labs)
+        y, x = np.ogrid[-r:r + 1, -r:r + 1]
+        struct = (x * x + y * y) <= r * r
+        mask |= binary_dilation(submask, structure=struct)
+        print(f"  dilation group {gi + 1}/{n_groups} "
+              f"(r={r}, {len(labs)} sources)", file=sys.stderr)
+
+    return mask, [int(l) for l in bright_labels]
 
 
 def iterative_mask_refine(data, mask, bkg_estimate, sigma_thresh=2.0,
