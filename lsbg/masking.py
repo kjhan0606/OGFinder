@@ -213,12 +213,13 @@ def create_lsbg_mask(data, config):
     print(f"LSBG mask: masked {len(bright_labels)} bright sources "
           f"(mag < {config.mask_mag_threshold})", file=sys.stderr)
 
-    # Bright star masking
+    # Bright star masking (apply zeropoint for calibrated magnitudes)
     if len(objects) > 0:
         catalog = {
             'x_image': objects['x'] + 1.0,
             'y_image': objects['y'] + 1.0,
             'mag_auto': -2.5 * np.log10(np.maximum(objects['flux'], 1e-30))
+                        + config.mag_zeropoint
         }
         mask_bright_stars(mask, catalog,
                           mag_limit=config.bright_star_mag_limit,

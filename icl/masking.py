@@ -87,10 +87,11 @@ def mask_bright_stars(mask, catalog, mag_limit=18.0, radius_scale=10.0):
     if not np.any(bright):
         return
 
+    max_radius = min(ny, nx) // 4
     for i in np.where(bright)[0]:
         # Radius scales with brightness excess
         r = radius_scale * 10 ** (-0.2 * (mag[i] - mag_limit))
-        r = max(3, int(r + 0.5))
+        r = max(3, min(int(r + 0.5), max_radius))
 
         # 0-based center
         cx = int(x_img[i] - 1 + 0.5)
