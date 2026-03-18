@@ -4680,11 +4680,10 @@ proc CatalogPanelStarFinder {} {
     set paramargs {}
     lappend paramargs "--catalog" $catfile
 
-    # Find checkpoint
-    set bindir [file dirname [info nameofexecutable]]
-    set ckpt [file join [file dirname $bindir] star_finder data checkpoints star_finder_best.pt]
-    if {[file exists $ckpt]} {
-	lappend paramargs "--checkpoint" $ckpt
+    # Pass PSF file if available
+    if {[info exists catpanel(psf,file)] && $catpanel(psf,file) ne {} &&
+	[file exists $catpanel(psf,file)]} {
+	lappend paramargs "--psf" $catpanel(psf,file)
     }
 
     set catpanel(status) "AI Star Classification: classifying sources on [file tail $fn] ..."
