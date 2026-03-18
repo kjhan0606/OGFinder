@@ -25,7 +25,7 @@ def train(h5_path=None, config=None):
 
     if h5_path is None:
         h5_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "galaxy_morph", "data", "galaxy10", "Galaxy10_DECals.h5"
         )
 
