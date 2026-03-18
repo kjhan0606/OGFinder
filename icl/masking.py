@@ -176,8 +176,9 @@ def interpolate_masked(data, mask, method='linear', block_size=4096,
 def _interpolate_block(data, mask, method):
     """Interpolate masked pixels in a single block in-place.
 
-    Uses Gaussian-weighted averaging of unmasked pixels for fast,
-    smooth interpolation. Falls back to median for edge cases.
+    Uses iterative Gaussian-weighted fill: each pass fills a band
+    around the edges of remaining masked regions, with increasing
+    sigma to reach deeper interiors.
     """
     from scipy.ndimage import gaussian_filter
 
@@ -191,18 +192,29 @@ def _interpolate_block(data, mask, method):
         data[mask] = med
         return
 
-    # Gaussian-weighted fill: convolve data*(~mask) and (~mask),
-    # then divide to get weighted average at masked locations.
-    # Choose sigma proportional to typical masked region size.
-    sigma = max(5.0, np.sqrt(n_bad / max(1, n_good)) * 10.0)
-    sigma = min(sigma, 50.0)
+    remaining = mask.copy()
+    sigma = 10.0
 
-    weight = (~mask).astype(np.float64)
-    filled = data.copy().astype(np.float64)
-    filled[mask] = 0.0
+    for _ in range(15):
+        if not np.any(remaining):
+            break
 
-    smooth_data = gaussian_filter(filled, sigma=sigma)
-    smooth_weight = gaussian_filter(weight, sigma=sigma)
-    smooth_weight[smooth_weight < 1e-10] = 1.0
+        weight = (~remaining).astype(np.float64)
+        tmp = data.astype(np.float64)
+        tmp[remaining] = 0.0
 
-    data[mask] = (smooth_data / smooth_weight)[mask]
+        sd = gaussian_filter(tmp, sigma=sigma)
+        sw = gaussian_filter(weight, sigma=sigma)
+
+        fillable = remaining & (sw > 0.01)
+        if not np.any(fillable):
+            sigma *= 2.0
+            continue
+
+        data[fillable] = (sd / sw)[fillable]
+        remaining &= ~fillable
+        sigma *= 1.5
+
+    # Fill any remaining pixels with median
+    if np.any(remaining):
+        data[remaining] = np.median(data[~mask])
