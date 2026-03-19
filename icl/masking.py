@@ -5,15 +5,18 @@ by galaxy/star light during background modeling and SB profile
 measurement.
 """
 
+import sys
 import numpy as np
-from scipy.ndimage import binary_dilation, generate_binary_structure
+from collections import defaultdict
+from scipy.ndimage import binary_dilation, distance_transform_edt
 
 
 def create_source_mask(data, segmap, expand_factor=2.5):
     """Expand segmentation map segments to create a source mask.
 
-    Each segment is dilated by expand_factor times its equivalent
-    circular radius, using per-segment structuring elements.
+    Segments are grouped by dilation radius and batch-dilated for
+    efficiency.  Large radii use distance_transform_edt (O(N) in
+    image size regardless of radius) instead of binary_dilation.
 
     Parameters
     ----------
@@ -33,22 +36,52 @@ def create_source_mask(data, segmap, expand_factor=2.5):
     labels = np.unique(segmap)
     labels = labels[labels > 0]
 
+    if len(labels) == 0:
+        return mask
+
+    # O(N) pixel count per label via bincount
+    label_counts = np.bincount(segmap.ravel())
+
+    # Compute dilation radii and group by radius
+    radius_groups = defaultdict(list)
     for lab in labels:
-        seg_pix = segmap == lab
-        npix = seg_pix.sum()
+        npix = label_counts[lab] if lab < len(label_counts) else 0
         if npix == 0:
             continue
-
-        # Equivalent circular radius
         r_eq = np.sqrt(npix / np.pi)
         r_dilate = max(1, int(r_eq * expand_factor))
+        radius_groups[r_dilate].append(lab)
 
-        # Create circular structuring element
-        y, x = np.ogrid[-r_dilate:r_dilate + 1, -r_dilate:r_dilate + 1]
-        struct = (x * x + y * y) <= r_dilate * r_dilate
+    # Merge into at most ~15 groups
+    sorted_radii = sorted(radius_groups.keys())
+    if len(sorted_radii) > 15:
+        all_radii = []
+        for r, labs in radius_groups.items():
+            all_radii.extend([r] * len(labs))
+        all_radii = np.array(all_radii)
+        bin_edges = np.percentile(all_radii, np.linspace(0, 100, 16))
+        bin_edges = np.unique(np.round(bin_edges).astype(int))
+        merged = defaultdict(list)
+        merged_r = {}
+        for r in sorted_radii:
+            b = int(np.searchsorted(bin_edges, r, side='right'))
+            merged[b].extend(radius_groups[r])
+            merged_r[b] = max(merged_r.get(b, 0), r)
+        radius_groups = {merged_r[b]: labs for b, labs in merged.items()}
 
-        dilated = binary_dilation(seg_pix, structure=struct)
-        mask |= dilated
+    # Dilate each group
+    n_groups = len(radius_groups)
+    for gi, (r, labs) in enumerate(sorted(radius_groups.items())):
+        submask = np.isin(segmap, labs)
+        if r > 30:
+            dist = distance_transform_edt(~submask)
+            mask |= (dist <= r)
+        else:
+            y, x = np.ogrid[-r:r + 1, -r:r + 1]
+            struct = (x * x + y * y) <= r * r
+            mask |= binary_dilation(submask, structure=struct)
+        print(f"  dilation group {gi + 1}/{n_groups} "
+              f"(r={r}, {len(labs)} sources)", file=sys.stderr)
 
     return mask
 
@@ -176,9 +209,9 @@ def interpolate_masked(data, mask, method='linear', block_size=4096,
 def _interpolate_block(data, mask, method):
     """Interpolate masked pixels in a single block in-place.
 
-    Uses iterative Gaussian-weighted fill: each pass fills a band
-    around the edges of remaining masked regions, with increasing
-    sigma to reach deeper interiors.
+    Uses Gaussian-weighted fill with aggressive sigma growth to
+    fill masked regions quickly.  Starts with large sigma and
+    doubles each iteration.
     """
     from scipy.ndimage import gaussian_filter
 
@@ -192,29 +225,30 @@ def _interpolate_block(data, mask, method):
         data[mask] = med
         return
 
-    remaining = mask.copy()
-    sigma = 10.0
+    # Single-pass: large sigma covers most gaps efficiently
+    weight = (~mask).astype(np.float32)
+    tmp = data.astype(np.float32)
+    tmp[mask] = 0.0
 
-    for _ in range(15):
-        if not np.any(remaining):
-            break
+    # Choose sigma based on typical gap size
+    sigma = max(20.0, np.sqrt(n_bad / np.pi) * 0.5)
 
-        weight = (~remaining).astype(np.float64)
-        tmp = data.astype(np.float64)
-        tmp[remaining] = 0.0
-
+    for i in range(8):
         sd = gaussian_filter(tmp, sigma=sigma)
         sw = gaussian_filter(weight, sigma=sigma)
 
-        fillable = remaining & (sw > 0.01)
-        if not np.any(fillable):
-            sigma *= 2.0
-            continue
-
-        data[fillable] = (sd / sw)[fillable]
-        remaining &= ~fillable
-        sigma *= 1.5
+        fillable = mask & (sw > 0.005)
+        if np.any(fillable):
+            ratio = sd[fillable] / sw[fillable]
+            data[fillable] = ratio
+            tmp[fillable] = ratio
+            weight[fillable] = 1.0
+            mask_remaining = mask & ~fillable
+            if not np.any(mask_remaining):
+                return
+            mask = mask_remaining
+        sigma *= 2.0
 
     # Fill any remaining pixels with median
-    if np.any(remaining):
-        data[remaining] = np.median(data[~mask])
+    if np.any(mask):
+        data[mask] = np.median(data[weight > 0])
