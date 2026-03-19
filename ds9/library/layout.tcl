@@ -691,6 +691,7 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,param,bright-star-radius-scale) 10.0
     set catpanel(icl,param,interp-method)          linear
     set catpanel(icl,param,detect-thresh)          1.5
+    set catpanel(icl,param,max-dilate-radius)      50
     set catpanel(icl,param,bkg-method)             polynomial
     set catpanel(icl,param,bkg-order)              3
     set catpanel(icl,param,bkg-sigma-clip)         3.0
@@ -8275,7 +8276,8 @@ proc CatalogPanelICLParamSave {} {
     }
     set preffile [file join $prefdir icl.prf]
     if {[catch {set fd [open $preffile w]} err]} return
-    foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
+    foreach pname {expand-factor max-dilate-radius \
+		   bright-star-mag-limit bright-star-radius-scale \
 		   interp-method detect-thresh \
 		   bkg-method bkg-order bkg-sigma-clip bkg-sep-mesh \
 		   bkg-iterative bkg-n-iterations bkg-convergence-tol bkg-refine-thresh \
@@ -8309,6 +8311,7 @@ proc CatalogPanelICLMask {} {
 
     set args [list python3 $script $fn --mode mask \
 	--expand-factor $catpanel(icl,param,expand-factor) \
+	--max-dilate-radius $catpanel(icl,param,max-dilate-radius) \
 	--bright-star-mag-limit $catpanel(icl,param,bright-star-mag-limit) \
 	--bright-star-radius-scale $catpanel(icl,param,bright-star-radius-scale) \
 	--interp-method $catpanel(icl,param,interp-method) \
@@ -9010,7 +9013,8 @@ proc CatalogPanelICLSettings {} {
     wm geometry $w 420x520
 
     # Copy current values
-    foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
+    foreach pname {expand-factor max-dilate-radius \
+		   bright-star-mag-limit bright-star-radius-scale \
 		   interp-method detect-thresh \
 		   bkg-order bkg-sigma-clip bkg-sep-mesh \
 		   bkg-iterative bkg-n-iterations bkg-convergence-tol bkg-refine-thresh \
@@ -9032,6 +9036,12 @@ proc CatalogPanelICLSettings {} {
     ttk::entry $t1.eef -textvariable ed(icl,expand-factor) -width 10
     grid $t1.lef -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t1.eef -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lmdr -text "Max dilate radius (px):"
+    ttk::entry $t1.emdr -textvariable ed(icl,max-dilate-radius) -width 10
+    grid $t1.lmdr -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.emdr -row $r -column 1 -sticky w -padx 4 -pady 4
     incr r
 
     ttk::label $t1.lml -text "Bright star mag limit:"
@@ -9198,7 +9208,8 @@ proc CatalogPanelICLSettingsApply {w} {
     global catpanel
     global ed
 
-    foreach pname {expand-factor bright-star-mag-limit bright-star-radius-scale \
+    foreach pname {expand-factor max-dilate-radius \
+		   bright-star-mag-limit bright-star-radius-scale \
 		   interp-method detect-thresh \
 		   bkg-order bkg-sigma-clip bkg-sep-mesh \
 		   bkg-iterative bkg-n-iterations bkg-convergence-tol bkg-refine-thresh \
@@ -9215,6 +9226,7 @@ proc CatalogPanelICLSettingsDefaults {} {
     global ed
 
     set ed(icl,expand-factor) 2.5
+    set ed(icl,max-dilate-radius) 50
     set ed(icl,bright-star-mag-limit) 18.0
     set ed(icl,bright-star-radius-scale) 10.0
     set ed(icl,interp-method) linear

@@ -160,7 +160,8 @@ def mode_mask(args):
     print(f"Detected {n_sources} sources for masking", file=sys.stderr)
 
     # Create expanded source mask
-    mask = create_source_mask(data, segmap, config.mask_expand_factor)
+    mask = create_source_mask(data, segmap, config.mask_expand_factor,
+                              max_dilate_radius=args.max_dilate_radius)
 
     # Add bright star masks if catalog provided
     if args.catalog:
@@ -626,6 +627,8 @@ def main():
                         choices=['linear', 'cubic', 'nearest'])
     parser.add_argument('--detect-thresh', type=float, default=1.5,
                         help='Detection threshold for segmap (sigma)')
+    parser.add_argument('--max-dilate-radius', type=int, default=50,
+                        help='Max dilation radius in pixels (prevents over-masking)')
     parser.add_argument('--mask-output',
                         default=os.path.expanduser('~/.ds9/icl_mask.fits'))
     parser.add_argument('--masked-output',

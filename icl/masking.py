@@ -11,7 +11,7 @@ from collections import defaultdict
 from scipy.ndimage import binary_dilation, distance_transform_edt
 
 
-def create_source_mask(data, segmap, expand_factor=2.5):
+def create_source_mask(data, segmap, expand_factor=2.5, max_dilate_radius=50):
     """Expand segmentation map segments to create a source mask.
 
     Segments are grouped by dilation radius and batch-dilated for
@@ -26,6 +26,9 @@ def create_source_mask(data, segmap, expand_factor=2.5):
         Segmentation map from SEP (0 = background).
     expand_factor : float
         Dilation factor relative to segment equivalent radius.
+    max_dilate_radius : int
+        Maximum dilation radius in pixels.  Prevents over-masking
+        of extended sources in crowded fields (e.g. galaxy clusters).
 
     Returns
     -------
@@ -43,6 +46,7 @@ def create_source_mask(data, segmap, expand_factor=2.5):
     label_counts = np.bincount(segmap.ravel())
 
     # Compute dilation radii and group by radius
+    n_capped = 0
     radius_groups = defaultdict(list)
     for lab in labels:
         npix = label_counts[lab] if lab < len(label_counts) else 0
@@ -50,7 +54,14 @@ def create_source_mask(data, segmap, expand_factor=2.5):
             continue
         r_eq = np.sqrt(npix / np.pi)
         r_dilate = max(1, int(r_eq * expand_factor))
+        if r_dilate > max_dilate_radius:
+            n_capped += 1
+            r_dilate = max_dilate_radius
         radius_groups[r_dilate].append(lab)
+
+    if n_capped > 0:
+        print(f"  dilation radius capped to {max_dilate_radius}px "
+              f"for {n_capped} sources", file=sys.stderr)
 
     # Merge into at most ~15 groups
     sorted_radii = sorted(radius_groups.keys())
