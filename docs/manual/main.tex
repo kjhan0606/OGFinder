@@ -654,20 +654,50 @@ Compact sources (stars and galaxies) must be aggressively masked before ICL anal
 The masking procedure:
 \begin{enumerate}[leftmargin=2em]
   \item Run SEP detection on the image at a configurable threshold (default: $1.5\sigma$) to produce a segmentation map.
-  \item Expand each segment by a factor of \texttt{expand-factor} (default: 2.5) times its equivalent circular radius using per-segment binary dilation:
+  \item Expand each segment by a factor of \texttt{expand-factor} (default: 2.5) times its equivalent circular radius, capped at \texttt{max-dilate-radius} (default: 50\,px) to prevent over-masking in crowded fields:
   \begin{equation}
-    r_\mathrm{dilate} = f_\mathrm{expand} \times \sqrt{N_\mathrm{pix}/\pi}
+    r_\mathrm{dilate} = \min\!\bigl(f_\mathrm{expand} \times \sqrt{N_\mathrm{pix}/\pi},\; r_\mathrm{max}\bigr)
   \end{equation}
+  Segments are grouped by dilation radius and batch-dilated; for $r > 30$\,px, \texttt{distance\_transform\_edt} is used (O($N$) regardless of radius) instead of \texttt{binary\_dilation}.
   \item Add circular masks for bright stars (MAG\_AUTO $<$ \texttt{bright-star-mag-limit}) with magnitude-dependent radii:
   \begin{equation}
     r_\mathrm{star} = f_\mathrm{scale} \times 10^{-0.2(m - m_\mathrm{limit})}
   \end{equation}
-  \item Interpolate masked pixels using surrounding unmasked pixels (\texttt{scipy.interpolate.griddata}, method: linear/cubic/nearest).  For large images, block-based processing with 4096-pixel blocks and 100-pixel overlap is used.
+  \item Interpolate masked pixels using surrounding unmasked pixels (\texttt{scipy.interpolate.griddata}, method: linear/cubic/nearest).  For large images, block-based processing with 2048-pixel blocks and 64-pixel overlap is used.
 \end{enumerate}
 
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/icl\_mask.fits} (binary mask), \texttt{\textasciitilde/.ds9/icl\_masked.fits} (interpolated image).
 
 \textbf{Package}: \texttt{icl/masking.py} --- functions: \texttt{create\_source\_mask()}, \texttt{mask\_bright\_stars()}, \texttt{interpolate\_masked()}.
+
+\subsection{Masking Parameter Comparison with Literature}
+
+Table~\ref{tab:icl-mask-params} compares the OGFinder ICL masking parameters with values reported in the literature.  All parameters are user-configurable in the ICL Settings dialog (Masking tab).
+
+\begin{table}[htbp]
+\centering
+\caption{ICL masking parameters: OGFinder defaults vs.\ literature values.}
+\label{tab:icl-mask-params}
+\begin{tabular}{L{2.8cm} C{1.8cm} L{3.5cm} L{4.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Literature Range} & \textbf{References} \\
+\midrule
+Expand factor ($f_\mathrm{expand}$) & 2.5 & 2.5--5.0$\times$ Kron radius & \parencite{kluge2020}: 2.5--3.5; GALAPAGOS: 3.0; DeMaio+2015: 3.0 \\
+\midrule
+Max dilate radius & 50\,px & 50--100\,px (HST) & No explicit standard; prevents over-masking in crowded cluster cores \\
+\midrule
+Bright star mag limit & 18.0 & 17.5--18.0 & HSC-SSP \parencite{huang2018}: 17.5 \\
+\midrule
+Bright star radius scale & 10.0 & Instrument-dependent & HSC-SSP: $200 \times 10^{0.25(7-m)} + 12 \times 10^{0.05(16-m)}$ \\
+\midrule
+Detection $\sigma$ & 1.5 & 1.0--1.5 & Morishita+2017: 1.0; SExtractor default: 1.5 \\
+\midrule
+Interpolation method & linear & linear, nearest & Linear preferred for smooth ICL signal \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Alternative ICL masking approaches include GALFIT model subtraction \parencite{montes2018}, wavelet decomposition (DAWIS; Ellien+2021), and CHEFs basis function fitting \parencite{jimenez-teja2018}.  The segmentation-map dilation approach implemented here follows the most widely used methodology for its simplicity and robustness.
 
 
 \section{Background Modeling}
@@ -715,18 +745,19 @@ This is particularly useful for cluster fields where imperfect initial masking l
 \section{Surface Brightness Profile}
 \label{sec:icl-profile}
 
-\textbf{Menu}: ICL $\to$ 3.\ Set BCG Center (Click) / Measure Profile / Sector Profile\ldots
+\textbf{Menu}: ICL $\to$ 3.\ Set BCG Center / Measure Profile / Sector Profile\ldots
 
 The SB profile is measured in concentric elliptical annuli centered on the BCG (brightest cluster galaxy).
 
 \subsection{BCG Center Selection}
 
-The BCG center can be specified in three ways:
-\begin{itemize}[leftmargin=2em]
-  \item Click a source in the catalog and select ``Set BCG Center'' --- uses the selected source position.
-  \item Auto-detection from the catalog: selects the brightest source (lowest MAG\_AUTO).
-  \item Manual: use the \texttt{--center x,y} CLI argument.
-\end{itemize}
+Selecting ``Set BCG Center'' opens a dialog with three options:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Source ID entry} (default) --- Enter the source \texttt{NUMBER} from the SExtractor catalog.  The dialog searches the \emph{first frame}'s catalog (i.e., the original image extraction) so that the BCG is available even when the current frame shows a masked or background-subtracted image where the BCG has been removed.  The brightest source (lowest \texttt{MAG\_AUTO}) is suggested as the default.
+  \item \textbf{Click on Image} --- Click the ``Click on Image'' button in the dialog, then click directly on the image to set the BCG position.  A cyan cross marker is drawn at the selected location.
+  \item \textbf{CLI} --- Use the \texttt{--center x,y} argument (0-indexed pixel coordinates).
+\end{enumerate}
 
 \subsection{Profile Measurement}
 
@@ -909,6 +940,7 @@ A 4-tab dialog configures all pipeline parameters:
 \midrule
 \endhead
 Masking & expand-factor & 2.5 & Segment dilation factor \\
+ & max-dilate-radius & 50 & Maximum dilation radius (px) \\
  & bright-star-mag-limit & 18.0 & Stars brighter get extra masks \\
  & bright-star-radius-scale & 10.0 & Base mask radius \\
  & interp-method & linear & Interpolation: linear/cubic/nearest \\
@@ -955,7 +987,7 @@ python3 ds9_icl.py FITS --mode {mask,background,profile,measure,
 \textbf{Mode} & \textbf{Key options} & \textbf{Description} \\
 \midrule
 \endhead
-\texttt{mask} & \texttt{--expand-factor}, \texttt{--bright-star-*}, \texttt{--interp-method} & Create source mask + interpolated image \\
+\texttt{mask} & \texttt{--expand-factor}, \texttt{--max-dilate-radius}, \texttt{--bright-star-*}, \texttt{--interp-method} & Create source mask + interpolated image \\
 \midrule
 \texttt{background} & \texttt{--bkg-method}, \texttt{--bkg-order}, \texttt{--mask}, \texttt{--iterative} & Fit background (optionally iterative) \\
 \midrule
@@ -1037,18 +1069,36 @@ Unlike the ICL masking that masks \emph{all} detected sources, LSBG masking sele
 
 \begin{enumerate}[leftmargin=2em]
   \item Run SEP detection at \texttt{mask-detect-thresh}$\,\sigma$ (default: 1.5) to produce a segmentation map.
-  \item For each segment, compute a rough magnitude from SEP flux.  Only segments with $m < m_\mathrm{thresh}$ are selected for masking.
+  \item For each segment, compute a calibrated magnitude from SEP flux using the photometric zeropoint: $m = m_\mathrm{ZP} - 2.5\log_{10}(f)$.  Only segments with $m < m_\mathrm{thresh}$ are selected for masking.
   \item \textbf{LSB structure protection} \parencite{greco2018}: When enabled (\texttt{lsb-protect}), compute the mean surface brightness of each segment.  Sources with $\mu_\mathrm{mean} \geq \mu_\mathrm{LSB}$ (default: 24.0\,mag/arcsec$^2$) are skipped to preserve potential LSBGs that would otherwise be masked.
-  \item Dilate selected segments by \texttt{mask-expand-factor} (default: 3.0) times their equivalent circular radius.
+  \item Dilate selected segments by \texttt{mask-expand-factor} (default: 1.5) times their equivalent circular radius, capped at \texttt{max-dilate-radius} (default: 30\,px) to prevent over-masking of extended sources.  The expansion factor follows \textcite{prole2018}, who use a factor of~1.5 for bright galaxies.
   \item Add bright star masks (same algorithm as ICL: magnitude-dependent circular masks).
-  \item Interpolate all masked regions.
+  \item Interpolate all masked regions using iterative Gaussian-weighted fill (parallelized via \texttt{ThreadPoolExecutor}).
 \end{enumerate}
+
+\subsection{Masking Parameter Comparison with Literature}
+
+\begin{center}
+\begin{tabular}{L{3.5cm} L{2cm} L{2cm} L{5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Our value} & \textbf{Literature} & \textbf{Reference} \\
+\midrule
+Expand factor          & 1.5  & 1.5            & \textcite{prole2018}: aperture enlargement for bright galaxies \\
+Max dilate radius      & 30\,px & 5--30\,FWHM  & \textcite{zaritsky2019}: Moffat fit range limit \\
+Detection $\sigma$     & 1.5  & 0.5--6         & \textcite{prole2018}: 6$\sigma$ for mask creation; \textcite{infante-sainz2020}: 0.5$\sigma$ \\
+Magnitude threshold    & 22.0 & ---            & Most pipelines mask all detected sources \\
+RMS quantile           & 0.25 & 0.159          & \textcite{prole2018}: 15.9\% (1$\sigma$ below median) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Alternative masking approaches in the literature include dual-threshold replacement \parencite{greco2018,carlsten2020}, isophotal masking to $\mu = 29\text{--}30$\,mag/arcsec$^2$ \parencite{prole2018,infante-sainz2020}, and model subtraction (MRF; \textcite{vandokkum2020}).
 
 The masking reuses functions from the ICL pipeline (\texttt{icl.masking}):
 \begin{itemize}[leftmargin=2em]
-  \item \texttt{create\_source\_mask()} --- segment dilation
+  \item \texttt{mask\_by\_magnitude()} --- magnitude-selective segment dilation (parallelized via \texttt{SharedArray})
   \item \texttt{mask\_bright\_stars()} --- bright star circular masks
-  \item \texttt{interpolate\_masked()} --- block-based 2D interpolation
+  \item \texttt{interpolate\_masked()} --- Gaussian-weighted iterative fill
 \end{itemize}
 
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_mask.fits} (binary mask), \texttt{\textasciitilde/.ds9/lsbg\_masked.fits} (interpolated image).
@@ -1300,7 +1350,8 @@ A 4-tab dialog configures all pipeline parameters:
 \midrule
 \endhead
 Masking & mask-mag-threshold & 22.0 & Mask sources brighter than this \\
- & mask-expand-factor & 3.0 & Segment dilation factor \\
+ & mask-expand-factor & 1.5 & Segment dilation factor (Prole+2018: 1.5) \\
+ & max-dilate-radius & 30 & Maximum dilation radius (px) \\
  & bright-star-mag-limit & 18.0 & Bright star threshold \\
  & bright-star-radius-scale & 12.0 & Star mask radius scale \\
  & interp-method & linear & Interpolation method \\
@@ -1360,7 +1411,7 @@ python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,
 \textbf{Mode} & \textbf{Key options} & \textbf{Description} \\
 \midrule
 \endhead
-\texttt{mask} & \texttt{--mask-mag-threshold}, \texttt{--lsb-protect}, \texttt{--bright-star-*} & Magnitude-based masking with LSB protection \\
+\texttt{mask} & \texttt{--mask-mag-threshold}, \texttt{--mask-expand-factor}, \texttt{--max-dilate-radius}, \texttt{--lsb-protect}, \texttt{--bright-star-*} & Magnitude-based masking with LSB protection \\
 \midrule
 \texttt{clean} & \texttt{--mask}, \texttt{--bkg-method}, \texttt{--bkg-n-iterations} & Iterative background refinement \\
 \midrule
@@ -1385,7 +1436,8 @@ python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,
 \begin{lstlisting}[style=bash,numbers=none]
 # Step 1: Mask bright sources
 python3 ds9_lsbg.py data/abell2744_f814w.fits \
-    --mode mask --mask-mag-threshold 22.0
+    --mode mask --mask-mag-threshold 22.0 \
+    --mask-expand-factor 1.5 --max-dilate-radius 30
 
 # Step 2: Iterative background cleaning
 python3 ds9_lsbg.py data/abell2744_f814w.fits \

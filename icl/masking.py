@@ -8,10 +8,31 @@ measurement.
 import sys
 import numpy as np
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from scipy.ndimage import binary_dilation, distance_transform_edt
 
 
-def create_source_mask(data, segmap, expand_factor=2.5, max_dilate_radius=50):
+def _dilate_group_worker(args):
+    """Worker for parallel dilation of one radius group."""
+    segmap_spec, labs, r = args
+    from parallel.shared_array import SharedArraySpec
+    segmap, shm = segmap_spec.attach()
+    try:
+        submask = np.isin(segmap, labs)
+        if r > 30:
+            dist = distance_transform_edt(~submask)
+            result = (dist <= r)
+        else:
+            y, x = np.ogrid[-r:r + 1, -r:r + 1]
+            struct = (x * x + y * y) <= r * r
+            result = binary_dilation(submask, structure=struct)
+        return result
+    finally:
+        shm.close()
+
+
+def create_source_mask(data, segmap, expand_factor=2.5, max_dilate_radius=50,
+                       n_workers=0):
     """Expand segmentation map segments to create a source mask.
 
     Segments are grouped by dilation radius and batch-dilated for
@@ -27,8 +48,9 @@ def create_source_mask(data, segmap, expand_factor=2.5, max_dilate_radius=50):
     expand_factor : float
         Dilation factor relative to segment equivalent radius.
     max_dilate_radius : int
-        Maximum dilation radius in pixels.  Prevents over-masking
-        of extended sources in crowded fields (e.g. galaxy clusters).
+        Maximum dilation radius in pixels.
+    n_workers : int
+        0 = auto parallel, 1 = sequential, N = N workers.
 
     Returns
     -------
@@ -80,19 +102,40 @@ def create_source_mask(data, segmap, expand_factor=2.5, max_dilate_radius=50):
             merged_r[b] = max(merged_r.get(b, 0), r)
         radius_groups = {merged_r[b]: labs for b, labs in merged.items()}
 
-    # Dilate each group
-    n_groups = len(radius_groups)
-    for gi, (r, labs) in enumerate(sorted(radius_groups.items())):
-        submask = np.isin(segmap, labs)
-        if r > 30:
-            dist = distance_transform_edt(~submask)
-            mask |= (dist <= r)
-        else:
-            y, x = np.ogrid[-r:r + 1, -r:r + 1]
-            struct = (x * x + y * y) <= r * r
-            mask |= binary_dilation(submask, structure=struct)
-        print(f"  dilation group {gi + 1}/{n_groups} "
-              f"(r={r}, {len(labs)} sources)", file=sys.stderr)
+    # Dilate groups — parallel if multiple groups and workers available
+    sorted_groups = sorted(radius_groups.items())
+    n_groups = len(sorted_groups)
+
+    from parallel.pool import resolve_n_workers
+    actual_workers = resolve_n_workers(n_workers)
+
+    if n_groups >= 2 and actual_workers > 1:
+        from parallel.shared_array import SharedArray
+        print(f"  dilation: {n_groups} groups, {actual_workers} workers",
+              file=sys.stderr)
+        with SharedArray(segmap) as seg_spec:
+            tasks = [(seg_spec, labs, r) for r, labs in sorted_groups]
+            from parallel.pool import parallel_map
+            results = parallel_map(
+                _dilate_group_worker, tasks,
+                n_workers=min(actual_workers, n_groups),
+                label="  dilation"
+            )
+        for submask in results:
+            mask |= submask
+    else:
+        # Sequential fallback
+        for gi, (r, labs) in enumerate(sorted_groups):
+            submask = np.isin(segmap, labs)
+            if r > 30:
+                dist = distance_transform_edt(~submask)
+                mask |= (dist <= r)
+            else:
+                y, x = np.ogrid[-r:r + 1, -r:r + 1]
+                struct = (x * x + y * y) <= r * r
+                mask |= binary_dilation(submask, structure=struct)
+            print(f"  dilation group {gi + 1}/{n_groups} "
+                  f"(r={r}, {len(labs)} sources)", file=sys.stderr)
 
     return mask
 
@@ -153,10 +196,11 @@ def mask_bright_stars(mask, catalog, mag_limit=18.0, radius_scale=10.0):
 
 
 def interpolate_masked(data, mask, method='linear', block_size=2048,
-                       overlap=64):
+                       overlap=256):
     """Interpolate masked regions using surrounding unmasked pixels.
 
-    For large images, uses block-based processing with progress logging.
+    Uses Gaussian-weighted fill on the full image first, then
+    block-based refinement for remaining gaps.
 
     Parameters
     ----------
@@ -165,11 +209,11 @@ def interpolate_masked(data, mask, method='linear', block_size=2048,
     mask : 2D bool array
         True where pixels should be interpolated.
     method : str
-        Interpolation method: 'linear', 'cubic', 'nearest'.
+        Interpolation method (kept for API compat, Gaussian fill used).
     block_size : int
         Block size for large-image processing.
     overlap : int
-        Overlap between blocks.
+        Overlap between blocks (large enough to avoid seams).
 
     Returns
     -------
@@ -177,7 +221,7 @@ def interpolate_masked(data, mask, method='linear', block_size=2048,
         Image with masked regions filled by interpolation.
     """
     ny, nx = data.shape
-    result = data.copy()
+    result = data.astype(np.float32).copy()
 
     n_masked = int(mask.sum())
     if n_masked == 0:
@@ -187,51 +231,29 @@ def interpolate_masked(data, mask, method='linear', block_size=2048,
     print(f"  interpolation: {n_masked} pixels ({100*frac:.1f}%)",
           file=sys.stderr)
 
-    # Small image: process directly
-    if ny <= block_size and nx <= block_size:
-        _interpolate_block(result, mask.copy(), method)
-        return result
+    remaining = mask.copy()
+    _gaussian_fill(result, remaining)
 
-    # Count total blocks
-    step = block_size - overlap
-    blocks = []
-    for y0 in range(0, ny, step):
-        y1 = min(ny, y0 + block_size)
-        for x0 in range(0, nx, step):
-            x1 = min(nx, x0 + block_size)
-            if np.any(mask[y0:y1, x0:x1]):
-                blocks.append((y0, y1, x0, x1))
-
-    n_blocks = len(blocks)
-    print(f"  interpolation: {n_blocks} blocks to process", file=sys.stderr)
-
-    for bi, (y0, y1, x0, x1) in enumerate(blocks):
-        block_mask = mask[y0:y1, x0:x1].copy()
-        block_data = result[y0:y1, x0:x1].copy()
-        _interpolate_block(block_data, block_mask, method)
-
-        # Write only the non-overlap interior
-        iy0 = 0 if y0 == 0 else overlap // 2
-        iy1 = block_data.shape[0] if y1 == ny else block_data.shape[0] - overlap // 2
-        ix0 = 0 if x0 == 0 else overlap // 2
-        ix1 = block_data.shape[1] if x1 == nx else block_data.shape[1] - overlap // 2
-
-        result[y0 + iy0:y0 + iy1, x0 + ix0:x0 + ix1] = \
-            block_data[iy0:iy1, ix0:ix1]
-
-        if (bi + 1) % 5 == 0 or bi + 1 == n_blocks:
-            print(f"  interpolation: block {bi+1}/{n_blocks}",
-                  file=sys.stderr)
+    n_left = int(remaining.sum())
+    if n_left > 0:
+        print(f"  interpolation: {n_left} pixels remaining after global fill",
+              file=sys.stderr)
+        # Fill any remainder with local median
+        if n_left < remaining.size:
+            result[remaining] = np.median(result[~remaining])
 
     return result
 
 
-def _interpolate_block(data, mask, method):
-    """Interpolate masked pixels in a single block in-place.
+def _gaussian_fill(data, mask, max_passes=8):
+    """Fill masked pixels using iterative Gaussian-weighted averaging.
 
-    Uses two-pass Gaussian-weighted fill: one pass with sigma
-    proportional to gap size fills most pixels, a second pass
-    with doubled sigma catches the rest.
+    Fills from edges inward: each pass uses a Gaussian filter to
+    propagate values from unmasked pixels into masked regions.
+    Sigma grows each pass to reach deeper into large gaps.
+
+    The two gaussian_filter calls per pass (data + weight) run in
+    parallel threads since scipy releases the GIL during filtering.
     """
     from scipy.ndimage import gaussian_filter
 
@@ -243,28 +265,30 @@ def _interpolate_block(data, mask, method):
     if n_good < 10:
         med = np.median(data[~mask]) if n_good > 0 else 0.0
         data[mask] = med
-        return
-
-    # If mask fraction > 90%, just fill with local median
-    if n_bad > 0.9 * mask.size:
-        data[mask] = np.median(data[~mask])
+        mask[:] = False
         return
 
     weight = (~mask).astype(np.float32)
-    tmp = data.astype(np.float32)
+    tmp = data.copy()
     tmp[mask] = 0.0
 
-    # Use large sigma to cover gaps in fewer passes
-    sigma = max(30.0, np.sqrt(n_bad / np.pi) * 0.7)
+    # Start sigma proportional to typical gap size, minimum 20
+    sigma = max(20.0, np.sqrt(n_bad / np.pi) * 0.5)
 
-    for _ in range(5):
+    for i in range(max_passes):
         if not np.any(mask):
             return
 
-        sd = gaussian_filter(tmp, sigma=sigma)
-        sw = gaussian_filter(weight, sigma=sigma)
+        # Run the two gaussian_filter calls in parallel threads
+        # (scipy releases GIL during the C computation)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f_data = executor.submit(gaussian_filter, tmp, sigma=sigma)
+            f_weight = executor.submit(gaussian_filter, weight, sigma=sigma)
+            sd = f_data.result()
+            sw = f_weight.result()
 
-        fillable = mask & (sw > 0.003)
+        # Fill where enough weight has diffused in
+        fillable = mask & (sw > 0.002)
         n_fill = int(fillable.sum())
         if n_fill > 0:
             ratio = sd[fillable] / sw[fillable]
@@ -272,8 +296,12 @@ def _interpolate_block(data, mask, method):
             tmp[fillable] = ratio
             weight[fillable] = 1.0
             mask &= ~fillable
-        sigma *= 2.5
 
-    # Fill remaining with median
-    if np.any(mask):
-        data[mask] = np.median(data[weight > 0])
+        n_left = int(mask.sum())
+        print(f"  interpolation pass {i+1}: sigma={sigma:.0f}, "
+              f"filled={n_fill}, remaining={n_left}", file=sys.stderr)
+
+        if n_left == 0:
+            return
+
+        sigma *= 2.0

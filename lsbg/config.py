@@ -10,7 +10,8 @@ class LSBGConfig:
     # Masking
     mask_detect_thresh: float = 1.5
     mask_detect_minarea: int = 5
-    mask_expand_factor: float = 3.0
+    mask_expand_factor: float = 1.5
+    max_dilate_radius: int = 30
     bright_star_mag_limit: float = 18.0
     bright_star_radius_scale: float = 12.0
     mask_mag_threshold: float = 22.0

@@ -161,7 +161,8 @@ def mode_mask(args):
 
     # Create expanded source mask
     mask = create_source_mask(data, segmap, config.mask_expand_factor,
-                              max_dilate_radius=args.max_dilate_radius)
+                              max_dilate_radius=args.max_dilate_radius,
+                              n_workers=args.n_workers)
 
     # Add bright star masks if catalog provided
     if args.catalog:

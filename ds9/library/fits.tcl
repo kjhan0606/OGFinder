@@ -42,8 +42,11 @@ proc LoadFitsFile {fn layer mode} {
 	}
     }
 
-    # Auto-extract sources for the catalog panel
-    CatalogPanelAutoExtract
+    # Auto-extract disabled — use SExtractor menu manually
+    # CatalogPanelAutoExtract
+
+    # Set log scale with optimized limits
+    after 500 CatalogPanelSetLogScale
 }
 
 proc LoadFitsAlloc {path fn layer mode} {

@@ -79,6 +79,7 @@ def build_config(args):
         mask_detect_thresh=args.mask_detect_thresh,
         mask_detect_minarea=args.mask_detect_minarea,
         mask_expand_factor=args.mask_expand_factor,
+        max_dilate_radius=args.max_dilate_radius,
         bright_star_mag_limit=args.bright_star_mag_limit,
         bright_star_radius_scale=args.bright_star_radius_scale,
         mask_mag_threshold=args.mask_mag_threshold,
@@ -188,7 +189,8 @@ def mode_mask(args):
     print(f"Image: {nx}x{ny}", file=sys.stderr)
 
     config = build_config(args)
-    mask, masked_data = create_lsbg_mask(data, config)
+    mask, masked_data = create_lsbg_mask(data, config,
+                                         n_workers=args.n_workers)
 
     n_masked = int(mask.sum())
 
@@ -500,7 +502,8 @@ def mode_run(args):
 
     # Step 1: Mask bright sources (with LSB protection)
     print("=== Step 1: Masking bright sources ===", file=sys.stderr)
-    mask, masked_data = create_lsbg_mask(data, config)
+    mask, masked_data = create_lsbg_mask(data, config,
+                                         n_workers=args.n_workers)
 
     mask_path = args.mask_output
     save_fits(mask.astype(np.int32), header, mask_path)
@@ -723,7 +726,8 @@ def main():
     parser.add_argument('--catalog', help='TSV catalog file')
     parser.add_argument('--mask-detect-thresh', type=float, default=1.5)
     parser.add_argument('--mask-detect-minarea', type=int, default=5)
-    parser.add_argument('--mask-expand-factor', type=float, default=3.0)
+    parser.add_argument('--mask-expand-factor', type=float, default=1.5)
+    parser.add_argument('--max-dilate-radius', type=int, default=30)
     parser.add_argument('--bright-star-mag-limit', type=float, default=18.0)
     parser.add_argument('--bright-star-radius-scale', type=float, default=12.0)
     parser.add_argument('--mask-mag-threshold', type=float, default=22.0)

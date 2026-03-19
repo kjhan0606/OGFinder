@@ -424,6 +424,9 @@ proc DeleteFrame {which} {
     # delete canvas widget
     $ds9(canvas) delete $which
 
+    # Clean up catalog panel saved state for this frame
+    catch {CatalogPanelDeleteFrameState $which}
+
     # reset current(frame) if needed
     if {$current(frame) == $which} {
 	set ii [lsearch $ds9(active) $which]
@@ -432,6 +435,15 @@ proc DeleteFrame {which} {
 	    catch {CatalogPanelFrameChanged $current(frame) $newframe}
 	    set current(frame) $newframe
 	    set current(colorbar) ${current(frame)}cb
+	} elseif {[llength $ds9(active)] > 1} {
+	    # First frame in list — switch to next
+	    set newframe [lindex $ds9(active) 1]
+	    catch {CatalogPanelFrameChanged $current(frame) $newframe}
+	    set current(frame) $newframe
+	    set current(colorbar) ${current(frame)}cb
+	} else {
+	    # Last frame — clear panel
+	    catch {CatalogPanelClearAll}
 	}
     }
 
@@ -845,6 +857,14 @@ proc Button1Frame {which x y} {
     switch -- $current(mode) {
 	none {
 	    if {$which == $current(frame)} {
+		# ICL BCG center click mode
+		global catpanel
+		if {[info exists catpanel(icl,click_mode)] &&
+		    $catpanel(icl,click_mode)} {
+		    CatalogPanelICLClickSetCenter $which $x $y
+		    set ds9(nonepan) 0
+		    return
+		}
 		# Check for sextract catalog marker click
 		set _marker_id [$which get marker catalog id $x $y]
 		if {$_marker_id != 0} {

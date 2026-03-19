@@ -12,13 +12,15 @@ except ImportError:
     import sep_pjw as sep
 from scipy.ndimage import binary_dilation
 
-from icl.masking import create_source_mask, mask_bright_stars, interpolate_masked
+from icl.masking import (create_source_mask, mask_bright_stars,
+                          interpolate_masked, _dilate_group_worker)
 
 
 def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
-                      expand_factor=3.0, lsb_protect=False,
+                      expand_factor=1.5, max_dilate_radius=30,
+                      lsb_protect=False,
                       lsb_mu_threshold=24.0, pixel_scale=0.06,
-                      mag_zeropoint=25.0):
+                      mag_zeropoint=25.0, n_workers=0):
     """Selectively mask only sources brighter than mag_threshold.
 
     Parameters
@@ -33,6 +35,8 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
         Magnitude limit; sources brighter (mag < threshold) are masked.
     expand_factor : float
         Dilation factor relative to segment equivalent radius.
+    max_dilate_radius : int
+        Maximum dilation radius in pixels.
     lsb_protect : bool
         If True, protect sources with low mean surface brightness.
     lsb_mu_threshold : float
@@ -41,6 +45,8 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
         Pixel scale in arcsec/pixel.
     mag_zeropoint : float
         Magnitude zeropoint.
+    n_workers : int
+        0 = auto parallel, 1 = sequential, N = N workers.
 
     Returns
     -------
@@ -54,10 +60,11 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
 
     mask = np.zeros(data.shape, dtype=bool)
 
-    # Compute rough magnitudes from flux
+    # Compute calibrated magnitudes from flux (need zeropoint!)
     flux = catalog['flux']
     with np.errstate(divide='ignore', invalid='ignore'):
-        mag = np.where(flux > 0, -2.5 * np.log10(flux), 99.0)
+        mag = np.where(flux > 0,
+                       mag_zeropoint - 2.5 * np.log10(flux), 99.0)
 
     labels = np.unique(segmap)
     labels = labels[labels > 0]
@@ -69,6 +76,7 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
     bright_labels = []
     radii = []
     n_protected = 0
+    n_capped = 0
     n = min(len(labels), len(mag))
     pixel_area_arcsec2 = pixel_scale * pixel_scale
     for i in range(n):
@@ -90,7 +98,15 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
 
         bright_labels.append(lab)
         r_eq = np.sqrt(npix / np.pi)
-        radii.append(max(1, int(r_eq * expand_factor)))
+        r_dilate = max(1, int(r_eq * expand_factor))
+        if r_dilate > max_dilate_radius:
+            n_capped += 1
+            r_dilate = max_dilate_radius
+        radii.append(r_dilate)
+
+    if n_capped > 0:
+        print(f"  dilation radius capped to {max_dilate_radius}px "
+              f"for {n_capped} sources", file=sys.stderr)
 
     if not bright_labels:
         return mask, bright_labels
@@ -114,22 +130,41 @@ def mask_by_magnitude(data, segmap, catalog, mag_threshold=22.0,
             merged_r[b] = max(merged_r.get(b, 0), r)
         radius_groups = {merged_r[b]: labs for b, labs in merged.items()}
 
-    # Dilate each group
-    from scipy.ndimage import distance_transform_edt
-    n_groups = len(radius_groups)
-    for gi, (r, labs) in enumerate(sorted(radius_groups.items())):
-        submask = np.isin(segmap, labs)
-        if r > 30:
-            # Large radius: distance transform is O(N) regardless of r
-            dist = distance_transform_edt(~submask)
-            mask |= (dist <= r)
-        else:
-            # Small radius: binary_dilation is fine
-            y, x = np.ogrid[-r:r + 1, -r:r + 1]
-            struct = (x * x + y * y) <= r * r
-            mask |= binary_dilation(submask, structure=struct)
-        print(f"  dilation group {gi + 1}/{n_groups} "
-              f"(r={r}, {len(labs)} sources)", file=sys.stderr)
+    # Dilate groups — parallel if multiple groups and workers available
+    sorted_groups = sorted(radius_groups.items())
+    n_groups = len(sorted_groups)
+
+    from parallel.pool import resolve_n_workers
+    actual_workers = resolve_n_workers(n_workers)
+
+    if n_groups >= 2 and actual_workers > 1:
+        from parallel.shared_array import SharedArray
+        from parallel.pool import parallel_map
+        from scipy.ndimage import distance_transform_edt
+        print(f"  dilation: {n_groups} groups, {actual_workers} workers",
+              file=sys.stderr)
+        with SharedArray(segmap) as seg_spec:
+            tasks = [(seg_spec, labs, r) for r, labs in sorted_groups]
+            results = parallel_map(
+                _dilate_group_worker, tasks,
+                n_workers=min(actual_workers, n_groups),
+                label="  dilation"
+            )
+        for submask in results:
+            mask |= submask
+    else:
+        from scipy.ndimage import distance_transform_edt
+        for gi, (r, labs) in enumerate(sorted_groups):
+            submask = np.isin(segmap, labs)
+            if r > 30:
+                dist = distance_transform_edt(~submask)
+                mask |= (dist <= r)
+            else:
+                y, x = np.ogrid[-r:r + 1, -r:r + 1]
+                struct = (x * x + y * y) <= r * r
+                mask |= binary_dilation(submask, structure=struct)
+            print(f"  dilation group {gi + 1}/{n_groups} "
+                  f"(r={r}, {len(labs)} sources)", file=sys.stderr)
 
     if n_protected > 0:
         print(f"  LSB protection: {n_protected} sources preserved "
@@ -192,7 +227,7 @@ def iterative_mask_refine(data, mask, bkg_estimate, sigma_thresh=2.0,
     return mask, n_new
 
 
-def create_lsbg_mask(data, config):
+def create_lsbg_mask(data, config, n_workers=0):
     """Full LSBG masking pipeline.
 
     1. Initial SEP detection
@@ -206,6 +241,8 @@ def create_lsbg_mask(data, config):
         Input image.
     config : LSBGConfig
         Pipeline configuration.
+    n_workers : int
+        0 = auto parallel, 1 = sequential, N = N workers.
 
     Returns
     -------
@@ -235,10 +272,12 @@ def create_lsbg_mask(data, config):
         data, segmap, objects,
         mag_threshold=config.mask_mag_threshold,
         expand_factor=config.mask_expand_factor,
+        max_dilate_radius=config.max_dilate_radius,
         lsb_protect=config.lsb_protect,
         lsb_mu_threshold=config.lsb_mu_threshold,
         pixel_scale=config.pixel_scale,
         mag_zeropoint=config.mag_zeropoint,
+        n_workers=n_workers,
     )
     print(f"LSBG mask: masked {len(bright_labels)} bright sources "
           f"(mag < {config.mask_mag_threshold})", file=sys.stderr)

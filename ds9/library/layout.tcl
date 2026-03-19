@@ -210,7 +210,7 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelClear
 
     # Display menu
-    ttk::menubutton $f.menubar.display -text "Display" \
+    ttk::menubutton $f.menubar.display -text "Objects" \
 	-menu $f.menubar.display.m -style CatMenu.TMenubutton
     menu $f.menubar.display.m -tearoff 0
     $f.menubar.display.m add command -label "Mark All" \
@@ -389,7 +389,7 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelICLViewBkg
     $f.menubar.icl.m add separator
     $f.menubar.icl.m add command \
-	-label "3. Set BCG Center (Click)" \
+	-label "3. Set BCG Center" \
 	-command CatalogPanelICLSetCenter
     $f.menubar.icl.m add command \
 	-label "   Measure Profile" \
@@ -686,6 +686,7 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,has_profile)  0
     set catpanel(icl,center_x)     {}
     set catpanel(icl,center_y)     {}
+    set catpanel(icl,click_mode)   0
     set catpanel(icl,param,expand-factor)          2.5
     set catpanel(icl,param,bright-star-mag-limit)  18.0
     set catpanel(icl,param,bright-star-radius-scale) 10.0
@@ -727,7 +728,8 @@ proc CreateCatalogPanel {} {
     set catpanel(lsbg,detect_data)  {}
     set catpanel(lsbg,param,mask-detect-thresh)         1.5
     set catpanel(lsbg,param,mask-detect-minarea)        5
-    set catpanel(lsbg,param,mask-expand-factor)         3.0
+    set catpanel(lsbg,param,mask-expand-factor)         1.5
+    set catpanel(lsbg,param,max-dilate-radius)          30
     set catpanel(lsbg,param,bright-star-mag-limit)      18.0
     set catpanel(lsbg,param,bright-star-radius-scale)   12.0
     set catpanel(lsbg,param,mask-mag-threshold)         22.0
@@ -8350,7 +8352,7 @@ proc CatalogPanelICLMask {} {
 proc CatalogPanelICLViewMask {} {
     global catpanel
 
-    if {!$catpanel(icl,has_mask) || ![file exists $catpanel(icl,masked_file)]} {
+    if {![file exists $catpanel(icl,masked_file)]} {
 	set catpanel(status) "ICL: No mask available — run Source Masking first"
 	return
     }
@@ -8363,6 +8365,7 @@ proc CatalogPanelICLViewMask {} {
     global scale
     set scale(mode) zscale
     ChangeScaleMode
+    set catpanel(icl,has_mask) 1
     set catpanel(status) "ICL: Masked image loaded in new frame"
 }
 
@@ -8437,7 +8440,7 @@ proc CatalogPanelICLBackground {method} {
 proc CatalogPanelICLViewBkg {} {
     global catpanel
 
-    if {!$catpanel(icl,has_bkg) || ![file exists $catpanel(icl,bgsub_file)]} {
+    if {![file exists $catpanel(icl,bgsub_file)]} {
 	set catpanel(status) "ICL: No background model — run Background Model first"
 	return
     }
@@ -8450,48 +8453,178 @@ proc CatalogPanelICLViewBkg {} {
     global scale
     set scale(mode) zscale
     ChangeScaleMode
+    set catpanel(icl,has_bkg) 1
     set catpanel(status) "ICL: Background-subtracted image loaded in new frame"
 }
 
 # --- 3. BCG Center + Profile ---
 
 proc CatalogPanelICLSetCenter {} {
-    global catpanel
+    global catpanel catpanel_fdata ds9 current
 
-    # Use currently selected source as BCG center
-    if {![info exists catpanel(selected_row)] || $catpanel(selected_row) < 0} {
-	set catpanel(status) "ICL: Select a source (click a row) to set as BCG center"
+    # Use the first frame's catalog (original image SExtractor result)
+    set catalog_data {}
+    set first_frame [lindex $ds9(frames) 0]
+    if {$first_frame ne {} &&
+	[info exists catpanel_fdata($first_frame,alldata)] &&
+	$catpanel_fdata($first_frame,alldata) ne {}} {
+	set catalog_data $catpanel_fdata($first_frame,alldata)
+    } elseif {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+	set catalog_data $catpanel(alldata)
+    }
+
+    if {$catalog_data eq {}} {
+	set catpanel(status) "ICL: No SExtractor catalog found — run SExtract first"
 	return
     }
 
-    set lines [split $catpanel(alldata) \n]
+    # Parse headers to find NUMBER, X_IMAGE, Y_IMAGE, MAG_AUTO
+    set lines [split $catalog_data \n]
     set headers [split [lindex $lines 0] "\t"]
-
-    # Find X_IMAGE, Y_IMAGE columns
+    set numcol -1
     set xcol -1
     set ycol -1
+    set magcol -1
     for {set c 0} {$c < [llength $headers]} {incr c} {
 	set h [string trim [lindex $headers $c]]
+	if {$h eq "NUMBER"} { set numcol $c }
 	if {$h eq "X_IMAGE"} { set xcol $c }
 	if {$h eq "Y_IMAGE"} { set ycol $c }
+	if {$h eq "MAG_AUTO"} { set magcol $c }
     }
-    if {$xcol < 0 || $ycol < 0} {
-	set catpanel(status) "ICL: Cannot find X_IMAGE/Y_IMAGE columns"
+    if {$numcol < 0 || $xcol < 0 || $ycol < 0} {
+	set catpanel(status) "ICL: Catalog missing NUMBER/X_IMAGE/Y_IMAGE"
 	return
     }
 
-    set row_idx [expr {$catpanel(selected_row) + 1}]
-    set row_data [split [lindex $lines $row_idx] "\t"]
-    if {[llength $row_data] <= $xcol || [llength $row_data] <= $ycol} {
-	set catpanel(status) "ICL: Cannot read coordinates from selected row"
+    # Find brightest source as default suggestion
+    set best_id {}
+    set best_mag 99.0
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set row [split [lindex $lines $i] "\t"]
+	if {[llength $row] <= $xcol} continue
+	if {$magcol >= 0 && [llength $row] > $magcol} {
+	    set m [string trim [lindex $row $magcol]]
+	    if {[string is double $m] && $m < $best_mag} {
+		set best_mag $m
+		set best_id [string trim [lindex $row $numcol]]
+	    }
+	}
+    }
+
+    # Show dialog
+    set w .icl_bcg_id
+    if {[winfo exists $w]} { destroy $w }
+    toplevel $w
+    wm title $w "Set BCG Center"
+    wm geometry $w 320x120
+    wm resizable $w 0 0
+
+    set default_id $best_id
+    if {$default_id eq {}} { set default_id 1 }
+
+    ttk::label $w.lbl -text "Enter source NUMBER from SExtractor catalog:"
+    pack $w.lbl -padx 10 -pady {10 2} -anchor w
+
+    ttk::frame $w.ef
+    pack $w.ef -padx 10 -pady 2 -fill x
+    ttk::label $w.ef.idlbl -text "Source ID:"
+    ttk::entry $w.ef.entry -width 10 -textvariable icl_bcg_entry_id
+    set ::icl_bcg_entry_id $default_id
+    pack $w.ef.idlbl -side left -padx {0 5}
+    pack $w.ef.entry -side left
+
+    if {$best_id ne {} && $magcol >= 0} {
+	ttk::label $w.ef.hint -text "(brightest: #${best_id}, mag=[format %.1f $best_mag])" \
+	    -foreground gray
+	pack $w.ef.hint -side left -padx 5
+    }
+
+    ttk::frame $w.bf
+    pack $w.bf -padx 10 -pady 8 -fill x
+    ttk::button $w.bf.ok -text "OK" \
+	-command [list CatalogPanelICLSetCenterByID $w [list $catalog_data] $numcol $xcol $ycol]
+    ttk::button $w.bf.click -text "Click on Image" \
+	-command [list CatalogPanelICLSetCenterClickMode $w]
+    ttk::button $w.bf.cancel -text "Cancel" -command [list destroy $w]
+    pack $w.bf.cancel -side right -padx 2
+    pack $w.bf.click -side right -padx 2
+    pack $w.bf.ok -side right -padx 2
+
+    bind $w.ef.entry <Return> [list $w.bf.ok invoke]
+    focus $w.ef.entry
+    $w.ef.entry selection range 0 end
+}
+
+proc CatalogPanelICLSetCenterByID {w catalog_data numcol xcol ycol} {
+    global catpanel current
+
+    set src_id [string trim $::icl_bcg_entry_id]
+    if {$src_id eq {} || ![string is integer $src_id]} {
+	set catpanel(status) "ICL: Enter a valid source NUMBER"
 	return
     }
 
-    # Store as 0-indexed
-    set catpanel(icl,center_x) [expr {[lindex $row_data $xcol] - 1.0}]
-    set catpanel(icl,center_y) [expr {[lindex $row_data $ycol] - 1.0}]
+    # Search catalog for this NUMBER
+    set lines [split $catalog_data \n]
+    for {set i 1} {$i < [llength $lines]} {incr i} {
+	set row [split [lindex $lines $i] "\t"]
+	if {[llength $row] <= $xcol || [llength $row] <= $ycol} continue
+	set n [string trim [lindex $row $numcol]]
+	if {$n eq $src_id} {
+	    set ix [string trim [lindex $row $xcol]]
+	    set iy [string trim [lindex $row $ycol]]
 
-    set catpanel(status) "ICL: BCG center set to ([format %.1f [expr {$catpanel(icl,center_x)+1}]], [format %.1f [expr {$catpanel(icl,center_y)+1}]])"
+	    # Store as 0-indexed
+	    set catpanel(icl,center_x) [expr {$ix - 1.0}]
+	    set catpanel(icl,center_y) [expr {$iy - 1.0}]
+
+	    # Draw cyan cross
+	    set frame $current(frame)
+	    if {$frame ne {}} {
+		catch {$frame marker catalog icl_bcg delete}
+		global icl_bcg_reg
+		set icl_bcg_reg "image\ncross point([format %.1f $ix] [format %.1f $iy]) # color=cyan width=2 point=cross 20 tag={icl_bcg} select=0 edit=0 move=0 rotate=0 delete=1\n"
+		catch {$frame marker catalog command ds9 var icl_bcg_reg}
+	    }
+
+	    set catpanel(status) "ICL: BCG center set to source #$src_id ([format %.1f $ix], [format %.1f $iy])"
+	    destroy $w
+	    return
+	}
+    }
+
+    set catpanel(status) "ICL: Source #$src_id not found in catalog"
+}
+
+proc CatalogPanelICLSetCenterClickMode {w} {
+    global catpanel
+    destroy $w
+    set catpanel(icl,click_mode) 1
+    set catpanel(status) "ICL: Click on image to set BCG center..."
+}
+
+proc CatalogPanelICLClickSetCenter {frame x y} {
+    global catpanel
+
+    # Convert canvas coords to image coords (1-based)
+    set imgc [$frame get coordinates $x $y image]
+    set ix [lindex $imgc 0]
+    set iy [lindex $imgc 1]
+
+    # Store as 0-indexed (Python convention)
+    set catpanel(icl,center_x) [expr {$ix - 1.0}]
+    set catpanel(icl,center_y) [expr {$iy - 1.0}]
+
+    # Draw a cyan cross at BCG center
+    catch {$frame marker catalog icl_bcg delete}
+
+    global icl_bcg_reg
+    set icl_bcg_reg "image\ncross point([format %.1f $ix] [format %.1f $iy]) # color=cyan width=2 point=cross 20 tag={icl_bcg} select=0 edit=0 move=0 rotate=0 delete=1\n"
+    catch {$frame marker catalog command ds9 var icl_bcg_reg}
+
+    set catpanel(icl,click_mode) 0
+    set catpanel(status) "ICL: BCG center set to ([format %.1f $ix], [format %.1f $iy])"
 }
 
 proc CatalogPanelICLProfile {} {
@@ -8504,7 +8637,7 @@ proc CatalogPanelICLProfile {} {
 
     # Use bgsub image if available, otherwise raw
     set fn [CatalogPanelGetFITS]
-    if {$catpanel(icl,has_bkg) && [file exists $catpanel(icl,bgsub_file)]} {
+    if {[file exists $catpanel(icl,bgsub_file)]} {
 	set fn $catpanel(icl,bgsub_file)
     }
     if {$fn eq {}} {
@@ -8565,11 +8698,9 @@ proc CatalogPanelICLDrawAnnuli {} {
     set cy [expr {$catpanel(icl,center_y) + 1.0}]
 
     # Draw BCG center cross
-    set MARKER "physical; cross point $cx $cy 20 # color=cyan tag={icl_annulus}"
-    set marker_var _icl_ann_center
-    global $marker_var
-    set $marker_var $MARKER
-    $frame marker catalog command ds9 var $marker_var
+    global icl_ann_reg
+    set icl_ann_reg "image\ncross point($cx $cy) # color=cyan width=2 point=cross 20 tag={icl_annulus} select=0 edit=0 move=0 rotate=0 delete=1\n"
+    catch {$frame marker catalog command ds9 var icl_ann_reg}
 
     # Draw annulus rings at 25%, 50%, 75%, 100% of rmax
     set rmin $catpanel(icl,param,rmin)
@@ -8577,11 +8708,8 @@ proc CatalogPanelICLDrawAnnuli {} {
     foreach frac {0.25 0.50 0.75 1.00} {
 	set r [expr {$rmin + ($rmax - $rmin) * $frac}]
 	set ri [expr {int($r)}]
-	set MARKER "physical; circle $cx $cy $r # color=green dash=1 width=1 tag={icl_annulus} text={r=${ri}}"
-	set marker_var _icl_ann_ring_$ri
-	global $marker_var
-	set $marker_var $MARKER
-	$frame marker catalog command ds9 var $marker_var
+	set icl_ann_reg "image\ncircle($cx $cy ${r}i) # color=green dash=1 width=1 tag={icl_annulus} select=0 edit=0 move=0 rotate=0 delete=1 text={r=${ri}}\n"
+	catch {$frame marker catalog command ds9 var icl_ann_reg}
     }
 }
 
@@ -8634,7 +8762,7 @@ proc CatalogPanelICLSectorProfileRun {w} {
     global catpanel ed
 
     set fn [CatalogPanelGetFITS]
-    if {$catpanel(icl,has_bkg) && [file exists $catpanel(icl,bgsub_file)]} {
+    if {[file exists $catpanel(icl,bgsub_file)]} {
 	set fn $catpanel(icl,bgsub_file)
     }
     if {$fn eq {}} {
@@ -8731,11 +8859,9 @@ proc CatalogPanelICLDrawIsophotes {data} {
     set cy [expr {$catpanel(icl,center_y) + 1.0}]
 
     # BCG center cross
-    set MARKER "physical; cross point $cx $cy 20 # color=cyan tag={icl_annulus}"
-    set marker_var _icl_iso_center
-    global $marker_var
-    set $marker_var $MARKER
-    $frame marker catalog command ds9 var $marker_var
+    global icl_ann_reg
+    set icl_ann_reg "image\ncross point($cx $cy) # color=cyan width=2 point=cross 20 tag={icl_annulus} select=0 edit=0 move=0 rotate=0 delete=1\n"
+    catch {$frame marker catalog command ds9 var icl_ann_reg}
 
     # Parse TSV for R_MU* columns
     set lines [split $data \n]
@@ -8752,11 +8878,8 @@ proc CatalogPanelICLDrawIsophotes {data} {
 		if {$r > 0 && $r < 1e6} {
 		    # Extract mu level from column name (R_MU26 → 26)
 		    set mu_label [string range $h 4 end]
-		    set MARKER "physical; circle $cx $cy $r # color=magenta dash=1 width=1 tag={icl_annulus} text={mu=$mu_label}"
-		    set marker_var _icl_iso_$c
-		    global $marker_var
-		    set $marker_var $MARKER
-		    $frame marker catalog command ds9 var $marker_var
+		    set icl_ann_reg "image\ncircle($cx $cy ${r}i) # color=magenta dash=1 width=1 tag={icl_annulus} select=0 edit=0 move=0 rotate=0 delete=1 text={mu=$mu_label}\n"
+		    catch {$frame marker catalog command ds9 var icl_ann_reg}
 		}
 	    }
 	}
@@ -8801,15 +8924,30 @@ proc CatalogPanelICLMeasureMulti {} {
 # --- BCG+ICL Decomposition ---
 
 proc CatalogPanelICLDecompose {} {
-    global catpanel
+    global catpanel ds9 catpanel_fdata
 
-    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
-	set catpanel(status) "ICL: No profile available — run Measure Profile first"
+    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
+	set catpanel(status) "ICL: Set BCG center first"
 	return
     }
 
-    set fn [CatalogPanelGetFITS]
-    if {$fn eq {}} { set fn "dummy.fits" }
+    # Use the ORIGINAL image (first frame) for decompose —
+    # the masked image has BCG removed, making Sérsic fitting impossible
+    set fn {}
+    set first_frame [lindex $ds9(frames) 0]
+    if {$first_frame ne {}} {
+	if {[info exists catpanel_fdata($first_frame,filename)] &&
+	    $catpanel_fdata($first_frame,filename) ne {}} {
+	    set fn $catpanel_fdata($first_frame,filename)
+	}
+    }
+    if {$fn eq {}} {
+	set fn [CatalogPanelGetFITS]
+    }
+    if {$fn eq {}} {
+	set catpanel(status) "ICL: No FITS image available"
+	return
+    }
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -8817,9 +8955,31 @@ proc CatalogPanelICLDecompose {} {
 	return
     }
 
-    set catpanel(status) "ICL: BCG+ICL decomposition..."
+    set catpanel(status) "ICL: BCG+ICL decomposition (original image)..."
     update idletasks
 
+    # Measure profile on original image and decompose in one step
+    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+
+    # First: measure profile on original (unmasked) image
+    set prof_args [list python3 $script $fn --mode profile \
+	--center $center \
+	--rmin $catpanel(icl,param,rmin) \
+	--rmax $catpanel(icl,param,rmax) \
+	--nsteps $catpanel(icl,param,nsteps) \
+	--spacing $catpanel(icl,param,spacing) \
+	--ellipticity $catpanel(icl,param,ellipticity) \
+	--pa $catpanel(icl,param,pa) \
+	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
+	--pixel-scale $catpanel(icl,param,pixel-scale) \
+	--profile-output $catpanel(icl,profile_file)]
+
+    if {[catch {exec {*}$prof_args 2>@stderr} err]} {
+	set catpanel(status) "ICL decompose: profile error: $err"
+	return
+    }
+
+    # Then: decompose using that profile
     set args [list python3 $script $fn --mode decompose \
 	--profile-file $catpanel(icl,profile_file) \
 	--pixel-scale $catpanel(icl,param,pixel-scale) \
@@ -9288,6 +9448,7 @@ proc CatalogPanelLSBGParamSave {} {
     set preffile [file join $prefdir lsbg.prf]
     if {[catch {set fd [open $preffile w]} err]} return
     foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
+		   max-dilate-radius \
 		   bright-star-mag-limit bright-star-radius-scale \
 		   mask-mag-threshold interp-method \
 		   lsb-protect lsb-mu-threshold \
@@ -9332,6 +9493,7 @@ proc CatalogPanelLSBGMask {} {
 	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
 	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
 	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
+	--max-dilate-radius $catpanel(lsbg,param,max-dilate-radius) \
 	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
 	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
 	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
@@ -9371,7 +9533,7 @@ proc CatalogPanelLSBGMask {} {
 proc CatalogPanelLSBGViewMask {} {
     global catpanel
 
-    if {!$catpanel(lsbg,has_mask) || ![file exists $catpanel(lsbg,masked_file)]} {
+    if {![file exists $catpanel(lsbg,masked_file)]} {
 	set catpanel(status) "LSBG: No mask available — run Mask Bright Sources first"
 	return
     }
@@ -9398,7 +9560,7 @@ proc CatalogPanelLSBGClean {method} {
 	return
     }
 
-    if {!$catpanel(lsbg,has_mask) || ![file exists $catpanel(lsbg,mask_file)]} {
+    if {![file exists $catpanel(lsbg,mask_file)]} {
 	set catpanel(status) "LSBG: No mask — run Mask Bright Sources first"
 	return
     }
@@ -9452,7 +9614,7 @@ proc CatalogPanelLSBGClean {method} {
 proc CatalogPanelLSBGViewClean {} {
     global catpanel
 
-    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+    if {![file exists $catpanel(lsbg,cleaned_file)]} {
 	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
 	return
     }
@@ -9473,7 +9635,7 @@ proc CatalogPanelLSBGViewClean {} {
 proc CatalogPanelLSBGDetect {} {
     global catpanel
 
-    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+    if {![file exists $catpanel(lsbg,cleaned_file)]} {
 	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
 	return
     }
@@ -9547,12 +9709,12 @@ proc CatalogPanelLSBGDetect {} {
 proc CatalogPanelLSBGPhotometry {} {
     global catpanel
 
-    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+    if {![file exists $catpanel(lsbg,cleaned_file)]} {
 	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
-    if {!$catpanel(lsbg,has_detect) || ![file exists $catpanel(lsbg,segmap_file)]} {
+    if {![file exists $catpanel(lsbg,segmap_file)]} {
 	set catpanel(status) "LSBG: No detections — run Detect first"
 	return
     }
@@ -9606,12 +9768,12 @@ proc CatalogPanelLSBGPhotometry {} {
 proc CatalogPanelLSBGSersic {} {
     global catpanel
 
-    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+    if {![file exists $catpanel(lsbg,cleaned_file)]} {
 	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
-    if {!$catpanel(lsbg,has_detect) || ![file exists $catpanel(lsbg,segmap_file)]} {
+    if {![file exists $catpanel(lsbg,segmap_file)]} {
 	set catpanel(status) "LSBG: No detections — run Detect first"
 	return
     }
@@ -9670,12 +9832,12 @@ proc CatalogPanelLSBGSersic {} {
 proc CatalogPanelLSBGFilter {} {
     global catpanel
 
-    if {!$catpanel(lsbg,has_clean) || ![file exists $catpanel(lsbg,cleaned_file)]} {
+    if {![file exists $catpanel(lsbg,cleaned_file)]} {
 	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
-    if {!$catpanel(lsbg,has_detect) || ![file exists $catpanel(lsbg,segmap_file)]} {
+    if {![file exists $catpanel(lsbg,segmap_file)]} {
 	set catpanel(status) "LSBG: No detections — run Detect first"
 	return
     }
@@ -9767,6 +9929,7 @@ proc CatalogPanelLSBGRunAll {} {
 	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
 	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
 	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
+	--max-dilate-radius $catpanel(lsbg,param,max-dilate-radius) \
 	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
 	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
 	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
@@ -10002,6 +10165,12 @@ proc CatalogPanelLSBGSettings {} {
     ttk::entry $t1.eef -textvariable ed(lsbg,mask-expand-factor) -width 10
     grid $t1.lef -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t1.eef -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::label $t1.lmdr -text "Max dilate radius (px):"
+    ttk::entry $t1.emdr -textvariable ed(lsbg,max-dilate-radius) -width 10
+    grid $t1.lmdr -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t1.emdr -row $r -column 1 -sticky w -padx 4 -pady 4
     incr r
 
     ttk::label $t1.lml -text "Bright star mag limit:"
@@ -10240,6 +10409,7 @@ proc CatalogPanelLSBGSettingsApply {w} {
     global ed
 
     foreach pname {mask-detect-thresh mask-detect-minarea mask-expand-factor \
+		   max-dilate-radius \
 		   bright-star-mag-limit bright-star-radius-scale \
 		   mask-mag-threshold interp-method \
 		   lsb-protect lsb-mu-threshold \
@@ -10266,7 +10436,8 @@ proc CatalogPanelLSBGSettingsDefaults {} {
 
     set ed(lsbg,mask-detect-thresh) 1.5
     set ed(lsbg,mask-detect-minarea) 5
-    set ed(lsbg,mask-expand-factor) 3.0
+    set ed(lsbg,mask-expand-factor) 1.5
+    set ed(lsbg,max-dilate-radius) 30
     set ed(lsbg,bright-star-mag-limit) 18.0
     set ed(lsbg,bright-star-radius-scale) 12.0
     set ed(lsbg,mask-mag-threshold) 22.0
@@ -10390,6 +10561,7 @@ proc CatalogPanelRestoreFrameState {frame} {
 	set catpanel(icl,has_profile) 0
 	set catpanel(icl,center_x) {}
 	set catpanel(icl,center_y) {}
+	set catpanel(icl,click_mode) 0
 	set catpanel(icl,mask_file) [file join [file normalize ~] .ds9 icl_mask.fits]
 	set catpanel(icl,masked_file) [file join [file normalize ~] .ds9 icl_masked.fits]
 	set catpanel(icl,bkg_file) [file join [file normalize ~] .ds9 icl_background.fits]
@@ -10473,4 +10645,65 @@ proc CatalogPanelFrameChanged {old_frame new_frame} {
 	CatalogPanelSaveFrameState $old_frame
     }
     CatalogPanelRestoreFrameState $new_frame
+}
+
+proc CatalogPanelDeleteFrameState {frame} {
+    global catpanel_fdata
+
+    # Remove all saved state for the deleted frame
+    foreach key [array names catpanel_fdata "$frame,*"] {
+	unset catpanel_fdata($key)
+    }
+}
+
+proc CatalogPanelClearAll {} {
+    global catpanel
+
+    # Clear table
+    if {[info exists catpanel(tbldb)] && [info exists catpanel(tbl)]} {
+	global $catpanel(tbldb)
+	$catpanel(tbl) configure -variable {}
+	unset -nocomplain $catpanel(tbldb)
+	$catpanel(tbl) configure -variable $catpanel(tbldb) \
+	    -cols 19 -rows 20
+    }
+
+    set catpanel(alldata) {}
+    set catpanel(filename) {}
+    set catpanel(sort,col) {}
+    set catpanel(sort,dir) {}
+    set catpanel(visible_mode) 0
+    set catpanel(markall,on) 0
+    set catpanel(add_objects_mode) 0
+    set catpanel(trim,active) 0
+    set catpanel(merge,list) {}
+    set catpanel(merge,active) 0
+    set catpanel(ai,groups) {}
+    set catpanel(ai,current) 0
+    set catpanel(ai,total) 0
+    set catpanel(ai,active) 0
+    set catpanel(psf,stars) {}
+    set catpanel(psf,star_indices) {}
+    set catpanel(psf,has_psf) 0
+    set catpanel(icl,has_mask) 0
+    set catpanel(icl,has_bkg) 0
+    set catpanel(icl,has_profile) 0
+    set catpanel(icl,center_x) {}
+    set catpanel(icl,center_y) {}
+    set catpanel(icl,click_mode) 0
+    set catpanel(lsbg,has_mask) 0
+    set catpanel(lsbg,has_clean) 0
+    set catpanel(lsbg,has_detect) 0
+    set catpanel(lsbg,has_catalog) 0
+    set catpanel(lsbg,detect_data) {}
+    set catpanel(status) {Ready}
+    set catpanel(search_var) {}
+
+    # Clear morph state
+    if {[info exists catpanel(morph,map)]} {
+	foreach src_num $catpanel(morph,map) {
+	    unset -nocomplain catpanel(morph,$src_num)
+	}
+    }
+    set catpanel(morph,map) {}
 }
