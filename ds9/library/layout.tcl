@@ -225,6 +225,19 @@ proc CreateCatalogPanel {} {
 	-variable catpanel(add_objects_mode)
     $f.menubar.display.m add command -label "Delete Selected (Click + D)" \
 	-command CatalogPanelDeleteSelected
+    $f.menubar.display.m add separator
+    $f.menubar.display.m add command \
+	-label "Separate Selected (Click + S)" \
+	-command CatalogPanelSeparateSelected
+    $f.menubar.display.m add command \
+	-label "Separate Settings..." \
+	-command CatalogPanelSeparateSettings
+    $f.menubar.display.m add command \
+	-label "Save Separated Catalog..." \
+	-command CatalogPanelSeparateSave
+    $f.menubar.display.m add command \
+	-label "Load Separated Catalog..." \
+	-command CatalogPanelSeparateLoad
 
     # AI Merge menu
     ttk::menubutton $f.menubar.aimerge -text "AI Merge" \
@@ -346,24 +359,7 @@ proc CreateCatalogPanel {} {
     $f.menubar.deconv.m add command -label "Quick Deconvolve (RL)" \
 	-command CatalogPanelQuickDeconvolve
 
-    # Separate menu
-    ttk::menubutton $f.menubar.separate -text "Separate" \
-	-menu $f.menubar.separate.m -style CatMenu.TMenubutton
-    menu $f.menubar.separate.m -tearoff 0
-    $f.menubar.separate.m add command \
-	-label "Separate Selected (Click + S)" \
-	-command CatalogPanelSeparateSelected
-    $f.menubar.separate.m add separator
-    $f.menubar.separate.m add command \
-	-label "Settings..." \
-	-command CatalogPanelSeparateSettings
-    $f.menubar.separate.m add separator
-    $f.menubar.separate.m add command \
-	-label "Save Catalog..." \
-	-command CatalogPanelSeparateSave
-    $f.menubar.separate.m add command \
-	-label "Load Catalog..." \
-	-command CatalogPanelSeparateLoad
+    # Separate items moved into Display menu above
 
     # ICL menu
     ttk::menubutton $f.menubar.icl -text "ICL" \
@@ -528,7 +524,6 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.galaxy -side left
     pack $f.menubar.starpsf -side left
     pack $f.menubar.deconv -side left
-    pack $f.menubar.separate -side left
     pack $f.menubar.icl -side left
     pack $f.menubar.lsbg -side left
     pack $f.menubar.analysis -side left
