@@ -68,7 +68,7 @@
 {\Large\sffamily
 SEP-Based Source Detection, Photometry,\\[8pt]
 and Catalog Management\\[8pt]
-Integrated into SAOImageDS9}
+Integrated into OGFinder}
 
 \vspace{3cm}
 
@@ -81,7 +81,8 @@ Integrated into SAOImageDS9}
 \begin{center}
 {\small\sffamily
 Based on SAOImageDS9 (Smithsonian Astrophysical Observatory)\\[3pt]
-and SEP --- Source Extraction and Photometry (Barbary et al.)}
+and SEP --- Source Extraction and Photometry (Barbary et al.)\\[6pt]
+\url{https://github.com/kjhan0606/OGFinder}}
 \end{center}
 \vspace{1cm}
 \end{titlepage}
@@ -108,7 +109,7 @@ This chapter provides a step-by-step guide to using the integrated Source Extrac
 
 \section{Overview}
 
-The DS9 Integrated Source Extractor adds SExtractor-like source detection and photometry capabilities directly within the SAOImageDS9 image viewer. When a FITS image is loaded, sources can be extracted with a single click, and the resulting catalog is displayed in a resizable panel alongside the image.
+The DS9 Integrated Source Extractor adds SExtractor-like source detection and photometry capabilities directly within the OGFinder image viewer. When a FITS image is loaded, sources can be extracted with a single click, and the resulting catalog is displayed in a resizable panel alongside the image.
 
 Key features:
 \begin{itemize}[leftmargin=2em]
@@ -123,7 +124,7 @@ Key features:
 \section{Prerequisites}
 
 \begin{itemize}[leftmargin=2em]
-  \item \textbf{DS9} --- SAOImageDS9 built with the integrated Source Extractor patch
+  \item \textbf{DS9} --- OGFinder built with the integrated Source Extractor patch
   \item \textbf{Python 3} with the following packages:
   \begin{itemize}
     \item \texttt{sep} --- Source Extraction and Photometry library (Python binding of SExtractor)
@@ -143,7 +144,7 @@ pip install sep astropy numpy
 
 \begin{codebox}[Build Commands]
 \begin{lstlisting}[style=bash,numbers=none]
-cd SAOImageDS9
+cd OGFinder
 make -C ds9/unix -j 128
 \end{lstlisting}
 \end{codebox}
@@ -617,9 +618,9 @@ If WCS is unavailable, \texttt{ALPHA\_J2000} and \texttt{DELTA\_J2000} are set t
 \label{ch:icl}
 %======================================================
 
-Intra-Cluster Light (ICL) is the diffuse stellar component in galaxy clusters, produced by tidal stripping of member galaxies during gravitational interactions.  ICL typically has surface brightness $\mu_V \gtrsim 26$\,mag/arcsec$^2$---far below the night sky background---requiring specialized techniques that preserve the faint extended signal.
+Intra-Cluster Light (ICL) is the diffuse stellar component in galaxy clusters, produced by tidal stripping of member galaxies during gravitational interactions.  ICL typically has surface brightness $\mu_V \gtrsim 26$\,mag/arcsec$^2$---far below the night sky background---requiring specialized techniques that preserve the faint extended signal \parencite{montes2018,rudick2011}.
 
-The \textbf{ICL} menu provides a complete step-by-step pipeline for detecting, modeling, and measuring ICL from deep imaging data.
+The \textbf{ICL} menu provides a complete step-by-step pipeline for detecting, modeling, and measuring ICL from deep imaging data.  The pipeline draws on established methods: surface brightness threshold decomposition \parencite{rudick2011,jimenez-teja2018}, double S\'ersic BCG+ICL profile fitting \parencite{kluge2020}, and multi-band color gradient analysis \parencite{montes2018,huang2018}.
 
 \section{Pipeline Overview}
 
@@ -803,7 +804,7 @@ Instead of computing $f_\mathrm{ICL}$ at a single threshold, this mode sweeps ov
 \end{tabular}
 \end{center}
 
-This allows assessment of how $f_\mathrm{ICL}$ depends on the choice of threshold---an important systematic in ICL studies \citep[see, e.g.,][]{brough2024}.
+This allows assessment of how $f_\mathrm{ICL}$ depends on the choice of threshold---an important systematic in ICL studies \parencite[see, e.g.,][]{brough2024}.
 
 \textbf{Package}: \texttt{icl/measure.py} --- function: \texttt{compute\_icl\_fraction\_multi()}.
 
@@ -813,7 +814,7 @@ This allows assessment of how $f_\mathrm{ICL}$ depends on the choice of threshol
 
 \textbf{Menu}: ICL $\to$ 5.\ BCG+ICL Decomposition
 
-An alternative to the SB threshold method is to decompose the radial profile into two S\'ersic components: a concentrated BCG and an extended ICL envelope.  The model is:
+An alternative to the SB threshold method is to decompose the radial profile into two S\'ersic components: a concentrated BCG and an extended ICL envelope \parencite{kluge2020,montes2018}.  The model is:
 \begin{equation}
   I(r) = I_\mathrm{e,BCG}\,\exp\!\biggl[-b_{n_1}\Bigl(\bigl(\frac{r}{r_\mathrm{e,BCG}}\bigr)^{1/n_1} - 1\Bigr)\biggr]
        + I_\mathrm{e,ICL}\,\exp\!\biggl[-b_{n_2}\Bigl(\bigl(\frac{r}{r_\mathrm{e,ICL}}\bigr)^{1/n_2} - 1\Bigr)\biggr]
@@ -967,7 +968,7 @@ python3 ds9_icl.py FITS --mode {mask,background,profile,measure,
 \textbf{Package structure}:
 \begin{codebox}
 \begin{lstlisting}[numbers=none]
-SAOImageDS9/icl/
+OGFinder/icl/
 |-- __init__.py
 |-- config.py         # ICLConfig dataclass (incl. iterative params)
 |-- masking.py        # Source mask + bright star + interpolation
@@ -992,7 +993,7 @@ Low Surface Brightness Galaxies (LSBGs) have effective surface brightness $\mu_\
   \item \textbf{Low SNR}: LSBGs have total SNR of only $2\text{--}5\sigma$, requiring aggressive filtering to separate real detections from noise.
 \end{enumerate}
 
-The \textbf{LSBG} menu implements a literature-based approach inspired by SMUDGes (Zaritsky et al.\ 2019), NoiseChisel (Akhlaghi \& Ichikawa 2015), and DeepScan (Prole et al.\ 2018):
+The \textbf{LSBG} menu implements a literature-based approach inspired by SMUDGes \parencite{zaritsky2019}, NoiseChisel \parencite{akhlaghi2015}, and DeepScan \parencite{prole2018}:
 
 \begin{equation*}
 \text{Mask} \;\longrightarrow\; \text{Iterative Background} \;\longrightarrow\; \text{Low-}\sigma\text{ Detection} \;\longrightarrow\; \text{Photometry \& Filter}
@@ -1030,7 +1031,7 @@ Unlike the ICL masking that masks \emph{all} detected sources, LSBG masking sele
 \begin{enumerate}[leftmargin=2em]
   \item Run SEP detection at \texttt{mask-detect-thresh}$\,\sigma$ (default: 1.5) to produce a segmentation map.
   \item For each segment, compute a rough magnitude from SEP flux.  Only segments with $m < m_\mathrm{thresh}$ are selected for masking.
-  \item \textbf{LSB structure protection}: When enabled (\texttt{lsb-protect}), compute the mean surface brightness of each segment.  Sources with $\mu_\mathrm{mean} \geq \mu_\mathrm{LSB}$ (default: 24.0\,mag/arcsec$^2$) are skipped to preserve potential LSBGs that would otherwise be masked.
+  \item \textbf{LSB structure protection} \parencite{greco2018}: When enabled (\texttt{lsb-protect}), compute the mean surface brightness of each segment.  Sources with $\mu_\mathrm{mean} \geq \mu_\mathrm{LSB}$ (default: 24.0\,mag/arcsec$^2$) are skipped to preserve potential LSBGs that would otherwise be masked.
   \item Dilate selected segments by \texttt{mask-expand-factor} (default: 3.0) times their equivalent circular radius.
   \item Add bright star masks (same algorithm as ICL: magnitude-dependent circular masks).
   \item Interpolate all masked regions.
@@ -1139,7 +1140,7 @@ When enabled (\texttt{multiscale}=true, default), the pipeline detects sources a
   \item \textbf{Merge}: Rebinned detections are mapped back to native coordinates.  Duplicates are removed by cross-matching within \texttt{match\_radius}~$\times$~scale.  Native-scale detections are prioritized.
 \end{enumerate}
 
-This multi-scale approach recovers very extended low-SB galaxies that are diluted below the detection threshold at the native resolution, while preserving spatial accuracy for compact LSBGs.
+This multi-scale approach \parencite{greco2018,prole2018} recovers very extended low-SB galaxies that are diluted below the detection threshold at the native resolution, while preserving spatial accuracy for compact LSBGs.
 
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_segmap.fits} (segmentation map), detection catalog displayed in the table.
 
@@ -1189,7 +1190,7 @@ SNR & $> \mathrm{SNR}_\mathrm{min}$ & $> 2.0$ \\
 
 \subsection{S\'ersic Profile Fitting}
 
-When enabled (\texttt{sersic-fit}=true, default), each candidate undergoes 1D~$\to$~2D S\'ersic profile fitting:
+When enabled (\texttt{sersic-fit}=true, default), each candidate undergoes 1D~$\to$~2D S\'ersic profile fitting \parencite{sersic1968,graham2005}:
 
 \begin{enumerate}[leftmargin=2em]
   \item Extract a square cutout ($5\times$ Kron radius) around the source.
@@ -1405,7 +1406,7 @@ python3 ds9_lsbg.py data/abell2744_f814w.fits \
 \textbf{Package structure}:
 \begin{codebox}
 \begin{lstlisting}[numbers=none]
-SAOImageDS9/lsbg/
+OGFinder/lsbg/
 |-- __init__.py
 |-- config.py          # LSBGConfig dataclass (40+ parameters)
 |-- masking.py         # Magnitude-based masking + LSB protection + ICL reuse
@@ -2908,7 +2909,7 @@ gcc -O2 -o ds9_sextract ds9_sextract.c \
 gcc -O2 -o ds9_sextract ds9_sextract.c \
     -I$CONDA_PREFIX/include -L$CONDA_PREFIX/lib \
     -lcfitsio -lm -Wl,-rpath,$CONDA_PREFIX/lib
-cp ds9_sextract /path/to/SAOImageDS9/bin/
+cp ds9_sextract /path/to/OGFinder/bin/
 \end{lstlisting}
 \end{codebox}
 
@@ -2951,7 +2952,7 @@ gcc -O2 -o ds9_sextract ds9_sextract.c \
 
 \begin{codebox}[Place binary]
 \begin{lstlisting}[style=bash,numbers=none]
-cp ds9_sextract /path/to/SAOImageDS9/bin/
+cp ds9_sextract /path/to/OGFinder/bin/
 \end{lstlisting}
 \end{codebox}
 
@@ -2982,9 +2983,9 @@ gcc -O2 -o ds9_sextract.exe ds9_sextract.c \
 \begin{codebox}[Deploy]
 \begin{lstlisting}[style=bash,numbers=none]
 # Copy binary and required DLLs to ds9 bin directory
-cp ds9_sextract.exe /path/to/SAOImageDS9/bin/
-cp /mingw64/bin/libcfitsio*.dll /path/to/SAOImageDS9/bin/
-cp /mingw64/bin/zlib1.dll /path/to/SAOImageDS9/bin/
+cp ds9_sextract.exe /path/to/OGFinder/bin/
+cp /mingw64/bin/libcfitsio*.dll /path/to/OGFinder/bin/
+cp /mingw64/bin/zlib1.dll /path/to/OGFinder/bin/
 \end{lstlisting}
 \end{codebox}
 
