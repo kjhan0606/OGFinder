@@ -612,409 +612,6 @@ If WCS is unavailable, \texttt{ALPHA\_J2000} and \texttt{DELTA\_J2000} are set t
 
 
 %======================================================
-\chapter{Output Parameters}
-\label{ch:parameters}
-%======================================================
-
-This chapter provides a detailed description of each column in the output catalog.
-
-\section{Complete Parameter Reference}
-
-\begin{center}
-\begin{longtable}{L{3.2cm} C{1.8cm} L{7.5cm}}
-\toprule
-\textbf{Parameter} & \textbf{Unit} & \textbf{Description} \\
-\midrule
-\endhead
-
-\texttt{NUMBER} & --- & Running object number, assigned after sorting by brightness (brightest = 1). \\
-\midrule
-
-\texttt{X\_IMAGE} & pixel & Object centroid $x$-coordinate in FITS convention (1-indexed). Computed as the intensity-weighted first moment. \\
-\midrule
-
-\texttt{Y\_IMAGE} & pixel & Object centroid $y$-coordinate in FITS convention (1-indexed). \\
-\midrule
-
-\texttt{ALPHA\_J2000} & deg & Right Ascension (J2000 equatorial) computed from pixel coordinates via WCS. Zero if no WCS is available. \\
-\midrule
-
-\texttt{DELTA\_J2000} & deg & Declination (J2000 equatorial) computed from pixel coordinates via WCS. Zero if no WCS is available. \\
-\midrule
-
-\texttt{MAG\_AUTO} & mag & Kron-like elliptical aperture magnitude. Uses an elliptical aperture with semi-major axis $= 2.5 \times r_{\text{Kron}}$. Most reliable total magnitude for galaxies. \\
-\midrule
-
-\texttt{MAG\_ISOCOR} & mag & Isophotal magnitude corrected for flux lost below the detection threshold, using the SExtractor analytical correction formula. \\
-\midrule
-
-\texttt{MAG\_APER} & mag & Fixed circular aperture magnitude. Aperture diameter set by \texttt{--phot-aperture} (default: 5.0 pixels). Useful for comparing point sources. \\
-\midrule
-
-\texttt{FLUX\_AUTO} & counts & Total flux within the Kron elliptical aperture (in ADU or counts). \\
-\midrule
-
-\texttt{FLUXERR\_AUTO} & counts & $1\sigma$ flux uncertainty for \texttt{FLUX\_AUTO}, from Poisson + background noise. \\
-\midrule
-
-\texttt{FLUXERR\_APER} & counts & $1\sigma$ flux uncertainty for \texttt{MAG\_APER}. \\
-\midrule
-
-\texttt{MAGERR\_AUTO} & mag & Magnitude error for \texttt{MAG\_AUTO}: $\sigma_m = 1.0857 \times \text{FLUXERR\_AUTO} / \text{FLUX\_AUTO}$. \\
-\midrule
-
-\texttt{MAGERR\_APER} & mag & Magnitude error for \texttt{MAG\_APER}. \\
-\midrule
-
-\texttt{FLUX\_APER\_2} & counts & Flux in the 2nd circular aperture (diameter set by \texttt{--phot-aperture-2}, default 4.0\,px). \\
-\midrule
-
-\texttt{FLUX\_APER\_3} & counts & Flux in the 3rd circular aperture (diameter set by \texttt{--phot-aperture-3}, default 6.0\,px). \\
-\midrule
-
-\texttt{FLUX\_APER\_5} & counts & Flux in the 4th circular aperture (diameter set by \texttt{--phot-aperture-5}, default 10.0\,px). \\
-\midrule
-
-\texttt{FLUXERR\_APER\_2/3/5} & counts & $1\sigma$ flux errors for the corresponding multi-aperture measurements. \\
-\midrule
-
-\texttt{MAG\_APER\_2/3/5} & mag & Magnitudes for the corresponding multi-aperture measurements. \\
-\midrule
-
-\texttt{FLUX\_RADIUS} & pixel & Half-light radius: radius of a circular aperture enclosing 50\% of \texttt{FLUX\_AUTO}. Indicator of object size; correlates with effective radius $R_e$ for galaxies. \\
-\midrule
-
-\texttt{A\_IMAGE} & pixel & Semi-major axis of the object ellipse, derived from second-order intensity moments. \\
-\midrule
-
-\texttt{B\_IMAGE} & pixel & Semi-minor axis of the object ellipse. \\
-\midrule
-
-\texttt{THETA\_IMAGE} & deg & Position angle of the major axis, measured counter-clockwise from the $x$-axis (FITS convention). Range: $-90\degree$ to $+90\degree$. \\
-\midrule
-
-\texttt{ELLIPTICITY} & --- & Ellipticity: $e = 1 - b/a$. Values range from 0 (circular) to 1 (infinitely elongated). \\
-\midrule
-
-\texttt{KRON\_RADIUS} & pixel & First-moment radius (Kron radius), used to scale the AUTO aperture. Minimum enforced value: 3.5 pixels. \\
-\midrule
-
-\texttt{FWHM\_IMAGE} & pixel & Full Width at Half Maximum, computed as $2\sqrt{\ln 2 \cdot (a^2 + b^2)}$ from the intensity-weighted second moments. Used internally for star/galaxy classification. \\
-\midrule
-
-\texttt{ISO\_RADIUS} & pixel & Equivalent semi-major axis of an ellipse with the same area as the isophotal detection footprint. \\
-\midrule
-
-\texttt{NPIX\_ISO} & pixel$^2$ & Number of pixels in the isophotal detection footprint above the detection threshold. \\
-\midrule
-
-\texttt{MU\_MAX} & mag/arcsec$^2$ & Peak surface brightness: magnitude of the brightest pixel divided by pixel area. Lower values = brighter peaks. \\
-\midrule
-
-\texttt{MU\_THRESHOLD} & mag/arcsec$^2$ & Detection threshold surface brightness at the object position. Objects with $\mu_{\max} < \mu_{\text{thresh}}$ are detected. \\
-\midrule
-
-\texttt{CLASS\_STAR} & --- & Star/galaxy classifier output. Range 0.0 (extended/galaxy) to 1.0 (point-like/star). Based on FWHM ratio to seeing. \\
-\midrule
-
-\texttt{FLAGS} & --- & Extraction flags (bitmask). See Section~\ref{ch:algorithm} for flag definitions. Zero means clean photometry. \\
-
-\bottomrule
-\end{longtable}
-\end{center}
-
-
-%======================================================
-\chapter{Command-Line Reference}
-\label{ch:cmdline}
-%======================================================
-
-The \sextract{} tool can also be used as a standalone command-line program, independent of the DS9 GUI.
-
-\section{Synopsis}
-
-\begin{codebox}
-\begin{lstlisting}[style=bash,numbers=none]
-ds9_sextract [OPTIONS] <FITS_FILE>
-\end{lstlisting}
-\end{codebox}
-
-The output is a tab-separated table printed to \texttt{stdout}. The first line is the header row containing column names; subsequent lines contain data rows sorted by \texttt{MAG\_AUTO} (brightest first).
-
-\section{Options}
-
-\begin{center}
-\begin{longtable}{L{4.0cm} C{1.5cm} L{7.0cm}}
-\toprule
-\textbf{Option} & \textbf{Default} & \textbf{Description} \\
-\midrule
-\endhead
-
-\texttt{--detect-thresh} & 1.5 & Detection threshold in units of the local background RMS ($\sigma$). Lower values detect fainter sources but increase false positives. \\
-\midrule
-
-\texttt{--detect-minarea} & 5 & Minimum number of connected pixels above the threshold required to register a detection. Rejects cosmic ray hits and noise spikes. \\
-\midrule
-
-\texttt{--deblend-nthresh} & 32 & Number of exponentially spaced sub-thresholds used for deblending overlapping sources. Higher values provide finer deblending. \\
-\midrule
-
-\texttt{--deblend-mincont} & 0.005 & Minimum contrast ratio for deblending. A sub-component must contain at least this fraction of the parent flux to be split off. Lower values split more aggressively. \\
-\midrule
-
-\texttt{--phot-aperture} & 5.0 & Diameter of the fixed circular aperture (in pixels) used for \texttt{MAG\_APER} measurements. \\
-\midrule
-
-\texttt{--mag-zeropoint} & 25.0 & Photometric zero-point $m_0$ for magnitude conversion: $m = -2.5\log_{10}(F) + m_0$. Set this to the calibrated zero-point of your image. \\
-\midrule
-
-\texttt{--gain} & 0 & Detector gain in $e^-$/ADU. Used for Poisson noise estimation in photometric errors. If 0, the tool attempts to read \texttt{GAIN}, \texttt{EGAIN}, or \texttt{CCDGAIN} from the FITS header. \\
-\midrule
-
-\texttt{--pixel-scale} & 1.0 & Pixel scale in arcsec/pixel. Used for surface brightness calculations. If 1.0 and WCS is available, the scale is automatically derived from WCS. \\
-\midrule
-
-\texttt{--seeing-fwhm} & 3.0 & Seeing FWHM in arcsec. Used for star/galaxy classification (\texttt{CLASS\_STAR}). \\
-\midrule
-
-\texttt{--back-size} & 64 & Background mesh size in pixels. Each mesh cell has dimensions \texttt{back-size} $\times$ \texttt{back-size}. Smaller values track finer background variations but may subtract source flux. \\
-\midrule
-
-\texttt{--back-filtersize} & 3 & Median filter kernel size (in mesh cells) applied to the background map before interpolation. Smooths out mesh-to-mesh noise. \\
-\midrule
-
-\texttt{--phot-aperture-2} & 4.0 & Diameter (pixels) of the 2nd circular aperture for multi-aperture photometry (\texttt{FLUX\_APER\_2}, \texttt{MAG\_APER\_2}). \\
-\midrule
-
-\texttt{--phot-aperture-3} & 6.0 & Diameter of the 3rd circular aperture. \\
-\midrule
-
-\texttt{--phot-aperture-5} & 10.0 & Diameter of the 4th circular aperture. \\
-\midrule
-
-\texttt{--conv-filter} & default & Convolution filter for source detection. Options: \texttt{default} (3$\times$3 Gaussian), \texttt{gauss5x5} (5$\times$5 Gaussian), \texttt{mexhat} (5$\times$5 Mexican hat), \texttt{tophat} (5$\times$5 top-hat). \\
-
-\bottomrule
-\end{longtable}
-\end{center}
-
-
-\section{Usage Examples}
-
-\begin{codebox}[Basic extraction]
-\begin{lstlisting}[style=bash,numbers=none]
-ds9_sextract image.fits > catalog.tsv
-\end{lstlisting}
-\end{codebox}
-
-\begin{codebox}[Deep extraction with calibrated zero-point]
-\begin{lstlisting}[style=bash,numbers=none]
-ds9_sextract --detect-thresh 1.0 --detect-minarea 3 \
-             --mag-zeropoint 28.09 --gain 2.5 \
-             --seeing-fwhm 0.8 --pixel-scale 0.03 \
-             hst_acs_f814w.fits > deep_catalog.tsv
-\end{lstlisting}
-\end{codebox}
-
-\begin{codebox}[Conservative extraction (few false positives)]
-\begin{lstlisting}[style=bash,numbers=none]
-ds9_sextract --detect-thresh 3.0 --detect-minarea 10 \
-             --deblend-mincont 0.01 \
-             crowded_field.fits > clean_catalog.tsv
-\end{lstlisting}
-\end{codebox}
-
-\begin{codebox}[Fine background estimation for extended objects]
-\begin{lstlisting}[style=bash,numbers=none]
-ds9_sextract --back-size 128 --back-filtersize 5 \
-             galaxy_cluster.fits > cluster_catalog.tsv
-\end{lstlisting}
-\end{codebox}
-
-
-%------------------------------------------------------
-% PART II
-%------------------------------------------------------
-\part{Developer Reference}
-
-%======================================================
-\chapter{Tcl/Tk Implementation Details}
-\label{ch:tcl}
-%======================================================
-
-This chapter documents the Tcl procedures that implement the catalog panel and its integration with the DS9 GUI.
-
-\section{Catalog Panel Procedures}
-
-\subsection{CreateCatalogPanel}
-
-Creates all widgets for the catalog panel within \texttt{ds9(catalog\_frame)}:
-
-\begin{center}
-\begin{longtable}{L{3.5cm} L{9.5cm}}
-\toprule
-\textbf{Widget} & \textbf{Description} \\
-\midrule
-\endhead
-\texttt{titlebar} & Horizontal frame containing the ``Source Extractor'' label, ``Extract'' button, and ``Clear'' button. \\
-\midrule
-\texttt{searchbar} & Filter entry with ``Apply'' button. The entry is bound to \texttt{<Return>} for keyboard activation. \\
-\midrule
-\texttt{tblf} (table frame) & Contains the \texttt{Tktable} widget (\texttt{catpanel(tbl)}) with horizontal and vertical scrollbars. The table is configured with 19 columns, row selection mode, and resizable column borders. \\
-\midrule
-\texttt{statusbar} & Displays status messages via the \texttt{catpanel(status)} variable. \\
-\bottomrule
-\end{longtable}
-\end{center}
-
-\subsection{CatalogPanelExtract}
-
-Orchestrates the extraction process:
-
-\begin{enumerate}[leftmargin=2em]
-  \item Locates the \sextract{} binary in the same directory as the DS9 executable
-  \item Retrieves the current FITS filename from the active frame
-  \item Constructs \texttt{LD\_LIBRARY\_PATH} to include conda libraries (both \texttt{\$CONDA\_PREFIX/lib} and \texttt{\$HOME/miniconda3/lib})
-  \item Executes \sextract{} via \texttt{exec sh -c} and captures stdout
-  \item Passes the TSV output to \texttt{CatalogPanelLoadTSV}
-\end{enumerate}
-
-\subsection{CatalogPanelLoadTSV}
-
-Parses tab-separated data into the Tktable widget:
-
-\begin{enumerate}[leftmargin=2em]
-  \item Splits the input string by newlines into rows
-  \item Parses the first row as column headers
-  \item Configures the table dimensions (\texttt{-cols}, \texttt{-rows})
-  \item Fills the \texttt{catpaneltbldb} array variable: \texttt{catpaneltbldb(\textit{row},\textit{col})}
-  \item Stores the raw data in \texttt{catpanel(alldata)} for filtering
-\end{enumerate}
-
-\subsection{CatalogPanelFilter}
-
-Performs case-insensitive substring filtering:
-
-\begin{enumerate}[leftmargin=2em]
-  \item Reads the filter pattern from \texttt{catpanel(search\_var)}
-  \item Iterates over stored data rows (\texttt{catpanel(alldata)})
-  \item Includes a row if the pattern appears anywhere in the tab-separated line (\texttt{string match -nocase})
-  \item Repopulates the table with matching rows only
-  \item Updates the status bar with the count of matching rows
-\end{enumerate}
-
-\subsection{CatalogPanelAutoExtract}
-
-A hook procedure called from \texttt{fits.tcl} after a FITS file is loaded:
-
-\begin{codebox}
-\begin{lstlisting}[style=tcl,numbers=none]
-proc CatalogPanelAutoExtract {} {
-    global catpanel
-    if {[info exists catpanel(tbl)]} {
-        after 500 CatalogPanelExtract
-    }
-}
-\end{lstlisting}
-\end{codebox}
-
-The 500\,ms delay (\texttt{after 500}) ensures the image is fully loaded and rendered before extraction begins.
-
-
-\section{Global Variables}
-
-\begin{center}
-\begin{longtable}{L{4.0cm} L{9.0cm}}
-\toprule
-\textbf{Variable} & \textbf{Purpose} \\
-\midrule
-\endhead
-\texttt{ds9(toppw)} & The top-level \texttt{ttk::panedwindow} widget path \\
-\texttt{ds9(catalog\_frame)} & Frame widget path for the right (catalog) pane \\
-\texttt{catpanel(tbl)} & The Tktable widget path \\
-\texttt{catpanel(tbldb)} & Name of the global array backing the table data \\
-\texttt{catpanel(status)} & Status bar text variable \\
-\texttt{catpanel(search\_var)} & Filter entry text variable \\
-\texttt{catpanel(alldata)} & Raw TSV string from last extraction (for filtering) \\
-\texttt{catpanel(filename)} & Last extracted FITS filename \\
-\texttt{catpanel(delim)} & Column delimiter (always ``\texttt{\textbackslash t}'') \\
-\bottomrule
-\end{longtable}
-\end{center}
-
-
-%======================================================
-\chapter{Python Extractor Details}
-\label{ch:python}
-%======================================================
-
-\section{Module Structure}
-
-The \sextract{} script (\texttt{ds9\_sextract.py}) is a single-file Python module with one main function:
-
-\begin{codebox}
-\begin{lstlisting}[style=python,numbers=none]
-def extract_sources(fits_file,
-                    detect_thresh=1.5,
-                    detect_minarea=5,
-                    deblend_nthresh=32,
-                    deblend_mincont=0.005,
-                    phot_aperture=5.0,
-                    mag_zeropoint=25.0,
-                    gain=0.0,
-                    pixel_scale=1.0,
-                    seeing_fwhm=3.0,
-                    back_size=64,
-                    back_filtersize=3):
-\end{lstlisting}
-\end{codebox}
-
-\section{FITS File Handling}
-
-The FITS reader searches for a 2D image HDU in the following order:
-
-\begin{enumerate}[leftmargin=2em]
-  \item Iterate through all HDUs; use the first one with 2D data (\texttt{hdu.data.ndim == 2})
-  \item If no 2D HDU is found, try the primary HDU
-  \item If the primary has $>2$ dimensions, extract the first 2D slice (\texttt{data[0]})
-  \item The data is converted to \texttt{float64} C-contiguous format (required by SEP)
-\end{enumerate}
-
-\section{Automatic Header Parsing}
-
-Several parameters are automatically read from the FITS header when not specified by the user:
-
-\begin{center}
-\begin{tabular}{lll}
-\toprule
-\textbf{Parameter} & \textbf{Header Keywords} & \textbf{Fallback} \\
-\midrule
-Gain & \texttt{GAIN}, \texttt{EGAIN}, \texttt{CCDGAIN} & 0 (Poisson noise disabled) \\
-Saturation level & \texttt{SATURATE}, \texttt{SATUR}, \texttt{SATULEVEL}, \texttt{DATAMAX} & 65535 \\
-Pixel scale & WCS \texttt{proj\_plane\_pixel\_scales()} & 1.0 arcsec/pixel \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\section{Dependencies}
-
-\begin{center}
-\begin{longtable}{L{3cm} L{2.5cm} L{7cm}}
-\toprule
-\textbf{Package} & \textbf{Version} & \textbf{Purpose} \\
-\midrule
-\endhead
-\texttt{sep} & $\geq 1.0$ & Core source extraction: background estimation, detection, deblending, photometry, and morphology. Python binding of the C library derived from SExtractor. \\
-\midrule
-\texttt{astropy} & $\geq 4.0$ & FITS file I/O (\texttt{astropy.io.fits}) and WCS coordinate transformations (\texttt{astropy.wcs.WCS}). \\
-\midrule
-\texttt{numpy} & $\geq 1.20$ & Array operations, mathematical functions, and data type management. \\
-\bottomrule
-\end{longtable}
-\end{center}
-
-
-%======================================================
 %======================================================
 \chapter{Intra-Cluster Light (ICL) Detection}
 \label{ch:icl}
@@ -1988,6 +1585,409 @@ Multi-core parallelization using \texttt{multiprocessing.shared\_memory} for CPU
 \end{itemize}
 
 \textbf{Status}: Implemented in the \texttt{parallel/} package (\texttt{SharedArray}, \texttt{parallel\_map}). Used by morphometry, S\'ersic, PSF photometry, crowded field, multi-band, completeness, and LSBG pipelines.
+
+
+%======================================================
+\chapter{Output Parameters}
+\label{ch:parameters}
+%======================================================
+
+This chapter provides a detailed description of each column in the output catalog.
+
+\section{Complete Parameter Reference}
+
+\begin{center}
+\begin{longtable}{L{3.2cm} C{1.8cm} L{7.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Unit} & \textbf{Description} \\
+\midrule
+\endhead
+
+\texttt{NUMBER} & --- & Running object number, assigned after sorting by brightness (brightest = 1). \\
+\midrule
+
+\texttt{X\_IMAGE} & pixel & Object centroid $x$-coordinate in FITS convention (1-indexed). Computed as the intensity-weighted first moment. \\
+\midrule
+
+\texttt{Y\_IMAGE} & pixel & Object centroid $y$-coordinate in FITS convention (1-indexed). \\
+\midrule
+
+\texttt{ALPHA\_J2000} & deg & Right Ascension (J2000 equatorial) computed from pixel coordinates via WCS. Zero if no WCS is available. \\
+\midrule
+
+\texttt{DELTA\_J2000} & deg & Declination (J2000 equatorial) computed from pixel coordinates via WCS. Zero if no WCS is available. \\
+\midrule
+
+\texttt{MAG\_AUTO} & mag & Kron-like elliptical aperture magnitude. Uses an elliptical aperture with semi-major axis $= 2.5 \times r_{\text{Kron}}$. Most reliable total magnitude for galaxies. \\
+\midrule
+
+\texttt{MAG\_ISOCOR} & mag & Isophotal magnitude corrected for flux lost below the detection threshold, using the SExtractor analytical correction formula. \\
+\midrule
+
+\texttt{MAG\_APER} & mag & Fixed circular aperture magnitude. Aperture diameter set by \texttt{--phot-aperture} (default: 5.0 pixels). Useful for comparing point sources. \\
+\midrule
+
+\texttt{FLUX\_AUTO} & counts & Total flux within the Kron elliptical aperture (in ADU or counts). \\
+\midrule
+
+\texttt{FLUXERR\_AUTO} & counts & $1\sigma$ flux uncertainty for \texttt{FLUX\_AUTO}, from Poisson + background noise. \\
+\midrule
+
+\texttt{FLUXERR\_APER} & counts & $1\sigma$ flux uncertainty for \texttt{MAG\_APER}. \\
+\midrule
+
+\texttt{MAGERR\_AUTO} & mag & Magnitude error for \texttt{MAG\_AUTO}: $\sigma_m = 1.0857 \times \text{FLUXERR\_AUTO} / \text{FLUX\_AUTO}$. \\
+\midrule
+
+\texttt{MAGERR\_APER} & mag & Magnitude error for \texttt{MAG\_APER}. \\
+\midrule
+
+\texttt{FLUX\_APER\_2} & counts & Flux in the 2nd circular aperture (diameter set by \texttt{--phot-aperture-2}, default 4.0\,px). \\
+\midrule
+
+\texttt{FLUX\_APER\_3} & counts & Flux in the 3rd circular aperture (diameter set by \texttt{--phot-aperture-3}, default 6.0\,px). \\
+\midrule
+
+\texttt{FLUX\_APER\_5} & counts & Flux in the 4th circular aperture (diameter set by \texttt{--phot-aperture-5}, default 10.0\,px). \\
+\midrule
+
+\texttt{FLUXERR\_APER\_2/3/5} & counts & $1\sigma$ flux errors for the corresponding multi-aperture measurements. \\
+\midrule
+
+\texttt{MAG\_APER\_2/3/5} & mag & Magnitudes for the corresponding multi-aperture measurements. \\
+\midrule
+
+\texttt{FLUX\_RADIUS} & pixel & Half-light radius: radius of a circular aperture enclosing 50\% of \texttt{FLUX\_AUTO}. Indicator of object size; correlates with effective radius $R_e$ for galaxies. \\
+\midrule
+
+\texttt{A\_IMAGE} & pixel & Semi-major axis of the object ellipse, derived from second-order intensity moments. \\
+\midrule
+
+\texttt{B\_IMAGE} & pixel & Semi-minor axis of the object ellipse. \\
+\midrule
+
+\texttt{THETA\_IMAGE} & deg & Position angle of the major axis, measured counter-clockwise from the $x$-axis (FITS convention). Range: $-90\degree$ to $+90\degree$. \\
+\midrule
+
+\texttt{ELLIPTICITY} & --- & Ellipticity: $e = 1 - b/a$. Values range from 0 (circular) to 1 (infinitely elongated). \\
+\midrule
+
+\texttt{KRON\_RADIUS} & pixel & First-moment radius (Kron radius), used to scale the AUTO aperture. Minimum enforced value: 3.5 pixels. \\
+\midrule
+
+\texttt{FWHM\_IMAGE} & pixel & Full Width at Half Maximum, computed as $2\sqrt{\ln 2 \cdot (a^2 + b^2)}$ from the intensity-weighted second moments. Used internally for star/galaxy classification. \\
+\midrule
+
+\texttt{ISO\_RADIUS} & pixel & Equivalent semi-major axis of an ellipse with the same area as the isophotal detection footprint. \\
+\midrule
+
+\texttt{NPIX\_ISO} & pixel$^2$ & Number of pixels in the isophotal detection footprint above the detection threshold. \\
+\midrule
+
+\texttt{MU\_MAX} & mag/arcsec$^2$ & Peak surface brightness: magnitude of the brightest pixel divided by pixel area. Lower values = brighter peaks. \\
+\midrule
+
+\texttt{MU\_THRESHOLD} & mag/arcsec$^2$ & Detection threshold surface brightness at the object position. Objects with $\mu_{\max} < \mu_{\text{thresh}}$ are detected. \\
+\midrule
+
+\texttt{CLASS\_STAR} & --- & Star/galaxy classifier output. Range 0.0 (extended/galaxy) to 1.0 (point-like/star). Based on FWHM ratio to seeing. \\
+\midrule
+
+\texttt{FLAGS} & --- & Extraction flags (bitmask). See Section~\ref{ch:algorithm} for flag definitions. Zero means clean photometry. \\
+
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+%======================================================
+\chapter{Command-Line Reference}
+\label{ch:cmdline}
+%======================================================
+
+The \sextract{} tool can also be used as a standalone command-line program, independent of the DS9 GUI.
+
+\section{Synopsis}
+
+\begin{codebox}
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract [OPTIONS] <FITS_FILE>
+\end{lstlisting}
+\end{codebox}
+
+The output is a tab-separated table printed to \texttt{stdout}. The first line is the header row containing column names; subsequent lines contain data rows sorted by \texttt{MAG\_AUTO} (brightest first).
+
+\section{Options}
+
+\begin{center}
+\begin{longtable}{L{4.0cm} C{1.5cm} L{7.0cm}}
+\toprule
+\textbf{Option} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+
+\texttt{--detect-thresh} & 1.5 & Detection threshold in units of the local background RMS ($\sigma$). Lower values detect fainter sources but increase false positives. \\
+\midrule
+
+\texttt{--detect-minarea} & 5 & Minimum number of connected pixels above the threshold required to register a detection. Rejects cosmic ray hits and noise spikes. \\
+\midrule
+
+\texttt{--deblend-nthresh} & 32 & Number of exponentially spaced sub-thresholds used for deblending overlapping sources. Higher values provide finer deblending. \\
+\midrule
+
+\texttt{--deblend-mincont} & 0.005 & Minimum contrast ratio for deblending. A sub-component must contain at least this fraction of the parent flux to be split off. Lower values split more aggressively. \\
+\midrule
+
+\texttt{--phot-aperture} & 5.0 & Diameter of the fixed circular aperture (in pixels) used for \texttt{MAG\_APER} measurements. \\
+\midrule
+
+\texttt{--mag-zeropoint} & 25.0 & Photometric zero-point $m_0$ for magnitude conversion: $m = -2.5\log_{10}(F) + m_0$. Set this to the calibrated zero-point of your image. \\
+\midrule
+
+\texttt{--gain} & 0 & Detector gain in $e^-$/ADU. Used for Poisson noise estimation in photometric errors. If 0, the tool attempts to read \texttt{GAIN}, \texttt{EGAIN}, or \texttt{CCDGAIN} from the FITS header. \\
+\midrule
+
+\texttt{--pixel-scale} & 1.0 & Pixel scale in arcsec/pixel. Used for surface brightness calculations. If 1.0 and WCS is available, the scale is automatically derived from WCS. \\
+\midrule
+
+\texttt{--seeing-fwhm} & 3.0 & Seeing FWHM in arcsec. Used for star/galaxy classification (\texttt{CLASS\_STAR}). \\
+\midrule
+
+\texttt{--back-size} & 64 & Background mesh size in pixels. Each mesh cell has dimensions \texttt{back-size} $\times$ \texttt{back-size}. Smaller values track finer background variations but may subtract source flux. \\
+\midrule
+
+\texttt{--back-filtersize} & 3 & Median filter kernel size (in mesh cells) applied to the background map before interpolation. Smooths out mesh-to-mesh noise. \\
+\midrule
+
+\texttt{--phot-aperture-2} & 4.0 & Diameter (pixels) of the 2nd circular aperture for multi-aperture photometry (\texttt{FLUX\_APER\_2}, \texttt{MAG\_APER\_2}). \\
+\midrule
+
+\texttt{--phot-aperture-3} & 6.0 & Diameter of the 3rd circular aperture. \\
+\midrule
+
+\texttt{--phot-aperture-5} & 10.0 & Diameter of the 4th circular aperture. \\
+\midrule
+
+\texttt{--conv-filter} & default & Convolution filter for source detection. Options: \texttt{default} (3$\times$3 Gaussian), \texttt{gauss5x5} (5$\times$5 Gaussian), \texttt{mexhat} (5$\times$5 Mexican hat), \texttt{tophat} (5$\times$5 top-hat). \\
+
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{Usage Examples}
+
+\begin{codebox}[Basic extraction]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract image.fits > catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Deep extraction with calibrated zero-point]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract --detect-thresh 1.0 --detect-minarea 3 \
+             --mag-zeropoint 28.09 --gain 2.5 \
+             --seeing-fwhm 0.8 --pixel-scale 0.03 \
+             hst_acs_f814w.fits > deep_catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Conservative extraction (few false positives)]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract --detect-thresh 3.0 --detect-minarea 10 \
+             --deblend-mincont 0.01 \
+             crowded_field.fits > clean_catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+\begin{codebox}[Fine background estimation for extended objects]
+\begin{lstlisting}[style=bash,numbers=none]
+ds9_sextract --back-size 128 --back-filtersize 5 \
+             galaxy_cluster.fits > cluster_catalog.tsv
+\end{lstlisting}
+\end{codebox}
+
+
+%------------------------------------------------------
+% PART II
+%------------------------------------------------------
+\part{Developer Reference}
+
+%======================================================
+\chapter{Tcl/Tk Implementation Details}
+\label{ch:tcl}
+%======================================================
+
+This chapter documents the Tcl procedures that implement the catalog panel and its integration with the DS9 GUI.
+
+\section{Catalog Panel Procedures}
+
+\subsection{CreateCatalogPanel}
+
+Creates all widgets for the catalog panel within \texttt{ds9(catalog\_frame)}:
+
+\begin{center}
+\begin{longtable}{L{3.5cm} L{9.5cm}}
+\toprule
+\textbf{Widget} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{titlebar} & Horizontal frame containing the ``Source Extractor'' label, ``Extract'' button, and ``Clear'' button. \\
+\midrule
+\texttt{searchbar} & Filter entry with ``Apply'' button. The entry is bound to \texttt{<Return>} for keyboard activation. \\
+\midrule
+\texttt{tblf} (table frame) & Contains the \texttt{Tktable} widget (\texttt{catpanel(tbl)}) with horizontal and vertical scrollbars. The table is configured with 19 columns, row selection mode, and resizable column borders. \\
+\midrule
+\texttt{statusbar} & Displays status messages via the \texttt{catpanel(status)} variable. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{CatalogPanelExtract}
+
+Orchestrates the extraction process:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Locates the \sextract{} binary in the same directory as the DS9 executable
+  \item Retrieves the current FITS filename from the active frame
+  \item Constructs \texttt{LD\_LIBRARY\_PATH} to include conda libraries (both \texttt{\$CONDA\_PREFIX/lib} and \texttt{\$HOME/miniconda3/lib})
+  \item Executes \sextract{} via \texttt{exec sh -c} and captures stdout
+  \item Passes the TSV output to \texttt{CatalogPanelLoadTSV}
+\end{enumerate}
+
+\subsection{CatalogPanelLoadTSV}
+
+Parses tab-separated data into the Tktable widget:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Splits the input string by newlines into rows
+  \item Parses the first row as column headers
+  \item Configures the table dimensions (\texttt{-cols}, \texttt{-rows})
+  \item Fills the \texttt{catpaneltbldb} array variable: \texttt{catpaneltbldb(\textit{row},\textit{col})}
+  \item Stores the raw data in \texttt{catpanel(alldata)} for filtering
+\end{enumerate}
+
+\subsection{CatalogPanelFilter}
+
+Performs case-insensitive substring filtering:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Reads the filter pattern from \texttt{catpanel(search\_var)}
+  \item Iterates over stored data rows (\texttt{catpanel(alldata)})
+  \item Includes a row if the pattern appears anywhere in the tab-separated line (\texttt{string match -nocase})
+  \item Repopulates the table with matching rows only
+  \item Updates the status bar with the count of matching rows
+\end{enumerate}
+
+\subsection{CatalogPanelAutoExtract}
+
+A hook procedure called from \texttt{fits.tcl} after a FITS file is loaded:
+
+\begin{codebox}
+\begin{lstlisting}[style=tcl,numbers=none]
+proc CatalogPanelAutoExtract {} {
+    global catpanel
+    if {[info exists catpanel(tbl)]} {
+        after 500 CatalogPanelExtract
+    }
+}
+\end{lstlisting}
+\end{codebox}
+
+The 500\,ms delay (\texttt{after 500}) ensures the image is fully loaded and rendered before extraction begins.
+
+
+\section{Global Variables}
+
+\begin{center}
+\begin{longtable}{L{4.0cm} L{9.0cm}}
+\toprule
+\textbf{Variable} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{ds9(toppw)} & The top-level \texttt{ttk::panedwindow} widget path \\
+\texttt{ds9(catalog\_frame)} & Frame widget path for the right (catalog) pane \\
+\texttt{catpanel(tbl)} & The Tktable widget path \\
+\texttt{catpanel(tbldb)} & Name of the global array backing the table data \\
+\texttt{catpanel(status)} & Status bar text variable \\
+\texttt{catpanel(search\_var)} & Filter entry text variable \\
+\texttt{catpanel(alldata)} & Raw TSV string from last extraction (for filtering) \\
+\texttt{catpanel(filename)} & Last extracted FITS filename \\
+\texttt{catpanel(delim)} & Column delimiter (always ``\texttt{\textbackslash t}'') \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+%======================================================
+\chapter{Python Extractor Details}
+\label{ch:python}
+%======================================================
+
+\section{Module Structure}
+
+The \sextract{} script (\texttt{ds9\_sextract.py}) is a single-file Python module with one main function:
+
+\begin{codebox}
+\begin{lstlisting}[style=python,numbers=none]
+def extract_sources(fits_file,
+                    detect_thresh=1.5,
+                    detect_minarea=5,
+                    deblend_nthresh=32,
+                    deblend_mincont=0.005,
+                    phot_aperture=5.0,
+                    mag_zeropoint=25.0,
+                    gain=0.0,
+                    pixel_scale=1.0,
+                    seeing_fwhm=3.0,
+                    back_size=64,
+                    back_filtersize=3):
+\end{lstlisting}
+\end{codebox}
+
+\section{FITS File Handling}
+
+The FITS reader searches for a 2D image HDU in the following order:
+
+\begin{enumerate}[leftmargin=2em]
+  \item Iterate through all HDUs; use the first one with 2D data (\texttt{hdu.data.ndim == 2})
+  \item If no 2D HDU is found, try the primary HDU
+  \item If the primary has $>2$ dimensions, extract the first 2D slice (\texttt{data[0]})
+  \item The data is converted to \texttt{float64} C-contiguous format (required by SEP)
+\end{enumerate}
+
+\section{Automatic Header Parsing}
+
+Several parameters are automatically read from the FITS header when not specified by the user:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Header Keywords} & \textbf{Fallback} \\
+\midrule
+Gain & \texttt{GAIN}, \texttt{EGAIN}, \texttt{CCDGAIN} & 0 (Poisson noise disabled) \\
+Saturation level & \texttt{SATURATE}, \texttt{SATUR}, \texttt{SATULEVEL}, \texttt{DATAMAX} & 65535 \\
+Pixel scale & WCS \texttt{proj\_plane\_pixel\_scales()} & 1.0 arcsec/pixel \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Dependencies}
+
+\begin{center}
+\begin{longtable}{L{3cm} L{2.5cm} L{7cm}}
+\toprule
+\textbf{Package} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+\endhead
+\texttt{sep} & $\geq 1.0$ & Core source extraction: background estimation, detection, deblending, photometry, and morphology. Python binding of the C library derived from SExtractor. \\
+\midrule
+\texttt{astropy} & $\geq 4.0$ & FITS file I/O (\texttt{astropy.io.fits}) and WCS coordinate transformations (\texttt{astropy.wcs.WCS}). \\
+\midrule
+\texttt{numpy} & $\geq 1.20$ & Array operations, mathematical functions, and data type management. \\
+\bottomrule
+\end{longtable}
+\end{center}
 
 
 %======================================================
