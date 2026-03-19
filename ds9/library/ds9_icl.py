@@ -32,6 +32,45 @@ from icl.profile import find_bcg, measure_sb_profile, measure_sector_profile
 from icl.measure import compute_icl_fraction, compute_isophotal_radii, summarize_icl
 
 
+def compute_jwst_zeropoint(header):
+    """Compute AB magnitude zeropoint from JWST FITS header.
+
+    JWST NIRCam/MIRI images are calibrated in MJy/sr.
+    ZP_AB = -6.10 - 2.5 * log10(PIXAR_SR)
+    where PIXAR_SR is the pixel solid angle in steradians.
+    """
+    if 'PIXAR_SR' in header:
+        pixar_sr = float(header['PIXAR_SR'])
+        zp = -6.10 - 2.5 * np.log10(pixar_sr)
+        photmjsr = header.get('PHOTMJSR', None)
+        filt = header.get('FILTER', 'unknown')
+        print(f"JWST auto ZP: filter={filt}, PIXAR_SR={pixar_sr:.6e}, "
+              f"ZP_AB={zp:.4f}", file=sys.stderr)
+        if photmjsr is not None:
+            print(f"  PHOTMJSR={photmjsr:.6f} MJy/sr per DN/s",
+                  file=sys.stderr)
+        return zp
+    elif 'PHOTFNU' in header:
+        # Fallback: PHOTFNU in Jy
+        photfnu = float(header['PHOTFNU'])
+        zp = -2.5 * np.log10(photfnu) + 8.90
+        print(f"Auto ZP from PHOTFNU={photfnu:.6e}: ZP_AB={zp:.4f}",
+              file=sys.stderr)
+        return zp
+    else:
+        print("ERROR: Cannot compute auto ZP - no PIXAR_SR or PHOTFNU in header",
+              file=sys.stderr)
+        sys.exit(1)
+
+
+def resolve_mag_zeropoint(args, header):
+    """Resolve --mag-zeropoint value. If 'auto', compute from FITS header."""
+    zp_str = str(args.mag_zeropoint)
+    if zp_str.lower() == 'auto':
+        return compute_jwst_zeropoint(header)
+    return float(zp_str)
+
+
 def load_fits_data(path):
     """Load FITS image data from primary or first image extension."""
     from astropy.io import fits
@@ -57,12 +96,15 @@ def save_fits(data, header, path):
     """Save data as FITS with WCS header."""
     from astropy.io import fits
     hdu = fits.PrimaryHDU(data.astype(np.float32))
-    wcs_keys = ['CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2',
-                'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2',
-                'CDELT1', 'CDELT2', 'CTYPE1', 'CTYPE2',
-                'CUNIT1', 'CUNIT2', 'EQUINOX', 'RADESYS',
-                'NAXIS1', 'NAXIS2']
-    for key in wcs_keys:
+    copy_keys = ['CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2',
+                 'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2',
+                 'CDELT1', 'CDELT2', 'CTYPE1', 'CTYPE2',
+                 'CUNIT1', 'CUNIT2', 'EQUINOX', 'RADESYS',
+                 'NAXIS1', 'NAXIS2',
+                 'PIXAR_SR', 'PIXAR_A2', 'PHOTMJSR', 'PHOTFNU',
+                 'PHOTFLAM', 'PHOTPLAM', 'PHOTZPT', 'PHOTBW',
+                 'BUNIT', 'FILTER', 'TELESCOP', 'INSTRUME']
+    for key in copy_keys:
         if key in header:
             hdu.header[key] = header[key]
     hdu.writeto(path, overwrite=True)
@@ -306,6 +348,8 @@ def mode_profile(args):
     """Measure surface brightness profile."""
     data, header = load_fits_data(args.fits)
 
+    mag_zp = resolve_mag_zeropoint(args, header)
+
     config = ICLConfig(
         profile_rmin=args.rmin,
         profile_rmax=args.rmax,
@@ -315,7 +359,7 @@ def mode_profile(args):
         profile_pa=args.pa,
         profile_sector_width=args.sector_width,
         profile_sector_pa=args.sector_pa,
-        mag_zeropoint=args.mag_zeropoint,
+        mag_zeropoint=mag_zp,
         pixel_scale=args.pixel_scale,
     )
 
@@ -521,10 +565,13 @@ def mode_decompose(args):
 
     print(f"Double Sérsic BCG+ICL decomposition...", file=sys.stderr)
 
+    data, header = load_fits_data(args.fits)
+    mag_zp = resolve_mag_zeropoint(args, header)
+
     result = fit_double_sersic(
         profile,
         pixel_scale=args.pixel_scale,
-        mag_zeropoint=args.mag_zeropoint
+        mag_zeropoint=mag_zp
     )
 
     if result is None:
@@ -596,12 +643,15 @@ def mode_color(args):
         print("ERROR: --center required for color mode", file=sys.stderr)
         sys.exit(1)
 
+    data, header = load_fits_data(args.fits)
+    mag_zp = resolve_mag_zeropoint(args, header)
+
     config = ICLConfig(
         profile_rmin=args.rmin,
         profile_rmax=args.rmax,
         profile_nsteps=args.nsteps,
         profile_spacing=args.spacing,
-        mag_zeropoint=args.mag_zeropoint,
+        mag_zeropoint=mag_zp,
         pixel_scale=args.pixel_scale,
     )
 
@@ -661,15 +711,15 @@ def main():
 
     # Masking args
     parser.add_argument('--catalog', help='TSV catalog file')
-    parser.add_argument('--expand-factor', type=float, default=2.5,
+    parser.add_argument('--expand-factor', type=float, default=1.5,
                         help='Segmap expansion factor')
     parser.add_argument('--bright-star-mag-limit', type=float, default=18.0)
     parser.add_argument('--bright-star-radius-scale', type=float, default=10.0)
     parser.add_argument('--interp-method', default='linear',
                         choices=['linear', 'cubic', 'nearest'])
-    parser.add_argument('--detect-thresh', type=float, default=1.5,
+    parser.add_argument('--detect-thresh', type=float, default=5.0,
                         help='Detection threshold for segmap (sigma)')
-    parser.add_argument('--max-dilate-radius', type=int, default=50,
+    parser.add_argument('--max-dilate-radius', type=int, default=20,
                         help='Max dilation radius in pixels (prevents over-masking)')
     parser.add_argument('--mask-output',
                         default=os.path.expanduser('~/.ds9/icl_mask.fits'))
@@ -709,7 +759,8 @@ def main():
     parser.add_argument('--pa', type=float, default=0.0)
     parser.add_argument('--sector-width', type=float, default=360.0)
     parser.add_argument('--sector-pa', type=float, default=0.0)
-    parser.add_argument('--mag-zeropoint', type=float, default=25.0)
+    parser.add_argument('--mag-zeropoint', default='25.0',
+                        help='AB mag zeropoint (number or "auto" for JWST)')
     parser.add_argument('--pixel-scale', type=float, default=0.06)
     parser.add_argument('--profile-output',
                         default=os.path.expanduser('~/.ds9/icl_profile.tsv'))

@@ -32,7 +32,17 @@ def measure_multiband_icl_profiles(band_files, mask, cx, cy, config):
     profiles = {}
     for band_name, fpath in band_files.items():
         with fits.open(fpath) as hdul:
-            data = hdul[0].data.astype(np.float64)
+            # Find image data in primary or first image extension
+            if hdul[0].data is not None:
+                data = hdul[0].data.astype(np.float64)
+            else:
+                data = None
+                for ext in hdul[1:]:
+                    if ext.data is not None and ext.data.ndim >= 2:
+                        data = ext.data.astype(np.float64)
+                        break
+                if data is None:
+                    raise ValueError(f"No image data in {fpath}")
             while data.ndim > 2:
                 data = data[0]
 

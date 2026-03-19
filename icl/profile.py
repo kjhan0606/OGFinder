@@ -51,6 +51,9 @@ def find_bcg(data, catalog):
 def measure_sb_profile(data, cx, cy, config):
     """Measure surface brightness profile in concentric annuli.
 
+    Uses pixel-by-pixel computation with NaN exclusion for robust
+    measurement at large radii where edge/masked pixels are common.
+
     Parameters
     ----------
     data : 2D array
@@ -67,11 +70,6 @@ def measure_sb_profile(data, cx, cy, config):
     profile : list of dict
         Each dict has: R_PIX, R_ARCSEC, MU, MU_ERR, FLUX, AREA, NPIX
     """
-    try:
-        import sep
-    except ImportError:
-        import sep_pjw as sep
-
     rmin = config.profile_rmin
     rmax = config.profile_rmax
     nsteps = config.profile_nsteps
@@ -79,8 +77,6 @@ def measure_sb_profile(data, cx, cy, config):
     pscale = config.pixel_scale
     ell = config.profile_ellipticity
     pa = config.profile_pa
-    sector_width = config.profile_sector_width
-    sector_pa = config.profile_sector_pa
 
     # Generate radii
     if config.profile_spacing == 'log':
@@ -88,93 +84,52 @@ def measure_sb_profile(data, cx, cy, config):
     else:
         radii = np.linspace(rmin, rmax, nsteps)
 
-    data_c = np.ascontiguousarray(data, dtype=np.float64)
     ny, nx = data.shape
 
-    # Sector mask (if not full azimuthal)
-    use_sector = sector_width < 360.0
-    if use_sector:
-        yy, xx = np.mgrid[0:ny, 0:nx]
-        angles = np.degrees(np.arctan2(yy - cy, xx - cx))  # [-180, 180]
-        # Normalize relative to sector PA
-        angle_diff = (angles - sector_pa + 180) % 360 - 180
-        sector_mask = np.abs(angle_diff) <= sector_width / 2.0
+    # Build distance map (elliptical if needed)
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    dx = (xx - cx).astype(np.float64)
+    dy = (yy - cy).astype(np.float64)
+
+    if ell > 0:
+        theta = np.radians(pa)
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        dx_rot = dx * cos_t + dy * sin_t
+        dy_rot = -dx * sin_t + dy * cos_t
+        r_map = np.sqrt(dx_rot ** 2 + (dy_rot / (1.0 - ell)) ** 2)
+    else:
+        r_map = np.sqrt(dx * dx + dy * dy)
+
+    # Valid pixel mask (exclude NaN/inf)
+    valid = np.isfinite(data)
 
     profile = []
-    x_arr = np.array([cx], dtype=np.float64)
-    y_arr = np.array([cy], dtype=np.float64)
-
     for i in range(len(radii)):
         r_out = radii[i]
         r_in = radii[i - 1] if i > 0 else 0.0
 
-        if ell > 0:
-            # Elliptical annulus
-            b_out = r_out * (1.0 - ell)
-            b_in = r_in * (1.0 - ell)
-            theta = np.radians(pa)
+        annulus = (r_map >= r_in) & (r_map < r_out) & valid
+        npix = int(annulus.sum())
 
-            flux_out, _, _ = sep.sum_ellipse(
-                data_c, x_arr, y_arr,
-                np.array([r_out]), np.array([b_out]),
-                np.array([theta]))
-            if r_in > 0:
-                flux_in, _, _ = sep.sum_ellipse(
-                    data_c, x_arr, y_arr,
-                    np.array([r_in]), np.array([b_in]),
-                    np.array([theta]))
-            else:
-                flux_in = np.array([0.0])
-
-            area_out = np.pi * r_out * b_out
-            area_in = np.pi * r_in * b_in if r_in > 0 else 0.0
-        else:
-            # Circular annulus
-            flux_out, _, _ = sep.sum_circle(
-                data_c, x_arr, y_arr,
-                np.array([r_out]))
-            if r_in > 0:
-                flux_in, _, _ = sep.sum_circle(
-                    data_c, x_arr, y_arr,
-                    np.array([r_in]))
-            else:
-                flux_in = np.array([0.0])
-
-            area_out = np.pi * r_out * r_out
-            area_in = np.pi * r_in * r_in if r_in > 0 else 0.0
-
-        annulus_flux = float(flux_out[0] - flux_in[0])
-        annulus_area = area_out - area_in
-
-        if annulus_area <= 0:
+        if npix < 1:
             continue
 
-        # Approximate pixel count
-        npix = int(annulus_area + 0.5)
+        vals = data[annulus]
+        flux = float(np.sum(vals))
+        area = float(npix)
 
-        # Apply sector correction
-        if use_sector:
-            sector_frac = sector_width / 360.0
-            annulus_flux *= 1.0  # flux already from full annulus
-            # Actually need to measure sector flux differently
-            # For now, scale area and flux by sector fraction
-            # (approximate for non-sector photometry)
-            annulus_area *= sector_frac
-            npix = max(1, int(npix * sector_frac))
+        # Use median for robust SB (less sensitive to bright source residuals)
+        median_val = float(np.median(vals))
+        flux_per_pix = median_val
 
-        flux_per_pix = annulus_flux / annulus_area if annulus_area > 0 else 0.0
-
-        # Surface brightness
         if flux_per_pix > 0:
             mu = -2.5 * np.log10(flux_per_pix) + zp + 2.5 * np.log10(pscale ** 2)
-            # Error: Poisson + read noise approximation
-            if annulus_flux > 0 and npix > 0:
-                mu_err = 2.5 / np.log(10) / (annulus_flux / np.sqrt(annulus_flux))
-                mu_err = 2.5 / (np.log(10) * np.sqrt(annulus_flux / npix) /
-                                (annulus_flux / npix)) if annulus_flux > 0 else 99.0
-                # Simplified: sigma_mu ≈ 2.5/(ln10) * 1/SNR_per_pixel * 1/sqrt(npix)
-                snr_pix = flux_per_pix / max(np.sqrt(np.abs(flux_per_pix)), 1e-30)
-                mu_err = 2.5 / (np.log(10) * snr_pix * np.sqrt(max(npix, 1)))
+            # Error from scatter in pixel values
+            std_val = float(np.std(vals))
+            if std_val > 0 and npix > 1:
+                se = std_val / np.sqrt(npix)
+                # Propagate to magnitude
+                mu_err = 2.5 / np.log(10) * se / flux_per_pix
             else:
                 mu_err = 99.0
         else:
@@ -188,8 +143,8 @@ def measure_sb_profile(data, cx, cy, config):
             'R_ARCSEC': r_mid * pscale,
             'MU': mu,
             'MU_ERR': mu_err,
-            'FLUX': annulus_flux,
-            'AREA': annulus_area,
+            'FLUX': flux,
+            'AREA': area,
             'NPIX': npix,
         })
 
@@ -256,20 +211,26 @@ def measure_sector_profile(data, cx, cy, sector_pa, sector_width, config):
         r_out = radii[i]
         r_in = radii[i - 1] if i > 0 else 0.0
 
-        annulus = (r_map >= r_in) & (r_map < r_out) & in_sector
+        valid = np.isfinite(data)
+        annulus = (r_map >= r_in) & (r_map < r_out) & in_sector & valid
         npix = annulus.sum()
 
         if npix < 1:
             continue
 
-        flux = float(np.sum(data[annulus]))
-        area = float(npix)  # pixel area
-        flux_per_pix = flux / area
+        vals = data[annulus]
+        flux = float(np.sum(vals))
+        area = float(npix)
+        flux_per_pix = float(np.median(vals))
 
         if flux_per_pix > 0:
             mu = -2.5 * np.log10(flux_per_pix) + zp + 2.5 * np.log10(pscale ** 2)
-            snr_pix = flux_per_pix / max(np.sqrt(np.abs(flux_per_pix)), 1e-30)
-            mu_err = 2.5 / (np.log(10) * snr_pix * np.sqrt(max(npix, 1)))
+            std_val = float(np.std(vals))
+            if std_val > 0 and npix > 1:
+                se = std_val / np.sqrt(npix)
+                mu_err = 2.5 / np.log(10) * se / flux_per_pix
+            else:
+                mu_err = 99.0
         else:
             mu = 99.0
             mu_err = 99.0

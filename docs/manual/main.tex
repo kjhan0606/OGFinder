@@ -1903,6 +1903,422 @@ ds9_sextract --back-size 128 --back-filtersize 5 \
 \end{codebox}
 
 
+%======================================================
+\chapter{Worked Example: ICL Analysis of SMACS~J0723}
+\label{ch:example}
+%======================================================
+
+This chapter demonstrates the complete ICL (Intra-Cluster Light) analysis
+pipeline using JWST data of the galaxy cluster SMACS~J0723.3$-$7327
+($z=0.39$), reproducing the analysis of
+\textcite{montes2022}.\footnote{Montes \& Trujillo 2022, ApJ 940, L51 ---
+``A New Era of Intracluster Light Studies with JWST''}
+We show both the \textbf{command-line} workflow (a self-contained bash script)
+and the equivalent \textbf{GUI} workflow using the DS9 ICL panel.
+
+\section{Data and Goals}
+
+\begin{itemize}
+  \item \textbf{Cluster}: SMACS~J0723.3$-$7327, $z=0.39$,
+        $M_h = 8.39\times10^{14}\,M_\odot$
+  \item \textbf{Instrument}: JWST NIRCam LW, Module~B
+        (pixel scale $0\rlap{.}{''}063$/pixel)
+  \item \textbf{Filter}: F277W (exposure 7537\,s; JWST ERO Program 2736)
+  \item \textbf{Data file}: \texttt{jwst\_smacs0723\_nircam\_f444w\_cutout.fits}
+        (2040$\times$2040 pixels, 115\,MB)
+  \item \textbf{Angular scale}: $5.277$\,kpc/arcsec at $z=0.39$
+        (flat $\Lambda$CDM, $H_0=70$)
+\end{itemize}
+
+\noindent
+The goals are to:
+\begin{enumerate}
+  \item Mask foreground sources while preserving diffuse ICL signal
+  \item Subtract the large-scale background
+  \item Measure the azimuthally-averaged surface brightness profile
+        out to ${\sim}400$\,kpc (${\sim}72''$)
+  \item Compute the ICL fraction at multiple SB thresholds
+  \item Decompose the light into BCG and ICL components
+        (double S\'ersic fit)
+  \item Compare with the stellar mass density slope
+        $\alpha_\mathrm{3D} = -2.47 \pm 0.13$ reported in \textcite{montes2022}
+\end{enumerate}
+
+
+\section{CLI Pipeline}
+\label{sec:example-cli}
+
+The complete analysis is encapsulated in
+\texttt{scripts/reproduce\_montes2022.sh}.
+Below we walk through each step with the exact commands.
+
+\subsection{Configuration}
+
+\begin{codebox}[Step 0: Parameters]
+\begin{lstlisting}[style=bash,numbers=none]
+PIXEL_SCALE=0.063     # arcsec/pixel (NIRCam LW)
+MAG_ZP=auto           # auto-compute from FITS header (PIXAR_SR)
+EXPAND_FACTOR=1.5     # source mask dilation factor
+MAX_DILATE=20         # max dilation radius (pixels)
+DETECT_THRESH=5.0     # detect only bright compact sources
+BRIGHT_MAG=18.0       # bright-star masking limit
+NSTEPS=51             # 51 logarithmic radial bins (as in the paper)
+RMIN=3.0              # inner cutoff (~0.19")
+RMAX=1143             # outer cutoff (~72" = 380 kpc)
+CENTER="1004,1067"    # BCG center (smoothed-peak detection)
+\end{lstlisting}
+\end{codebox}
+
+\begin{remark}
+The zero-point is set to \texttt{auto}, which reads the \texttt{PIXAR\_SR}
+keyword from the FITS header and computes
+$\mathrm{ZP_{AB}} = -6.10 - 2.5\log_{10}(\texttt{PIXAR\_SR})$.
+For this dataset, $\mathrm{ZP_{AB}} \approx 26.48$.
+\end{remark}
+
+\subsection{Step 1: Source Masking}
+
+SEP-based source detection with controlled dilation to mask compact sources
+while preserving diffuse ICL emission.
+A detection threshold of $5\sigma$ avoids flagging ICL itself as ``sources.''
+
+\begin{codebox}[Step 1: Source Masking]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_icl.py $FITS --mode mask \
+    --expand-factor 1.5 \
+    --max-dilate-radius 20 \
+    --detect-thresh 5.0 \
+    --bright-star-mag-limit 18.0 \
+    --interp-method linear \
+    --mask-output  results/montes2022/icl_mask.fits \
+    --masked-output results/montes2022/icl_masked.fits
+\end{lstlisting}
+\end{codebox}
+
+\noindent
+This masks ${\sim}32\%$ of pixels---compact enough to leave the ICL intact
+but aggressive enough to remove all bright galaxies and stars.
+
+\subsection{Step 2: Background Subtraction}
+
+A 2nd-order 2D polynomial is fitted to the masked image, with iterative
+$3\sigma$ clipping over 3 iterations.
+
+\begin{codebox}[Step 2: 2D Polynomial Background]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_icl.py $FITS --mode background \
+    --mask results/montes2022/icl_mask.fits \
+    --bkg-method polynomial \
+    --bkg-order 2 \
+    --bkg-sigma-clip 3.0 \
+    --iterative --bkg-n-iterations 3 \
+    --bkg-convergence-tol 0.01 \
+    --bkg-output  results/montes2022/icl_background.fits \
+    --bgsub-output results/montes2022/icl_bgsub.fits
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Step 3: Surface Brightness Profile}
+
+Measure the azimuthally-averaged circular SB profile in 51
+logarithmically-spaced annuli from $r=3$ to $r=1143$ pixels ($0\rlap{.}{''}2$ to
+$72''$, i.e.\ 1--380\,kpc).
+
+\begin{codebox}[Step 3: Circular SB Profile]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_icl.py $BGSUB --mode profile \
+    --center 1004,1067 \
+    --rmin 3.0 --rmax 1143 --nsteps 51 --spacing log \
+    --mag-zeropoint auto --pixel-scale 0.063 \
+    --profile-output results/montes2022/sb_profile.tsv
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Step 4: Sector Profiles (East / West)}
+
+Directional profiles in 20$^\circ$-wide sectors along the east and west
+semi-major axes, matching the analysis in Figure~2 of \textcite{montes2022}.
+
+\begin{codebox}[Step 4: East and West Sector Profiles]
+\begin{lstlisting}[style=bash,numbers=none]
+# East sector (PA = 0)
+python3 ds9/library/ds9_icl.py $BGSUB --mode profile \
+    --center 1004,1067 \
+    --rmin 3 --rmax 1143 --nsteps 51 --spacing log \
+    --sector-width 20.0 --sector-pa 0.0 \
+    --mag-zeropoint auto --pixel-scale 0.063 \
+    --profile-output results/montes2022/sb_profile_east.tsv
+
+# West sector (PA = 180)
+python3 ds9/library/ds9_icl.py $BGSUB --mode profile \
+    --center 1004,1067 \
+    --rmin 3 --rmax 1143 --nsteps 51 --spacing log \
+    --sector-width 20.0 --sector-pa 180.0 \
+    --mag-zeropoint auto --pixel-scale 0.063 \
+    --profile-output results/montes2022/sb_profile_west.tsv
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Step 5: ICL Fraction (Multi-Threshold)}
+
+Compute the ICL fraction $f_\mathrm{ICL}(\mu > \mu_\mathrm{thresh})$ at
+thresholds from 25.0 to 29.0\,mag\,arcsec$^{-2}$ with bootstrap error
+estimation.
+
+\begin{codebox}[Step 5: Multi-Threshold ICL Fraction]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_icl.py $BGSUB --mode measure-multi \
+    --profile-file results/montes2022/sb_profile.tsv \
+    --mu-min 25.0 --mu-max 29.0 --mu-step 0.5 \
+    --n-bootstrap 500 --pixel-scale 0.063 \
+    > results/montes2022/icl_fraction_multi.tsv
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Step 6: BCG+ICL Decomposition}
+
+Fit a double S\'ersic model (BCG + ICL) to the radial profile.
+
+\begin{codebox}[Step 6: Double S\'ersic Decomposition]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_icl.py $BGSUB --mode decompose \
+    --profile-file results/montes2022/sb_profile.tsv \
+    --pixel-scale 0.063 --mag-zeropoint auto \
+    > results/montes2022/decompose_result.tsv
+\end{lstlisting}
+\end{codebox}
+
+\subsection{Step 7: Multi-Band Color Profile (Optional)}
+
+If F090W data is available, measure the radial color gradient.
+
+\begin{codebox}[Step 7: Color Profile (F090W $-$ F277W)]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_icl.py $FITS --mode color \
+    --mask results/montes2022/icl_mask.fits \
+    --center 1004,1067 \
+    --bands "F090W:$F090W,F277W:$FITS" \
+    --rmin 3 --rmax 1143 --nsteps 51 --spacing log \
+    --mag-zeropoint auto --pixel-scale 0.063 \
+    > results/montes2022/color_profile.tsv
+\end{lstlisting}
+\end{codebox}
+
+
+\section{Results}
+\label{sec:example-results}
+
+Figure~\ref{fig:sb-profile} compares the measured SB profile with the
+Montes+2022 model composed of a BCG component (de~Vaucouleurs,
+S\'ersic $n=4$, $r_e=3''$) and an ICL power-law component with projected
+slope $\alpha_\mathrm{proj} = \alpha_\mathrm{3D} + 1 = -1.47$.
+Our pipeline recovers the profile from $\mu \approx 18$ to
+$\mu \approx 27.5$\,mag\,arcsec$^{-2}$, spanning
+$0.5$--$360$\,kpc.
+The left panel uses physical kpc units; the right panel uses arcseconds
+matching the $x$-axis of \textcite{montes2022} Figure~2.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{fig_sb_profile.png}
+  \caption{Surface brightness profile of SMACS~J0723 (F277W).
+    Blue circles: our circular profile; red/green: east/west sectors;
+    red solid curve: Montes+2022 two-component model (BCG + ICL power-law);
+    dashed line: power-law slope $\alpha_\mathrm{3D} = -2.47 \pm 0.13$ anchored
+    to the data.
+    Vertical purple lines mark tidal features identified in the paper.}
+  \label{fig:sb-profile}
+\end{figure}
+
+Figure~\ref{fig:icl-fraction} shows the ICL fraction as a function of the
+surface brightness threshold.
+The convention is $f_\mathrm{ICL} = L(\mu > \mu_\mathrm{thresh}) / L_\mathrm{total}$:
+as the threshold moves to fainter levels, fewer annuli qualify, so
+$f_\mathrm{ICL}$ decreases.
+At $\mu_\mathrm{thresh} = 26.5$, we measure
+$f_\mathrm{ICL} \approx 37\%$, consistent with the Ellien~(2025) DAWIS
+measurement of $28 \pm 2\%$ within 400\,kpc (different method).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{fig_icl_fraction.png}
+  \caption{ICL fraction vs.\ surface brightness threshold.
+    Red dashed line: Ellien+(2025) DAWIS reference ($28\%$);
+    orange dashed: BCG+ICL fraction ($34\%$).}
+  \label{fig:icl-fraction}
+\end{figure}
+
+Figure~\ref{fig:decompose} presents the double S\'ersic decomposition.
+The BCG is fitted with $n_\mathrm{BCG} = 1.5$, $r_{e,\mathrm{BCG}} = 1.9''$,
+and the ICL with $n_\mathrm{ICL} = 1.2$, $r_{e,\mathrm{ICL}} = 30.3''$.
+The green curve is the Montes+2022 reference model for comparison.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{fig_decompose.png}
+  \caption{BCG+ICL double S\'ersic decomposition.
+    Black points: measured profile; blue/red dashed: BCG/ICL S\'ersic components;
+    orange solid: combined fit; green: Montes+2022 reference model.}
+  \label{fig:decompose}
+\end{figure}
+
+Figure~\ref{fig:color-gradient} shows the radial color gradient
+(F090W $-$ F277W).
+The gradient is negative (bluer outward) at $R > 100$\,kpc, consistent with
+the tidal stripping origin of ICL reported in \textcite{montes2022}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.7\textwidth]{fig_color_profile.png}
+  \caption{Radial color gradient (F090W $-$ F277W) of SMACS~J0723.
+    The negative gradient at $R > 100$\,kpc indicates bluer stellar
+    populations in the outer ICL.}
+  \label{fig:color-gradient}
+\end{figure}
+
+
+\section{Equivalent GUI Workflow}
+\label{sec:example-gui}
+
+The same analysis can be performed entirely through the DS9 GUI without
+writing a single command.
+Open the FITS file in OGFinder, then use the \textbf{ICL} menu button on the
+title bar.
+
+\subsection{Step 1: Configure Settings}
+
+Before starting, open \textbf{ICL $\rightarrow$ Settings\ldots} to set the
+parameters matching this dataset.
+The dialog has four tabs:
+
+\begin{center}
+\begin{tabular}{L{3cm} L{4cm} L{5cm}}
+\toprule
+\textbf{Tab} & \textbf{Key Parameters} & \textbf{Values for SMACS~J0723} \\
+\midrule
+Masking &
+  \texttt{detect-thresh} \newline
+  \texttt{expand-factor} \newline
+  \texttt{max-dilate-radius} &
+  5.0 \newline
+  1.5 \newline
+  20 \\
+\midrule
+Background &
+  \texttt{bkg-order} \newline
+  \texttt{bkg-sigma-clip} \newline
+  Iterative (checkbox) &
+  2 \newline
+  3.0 \newline
+  Enabled (3 iterations) \\
+\midrule
+Profile &
+  \texttt{rmin / rmax} \newline
+  \texttt{nsteps} \newline
+  \texttt{spacing} &
+  3.0 / 1143 \newline
+  51 \newline
+  log \\
+\midrule
+Calibration &
+  \texttt{mag-zeropoint} \newline
+  \texttt{pixel-scale} \newline
+  \texttt{mu-threshold} &
+  25.0 (or auto) \newline
+  0.063 \newline
+  26.5 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Click \textbf{Apply} to save. Settings persist in
+\texttt{\~{}/.ds9/icl.prf} across sessions.
+
+\subsection{Step 2: Source Masking}
+
+\textbf{ICL $\rightarrow$ Source Masking}
+
+This runs SEP-based source detection with the configured parameters.
+The masked image is automatically displayed in a new frame.
+You can inspect the mask with \textbf{ICL $\rightarrow$ View Mask}.
+
+If you have a pre-computed mask (e.g.\ from manual editing), use
+\textbf{ICL $\rightarrow$ Import Mask\ldots} to load it.
+
+\subsection{Step 3: Background Subtraction}
+
+\textbf{ICL $\rightarrow$ Background Model $\rightarrow$ Polynomial Fit}
+
+Three methods are available as a submenu: \emph{Polynomial Fit},
+\emph{Chebyshev Fit}, and \emph{SEP Large Mesh}.
+For this example, choose \textbf{Polynomial Fit} (matching the paper).
+The background-subtracted image appears in a new frame.
+Use \textbf{View Background} to inspect the 2D model.
+
+\subsection{Step 4: Set BCG Center}
+
+\textbf{ICL $\rightarrow$ Set BCG Center}
+
+A dialog offers two methods:
+\begin{itemize}
+  \item \textbf{By Source ID}: If a SExtractor catalog is loaded,
+        enter the catalog number of the brightest galaxy.
+        The dialog auto-suggests the brightest source.
+  \item \textbf{Click on Image}: Click directly on the BCG center in the
+        image display. A cyan cross marker appears at the selected position.
+\end{itemize}
+
+\subsection{Step 5: Measure Profile}
+
+\textbf{ICL $\rightarrow$ Measure Profile}
+
+Computes the radial SB profile from the BCG center using the background-subtracted
+image. The profile table appears in the catalog panel, and green annulus
+rings are drawn at representative radii.
+
+For directional profiles, use
+\textbf{ICL $\rightarrow$ Sector Profile\ldots} and enter the PA and
+sector width (e.g.\ PA$=0^\circ$, width$=20^\circ$ for east).
+
+\subsection{Step 6: ICL Measurements}
+
+\textbf{ICL $\rightarrow$ ICL Measurements} computes $f_\mathrm{ICL}$
+at the configured single threshold.
+Isophotal radii are drawn as magenta dashed circles with labels.
+
+For a multi-threshold sweep (as in Figure~\ref{fig:icl-fraction}), use
+\textbf{ICL $\rightarrow$ Multi-Threshold ICL}.
+
+\subsection{Step 7: BCG+ICL Decomposition}
+
+\textbf{ICL $\rightarrow$ BCG+ICL Decomposition}
+
+Fits a double S\'ersic model to the profile. The decomposition results
+(S\'ersic indices, effective radii, ICL fraction, transition radius)
+appear in the catalog panel.
+
+\begin{important}
+  The decomposition uses the \emph{original} (unmasked) image,
+  because masking the BCG would make the S\'ersic fit impossible.
+  Make sure to set the BCG center before running this step.
+\end{important}
+
+\subsection{Step 8: Color Profile (Optional)}
+
+\textbf{ICL $\rightarrow$ Color Profile\ldots}
+
+A dialog accepts 2--4 bands (name + FITS file path).
+Enter the band name (e.g.\ \texttt{F090W}) and browse to the corresponding
+FITS file. The multi-band color profile appears in the catalog panel.
+
+\subsection{Step 9: Save Results}
+
+Use \textbf{ICL $\rightarrow$ Save Profile\ldots} to export the profile
+TSV to a permanent location.
+All intermediate FITS files (mask, background, background-subtracted image)
+are stored in \texttt{\~{}/.ds9/} and can be accessed from there.
+
+
 %------------------------------------------------------
 % PART II
 %------------------------------------------------------

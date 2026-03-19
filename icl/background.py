@@ -32,7 +32,12 @@ def fit_polynomial_background(data, mask, order=3, sigma_clip=3.0):
         Fitted background model at full resolution.
     """
     ny, nx = data.shape
-    unmask = ~mask
+    # Also mask NaN/inf pixels
+    bad = np.isnan(data) | np.isinf(data)
+    if mask is not None:
+        unmask = ~(mask | bad)
+    else:
+        unmask = ~bad
 
     # Downsample to ~100x100 grid
     step_y = max(1, ny // 100)
@@ -117,7 +122,11 @@ def fit_chebyshev_background(data, mask, order=3, sigma_clip=3.0):
     from numpy.polynomial import chebyshev
 
     ny, nx = data.shape
-    unmask = ~mask
+    bad = np.isnan(data) | np.isinf(data)
+    if mask is not None:
+        unmask = ~(mask | bad)
+    else:
+        unmask = ~bad
 
     # Downsample
     step_y = max(1, ny // 100)
@@ -201,7 +210,12 @@ def sep_large_mesh_background(data, mask, mesh_size=256):
         import sep_pjw as sep
 
     data_c = np.ascontiguousarray(data, dtype=np.float64)
-    mask_byte = mask.astype(np.uint8) if mask is not None else None
+    nan_mask = np.isnan(data_c) | np.isinf(data_c)
+    data_c[nan_mask] = 0.0
+    if mask is not None:
+        mask_byte = (mask | nan_mask).astype(np.uint8)
+    else:
+        mask_byte = nan_mask.astype(np.uint8)
 
     bkg = sep.Background(data_c, mask=mask_byte,
                          bw=mesh_size, bh=mesh_size)

@@ -699,12 +699,12 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,center_x)     {}
     set catpanel(icl,center_y)     {}
     set catpanel(icl,click_mode)   0
-    set catpanel(icl,param,expand-factor)          2.5
+    set catpanel(icl,param,expand-factor)          1.5
     set catpanel(icl,param,bright-star-mag-limit)  18.0
     set catpanel(icl,param,bright-star-radius-scale) 10.0
     set catpanel(icl,param,interp-method)          linear
-    set catpanel(icl,param,detect-thresh)          1.5
-    set catpanel(icl,param,max-dilate-radius)      50
+    set catpanel(icl,param,detect-thresh)          5.0
+    set catpanel(icl,param,max-dilate-radius)      20
     set catpanel(icl,param,bkg-method)             polynomial
     set catpanel(icl,param,bkg-order)              3
     set catpanel(icl,param,bkg-sigma-clip)         3.0
