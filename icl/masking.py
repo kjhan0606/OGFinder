@@ -141,11 +141,11 @@ def mask_bright_stars(mask, catalog, mag_limit=18.0, radius_scale=10.0):
         mask[y0:y1, x0:x1] |= dist2 <= r * r
 
 
-def interpolate_masked(data, mask, method='linear', block_size=4096,
-                       overlap=100):
+def interpolate_masked(data, mask, method='linear', block_size=2048,
+                       overlap=64):
     """Interpolate masked regions using surrounding unmasked pixels.
 
-    For large images, uses block-based processing to limit memory.
+    For large images, uses block-based processing with progress logging.
 
     Parameters
     ----------
@@ -168,40 +168,49 @@ def interpolate_masked(data, mask, method='linear', block_size=4096,
     ny, nx = data.shape
     result = data.copy()
 
-    n_masked = mask.sum()
+    n_masked = int(mask.sum())
     if n_masked == 0:
         return result
 
+    frac = n_masked / mask.size
+    print(f"  interpolation: {n_masked} pixels ({100*frac:.1f}%)",
+          file=sys.stderr)
+
     # Small image: process directly
     if ny <= block_size and nx <= block_size:
-        _interpolate_block(result, mask, method)
+        _interpolate_block(result, mask.copy(), method)
         return result
 
-    # Large image: block-based processing
-    for y0 in range(0, ny, block_size - overlap):
+    # Count total blocks
+    step = block_size - overlap
+    blocks = []
+    for y0 in range(0, ny, step):
         y1 = min(ny, y0 + block_size)
-        for x0 in range(0, nx, block_size - overlap):
+        for x0 in range(0, nx, step):
             x1 = min(nx, x0 + block_size)
+            if np.any(mask[y0:y1, x0:x1]):
+                blocks.append((y0, y1, x0, x1))
 
-            block_mask = mask[y0:y1, x0:x1]
-            if not np.any(block_mask):
-                continue
+    n_blocks = len(blocks)
+    print(f"  interpolation: {n_blocks} blocks to process", file=sys.stderr)
 
-            block_data = result[y0:y1, x0:x1].copy()
-            _interpolate_block(block_data, block_mask, method)
+    for bi, (y0, y1, x0, x1) in enumerate(blocks):
+        block_mask = mask[y0:y1, x0:x1].copy()
+        block_data = result[y0:y1, x0:x1].copy()
+        _interpolate_block(block_data, block_mask, method)
 
-            # Write only the non-overlap interior
-            iy0 = 0 if y0 == 0 else overlap // 2
-            iy1 = block_data.shape[0] if y1 == ny else block_data.shape[0] - overlap // 2
-            ix0 = 0 if x0 == 0 else overlap // 2
-            ix1 = block_data.shape[1] if x1 == nx else block_data.shape[1] - overlap // 2
+        # Write only the non-overlap interior
+        iy0 = 0 if y0 == 0 else overlap // 2
+        iy1 = block_data.shape[0] if y1 == ny else block_data.shape[0] - overlap // 2
+        ix0 = 0 if x0 == 0 else overlap // 2
+        ix1 = block_data.shape[1] if x1 == nx else block_data.shape[1] - overlap // 2
 
-            gy0 = y0 + iy0
-            gy1 = y0 + iy1
-            gx0 = x0 + ix0
-            gx1 = x0 + ix1
+        result[y0 + iy0:y0 + iy1, x0 + ix0:x0 + ix1] = \
+            block_data[iy0:iy1, ix0:ix1]
 
-            result[gy0:gy1, gx0:gx1] = block_data[iy0:iy1, ix0:ix1]
+        if (bi + 1) % 5 == 0 or bi + 1 == n_blocks:
+            print(f"  interpolation: block {bi+1}/{n_blocks}",
+                  file=sys.stderr)
 
     return result
 
@@ -209,46 +218,51 @@ def interpolate_masked(data, mask, method='linear', block_size=4096,
 def _interpolate_block(data, mask, method):
     """Interpolate masked pixels in a single block in-place.
 
-    Uses Gaussian-weighted fill with aggressive sigma growth to
-    fill masked regions quickly.  Starts with large sigma and
-    doubles each iteration.
+    Uses two-pass Gaussian-weighted fill: one pass with sigma
+    proportional to gap size fills most pixels, a second pass
+    with doubled sigma catches the rest.
     """
     from scipy.ndimage import gaussian_filter
 
-    n_good = (~mask).sum()
-    n_bad = mask.sum()
-
+    n_bad = int(mask.sum())
     if n_bad == 0:
         return
+
+    n_good = mask.size - n_bad
     if n_good < 10:
         med = np.median(data[~mask]) if n_good > 0 else 0.0
         data[mask] = med
         return
 
-    # Single-pass: large sigma covers most gaps efficiently
+    # If mask fraction > 90%, just fill with local median
+    if n_bad > 0.9 * mask.size:
+        data[mask] = np.median(data[~mask])
+        return
+
     weight = (~mask).astype(np.float32)
     tmp = data.astype(np.float32)
     tmp[mask] = 0.0
 
-    # Choose sigma based on typical gap size
-    sigma = max(20.0, np.sqrt(n_bad / np.pi) * 0.5)
+    # Use large sigma to cover gaps in fewer passes
+    sigma = max(30.0, np.sqrt(n_bad / np.pi) * 0.7)
 
-    for i in range(8):
+    for _ in range(5):
+        if not np.any(mask):
+            return
+
         sd = gaussian_filter(tmp, sigma=sigma)
         sw = gaussian_filter(weight, sigma=sigma)
 
-        fillable = mask & (sw > 0.005)
-        if np.any(fillable):
+        fillable = mask & (sw > 0.003)
+        n_fill = int(fillable.sum())
+        if n_fill > 0:
             ratio = sd[fillable] / sw[fillable]
             data[fillable] = ratio
             tmp[fillable] = ratio
             weight[fillable] = 1.0
-            mask_remaining = mask & ~fillable
-            if not np.any(mask_remaining):
-                return
-            mask = mask_remaining
-        sigma *= 2.0
+            mask &= ~fillable
+        sigma *= 2.5
 
-    # Fill any remaining pixels with median
+    # Fill remaining with median
     if np.any(mask):
         data[mask] = np.median(data[weight > 0])
