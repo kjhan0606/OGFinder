@@ -668,7 +668,29 @@ The masking procedure:
 
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/icl\_mask.fits} (binary mask), \texttt{\textasciitilde/.ds9/icl\_masked.fits} (interpolated image).
 
-\textbf{Package}: \texttt{icl/masking.py} --- functions: \texttt{create\_source\_mask()}, \texttt{mask\_bright\_stars()}, \texttt{interpolate\_masked()}.
+\textbf{Package}: \texttt{icl/masking.py} --- functions: \texttt{create\_source\_mask()}, \texttt{mask\_bright\_stars()}, \texttt{interpolate\_masked()}, \texttt{reproject\_mask()}.
+
+\subsection{Save Mask As / Import Mask}
+\label{sec:icl-mask-io}
+
+\textbf{Menu}: ICL $\to$ Save Mask As\ldots{} / Import Mask\ldots
+
+These two features allow reusing a mask created on one band (e.g., F814W) for another band (e.g., F606W) that may differ in image size or pixel scale.
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Save Mask As\ldots} --- Copies the current mask FITS (\texttt{\textasciitilde/.ds9/icl\_mask.fits}) to a user-selected path.  The saved mask retains WCS header keywords, enabling cross-band reprojection.
+  \item \textbf{Import Mask\ldots} --- Loads an external mask FITS and reprojects it onto the current image via WCS coordinate matching.  The reprojected mask and interpolated masked image are saved to the standard locations and automatically displayed in a new frame.
+\end{itemize}
+
+\noindent\textbf{WCS Reprojection Algorithm} (\texttt{reproject\_mask()} in \texttt{icl/masking.py}):
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Header comparison}: Compare NAXIS1/2, CRPIX1/2, CRVAL1/2, and CD matrix between mask and target.
+  \item \textbf{Case~A --- Direct copy}: If shape and WCS match (or no WCS and same shape), return the mask unchanged.
+  \item \textbf{Case~B --- WCS transform}: Build the full target pixel grid, convert to sky coordinates via \texttt{WCS.pixel\_to\_world()}, then back to mask pixel coordinates via \texttt{WCS.world\_to\_pixel()}.  Nearest-neighbor rounding is used (the only correct interpolation for boolean masks).  Out-of-bounds pixels are set to unmasked.
+\end{enumerate}
+
+\noindent The algorithm is fully vectorized with NumPy and handles $>30$\,M pixels in a few seconds.  It is shared between the ICL and LSBG pipelines (\texttt{from icl.masking import reproject\_mask}).
 
 \subsection{Masking Parameter Comparison with Literature}
 
@@ -976,8 +998,9 @@ Settings are saved to \texttt{\textasciitilde/.ds9/icl.prf} and loaded automatic
 
 \begin{codebox}[Synopsis]
 \begin{lstlisting}[style=bash,numbers=none]
-python3 ds9_icl.py FITS --mode {mask,background,profile,measure,
-                                 measure-multi,decompose,color} [OPTIONS]
+python3 ds9_icl.py FITS --mode {mask,import-mask,background,profile,
+                                 measure,measure-multi,decompose,
+                                 color} [OPTIONS]
 \end{lstlisting}
 \end{codebox}
 
@@ -988,6 +1011,8 @@ python3 ds9_icl.py FITS --mode {mask,background,profile,measure,
 \midrule
 \endhead
 \texttt{mask} & \texttt{--expand-factor}, \texttt{--max-dilate-radius}, \texttt{--bright-star-*}, \texttt{--interp-method} & Create source mask + interpolated image \\
+\midrule
+\texttt{import-mask} & \texttt{--import-mask-file}, \texttt{--interp-method} & Import external mask with WCS reprojection \\
 \midrule
 \texttt{background} & \texttt{--bkg-method}, \texttt{--bkg-order}, \texttt{--mask}, \texttt{--iterative} & Fit background (optionally iterative) \\
 \midrule
@@ -1010,7 +1035,7 @@ python3 ds9_icl.py FITS --mode {mask,background,profile,measure,
 OGFinder/icl/
 |-- __init__.py
 |-- config.py         # ICLConfig dataclass (incl. iterative params)
-|-- masking.py        # Source mask + bright star + interpolation
+|-- masking.py        # Source mask + bright star + interpolation + reproject
 |-- background.py     # Polynomial / Chebyshev / SEP + iterative refinement
 |-- profile.py        # SB profile measurement (circular/elliptical/sector)
 |-- measure.py        # ICL fraction + isophotal radii + multi-threshold
@@ -1104,6 +1129,13 @@ The masking reuses functions from the ICL pipeline (\texttt{icl.masking}):
 \textbf{Outputs}: \texttt{\textasciitilde/.ds9/lsbg\_mask.fits} (binary mask), \texttt{\textasciitilde/.ds9/lsbg\_masked.fits} (interpolated image).
 
 \textbf{Package}: \texttt{lsbg/masking.py} --- functions: \texttt{mask\_by\_magnitude()}, \texttt{iterative\_mask\_refine()}, \texttt{create\_lsbg\_mask()}.
+
+\subsection{Save Mask As / Import Mask}
+\label{sec:lsbg-mask-io}
+
+\textbf{Menu}: LSBG $\to$ Save Mask As\ldots{} / Import Mask\ldots
+
+Same functionality as the ICL mask I/O (Section~\ref{sec:icl-mask-io}): save the current LSBG mask to a user-selected path, or import an external mask FITS with automatic WCS reprojection.  This is useful for applying a mask created on a deep detection band to shallower bands for forced photometry.  The reprojection uses the shared \texttt{reproject\_mask()} function from \texttt{icl.masking}.
 
 
 \section{Step 2: Iterative Background Refinement}
@@ -1400,8 +1432,9 @@ Settings are saved to \texttt{\textasciitilde/.ds9/lsbg.prf} and loaded automati
 
 \begin{codebox}[Synopsis]
 \begin{lstlisting}[style=bash,numbers=none]
-python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,
-                                  sersic,filter,run,forced} [OPTIONS]
+python3 ds9_lsbg.py FITS --mode {mask,import-mask,clean,detect,
+                                  photometry,sersic,filter,
+                                  run,forced} [OPTIONS]
 \end{lstlisting}
 \end{codebox}
 
@@ -1412,6 +1445,8 @@ python3 ds9_lsbg.py FITS --mode {mask,clean,detect,photometry,
 \midrule
 \endhead
 \texttt{mask} & \texttt{--mask-mag-threshold}, \texttt{--mask-expand-factor}, \texttt{--max-dilate-radius}, \texttt{--lsb-protect}, \texttt{--bright-star-*} & Magnitude-based masking with LSB protection \\
+\midrule
+\texttt{import-mask} & \texttt{--import-mask-file}, \texttt{--interp-method} & Import external mask with WCS reprojection \\
 \midrule
 \texttt{clean} & \texttt{--mask}, \texttt{--bkg-method}, \texttt{--bkg-n-iterations} & Iterative background refinement \\
 \midrule

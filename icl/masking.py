@@ -195,6 +195,100 @@ def mask_bright_stars(mask, catalog, mag_limit=18.0, radius_scale=10.0):
         mask[y0:y1, x0:x1] |= dist2 <= r * r
 
 
+def reproject_mask(mask_data, mask_header, target_header):
+    """Reproject boolean mask from one WCS frame to another.
+
+    Uses astropy.wcs pixel-to-sky transforms + nearest-neighbor sampling.
+    Fast path: same shape + same WCS -> direct copy.
+
+    Parameters
+    ----------
+    mask_data : 2D array
+        Source mask (nonzero = masked).
+    mask_header : FITS header
+        WCS header of mask_data.
+    target_header : FITS header
+        WCS header of target image.
+
+    Returns
+    -------
+    mask_out : 2D bool array
+        Reprojected mask matching target image dimensions.
+    """
+    from astropy.wcs import WCS
+
+    # Target shape from header
+    tny = int(target_header.get('NAXIS2', 0))
+    tnx = int(target_header.get('NAXIS1', 0))
+    if tny == 0 or tnx == 0:
+        tny, tnx = mask_data.shape
+
+    mny, mnx = mask_data.shape
+
+    # Check if WCS headers match (fast path)
+    same_shape = (mny == tny and mnx == tnx)
+    wcs_keys = ['CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2',
+                'CD1_1', 'CD1_2', 'CD2_1', 'CD2_2']
+
+    has_wcs_mask = any(k in mask_header for k in ['CRVAL1', 'CD1_1', 'CDELT1'])
+    has_wcs_target = any(k in target_header for k in ['CRVAL1', 'CD1_1', 'CDELT1'])
+
+    if has_wcs_mask and has_wcs_target:
+        same_wcs = same_shape
+        if same_wcs:
+            for k in wcs_keys:
+                v1 = mask_header.get(k, None)
+                v2 = target_header.get(k, None)
+                if v1 is None and v2 is None:
+                    continue
+                if v1 is None or v2 is None:
+                    same_wcs = False
+                    break
+                if abs(float(v1) - float(v2)) > 1e-10:
+                    same_wcs = False
+                    break
+
+        if same_wcs:
+            print("reproject_mask: same WCS, direct copy", file=sys.stderr)
+            return mask_data.astype(bool)
+
+        # Case B: WCS coordinate transform
+        mask_wcs = WCS(mask_header, naxis=2)
+        target_wcs = WCS(target_header, naxis=2)
+
+        # Build target pixel grid
+        yy, xx = np.mgrid[0:tny, 0:tnx]
+        # Target pixels -> sky -> mask pixels
+        sky = target_wcs.pixel_to_world(xx.ravel(), yy.ravel())
+        mx, my = mask_wcs.world_to_pixel(sky)
+        mx = np.round(mx).astype(int)
+        my = np.round(my).astype(int)
+
+        # Bounds check
+        valid = (mx >= 0) & (mx < mnx) & (my >= 0) & (my < mny)
+        mask_bool = mask_data.astype(bool)
+
+        mask_out = np.zeros(tny * tnx, dtype=bool)
+        mask_out[valid] = mask_bool[my[valid], mx[valid]]
+        mask_out = mask_out.reshape(tny, tnx)
+
+        n_masked = int(mask_out.sum())
+        print(f"reproject_mask: ({mny},{mnx}) -> ({tny},{tnx}), "
+              f"{n_masked} pixels masked", file=sys.stderr)
+        return mask_out
+
+    else:
+        # No WCS available
+        if same_shape:
+            print("reproject_mask: no WCS, same shape, direct copy",
+                  file=sys.stderr)
+            return mask_data.astype(bool)
+        else:
+            raise ValueError(
+                f"Cannot reproject mask: no WCS headers and shapes differ "
+                f"({mny},{mnx}) vs ({tny},{tnx})")
+
+
 def interpolate_masked(data, mask, method='linear', block_size=2048,
                        overlap=256):
     """Interpolate masked regions using surrounding unmasked pixels.

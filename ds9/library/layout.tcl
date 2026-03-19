@@ -371,6 +371,12 @@ proc CreateCatalogPanel {} {
     $f.menubar.icl.m add command \
 	-label "   View Mask" \
 	-command CatalogPanelICLViewMask
+    $f.menubar.icl.m add command \
+	-label "   Save Mask As..." \
+	-command CatalogPanelICLSaveMask
+    $f.menubar.icl.m add command \
+	-label "   Import Mask..." \
+	-command CatalogPanelICLImportMask
     $f.menubar.icl.m add separator
     menu $f.menubar.icl.m.bkg -tearoff 0
     $f.menubar.icl.m add cascade -label "2. Background Model" \
@@ -434,6 +440,12 @@ proc CreateCatalogPanel {} {
     $f.menubar.lsbg.m add command \
 	-label "   View Masked Image" \
 	-command CatalogPanelLSBGViewMask
+    $f.menubar.lsbg.m add command \
+	-label "   Save Mask As..." \
+	-command CatalogPanelLSBGSaveMask
+    $f.menubar.lsbg.m add command \
+	-label "   Import Mask..." \
+	-command CatalogPanelLSBGImportMask
     $f.menubar.lsbg.m add separator
     menu $f.menubar.lsbg.m.bkg -tearoff 0
     $f.menubar.lsbg.m add cascade -label "2. Background Model" \
@@ -8369,6 +8381,75 @@ proc CatalogPanelICLViewMask {} {
     set catpanel(status) "ICL: Masked image loaded in new frame"
 }
 
+proc CatalogPanelICLSaveMask {} {
+    global catpanel
+
+    if {!$catpanel(icl,has_mask) || ![file exists $catpanel(icl,mask_file)]} {
+	set catpanel(status) "ICL: No mask available — run Source Masking first"
+	return
+    }
+
+    set fname [tk_getSaveFile \
+	-title "Save ICL Mask As..." \
+	-initialfile icl_mask.fits \
+	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
+    if {$fname eq {}} return
+
+    if {[catch {file copy -force $catpanel(icl,mask_file) $fname} err]} {
+	set catpanel(status) "ICL: Save mask error: $err"
+	return
+    }
+    set catpanel(status) "ICL: Mask saved to $fname"
+}
+
+proc CatalogPanelICLImportMask {} {
+    global catpanel current
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "ICL: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_icl.py]
+    if {![file exists $script]} {
+	set catpanel(status) "ICL: ds9_icl.py not found"
+	return
+    }
+
+    set fname [tk_getOpenFile \
+	-title "Import Mask FITS..." \
+	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
+    if {$fname eq {}} return
+
+    set catpanel(status) "ICL: Importing mask..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode import-mask \
+	--import-mask-file $fname \
+	--interp-method $catpanel(icl,param,interp-method) \
+	--mask-output $catpanel(icl,mask_file) \
+	--masked-output $catpanel(icl,masked_file)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "ICL import mask error: $err"
+	return
+    }
+
+    set catpanel(icl,has_mask) 1
+
+    if {[file exists $catpanel(icl,masked_file)]} {
+	CreateFrame
+	if {![catch {LoadFitsFile $catpanel(icl,masked_file) {} {}}]} {
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	}
+    }
+
+    set catpanel(status) "ICL: Mask imported and applied"
+}
+
 # --- 2. Background Model ---
 
 proc CatalogPanelICLBackground {method} {
@@ -9549,6 +9630,76 @@ proc CatalogPanelLSBGViewMask {} {
     set catpanel(status) "LSBG: Masked image loaded in new frame"
 }
 
+proc CatalogPanelLSBGSaveMask {} {
+    global catpanel
+
+    if {!$catpanel(lsbg,has_mask) || ![file exists $catpanel(lsbg,mask_file)]} {
+	set catpanel(status) "LSBG: No mask available — run Mask Bright Sources first"
+	return
+    }
+
+    set fname [tk_getSaveFile \
+	-title "Save LSBG Mask As..." \
+	-initialfile lsbg_mask.fits \
+	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
+    if {$fname eq {}} return
+
+    if {[catch {file copy -force $catpanel(lsbg,mask_file) $fname} err]} {
+	set catpanel(status) "LSBG: Save mask error: $err"
+	return
+    }
+    set catpanel(status) "LSBG: Mask saved to $fname"
+}
+
+proc CatalogPanelLSBGImportMask {} {
+    global catpanel current
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG: No FITS file loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	return
+    }
+
+    set fname [tk_getOpenFile \
+	-title "Import Mask FITS..." \
+	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
+    if {$fname eq {}} return
+
+    set catpanel(status) "LSBG: Importing mask..."
+    update idletasks
+
+    set args [list python3 $script $fn --mode import-mask \
+	--import-mask-file $fname \
+	--interp-method $catpanel(lsbg,param,interp-method) \
+	--mask-output $catpanel(lsbg,mask_file) \
+	--masked-output $catpanel(lsbg,masked_file) \
+	--n-workers $catpanel(param,n-workers)]
+
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG import mask error: $err"
+	return
+    }
+
+    set catpanel(lsbg,has_mask) 1
+
+    CreateFrame
+    if {[catch {LoadFitsFile $catpanel(lsbg,masked_file) {} {}} err]} {
+	set catpanel(status) "LSBG: Mask imported but could not display: $err"
+    } else {
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+    }
+
+    set catpanel(status) "LSBG: Mask imported and applied (new frame)"
+}
+
 # --- 2. Background Model (Iterative Cleaning) ---
 
 proc CatalogPanelLSBGClean {method} {
@@ -9696,7 +9847,7 @@ proc CatalogPanelLSBGDetect {} {
 
     # Load into panel table
     set catpanel(alldata) $result
-    CatalogPanelDisplayTable
+    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
 
     # Count detections
     set nlines [llength [split $result \n]]
@@ -9754,7 +9905,7 @@ proc CatalogPanelLSBGPhotometry {} {
 
     set catpanel(alldata) $result
     set catpanel(lsbg,has_catalog) 1
-    CatalogPanelDisplayTable
+    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
@@ -9818,7 +9969,7 @@ proc CatalogPanelLSBGSersic {} {
 
     set catpanel(alldata) $result
     set catpanel(lsbg,has_catalog) 1
-    CatalogPanelDisplayTable
+    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
@@ -9896,7 +10047,7 @@ proc CatalogPanelLSBGFilter {} {
 
     set catpanel(alldata) $result
     set catpanel(lsbg,has_catalog) 1
-    CatalogPanelDisplayTable
+    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
@@ -10012,7 +10163,7 @@ proc CatalogPanelLSBGRunAll {} {
 
     # Load catalog
     set catpanel(alldata) $result
-    CatalogPanelDisplayTable
+    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]

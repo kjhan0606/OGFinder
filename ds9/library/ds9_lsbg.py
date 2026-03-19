@@ -203,6 +203,47 @@ def mode_mask(args):
     print(f"#LSBG_MASK\tN_MASKED={n_masked}\tMASK={mask_path}\tMASKED={masked_path}")
 
 
+# ---- Mode: import-mask ----
+
+def mode_import_mask(args):
+    """Import external mask FITS with WCS reprojection."""
+    from astropy.io import fits as pyfits
+    from icl.masking import reproject_mask, interpolate_masked
+
+    data, header = load_fits_data(args.fits)
+    ny, nx = data.shape
+    print(f"Target image: {nx}x{ny}", file=sys.stderr)
+
+    if not args.import_mask_file:
+        print("ERROR: --import-mask-file required for import-mask mode",
+              file=sys.stderr)
+        sys.exit(1)
+
+    with pyfits.open(args.import_mask_file) as hdul:
+        mask_data = hdul[0].data
+        mask_header = hdul[0].header
+    print(f"External mask: {mask_data.shape[1]}x{mask_data.shape[0]}",
+          file=sys.stderr)
+
+    mask = reproject_mask(mask_data, mask_header, header)
+
+    n_masked = int(mask.sum())
+    print(f"Masked {n_masked} pixels ({100*n_masked/(ny*nx):.1f}%)",
+          file=sys.stderr)
+
+    mask_path = args.mask_output
+    save_fits(mask.astype(np.int32), header, mask_path)
+
+    print(f"Interpolating masked regions ({args.interp_method})...",
+          file=sys.stderr)
+    masked_data = interpolate_masked(data, mask, method=args.interp_method)
+
+    masked_path = args.masked_output
+    save_fits(masked_data, header, masked_path)
+
+    print(f"#LSBG_MASK\tN_MASKED={n_masked}\tMASK={mask_path}\tMASKED={masked_path}")
+
+
 # ---- Mode: clean ----
 
 def mode_clean(args):
@@ -718,8 +759,9 @@ def main():
         description='DS9 LSBG (Low Surface Brightness Galaxy) Detection Pipeline')
     parser.add_argument('fits', help='Input FITS file')
     parser.add_argument('--mode', required=True,
-                        choices=['mask', 'clean', 'detect', 'photometry',
-                                 'sersic', 'filter', 'run', 'forced'],
+                        choices=['mask', 'import-mask', 'clean', 'detect',
+                                 'photometry', 'sersic', 'filter',
+                                 'run', 'forced'],
                         help='Operation mode')
 
     # Masking args
@@ -744,6 +786,8 @@ def main():
                         default=os.path.expanduser('~/.ds9/lsbg_mask.fits'))
     parser.add_argument('--masked-output',
                         default=os.path.expanduser('~/.ds9/lsbg_masked.fits'))
+    parser.add_argument('--import-mask-file',
+                        help='External mask FITS to import')
 
     # Background / clean args
     parser.add_argument('--mask', help='Mask FITS file for background fitting')
@@ -829,6 +873,8 @@ def main():
 
     if args.mode == 'mask':
         mode_mask(args)
+    elif args.mode == 'import-mask':
+        mode_import_mask(args)
     elif args.mode == 'clean':
         mode_clean(args)
     elif args.mode == 'detect':
