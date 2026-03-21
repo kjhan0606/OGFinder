@@ -24,6 +24,7 @@ DATADIR="../data"
 OUTDIR="results/tanoglidis2021_riz"
 LSBG_PY="ds9/library/ds9_lsbg.py"
 SEP_DETECT="scripts/sep_detect_riz.py"
+MERGE_PY="scripts/lsbg_merge_forced.py"
 
 # Detection image: r+i+z coadd
 RIZ_COADD="$DATADIR/des_tanoglidis2021_riz_coadd.fits"
@@ -128,71 +129,14 @@ echo "  Forced photometry saved: $OUTDIR/lsbg_forced_g.tsv" >&2
 echo "" >&2
 echo ">>> Step 3: Merging catalogs and applying g-band selection..." >&2
 
-python3 -c "
-import sys
-
-# Load detection catalog
-det_lines = open('$OUTDIR/lsbg_riz_detected.tsv').read().strip().split('\n')
-det_header = det_lines[0].split('\t')
-det_rows = [line.split('\t') for line in det_lines[1:]]
-
-# Load forced photometry
-forced_lines = open('$OUTDIR/lsbg_forced_g.tsv').read().strip().split('\n')
-forced_header = forced_lines[0].split('\t')
-forced_rows = [line.split('\t') for line in forced_lines[1:]]
-
-# Build merged header with MU_EFF_G column
-merge_header = det_header + [c for c in forced_header if c != 'NUMBER'] + ['MU_EFF_G']
-print('\t'.join(merge_header))
-
-import math
-
-n_pass = 0
-for i, det_row in enumerate(det_rows):
-    if i >= len(forced_rows):
-        break
-
-    # Parse forced g-band magnitude
-    forced_dict = dict(zip(forced_header, forced_rows[i]))
-    mag_g = float(forced_dict.get('MAG_g', '99'))
-
-    # Two r_eff measures:
-    # - R_EFF_ARCSEC (moment-based): stable, used for size filtering
-    # - FLUX_RADIUS_ARCSEC (half-light): accurate, used for mu_eff_g
-    fr_idx = det_header.index('FLUX_RADIUS_ARCSEC') if 'FLUX_RADIUS_ARCSEC' in det_header else -1
-    r_eff_idx = det_header.index('R_EFF_ARCSEC') if 'R_EFF_ARCSEC' in det_header else -1
-
-    # Moment r_eff for size filter
-    r_eff_moment = float(det_row[r_eff_idx]) if r_eff_idx >= 0 else 5.0
-    # Flux radius for mu_eff_g calculation
-    r_eff_mu = float(det_row[fr_idx]) if fr_idx >= 0 else r_eff_moment
-    # Clamp flux_radius to reasonable range for mu_eff calculation
-    r_eff_mu = max(r_eff_mu, r_eff_moment * 0.5)
-    r_eff_mu = min(r_eff_mu, 20.0)
-
-    # Compute g-band mu_eff using flux_radius
-    if mag_g < 90 and r_eff_mu > 0:
-        mu_eff_g = mag_g + 2.5 * math.log10(2 * math.pi * r_eff_mu**2)
-    else:
-        mu_eff_g = 99.0
-
-    # Apply Tanoglidis+2021 g-band selection
-    # Size filter uses moment-based r_eff (stable for blended sources)
-    if mu_eff_g < $MU_EFF_MIN or mu_eff_g > $MU_EFF_MAX:
-        continue
-    if r_eff_moment < $R_EFF_MIN or r_eff_moment > $R_EFF_MAX:
-        continue
-
-    # Merge columns
-    forced_vals = [forced_dict[c] for c in forced_header if c != 'NUMBER']
-    merged = det_row + forced_vals + [f'{mu_eff_g:.3f}']
-    print('\t'.join(merged))
-    n_pass += 1
-
-print(f'  g-band selection: {n_pass}/{len(det_rows)} passed '
-      f'(mu_eff_g {$MU_EFF_MIN}-{$MU_EFF_MAX}, r_eff {$R_EFF_MIN}-{$R_EFF_MAX}\")',
-      file=sys.stderr)
-" > "$OUTDIR/lsbg_detected.tsv"
+python3 "$MERGE_PY" \
+    --detection "$OUTDIR/lsbg_riz_detected.tsv" \
+    --forced "$OUTDIR/lsbg_forced_g.tsv" \
+    --mu-eff-min $MU_EFF_MIN \
+    --mu-eff-max $MU_EFF_MAX \
+    --r-eff-min $R_EFF_MIN \
+    --r-eff-max $R_EFF_MAX \
+    --output "$OUTDIR/lsbg_detected.tsv"
 
 N_FINAL=$(tail -n +2 "$OUTDIR/lsbg_detected.tsv" | wc -l)
 echo "  Final LSBG candidates: $N_FINAL" >&2

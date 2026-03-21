@@ -8733,14 +8733,9 @@ proc CatalogPanelLSBGExportScript {} {
 # and standalone reproduce scripts (arbitrary shell variables, line continuations).
 
 proc CatalogPanelImportCLIScript {pipeline} {
-    global catpanel
+    global catpanel current
 
-    set fn [CatalogPanelGetFITS]
-    if {$fn eq {}} {
-	set catpanel(status) "$pipeline: No FITS file loaded"
-	return
-    }
-
+    # --- Step 0: Select script file first (before requiring FITS) ---
     set types {{"Shell Script" {.sh}} {"All Files" *}}
     set infile [tk_getOpenFile -title "Import $pipeline CLI Script" \
 	-filetypes $types]
@@ -8749,6 +8744,64 @@ proc CatalogPanelImportCLIScript {pipeline} {
     if {[catch {set fd [open $infile r]; set content [read $fd]; close $fd} err]} {
 	set catpanel(status) "$pipeline: Cannot read script: $err"
 	return
+    }
+
+    # --- Get current FITS, or auto-detect from script ---
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	# Try to find the input FITS path from the script
+	# Look for FITS=... variable assignment
+	set script_fits {}
+	foreach rawline [split $content \n] {
+	    set line [string trim $rawline]
+	    if {[regexp {^FITS=["']?([^"'\$]+\.fits[^"']*)["']?$} $line -> fpath]} {
+		set script_fits $fpath
+		break
+	    }
+	}
+	# Also try first positional arg of first python3 command
+	if {$script_fits eq {}} {
+	    foreach rawline [split $content \n] {
+		set line [string trim $rawline]
+		if {[string match "python3 *" $line]} {
+		    # python3 script.py INPUT.fits ...
+		    set parts [split $line " "]
+		    if {[llength $parts] >= 3} {
+			set candidate [lindex $parts 2]
+			if {[string match "*.fits*" $candidate] &&
+			    ![string match {$*} $candidate] &&
+			    ![string match {--*} $candidate]} {
+			    set script_fits $candidate
+			    break
+			}
+		    }
+		}
+	    }
+	}
+	# Resolve relative path from script directory
+	if {$script_fits ne {} && [file pathtype $script_fits] ne "absolute"} {
+	    set script_fits [file join [file dirname $infile] $script_fits]
+	}
+	if {$script_fits ne {} && [file exists $script_fits]} {
+	    # Auto-load the FITS file
+	    if {$current(frame) eq {}} { CreateFrame }
+	    LoadFitsFile $script_fits {} {}
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	    set fn $script_fits
+	} else {
+	    # Ask user to select FITS file
+	    set ftypes {{"FITS Files" {.fits .fit .fts .fits.gz}} {"All Files" *}}
+	    set fn [tk_getOpenFile -title "Select input FITS file" \
+		-filetypes $ftypes]
+	    if {$fn eq {}} return
+	    if {$current(frame) eq {}} { CreateFrame }
+	    LoadFitsFile $fn {} {}
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	}
     }
 
     # --- Phase 1: Parse shell variable assignments ---
@@ -8763,6 +8816,13 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	    if {([string index $vval 0] eq "\"" && [string index $vval end] eq "\"") ||
 		([string index $vval 0] eq "'" && [string index $vval end] eq "'")} {
 		set vval [string range $vval 1 end-1]
+	    } else {
+		# Remove inline comments: "0.263  # arcsec/pixel" → "0.263"
+		# Only strip if not inside quotes
+		set cidx [string first " #" $vval]
+		if {$cidx >= 0} {
+		    set vval [string trimright [string range $vval 0 $cidx-1]]
+		}
 	    }
 	    # Expand already-known variables in value
 	    dict for {k v} $shell_vars {
@@ -8790,7 +8850,9 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	    continue
 	}
 	set cont 0
-	if {[string match "python3 *" $buf]} {
+	if {[string match "python3 *" $buf] &&
+	    ![string match "python3 -c *" $buf] &&
+	    ![string match "python3 -c*" $buf]} {
 	    # Expand shell variables
 	    dict for {k v} $shell_vars {
 		set buf [string map [list \
@@ -8817,6 +8879,9 @@ proc CatalogPanelImportCLIScript {pipeline} {
 
     set total [llength $commands]
     set step 0
+    set loaded_tsv 0
+    set last_tsv_data {}
+    set last_input_fits $fn
     foreach cmdline $commands {
 	incr step
 	set catpanel(status) "$pipeline: Running step $step/$total..."
@@ -8853,6 +8918,7 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	set found_script 0
 	set found_input 0
 	set prev_flag {}
+	set cmd_output_file {}
 
 	foreach arg $args {
 	    # 1. Replace script path (any form of ds9_<pipeline>.py)
@@ -8862,16 +8928,49 @@ proc CatalogPanelImportCLIScript {pipeline} {
 		set prev_flag {}
 		continue
 	    }
-
-	    # 2. Redirect --*-output values to ~/.ds9/
-	    if {[string match "--*-output" $prev_flag]} {
-		set arg [file join $ds9dir [file tail $arg]]
-		lappend new_args $arg
+	    # Also recognize other known pipeline scripts
+	    if {!$found_script && [string match "*.py" $arg] &&
+		[string match "*ds9_*" $arg] || [string match "*sep_detect*" $arg]} {
+		# Non-ds9 script: resolve relative to script_dir or keep as-is
+		if {[file exists $arg]} {
+		    lappend new_args $arg
+		} else {
+		    set resolved [file join [file dirname $script_path] [file tail $arg]]
+		    if {[file exists $resolved]} {
+			lappend new_args $resolved
+		    } else {
+			lappend new_args $arg
+		    }
+		}
+		set found_script 1
 		set prev_flag {}
 		continue
 	    }
 
-	    # 3. Redirect intermediate file inputs to ~/.ds9/
+	    # 2. Redirect --*-output and --output values to ~/.ds9/
+	    if {[string match "--*-output" $prev_flag] ||
+		$prev_flag eq "--output"} {
+		set arg [file join $ds9dir [file tail $arg]]
+		lappend new_args $arg
+		if {[string match "*.tsv" $arg]} {
+		    set cmd_output_file $arg
+		}
+		set prev_flag {}
+		continue
+	    }
+
+	    # 3. Redirect shell > output to ~/.ds9/
+	    if {$prev_flag eq ">"} {
+		set arg [file join $ds9dir [file tail $arg]]
+		lappend new_args $arg
+		if {[string match "*.tsv" $arg]} {
+		    set cmd_output_file $arg
+		}
+		set prev_flag {}
+		continue
+	    }
+
+	    # 4. Redirect intermediate file inputs to ~/.ds9/
 	    if {$prev_flag in {--mask --cleaned --segmap --catalog
 			       --profile-file --import-mask-file} &&
 		[regexp {\.(fits|tsv|fit|fts)(\.gz)?$} $arg]} {
@@ -8881,14 +8980,19 @@ proc CatalogPanelImportCLIScript {pipeline} {
 		continue
 	    }
 
-	    # 4. Input file (first positional arg after script)
+	    # 5. Input file (first positional arg after script)
 	    if {$found_script && !$found_input &&
-		[string index $arg 0] ne "-"} {
-		# If path is within ~/.ds9/, keep as intermediate
+		[string index $arg 0] ne "-" &&
+		$arg ne ">"} {
 		if {[string match "${ds9dir}/*" $arg]} {
+		    # Intermediate file in ~/.ds9/
 		    lappend new_args $arg
+		} elseif {[file exists $arg]} {
+		    # Original file exists, keep it
+		    lappend new_args $arg
+		    set last_input_fits $arg
 		} else {
-		    # Original input → replace with current FITS
+		    # File doesn't exist, use current FITS
 		    lappend new_args $fn
 		}
 		set found_input 1
@@ -8896,7 +9000,7 @@ proc CatalogPanelImportCLIScript {pipeline} {
 		continue
 	    }
 
-	    # 5. Track flag for next arg
+	    # 6. Track flag for next arg
 	    set prev_flag $arg
 	    lappend new_args $arg
 	}
@@ -8909,49 +9013,68 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	    return
 	}
 
-	# If output looks like TSV, load it
+	# Collect TSV: from stdout or from output file
+	set tsv {}
 	if {[string match "*\t*" $result] && [llength [split $result \n]] > 1} {
-	    set catpanel(alldata) $result
-	    CatalogPanelLoadTSV $result $pipeline
-	    CatalogPanelMarkAll
+	    set tsv $result
+	} elseif {$cmd_output_file ne {} && [file exists $cmd_output_file]} {
+	    catch {set fd [open $cmd_output_file r]
+		set tsv [read $fd]; close $fd}
+	}
+	# Keep the TSV with X_IMAGE (has coordinates); remember last TSV as fallback
+	if {$tsv ne {} && [string match "*\t*" $tsv]} {
+	    set hdr [lindex [split $tsv \n] 0]
+	    if {[string match "*X_IMAGE*" $hdr]} {
+		set last_tsv_data $tsv
+	    } elseif {$last_tsv_data eq {}} {
+		set last_tsv_data $tsv
+	    }
+	    set loaded_tsv 1
 	}
     }
 
-    # Update pipeline state and display images
+    # Load the best TSV collected during execution
+    if {$last_tsv_data ne {}} {
+	set catpanel(alldata) $last_tsv_data
+	CatalogPanelLoadTSV $last_tsv_data $pipeline
+	CatalogPanelMarkAll
+    }
+
+    # Update pipeline state
     if {$pipeline eq "icl"} {
 	if {[file exists $catpanel(icl,mask_file)]}    { set catpanel(icl,has_mask) 1 }
 	if {[file exists $catpanel(icl,bkg_file)]}     { set catpanel(icl,has_bkg) 1 }
 	if {[file exists $catpanel(icl,profile_file)]} { set catpanel(icl,has_profile) 1 }
-
-	# Display the best available result image
-	set display_file {}
-	if {[file exists $catpanel(icl,bgsub_file)]} {
-	    set display_file $catpanel(icl,bgsub_file)
-	} elseif {[file exists $catpanel(icl,masked_file)]} {
-	    set display_file $catpanel(icl,masked_file)
-	}
-	if {$display_file ne {}} {
-	    CreateFrame
-	    if {![catch {LoadFitsFile $display_file {} {}}]} {
-		global scale
-		set scale(mode) zscale
-		ChangeScaleMode
-	    }
-	}
     } elseif {$pipeline eq "lsbg"} {
 	if {[file exists $catpanel(lsbg,mask_file)]}    { set catpanel(lsbg,has_mask) 1 }
 	if {[file exists $catpanel(lsbg,cleaned_file)]} { set catpanel(lsbg,has_clean) 1 }
 	if {[file exists $catpanel(lsbg,segmap_file)]}  { set catpanel(lsbg,has_detect) 1 }
 	set catpanel(lsbg,has_catalog) 1
+    }
 
-	# Display cleaned image (like LSBGRunAll does)
-	if {[file exists $catpanel(lsbg,cleaned_file)]} {
-	    CreateFrame
-	    if {![catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}}]} {
-		global scale
-		set scale(mode) zscale
-		ChangeScaleMode
-	    }
+    # Display appropriate image
+    if {$pipeline eq "icl"} {
+	# ICL: show bgsub or masked image (better for ICL visualization)
+	set display_file {}
+	if {[file exists $catpanel(icl,bgsub_file)]} {
+	    set display_file $catpanel(icl,bgsub_file)
+	} elseif {[file exists $catpanel(icl,masked_file)]} {
+	    set display_file $catpanel(icl,masked_file)
+	} else {
+	    set display_file $fn
+	}
+	CreateFrame
+	if {![catch {LoadFitsFile $display_file {} {}}]} {
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
+	}
+    } else {
+	# LSBG: show last input FITS used (e.g. g-band for riz+g pipeline)
+	if {![catch {LoadFitsFile $last_input_fits {} {}}]} {
+	    global scale
+	    set scale(mode) zscale
+	    ChangeScaleMode
 	}
     }
 
