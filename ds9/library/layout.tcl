@@ -8571,6 +8571,8 @@ proc CatalogPanelLSBGExportScript {} {
 }
 
 # --- Import Script Engine ---
+# Handles both Export-generated scripts ($INPUT/$OUTDIR/$SCRIPT_DIR)
+# and standalone reproduce scripts (arbitrary shell variables, line continuations).
 
 proc CatalogPanelImportCLIScript {pipeline} {
     global catpanel
@@ -8591,14 +8593,55 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	return
     }
 
-    # Parse python3 commands from the script
-    set commands {}
-    foreach line [split $content \n] {
-	set line [string trim $line]
+    # --- Phase 1: Parse shell variable assignments ---
+    set shell_vars [dict create]
+    foreach rawline [split $content \n] {
+	set line [string trim $rawline]
 	if {$line eq {} || [string index $line 0] eq "#"} continue
-	if {[string match "python3 *" $line] || [string match "\$SCRIPT_DIR/*" $line]} {
-	    lappend commands $line
+	if {[regexp {^([A-Za-z_][A-Za-z_0-9]*)=(.+)$} $line -> vname vval]} {
+	    # Skip command substitutions $(...) and backticks
+	    if {[string match {*$(*} $vval] || [string match {*`*} $vval]} continue
+	    # Strip surrounding quotes
+	    if {([string index $vval 0] eq "\"" && [string index $vval end] eq "\"") ||
+		([string index $vval 0] eq "'" && [string index $vval end] eq "'")} {
+		set vval [string range $vval 1 end-1]
+	    }
+	    # Expand already-known variables in value
+	    dict for {k v} $shell_vars {
+		set vval [string map [list "\$$k" $v "\${$k}" $v] $vval]
+	    }
+	    dict set shell_vars $vname $vval
 	}
+    }
+
+    # --- Phase 2: Join continuation lines, extract python3 commands ---
+    set commands {}
+    set buf {}
+    set cont 0
+    foreach rawline [split $content \n] {
+	set trimmed [string trim $rawline]
+	if {!$cont} {
+	    if {$trimmed eq {} || [string index $trimmed 0] eq "#"} continue
+	    set buf $trimmed
+	} else {
+	    append buf " " $trimmed
+	}
+	if {[string index $buf end] eq "\\"} {
+	    set buf [string range $buf 0 end-1]
+	    set cont 1
+	    continue
+	}
+	set cont 0
+	if {[string match "python3 *" $buf]} {
+	    # Expand shell variables
+	    dict for {k v} $shell_vars {
+		set buf [string map [list \
+		    "\"\$$k\"" $v "\$$k" $v \
+		    "\"\${$k}\"" $v "\${$k}" $v] $buf]
+	    }
+	    lappend commands $buf
+	}
+	set buf {}
     }
 
     if {[llength $commands] == 0} {
@@ -8606,8 +8649,9 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	return
     }
 
-    # Resolve paths
-    set script_dir [file dirname [CatalogPanelGetScript ds9_${pipeline}.py]]
+    # --- Phase 3: Execute commands ---
+    set script_path [CatalogPanelGetScript ds9_${pipeline}.py]
+    set script_dir [file dirname $script_path]
     set ds9dir [file join [file normalize ~] .ds9]
 
     # Reset cmdlog for new session
@@ -8620,47 +8664,89 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	set catpanel(status) "$pipeline: Running step $step/$total..."
 	update idletasks
 
-	# Substitute variables
+	# Standard variable substitution (Export-generated scripts)
 	set cmdline [string map [list \
-	    "\$INPUT" $fn \
-	    "\${INPUT}" $fn \
-	    "\$OUTDIR" $ds9dir \
-	    "\${OUTDIR}" $ds9dir \
-	    "\$SCRIPT_DIR" $script_dir \
-	    "\${SCRIPT_DIR}" $script_dir] $cmdline]
+	    "\$INPUT" $fn "\${INPUT}" $fn \
+	    "\$OUTDIR" $ds9dir "\${OUTDIR}" $ds9dir \
+	    "\$SCRIPT_DIR" $script_dir "\${SCRIPT_DIR}" $script_dir] $cmdline]
 
-	# Remove shell quoting for exec
-	set cmdline [string map {"\\" ""} $cmdline]
-
-	# Split into args (simple word splitting)
+	# Shell-split into args (handle single and double quotes)
 	set args {}
-	set in_quote 0
-	set current_arg {}
+	set in_sq 0
+	set in_dq 0
+	set cur {}
 	foreach ch [split $cmdline {}] {
-	    if {$ch eq "'" && !$in_quote} {
-		set in_quote 1
-	    } elseif {$ch eq "'" && $in_quote} {
-		set in_quote 0
-	    } elseif {$ch eq " " && !$in_quote} {
-		if {$current_arg ne {}} {
-		    lappend args $current_arg
-		    set current_arg {}
-		}
+	    if {$ch eq "'" && !$in_dq} {
+		set in_sq [expr {!$in_sq}]
+	    } elseif {$ch eq "\"" && !$in_sq} {
+		set in_dq [expr {!$in_dq}]
+	    } elseif {$ch eq " " && !$in_sq && !$in_dq} {
+		if {$cur ne {}} { lappend args $cur; set cur {} }
 	    } else {
-		append current_arg $ch
+		append cur $ch
 	    }
 	}
-	if {$current_arg ne {}} {
-	    lappend args $current_arg
-	}
+	if {$cur ne {}} { lappend args $cur }
 
 	if {[llength $args] == 0} continue
 
-	# Log the command
-	CatalogPanelCmdLog $pipeline $args
+	# --- Smart path substitution ---
+	set new_args {}
+	set found_script 0
+	set found_input 0
+	set prev_flag {}
 
-	# Execute
-	if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	foreach arg $args {
+	    # 1. Replace script path (any form of ds9_<pipeline>.py)
+	    if {!$found_script && [string match "*ds9_${pipeline}.py" $arg]} {
+		lappend new_args $script_path
+		set found_script 1
+		set prev_flag {}
+		continue
+	    }
+
+	    # 2. Redirect --*-output values to ~/.ds9/
+	    if {[string match "--*-output" $prev_flag]} {
+		set arg [file join $ds9dir [file tail $arg]]
+		lappend new_args $arg
+		set prev_flag {}
+		continue
+	    }
+
+	    # 3. Redirect intermediate file inputs to ~/.ds9/
+	    if {$prev_flag in {--mask --cleaned --segmap --catalog
+			       --profile-file --import-mask-file} &&
+		[regexp {\.(fits|tsv|fit|fts)(\.gz)?$} $arg]} {
+		set arg [file join $ds9dir [file tail $arg]]
+		lappend new_args $arg
+		set prev_flag {}
+		continue
+	    }
+
+	    # 4. Input file (first positional arg after script)
+	    if {$found_script && !$found_input &&
+		[string index $arg 0] ne "-"} {
+		# If path is within ~/.ds9/, keep as intermediate
+		if {[string match "${ds9dir}/*" $arg]} {
+		    lappend new_args $arg
+		} else {
+		    # Original input → replace with current FITS
+		    lappend new_args $fn
+		}
+		set found_input 1
+		set prev_flag {}
+		continue
+	    }
+
+	    # 5. Track flag for next arg
+	    set prev_flag $arg
+	    lappend new_args $arg
+	}
+
+	# Log and execute
+	CatalogPanelCmdLog $pipeline $new_args
+
+	if {[catch {set result [exec {*}$new_args 2>@stderr]} err]} {
 	    set catpanel(status) "$pipeline import: Step $step failed: $err"
 	    return
 	}
