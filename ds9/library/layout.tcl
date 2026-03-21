@@ -8370,49 +8370,207 @@ proc CatalogPanelExportCLIScript {pipeline} {
 
     set script_dir [file dirname [CatalogPanelGetScript ds9_${pipeline}.py]]
     set ds9dir [file join [file normalize ~] .ds9]
+    set PIPELINE [string toupper $pipeline]
 
+    # --- Collect all --param value pairs across commands as shell variables ---
+    set param_vars {}      ;# list of {VARNAME value flag_name}
+    set param_var_map {}   ;# dict: value -> VARNAME (for dedup)
+    set output_files {}    ;# list of {VARNAME basename flag_name}
+
+    foreach cmd $commands {
+	for {set i 0} {$i < [llength $cmd]} {incr i} {
+	    set arg [lindex $cmd $i]
+	    if {[string match "--*" $arg] && $i + 1 < [llength $cmd]} {
+		set val [lindex $cmd [expr {$i + 1}]]
+		# Skip positional args, python3, script path
+		if {$val eq "python3" || [string match "--*" $val]} continue
+
+		# Convert flag name to shell var: --bkg-method → BKG_METHOD
+		set varname [string range $arg 2 end]
+		set varname [string map {- _} $varname]
+		set varname [string toupper $varname]
+
+		if {[string match "--*-output" $arg]} {
+		    # Output file → use $OUTDIR/basename
+		    lappend output_files [list $varname [file tail $val] $arg]
+		} elseif {[string match "${ds9dir}/*" $val] ||
+			  [regexp {\.(fits|tsv)(\.gz)?$} $val]} {
+		    # Intermediate file → use $OUTDIR/basename
+		    lappend output_files [list $varname [file tail $val] $arg]
+		} elseif {![dict exists $param_var_map $arg]} {
+		    # Parameter value → shell variable
+		    lappend param_vars [list $varname $val $arg]
+		    dict set param_var_map $arg $varname
+		}
+	    }
+	}
+    }
+
+    # --- Write script ---
     set fd [open $outfile w]
     puts $fd "#!/bin/bash"
-    puts $fd "# $pipeline pipeline — exported from DS9 GUI"
+    puts $fd "# [string toupper $pipeline] pipeline — exported from DS9 GUI"
     puts $fd "# Generated: [clock format [clock seconds] -format {%Y-%m-%d %H:%M:%S}]"
+    puts $fd "#"
+    puts $fd "# Usage: bash [file tail $outfile] <input.fits> \[output_dir\]"
     puts $fd ""
     puts $fd "set -euo pipefail"
     puts $fd ""
+
+    # Paths
     puts $fd "SCRIPT_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\""
-    puts $fd "# Adjust SCRIPT_DIR if scripts are elsewhere:"
-    puts $fd "SCRIPT_DIR=\"$script_dir\""
+    puts $fd "${PIPELINE}_PY=\"$script_dir/ds9_${pipeline}.py\""
     puts $fd ""
-    puts $fd "INPUT=\"\${1:?Usage: bash [file tail $outfile] <input.fits> \[output_dir\]}\""
+    puts $fd "# --- Input / Output ---"
+    puts $fd "FITS=\"\${1:?Usage: bash [file tail $outfile] <input.fits> \[output_dir\]}\""
     puts $fd "OUTDIR=\"\${2:-./output}\""
     puts $fd "mkdir -p \"\$OUTDIR\""
     puts $fd ""
 
-    set step 0
-    foreach cmd $commands {
-	incr step
-	puts $fd "# --- Step $step ---"
-
-	set parts {}
-	foreach arg $cmd {
-	    if {$fits_file ne {} && $arg eq $fits_file} {
-		set arg "\$INPUT"
-	    }
-	    if {[string match "${ds9dir}/*" $arg]} {
-		set basename [file tail $arg]
-		set arg "\$OUTDIR/$basename"
-	    }
-	    if {[string match "*/ds9_${pipeline}.py" $arg]} {
-		set arg "\$SCRIPT_DIR/ds9_${pipeline}.py"
-	    }
-	    lappend parts [ShellQuote $arg]
+    # Parameter variables (grouped)
+    if {[llength $param_vars] > 0} {
+	puts $fd "# --- Parameters ---"
+	foreach pv $param_vars {
+	    lassign $pv varname val flag
+	    puts $fd "$varname=$val"
 	}
-	puts $fd [join $parts " "]
 	puts $fd ""
     }
 
-    puts $fd "echo \"Done: $step steps completed.\""
-    close $fd
+    # Validate
+    puts $fd "# --- Validate ---"
+    puts $fd "if \[ ! -f \"\$FITS\" \]; then"
+    puts $fd "    echo \"ERROR: Input FITS not found: \$FITS\" >&2"
+    puts $fd "    exit 1"
+    puts $fd "fi"
+    puts $fd ""
 
+    # Commands
+    set step 0
+    foreach cmd $commands {
+	incr step
+
+	# Extract --mode value for echo
+	set mode "step$step"
+	for {set i 0} {$i < [llength $cmd]} {incr i} {
+	    if {[lindex $cmd $i] eq "--mode"} {
+		set mode [lindex $cmd [expr {$i + 1}]]
+		break
+	    }
+	}
+	puts $fd "# --- Step $step: $mode ---"
+	puts $fd "echo \">>> Step $step: $mode ...\" >&2"
+	puts $fd ""
+
+	# Build command with shell variables and line continuations
+	set first_line {}
+	set cont_lines {}
+	set found_script 0
+	set found_input 0
+
+	for {set i 0} {$i < [llength $cmd]} {incr i} {
+	    set arg [lindex $cmd $i]
+
+	    # python3
+	    if {$arg eq "python3"} {
+		set first_line "python3"
+		continue
+	    }
+
+	    # Script path
+	    if {!$found_script && [string match "*ds9_${pipeline}.py" $arg]} {
+		append first_line " \"\$${PIPELINE}_PY\""
+		set found_script 1
+		continue
+	    }
+
+	    # Input FITS (first positional arg)
+	    if {$found_script && !$found_input && [string index $arg 0] ne "-"} {
+		if {$fits_file ne {} && $arg eq $fits_file} {
+		    append first_line " \"\$FITS\""
+		} elseif {[string match "${ds9dir}/*" $arg]} {
+		    append first_line " \"\$OUTDIR/[file tail $arg]\""
+		} else {
+		    append first_line " \"\$FITS\""
+		}
+		set found_input 1
+		continue
+	    }
+
+	    # Flag + value pair
+	    if {[string match "--*" $arg] && $i + 1 < [llength $cmd]} {
+		set val [lindex $cmd [expr {$i + 1}]]
+
+		if {[string match "--*" $val]} {
+		    # Boolean flag (no value)
+		    lappend cont_lines "    $arg"
+		    continue
+		}
+
+		incr i ;# consume value
+
+		# Output files → $OUTDIR/basename
+		if {[string match "--*-output" $arg] ||
+		    ([string match "${ds9dir}/*" $val] &&
+		     [regexp {\.(fits|tsv)(\.gz)?$} $val])} {
+		    lappend cont_lines "    $arg \"\$OUTDIR/[file tail $val]\""
+		    continue
+		}
+
+		# Known intermediate file flags
+		if {$arg in {--mask --cleaned --segmap --catalog
+			     --profile-file --import-mask-file} &&
+		    [regexp {\.(fits|tsv)(\.gz)?$} $val]} {
+		    lappend cont_lines "    $arg \"\$OUTDIR/[file tail $val]\""
+		    continue
+		}
+
+		# Parameter with shell variable
+		set varname [string range $arg 2 end]
+		set varname [string map {- _} $varname]
+		set varname [string toupper $varname]
+
+		if {[dict exists $param_var_map $arg]} {
+		    lappend cont_lines "    $arg \$$varname"
+		} else {
+		    lappend cont_lines "    $arg [ShellQuote $val]"
+		}
+		continue
+	    }
+
+	    # Boolean flag (standalone)
+	    if {[string match "--*" $arg]} {
+		lappend cont_lines "    $arg"
+		continue
+	    }
+	}
+
+	# Write with line continuations
+	if {[llength $cont_lines] > 0} {
+	    puts $fd "$first_line \\"
+	    for {set j 0} {$j < [llength $cont_lines]} {incr j} {
+		set line [lindex $cont_lines $j]
+		if {$j < [llength $cont_lines] - 1} {
+		    puts $fd "$line \\"
+		} else {
+		    puts $fd $line
+		}
+	    }
+	} else {
+	    puts $fd $first_line
+	}
+	puts $fd ""
+    }
+
+    # Summary
+    puts $fd "echo \"\" >&2"
+    puts $fd "echo \"=== $PIPELINE Pipeline Complete ($step steps) ===\" >&2"
+    puts $fd "echo \"Output: \$OUTDIR/\" >&2"
+    puts $fd "ls -lh \"\$OUTDIR/\"*.fits \"\$OUTDIR/\"*.tsv 2>/dev/null | while read line; do"
+    puts $fd "    echo \"  \$line\" >&2"
+    puts $fd "done"
+
+    close $fd
     file attributes $outfile -permissions 0755
 
     set catpanel(status) "$pipeline: Script exported → [file tail $outfile] ($step steps)"
