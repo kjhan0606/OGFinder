@@ -999,28 +999,64 @@ Settings are saved to \texttt{\textasciitilde/.ds9/icl.prf} and loaded automatic
 
 \textbf{Menu}: ICL $\to$ Export Script\ldots{} / Import Script\ldots
 
-The \textbf{Export Script} feature saves the ICL pipeline commands executed in the current GUI session as a standalone bash script.  Two modes are supported:
+The \textbf{Export Script} feature saves the ICL pipeline commands executed in the current GUI session as a standalone, self-contained bash script in the same format as the reproduction scripts (e.g., \texttt{scripts/reproduce\_montes2022.sh}).  Two modes are supported:
 
 \begin{enumerate}
   \item \textbf{Command log mode} --- If any ICL commands have been executed (Mask, Background, Profile, etc.), the exact commands are exported in execution order.
   \item \textbf{Settings-based fallback} --- If no commands have been executed, a full 4-step pipeline script (mask $\to$ background $\to$ profile $\to$ measure) is generated from the current parameter settings.
 \end{enumerate}
 
-\noindent The exported script substitutes file paths with shell variables for portability:
+\noindent The exported script declares all pipeline parameters as shell variables at the top, followed by \texttt{python3} commands with line continuations for readability:
 
-\begin{itemize}
-  \item \texttt{\$INPUT} --- The input FITS file (first positional argument)
-  \item \texttt{\$OUTDIR} --- Output directory for intermediate files (second argument, default \texttt{./output})
-  \item \texttt{\$SCRIPT\_DIR} --- Directory containing \texttt{ds9\_icl.py}
-\end{itemize}
+\begin{codebox}[Exported script structure]
+\begin{lstlisting}[style=bash,numbers=none]
+#!/bin/bash
+# icl pipeline -- exported from DS9 GUI
+# Generated: 2026-03-22 14:30:00
+set -euo pipefail
 
-\begin{codebox}[Usage]
+FITS="${1:?Usage: bash icl_pipeline.sh <input.fits>}"
+OUTDIR="${2:-./output}"
+ICL_PY="ds9/library/ds9_icl.py"
+
+# --- Parameters ---
+EXPAND_FACTOR=1.5
+MAX_DILATE_RADIUS=20
+BKG_METHOD=polynomial
+BKG_ORDER=3
+# ... (all parameters as variables)
+
+# --- Step 1: mask ---
+python3 "$ICL_PY" "$FITS" --mode mask \
+    --expand-factor $EXPAND_FACTOR \
+    --max-dilate-radius $MAX_DILATE_RADIUS \
+    --mask-output "$OUTDIR/icl_mask.fits" \
+    --masked-output "$OUTDIR/icl_masked.fits"
+
+# --- Step 2: background ---
+python3 "$ICL_PY" "$OUTDIR/icl_masked.fits" \
+    --mode background \
+    --bkg-method $BKG_METHOD ...
+\end{lstlisting}
+\end{codebox}
+
+\noindent This format ensures full \textbf{GUI/CLI interoperability}: the same script works both as a standalone CLI tool and as input to the GUI's Import function.
+
+\begin{codebox}[CLI usage]
 \begin{lstlisting}[style=bash,numbers=none]
 bash icl_pipeline.sh input.fits ./output
 \end{lstlisting}
 \end{codebox}
 
-\noindent The \textbf{Import Script} feature loads a previously exported \texttt{.sh} file and re-executes all \texttt{python3} commands against the currently loaded FITS image.  Variable substitution is applied in reverse (\texttt{\$INPUT} $\to$ current FITS path, \texttt{\$OUTDIR} $\to$ \texttt{\textasciitilde/.ds9/}).  After execution, the best available result image (background-subtracted or masked) is displayed in a new frame, and any TSV output is loaded into the catalog table.
+\noindent The \textbf{Import Script} feature loads any bash script containing \texttt{python3} commands and re-executes them against the currently loaded FITS image.  The import engine performs three processing phases:
+
+\begin{enumerate}
+  \item \textbf{Variable parsing} --- Shell variable assignments (\texttt{VAR=value}) are extracted and recursively expanded (e.g., \texttt{FITS="\$DATADIR/file.fits"}).
+  \item \textbf{Command extraction} --- Line continuations (\texttt{\textbackslash}) are joined, and shell variables within \texttt{python3} commands are expanded to their values.
+  \item \textbf{Path substitution} --- The Python script path is resolved to the local installation; input FITS is replaced with the currently loaded image; output paths (\texttt{--*-output}) are redirected to \texttt{\textasciitilde/.ds9/}.
+\end{enumerate}
+
+\noindent This allows importing not only GUI-exported scripts but also hand-written reproduction scripts such as \texttt{scripts/reproduce\_montes2022.sh}.  After execution, the best available result image (background-subtracted or masked) is displayed in a new frame, and any TSV output is loaded into the catalog table.
 
 \begin{important}
 The command log is reset each time a new Mask operation is started, so the exported script reflects the most recent analysis session.
@@ -1466,7 +1502,7 @@ Settings are saved to \texttt{\textasciitilde/.ds9/lsbg.prf} and loaded automati
 
 \textbf{Menu}: LSBG $\to$ Export Script\ldots{} / Import Script\ldots
 
-Same functionality as the ICL Export/Import (Section~\ref{sec:icl-export-import}), adapted for the LSBG pipeline:
+Same core functionality as the ICL Export/Import (Section~\ref{sec:icl-export-import}), adapted for the LSBG pipeline.  Exported scripts use the same reproduce-style format with shell variable declarations and line continuations.
 
 \begin{enumerate}
   \item \textbf{Command log mode} --- Exports the exact LSBG commands executed in the GUI session (Mask, Clean, Detect, Photometry, Filter, SVM Classify, Forced Photometry, etc.) in execution order.
@@ -1475,9 +1511,9 @@ Same functionality as the ICL Export/Import (Section~\ref{sec:icl-export-import}
 
 \noindent The command log is reset when starting a new Mask operation or when using Run Full Pipeline.
 
-On import, the script is re-executed against the currently loaded FITS image.  After completion, the cleaned image is displayed in a new frame, and the final catalog is loaded into the table with source markers.
+On import, any bash script containing \texttt{python3 ds9\_lsbg.py} commands can be loaded---including hand-written reproduction scripts such as \texttt{scripts/reproduce\_tanoglidis2021.sh}.  Shell variables and line continuations are parsed automatically.  After completion, the cleaned image is displayed in a new frame, and the final catalog is loaded into the table with source markers.
 
-\begin{codebox}[Usage]
+\begin{codebox}[CLI usage]
 \begin{lstlisting}[style=bash,numbers=none]
 bash lsbg_pipeline.sh input.fits ./output
 \end{lstlisting}
