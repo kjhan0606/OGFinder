@@ -203,6 +203,50 @@ def classify_confidence(source, config):
     return round(confidence, 3)
 
 
+def svm_classify_candidates(catalog, config):
+    """Classify LSBG candidates using trained SVM.
+
+    Adds SVM_LSBG (0/1) and SVM_CONF (probability) to each source dict.
+    If model file is missing, sets SVM_LSBG=-1, SVM_CONF=NaN.
+
+    Returns
+    -------
+    catalog : list of dict
+        All sources with SVM columns added.
+    accepted : list of dict
+        Sources classified as LSBG (SVM_LSBG=1).
+    rejected : list of dict
+        Sources classified as contaminant (SVM_LSBG=0).
+    """
+    from lsbg.classify import classify
+
+    checkpoint = config.svm_checkpoint if config.svm_checkpoint else None
+
+    try:
+        results = classify(catalog, checkpoint_path=checkpoint,
+                           threshold=config.svm_threshold)
+    except FileNotFoundError as e:
+        import sys
+        print(f"SVM: model not found, skipping classification ({e})",
+              file=sys.stderr)
+        for src in catalog:
+            src['svm_lsbg'] = -1
+            src['svm_conf'] = np.nan
+        return catalog, catalog, []
+
+    accepted = []
+    rejected = []
+    for src, res in zip(catalog, results):
+        src['svm_lsbg'] = res['svm_lsbg']
+        src['svm_conf'] = res['svm_conf']
+        if res['svm_lsbg'] == 1:
+            accepted.append(src)
+        else:
+            rejected.append(src)
+
+    return catalog, accepted, rejected
+
+
 def assign_grade(confidence):
     """Assign A/B/C/D letter grade based on confidence score.
 

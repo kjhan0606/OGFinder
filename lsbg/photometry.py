@@ -35,7 +35,10 @@ def curve_of_growth(data, x, y, max_radius=100, n_steps=20):
     r_eff : float
         Half-light radius in pixels (NaN if unmeasurable).
     """
-    data_c = np.ascontiguousarray(data, dtype=np.float64)
+    if data.dtype == np.float64 and data.flags['C_CONTIGUOUS']:
+        data_c = data
+    else:
+        data_c = np.ascontiguousarray(data, dtype=np.float64)
     radii = np.linspace(2.0, max_radius, n_steps)
     cumflux = np.zeros(n_steps)
 
@@ -77,8 +80,15 @@ def _measure_one_source(data, rms, obj, segmap, label_idx, config):
     b = float(obj['b'])
     theta = float(obj['theta'])
 
-    data_c = np.ascontiguousarray(data, dtype=np.float64)
-    rms_c = np.ascontiguousarray(rms, dtype=np.float64)
+    # Avoid copy if already contiguous float64 (e.g. from SharedArray)
+    if data.dtype == np.float64 and data.flags['C_CONTIGUOUS']:
+        data_c = data
+    else:
+        data_c = np.ascontiguousarray(data, dtype=np.float64)
+    if rms.dtype == np.float64 and rms.flags['C_CONTIGUOUS']:
+        rms_c = rms
+    else:
+        rms_c = np.ascontiguousarray(rms, dtype=np.float64)
 
     result = {
         'x': x, 'y': y, 'a': a, 'b': b, 'theta': theta,
@@ -117,16 +127,33 @@ def _measure_one_source(data, rms, obj, segmap, label_idx, config):
         except Exception:
             result[key] = 0.0
 
-    # Curve of growth
-    max_r = max(100, int(4 * max(a, b)))
-    _, _, r_eff = curve_of_growth(data, x, y, max_radius=max_r, n_steps=25)
+    # Half-light radius via sep.flux_radius with local normalization.
+    # Using rmax based on source shape (not Kron aperture) avoids
+    # background contamination that inflates r_eff for diffuse sources.
+    rmax = max(10.0, min(60.0, 3.0 * max(a, b)))
+    try:
+        r_half, _ = sep.flux_radius(data_c, [x], [y], [rmax], 0.5)
+        r_eff = float(r_half[0])
+        if not np.isfinite(r_eff) or r_eff <= 0:
+            r_eff = np.nan
+    except Exception:
+        r_eff = np.nan
     result['r_eff_pix'] = r_eff
 
-    # Surface brightness
+    # Surface brightness from flux within r_eff (self-consistent)
     r_eff_arcsec = r_eff * config.pixel_scale if np.isfinite(r_eff) else np.nan
     result['r_eff_arcsec'] = r_eff_arcsec
 
-    flux_half = result['flux_auto'] * 0.5
+    if np.isfinite(r_eff) and r_eff > 0:
+        try:
+            flux_in_reff, _, _ = sep.sum_circle(
+                data_c, [x], [y], [r_eff], err=rms_c)
+            flux_half = float(flux_in_reff[0])
+        except Exception:
+            flux_half = 0.0
+    else:
+        flux_half = 0.0
+
     if np.isfinite(r_eff_arcsec) and r_eff_arcsec > 0 and flux_half > 0:
         area = np.pi * r_eff_arcsec ** 2
         mu_eff = (config.mag_zeropoint
@@ -163,17 +190,14 @@ def _worker_photometry(args):
     """Parallel worker for source photometry."""
     from parallel import SharedArraySpec
 
-    data_spec, rms_spec, obj_data, segmap_spec, label_idx, config = args
+    data_spec, rms_spec, obj_dict, segmap_spec, label_idx, config = args
 
     data_arr, data_shm = data_spec.attach()
     rms_arr, rms_shm = rms_spec.attach()
     segmap_arr, segmap_shm = segmap_spec.attach()
 
-    # Reconstruct structured array element
-    obj = np.void(obj_data)
-
     try:
-        result = _measure_one_source(data_arr, rms_arr, obj,
+        result = _measure_one_source(data_arr, rms_arr, obj_dict,
                                      segmap_arr, label_idx, config)
     finally:
         data_shm.close()
@@ -235,7 +259,11 @@ def measure_photometry(data, rms, objects, segmap, config):
           SharedArray(rms_c) as rms_spec,
           SharedArray(segmap_c) as segmap_spec):
         tasks = [
-            (data_spec, rms_spec, objects[i].tobytes(), segmap_spec, i, config)
+            (data_spec, rms_spec,
+             {name: float(objects[i][name]) if objects.dtype[name] != np.int32
+              else int(objects[i][name])
+              for name in objects.dtype.names},
+             segmap_spec, i, config)
             for i in range(n_sources)
         ]
         results = parallel_map(_worker_photometry, tasks,

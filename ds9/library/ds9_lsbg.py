@@ -33,7 +33,7 @@ from lsbg.masking import create_lsbg_mask
 from lsbg.background import iterative_background
 from lsbg.detection import detect_lsbg_candidates, detect_multiscale
 from lsbg.photometry import measure_photometry
-from lsbg.filtering import filter_lsbg_candidates
+from lsbg.filtering import filter_lsbg_candidates, svm_classify_candidates
 
 
 def load_fits_data(path):
@@ -119,13 +119,17 @@ def build_config(args):
         sersic_n_filter_min=args.sersic_n_filter_min,
         sersic_n_filter_max=args.sersic_n_filter_max,
         sersic_chi2_max=args.sersic_chi2_max,
+        svm_classify=args.svm_classify,
+        svm_threshold=args.svm_threshold,
+        svm_checkpoint=args.svm_checkpoint,
         n_workers=args.n_workers,
     )
 
 
 # Column names for output TSV
 COLUMNS = [
-    'NUMBER', 'X_IMAGE', 'Y_IMAGE', 'A_IMAGE', 'B_IMAGE',
+    'NUMBER', 'X_IMAGE', 'Y_IMAGE', 'RA', 'DEC',
+    'A_IMAGE', 'B_IMAGE',
     'THETA_IMAGE', 'ELLIPTICITY',
     'FLUX_AUTO', 'FLUXERR_AUTO', 'MAG_AUTO', 'MAGERR_AUTO',
     'KRON_RADIUS', 'R_EFF_PIX', 'R_EFF_ARCSEC', 'MU_EFF',
@@ -133,8 +137,29 @@ COLUMNS = [
     'FLUX_APER_5', 'FLUX_APER_10', 'FLUX_APER_20', 'FLUX_APER_40',
     'SERSIC_N', 'SERSIC_RE', 'SERSIC_CHI2',
     'MAG_SERSIC', 'MU_EFF_SERSIC',
-    'LSBG_CONF', 'LSBG_GRADE', 'FLAGS',
+    'LSBG_CONF', 'LSBG_GRADE',
+    'SVM_LSBG', 'SVM_CONF',
+    'FLAGS',
 ]
+
+
+def add_wcs_coords(catalog, header):
+    """Add RA/DEC to catalog sources using FITS WCS header."""
+    try:
+        from astropy.wcs import WCS
+        w = WCS(header)
+    except Exception:
+        return
+    for src in catalog:
+        x = src.get('x', 0)
+        y = src.get('y', 0)
+        try:
+            coord = w.pixel_to_world(x, y)
+            src['ra'] = float(coord.ra.deg)
+            src['dec'] = float(coord.dec.deg)
+        except Exception:
+            src['ra'] = np.nan
+            src['dec'] = np.nan
 
 
 def format_catalog_tsv(catalog):
@@ -150,6 +175,8 @@ def format_catalog_tsv(catalog):
             str(i + 1),
             f"{src.get('x', 0) + 1:.3f}",
             f"{src.get('y', 0) + 1:.3f}",
+            f"{src.get('ra', 0):.7f}" if np.isfinite(src.get('ra', np.nan)) else "NaN",
+            f"{src.get('dec', 0):.7f}" if np.isfinite(src.get('dec', np.nan)) else "NaN",
             f"{src.get('a', 0):.3f}",
             f"{src.get('b', 0):.3f}",
             f"{np.degrees(src.get('theta', 0)):.3f}",
@@ -174,6 +201,8 @@ def format_catalog_tsv(catalog):
             f"{mu_s:.4f}" if np.isfinite(mu_s) else "NaN",
             f"{src.get('lsbg_conf', 0):.3f}",
             src.get('lsbg_grade', 'D'),
+            str(int(src.get('svm_lsbg', -1))),
+            f"{src.get('svm_conf', 0):.4f}" if np.isfinite(src.get('svm_conf', np.nan)) else "NaN",
             str(int(src.get('flags', 0))),
         ]
         lines.append("\t".join(vals))
@@ -531,6 +560,53 @@ def mode_filter(args):
     print(tsv)
 
 
+# ---- Mode: svm-classify ----
+
+def mode_svm_classify(args):
+    """Apply SVM classification to an existing LSBG catalog."""
+    if not args.catalog:
+        print("ERROR: --catalog required for svm-classify mode", file=sys.stderr)
+        sys.exit(1)
+
+    # Load catalog TSV
+    with open(args.catalog, 'r') as f:
+        lines = f.read().strip().split('\n')
+    if len(lines) < 2:
+        print("ERROR: Catalog has no data rows", file=sys.stderr)
+        sys.exit(1)
+
+    headers = [h.strip() for h in lines[0].split('\t')]
+    rows = []
+    for line in lines[1:]:
+        fields = line.split('\t')
+        if len(fields) < len(headers):
+            continue
+        row = {}
+        for h, v in zip(headers, fields):
+            row[h] = v.strip()
+        rows.append(row)
+
+    if len(rows) == 0:
+        print("NUMBER\tSVM_LSBG\tSVM_CONF")
+        return
+
+    print(f"SVM classifying {len(rows)} candidates...", file=sys.stderr)
+
+    from lsbg.classify import classify
+    checkpoint = args.svm_checkpoint if args.svm_checkpoint else None
+    results = classify(rows, checkpoint_path=checkpoint,
+                       threshold=args.svm_threshold)
+
+    n_lsbg = sum(1 for r in results if r['svm_lsbg'] == 1)
+    print(f"SVM: {n_lsbg} LSBG, {len(results) - n_lsbg} rejected",
+          file=sys.stderr)
+
+    # Output: NUMBER, SVM_LSBG, SVM_CONF (for AddColumnsFromTSV)
+    print("NUMBER\tSVM_LSBG\tSVM_CONF")
+    for res in results:
+        print(f"{res['number']}\t{res['svm_lsbg']}\t{res['svm_conf']:.4f}")
+
+
 # ---- Mode: run ----
 
 def mode_run(args):
@@ -600,6 +676,9 @@ def mode_run(args):
     print("=== Step 4: Photometry ===", file=sys.stderr)
     catalog = measure_photometry(cleaned, rms, objects, segmap, config)
 
+    # Add WCS coordinates (RA/DEC) for cross-matching
+    add_wcs_coords(catalog, header)
+
     # Step 5: Sérsic profile fitting
     sersic_results = None
     if config.sersic_fit:
@@ -623,6 +702,14 @@ def mode_run(args):
           file=sys.stderr)
     if grade_str:
         print(f"  Grades: {grade_str}", file=sys.stderr)
+
+    # Step 7: SVM classification (optional)
+    if config.svm_classify:
+        print("=== Step 7: SVM classification ===", file=sys.stderr)
+        classified, svm_ok, svm_rej = svm_classify_candidates(filtered, config)
+        print(f"SVM: {len(svm_ok)} LSBG, {len(svm_rej)} rejected",
+              file=sys.stderr)
+        filtered = svm_ok
 
     # Save full catalog
     catalog_path = args.catalog_output
@@ -761,7 +848,7 @@ def main():
     parser.add_argument('--mode', required=True,
                         choices=['mask', 'import-mask', 'clean', 'detect',
                                  'photometry', 'sersic', 'filter',
-                                 'run', 'forced'],
+                                 'svm-classify', 'run', 'forced'],
                         help='Operation mode')
 
     # Masking args
@@ -813,7 +900,8 @@ def main():
     parser.add_argument('--detect-minarea', type=int, default=50)
     parser.add_argument('--detect-filter-kernel', default='gauss5x5',
                         choices=['none', 'gauss3x3', 'gauss5x5', 'gauss7x7',
-                                 'gauss9x9', 'tophat5', 'tophat7', 'mexhat'])
+                                 'gauss9x9', 'gauss15x15', 'gauss21x21',
+                                 'gauss33x33', 'tophat5', 'tophat7', 'mexhat'])
     parser.add_argument('--deblend-nthresh', type=int, default=32)
     parser.add_argument('--deblend-mincont', type=float, default=0.005)
     parser.add_argument('--multiscale', action='store_true', default=True,
@@ -858,6 +946,17 @@ def main():
     parser.add_argument('--sersic-chi2-max', type=float, default=10.0,
                         help='Max reduced chi2 for Sérsic fit quality')
 
+    # SVM classification
+    parser.add_argument('--svm-classify', action='store_true', default=False,
+                        help='Apply SVM classification after filtering')
+    parser.add_argument('--no-svm-classify', dest='svm_classify',
+                        action='store_false',
+                        help='Disable SVM classification')
+    parser.add_argument('--svm-threshold', type=float, default=0.3,
+                        help='SVM probability threshold for LSBG (0-1)')
+    parser.add_argument('--svm-checkpoint', default='',
+                        help='Path to SVM model checkpoint (.joblib)')
+
     # Output
     parser.add_argument('--catalog-output',
                         default=os.path.expanduser('~/.ds9/lsbg_catalog.tsv'))
@@ -885,6 +984,8 @@ def main():
         mode_sersic(args)
     elif args.mode == 'filter':
         mode_filter(args)
+    elif args.mode == 'svm-classify':
+        mode_svm_classify(args)
     elif args.mode == 'run':
         mode_run(args)
     elif args.mode == 'forced':

@@ -46,7 +46,7 @@ class LSBGConfig:
     sersic_n_min: float = 0.2
     sersic_n_max: float = 10.0
     sersic_re_min: float = 0.5  # pixels
-    sersic_cutout_scale: float = 5.0  # cutout = scale * kron_radius * a
+    sersic_cutout_scale: float = 10.0  # cutout = scale * max(a,b), 10× for LSBG
     sersic_max_nfev: int = 500  # max function evaluations
 
     # Photometry
@@ -64,5 +64,10 @@ class LSBGConfig:
     sersic_n_filter_min: float = 0.3  # reject if n < this (likely artifact)
     sersic_n_filter_max: float = 6.0  # reject if n > this (likely compact)
     sersic_chi2_max: float = 10.0     # reject poor fits
+
+    # SVM classification
+    svm_classify: bool = False
+    svm_threshold: float = 0.3
+    svm_checkpoint: str = ''
 
     n_workers: int = 0

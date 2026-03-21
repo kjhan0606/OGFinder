@@ -55,7 +55,7 @@ def _fit_background_tile(args):
     mask_arr, mask_shm = mask_spec.attach()
 
     tile_data = data_arr[y0:y1, x0:x1].copy()
-    tile_mask = mask_arr[y0:y1, x0:x1].copy()
+    tile_mask = mask_arr[y0:y1, x0:x1].astype(bool)
 
     try:
         if method == 'polynomial':
@@ -203,7 +203,10 @@ def compute_quantile_rms(data, mask, quantile=0.25):
     rms_map : 2D array
         RMS map scaled to the lower quantile.
     """
-    data_c = np.ascontiguousarray(data, dtype=np.float64)
+    if data.dtype == np.float64 and data.flags['C_CONTIGUOUS']:
+        data_c = data
+    else:
+        data_c = np.ascontiguousarray(data, dtype=np.float64)
     try:
         bkg = sep.Background(data_c)
         rms = bkg.rms()

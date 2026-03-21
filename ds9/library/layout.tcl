@@ -427,6 +427,13 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelICLLoadProfile
     $f.menubar.icl.m add separator
     $f.menubar.icl.m add command \
+	-label "Export Script..." \
+	-command CatalogPanelICLExportScript
+    $f.menubar.icl.m add command \
+	-label "Import Script..." \
+	-command CatalogPanelICLImportScript
+    $f.menubar.icl.m add separator
+    $f.menubar.icl.m add command \
 	-label "Settings..." \
 	-command CatalogPanelICLSettings
 
@@ -480,6 +487,10 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelLSBGFilter
     $f.menubar.lsbg.m add separator
     $f.menubar.lsbg.m add command \
+	-label "7. SVM Classify" \
+	-command CatalogPanelLSBGSVMClassify
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
 	-label "Save Catalog..." \
 	-command CatalogPanelSaveCatalog
     $f.menubar.lsbg.m add command \
@@ -487,12 +498,19 @@ proc CreateCatalogPanel {} {
 	-command CatalogPanelLoadCatalog
     $f.menubar.lsbg.m add separator
     $f.menubar.lsbg.m add command \
-	-label "7. Forced Photometry (Multi-Band)" \
+	-label "8. Forced Photometry (Multi-Band)" \
 	-command CatalogPanelLSBGForcedPhot
     $f.menubar.lsbg.m add separator
     $f.menubar.lsbg.m add command \
 	-label "Run Full Pipeline" \
 	-command CatalogPanelLSBGRunAll
+    $f.menubar.lsbg.m add separator
+    $f.menubar.lsbg.m add command \
+	-label "Export Script..." \
+	-command CatalogPanelLSBGExportScript
+    $f.menubar.lsbg.m add command \
+	-label "Import Script..." \
+	-command CatalogPanelLSBGImportScript
     $f.menubar.lsbg.m add separator
     $f.menubar.lsbg.m add command \
 	-label "Settings..." \
@@ -699,6 +717,7 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,center_x)     {}
     set catpanel(icl,center_y)     {}
     set catpanel(icl,click_mode)   0
+    set catpanel(icl,cmdlog)       {}
     set catpanel(icl,param,expand-factor)          1.5
     set catpanel(icl,param,bright-star-mag-limit)  18.0
     set catpanel(icl,param,bright-star-radius-scale) 10.0
@@ -738,6 +757,7 @@ proc CreateCatalogPanel {} {
     set catpanel(lsbg,has_detect)   0
     set catpanel(lsbg,has_catalog)  0
     set catpanel(lsbg,detect_data)  {}
+    set catpanel(lsbg,cmdlog)       {}
     set catpanel(lsbg,param,mask-detect-thresh)         1.5
     set catpanel(lsbg,param,mask-detect-minarea)        5
     set catpanel(lsbg,param,mask-expand-factor)         1.5
@@ -781,6 +801,9 @@ proc CreateCatalogPanel {} {
     set catpanel(lsbg,param,sersic-n-filter-min)        0.3
     set catpanel(lsbg,param,sersic-n-filter-max)        6.0
     set catpanel(lsbg,param,sersic-chi2-max)            10.0
+    set catpanel(lsbg,param,svm-classify)               0
+    set catpanel(lsbg,param,svm-threshold)              0.3
+    set catpanel(lsbg,param,svm-checkpoint)             {}
     CatalogPanelLSBGParamLoad
 
     # Ctrl key tracking (Feature A/C)
@@ -8303,6 +8326,402 @@ proc CatalogPanelICLParamSave {} {
     close $fd
 }
 
+# ===========================================================
+# CLI Script Export / Import Engine (ICL & LSBG)
+# ===========================================================
+
+proc CatalogPanelCmdLog {pipeline args_list} {
+    global catpanel
+    lappend catpanel($pipeline,cmdlog) $args_list
+}
+
+proc ShellQuote {s} {
+    if {[string index $s 0] eq "\$"} {
+	return $s
+    }
+    if {[regexp {[[:space:]'\"\\;&|<>()]} $s]} {
+	return "'[string map {' '\\''} $s]'"
+    }
+    return $s
+}
+
+proc CatalogPanelExportCLIScript {pipeline} {
+    global catpanel
+
+    set types {{"Shell Script" {.sh}} {"All Files" *}}
+    set outfile [tk_getSaveFile -title "Export $pipeline CLI Script" \
+	-filetypes $types \
+	-defaultextension .sh \
+	-initialfile "${pipeline}_pipeline.sh"]
+    if {$outfile eq {}} return
+
+    set fits_file [CatalogPanelGetFITS]
+
+    if {[llength $catpanel($pipeline,cmdlog)] > 0} {
+	set commands $catpanel($pipeline,cmdlog)
+    } else {
+	set commands [CatalogPanel[string totitle $pipeline]GenerateScript]
+    }
+
+    if {[llength $commands] == 0} {
+	set catpanel(status) "$pipeline: No commands to export"
+	return
+    }
+
+    set script_dir [file dirname [CatalogPanelGetScript ds9_${pipeline}.py]]
+    set ds9dir [file join [file normalize ~] .ds9]
+
+    set fd [open $outfile w]
+    puts $fd "#!/bin/bash"
+    puts $fd "# $pipeline pipeline — exported from DS9 GUI"
+    puts $fd "# Generated: [clock format [clock seconds] -format {%Y-%m-%d %H:%M:%S}]"
+    puts $fd ""
+    puts $fd "set -euo pipefail"
+    puts $fd ""
+    puts $fd "SCRIPT_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\""
+    puts $fd "# Adjust SCRIPT_DIR if scripts are elsewhere:"
+    puts $fd "SCRIPT_DIR=\"$script_dir\""
+    puts $fd ""
+    puts $fd "INPUT=\"\${1:?Usage: bash [file tail $outfile] <input.fits> \[output_dir\]}\""
+    puts $fd "OUTDIR=\"\${2:-./output}\""
+    puts $fd "mkdir -p \"\$OUTDIR\""
+    puts $fd ""
+
+    set step 0
+    foreach cmd $commands {
+	incr step
+	puts $fd "# --- Step $step ---"
+
+	set parts {}
+	foreach arg $cmd {
+	    if {$fits_file ne {} && $arg eq $fits_file} {
+		set arg "\$INPUT"
+	    }
+	    if {[string match "${ds9dir}/*" $arg]} {
+		set basename [file tail $arg]
+		set arg "\$OUTDIR/$basename"
+	    }
+	    if {[string match "*/ds9_${pipeline}.py" $arg]} {
+		set arg "\$SCRIPT_DIR/ds9_${pipeline}.py"
+	    }
+	    lappend parts [ShellQuote $arg]
+	}
+	puts $fd [join $parts " "]
+	puts $fd ""
+    }
+
+    puts $fd "echo \"Done: $step steps completed.\""
+    close $fd
+
+    file attributes $outfile -permissions 0755
+
+    set catpanel(status) "$pipeline: Script exported → [file tail $outfile] ($step steps)"
+}
+
+# --- ICL fallback: generate from current settings ---
+
+proc CatalogPanelIclGenerateScript {} {
+    global catpanel
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} return
+    set script [CatalogPanelGetScript ds9_icl.py]
+    set commands {}
+
+    # Step 1: Mask
+    set args [list python3 $script $fn --mode mask \
+	--expand-factor $catpanel(icl,param,expand-factor) \
+	--max-dilate-radius $catpanel(icl,param,max-dilate-radius) \
+	--bright-star-mag-limit $catpanel(icl,param,bright-star-mag-limit) \
+	--bright-star-radius-scale $catpanel(icl,param,bright-star-radius-scale) \
+	--interp-method $catpanel(icl,param,interp-method) \
+	--detect-thresh $catpanel(icl,param,detect-thresh) \
+	--mask-output $catpanel(icl,mask_file) \
+	--masked-output $catpanel(icl,masked_file)]
+    lappend commands $args
+
+    # Step 2: Background
+    set args [list python3 $script $catpanel(icl,masked_file) --mode background \
+	--bkg-method $catpanel(icl,param,bkg-method) \
+	--bkg-order $catpanel(icl,param,bkg-order) \
+	--bkg-sigma-clip $catpanel(icl,param,bkg-sigma-clip) \
+	--bkg-sep-mesh $catpanel(icl,param,bkg-sep-mesh) \
+	--bkg-output $catpanel(icl,bkg_file) \
+	--bgsub-output $catpanel(icl,bgsub_file) \
+	--mask $catpanel(icl,mask_file)]
+    lappend commands $args
+
+    # Step 3: Profile (if center is set)
+    if {$catpanel(icl,center_x) ne {} && $catpanel(icl,center_y) ne {}} {
+	set args [list python3 $script $catpanel(icl,bgsub_file) --mode profile \
+	    --center "$catpanel(icl,center_x),$catpanel(icl,center_y)" \
+	    --rmin $catpanel(icl,param,rmin) \
+	    --rmax $catpanel(icl,param,rmax) \
+	    --nsteps $catpanel(icl,param,nsteps) \
+	    --spacing $catpanel(icl,param,spacing) \
+	    --ellipticity $catpanel(icl,param,ellipticity) \
+	    --pa $catpanel(icl,param,pa) \
+	    --mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
+	    --pixel-scale $catpanel(icl,param,pixel-scale) \
+	    --mask $catpanel(icl,mask_file) \
+	    --profile-output $catpanel(icl,profile_file)]
+	lappend commands $args
+
+	# Step 4: Measure
+	set args [list python3 $script $fn --mode measure \
+	    --profile-file $catpanel(icl,profile_file) \
+	    --mu-threshold $catpanel(icl,param,mu-threshold) \
+	    --mu-levels $catpanel(icl,param,mu-levels) \
+	    --pixel-scale $catpanel(icl,param,pixel-scale)]
+	lappend commands $args
+    }
+
+    return $commands
+}
+
+# --- LSBG fallback: generate --mode run from current settings ---
+
+proc CatalogPanelLsbgGenerateScript {} {
+    global catpanel
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} return
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+
+    set args [list python3 $script $fn --mode run \
+	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
+	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
+	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
+	--max-dilate-radius $catpanel(lsbg,param,max-dilate-radius) \
+	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
+	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
+	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
+	--interp-method $catpanel(lsbg,param,interp-method) \
+	--lsb-mu-threshold $catpanel(lsbg,param,lsb-mu-threshold) \
+	--bkg-method $catpanel(lsbg,param,bkg-method) \
+	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
+	--bkg-poly-order $catpanel(lsbg,param,bkg-poly-order) \
+	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
+	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
+	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
+	--bkg-rms-quantile $catpanel(lsbg,param,bkg-rms-quantile) \
+	--bkg-convergence-tol $catpanel(lsbg,param,bkg-convergence-tol) \
+	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
+	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
+	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
+	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
+	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
+	--multiscale-factors $catpanel(lsbg,param,multiscale-factors) \
+	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
+	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
+	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
+	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
+	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
+	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
+	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
+	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
+	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
+	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
+	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
+	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
+	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
+	--min-snr $catpanel(lsbg,param,min-snr) \
+	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
+	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
+	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
+	--mask-output $catpanel(lsbg,mask_file) \
+	--masked-output $catpanel(lsbg,masked_file) \
+	--bkg-output $catpanel(lsbg,bkg_file) \
+	--cleaned-output $catpanel(lsbg,cleaned_file) \
+	--segmap-output $catpanel(lsbg,segmap_file) \
+	--catalog-output $catpanel(lsbg,catalog_file) \
+	--n-workers $catpanel(param,n-workers)]
+    if {$catpanel(lsbg,param,lsb-protect)} {
+	lappend args --lsb-protect
+    } else {
+	lappend args --no-lsb-protect
+    }
+    if {$catpanel(lsbg,param,multiscale)} {
+	lappend args --multiscale
+    } else {
+	lappend args --no-multiscale
+    }
+    if {$catpanel(lsbg,param,sersic-fit)} {
+	lappend args --sersic-fit
+    } else {
+	lappend args --no-sersic-fit
+    }
+    if {$catpanel(lsbg,param,svm-classify)} {
+	lappend args --svm-classify
+	lappend args --svm-threshold $catpanel(lsbg,param,svm-threshold)
+	if {$catpanel(lsbg,param,svm-checkpoint) ne {}} {
+	    lappend args --svm-checkpoint $catpanel(lsbg,param,svm-checkpoint)
+	}
+    }
+
+    return [list $args]
+}
+
+# --- Export entry points ---
+
+proc CatalogPanelICLExportScript {} {
+    CatalogPanelExportCLIScript icl
+}
+
+proc CatalogPanelLSBGExportScript {} {
+    CatalogPanelExportCLIScript lsbg
+}
+
+# --- Import Script Engine ---
+
+proc CatalogPanelImportCLIScript {pipeline} {
+    global catpanel
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "$pipeline: No FITS file loaded"
+	return
+    }
+
+    set types {{"Shell Script" {.sh}} {"All Files" *}}
+    set infile [tk_getOpenFile -title "Import $pipeline CLI Script" \
+	-filetypes $types]
+    if {$infile eq {}} return
+
+    if {[catch {set fd [open $infile r]; set content [read $fd]; close $fd} err]} {
+	set catpanel(status) "$pipeline: Cannot read script: $err"
+	return
+    }
+
+    # Parse python3 commands from the script
+    set commands {}
+    foreach line [split $content \n] {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	if {[string match "python3 *" $line] || [string match "\$SCRIPT_DIR/*" $line]} {
+	    lappend commands $line
+	}
+    }
+
+    if {[llength $commands] == 0} {
+	set catpanel(status) "$pipeline: No python3 commands found in script"
+	return
+    }
+
+    # Resolve paths
+    set script_dir [file dirname [CatalogPanelGetScript ds9_${pipeline}.py]]
+    set ds9dir [file join [file normalize ~] .ds9]
+
+    # Reset cmdlog for new session
+    set catpanel($pipeline,cmdlog) {}
+
+    set total [llength $commands]
+    set step 0
+    foreach cmdline $commands {
+	incr step
+	set catpanel(status) "$pipeline: Running step $step/$total..."
+	update idletasks
+
+	# Substitute variables
+	set cmdline [string map [list \
+	    "\$INPUT" $fn \
+	    "\${INPUT}" $fn \
+	    "\$OUTDIR" $ds9dir \
+	    "\${OUTDIR}" $ds9dir \
+	    "\$SCRIPT_DIR" $script_dir \
+	    "\${SCRIPT_DIR}" $script_dir] $cmdline]
+
+	# Remove shell quoting for exec
+	set cmdline [string map {"\\" ""} $cmdline]
+
+	# Split into args (simple word splitting)
+	set args {}
+	set in_quote 0
+	set current_arg {}
+	foreach ch [split $cmdline {}] {
+	    if {$ch eq "'" && !$in_quote} {
+		set in_quote 1
+	    } elseif {$ch eq "'" && $in_quote} {
+		set in_quote 0
+	    } elseif {$ch eq " " && !$in_quote} {
+		if {$current_arg ne {}} {
+		    lappend args $current_arg
+		    set current_arg {}
+		}
+	    } else {
+		append current_arg $ch
+	    }
+	}
+	if {$current_arg ne {}} {
+	    lappend args $current_arg
+	}
+
+	if {[llength $args] == 0} continue
+
+	# Log the command
+	CatalogPanelCmdLog $pipeline $args
+
+	# Execute
+	if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	    set catpanel(status) "$pipeline import: Step $step failed: $err"
+	    return
+	}
+
+	# If output looks like TSV, load it
+	if {[string match "*\t*" $result] && [llength [split $result \n]] > 1} {
+	    set catpanel(alldata) $result
+	    CatalogPanelLoadTSV $result $pipeline
+	    CatalogPanelMarkAll
+	}
+    }
+
+    # Update pipeline state and display images
+    if {$pipeline eq "icl"} {
+	if {[file exists $catpanel(icl,mask_file)]}    { set catpanel(icl,has_mask) 1 }
+	if {[file exists $catpanel(icl,bkg_file)]}     { set catpanel(icl,has_bkg) 1 }
+	if {[file exists $catpanel(icl,profile_file)]} { set catpanel(icl,has_profile) 1 }
+
+	# Display the best available result image
+	set display_file {}
+	if {[file exists $catpanel(icl,bgsub_file)]} {
+	    set display_file $catpanel(icl,bgsub_file)
+	} elseif {[file exists $catpanel(icl,masked_file)]} {
+	    set display_file $catpanel(icl,masked_file)
+	}
+	if {$display_file ne {}} {
+	    CreateFrame
+	    if {![catch {LoadFitsFile $display_file {} {}}]} {
+		global scale
+		set scale(mode) zscale
+		ChangeScaleMode
+	    }
+	}
+    } elseif {$pipeline eq "lsbg"} {
+	if {[file exists $catpanel(lsbg,mask_file)]}    { set catpanel(lsbg,has_mask) 1 }
+	if {[file exists $catpanel(lsbg,cleaned_file)]} { set catpanel(lsbg,has_clean) 1 }
+	if {[file exists $catpanel(lsbg,segmap_file)]}  { set catpanel(lsbg,has_detect) 1 }
+	set catpanel(lsbg,has_catalog) 1
+
+	# Display cleaned image (like LSBGRunAll does)
+	if {[file exists $catpanel(lsbg,cleaned_file)]} {
+	    CreateFrame
+	    if {![catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}}]} {
+		global scale
+		set scale(mode) zscale
+		ChangeScaleMode
+	    }
+	}
+    }
+
+    set catpanel(status) "$pipeline: Script imported — $total steps executed"
+}
+
+proc CatalogPanelICLImportScript {} {
+    CatalogPanelImportCLIScript icl
+}
+
+proc CatalogPanelLSBGImportScript {} {
+    CatalogPanelImportCLIScript lsbg
+}
+
 # --- 1. Source Masking ---
 
 proc CatalogPanelICLMask {} {
@@ -8323,6 +8742,9 @@ proc CatalogPanelICLMask {} {
     set catpanel(status) "ICL: Creating source mask..."
     update idletasks
 
+    # Reset cmdlog for new session
+    set catpanel(icl,cmdlog) {}
+
     set args [list python3 $script $fn --mode mask \
 	--expand-factor $catpanel(icl,param,expand-factor) \
 	--max-dilate-radius $catpanel(icl,param,max-dilate-radius) \
@@ -8341,6 +8763,7 @@ proc CatalogPanelICLMask {} {
 	}
     }
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL mask error: $err"
 	return
@@ -8498,6 +8921,7 @@ proc CatalogPanelICLBackground {method} {
 	    --mask-output $catpanel(icl,mask_file)
     }
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL background error: $err"
 	return
@@ -8749,6 +9173,7 @@ proc CatalogPanelICLProfile {} {
 	--pixel-scale $catpanel(icl,param,pixel-scale) \
 	--profile-output $catpanel(icl,profile_file)]
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL profile error: $err"
 	return
@@ -8874,6 +9299,7 @@ proc CatalogPanelICLSectorProfileRun {w} {
 	--sector-width $ed(icl,sector-width) \
 	--profile-output $catpanel(icl,profile_file)]
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL sector profile error: $err"
 	return
@@ -8913,6 +9339,7 @@ proc CatalogPanelICLMeasure {} {
 	--mu-levels $catpanel(icl,param,mu-levels) \
 	--pixel-scale $catpanel(icl,param,pixel-scale)]
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL measure error: $err"
 	return
@@ -8993,6 +9420,7 @@ proc CatalogPanelICLMeasureMulti {} {
 	--profile-file $catpanel(icl,profile_file) \
 	--pixel-scale $catpanel(icl,param,pixel-scale)]
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL multi-threshold error: $err"
 	return
@@ -9055,6 +9483,7 @@ proc CatalogPanelICLDecompose {} {
 	--pixel-scale $catpanel(icl,param,pixel-scale) \
 	--profile-output $catpanel(icl,profile_file)]
 
+    CatalogPanelCmdLog icl $prof_args
     if {[catch {exec {*}$prof_args 2>@stderr} err]} {
 	set catpanel(status) "ICL decompose: profile error: $err"
 	return
@@ -9066,6 +9495,7 @@ proc CatalogPanelICLDecompose {} {
 	--pixel-scale $catpanel(icl,param,pixel-scale) \
 	--mag-zeropoint $catpanel(icl,param,mag-zeropoint)]
 
+    CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL decompose error: $err"
 	return
@@ -9544,7 +9974,8 @@ proc CatalogPanelLSBGParamSave {} {
 		   phot-apertures mag-zeropoint pixel-scale \
 		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
 		   ellipticity-max min-snr \
-		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max} {
+		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max \
+		   svm-classify svm-threshold svm-checkpoint} {
 	puts $fd "$pname $catpanel(lsbg,param,$pname)"
     }
     close $fd
@@ -9570,6 +10001,9 @@ proc CatalogPanelLSBGMask {} {
     set catpanel(status) "LSBG: Masking bright sources..."
     update idletasks
 
+    # Reset cmdlog for new session
+    set catpanel(lsbg,cmdlog) {}
+
     set args [list python3 $script $fn --mode mask \
 	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
 	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
@@ -9591,6 +10025,7 @@ proc CatalogPanelLSBGMask {} {
 	lappend args --no-lsb-protect
     }
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG mask error: $err"
 	return
@@ -9742,6 +10177,7 @@ proc CatalogPanelLSBGClean {method} {
 	--cleaned-output $catpanel(lsbg,cleaned_file) \
 	--n-workers $catpanel(param,n-workers)]
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG clean error: $err"
 	return
@@ -9824,6 +10260,7 @@ proc CatalogPanelLSBGDetect {} {
 	lappend args --no-multiscale
     }
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG detect error: $err"
 	return
@@ -9898,6 +10335,7 @@ proc CatalogPanelLSBGPhotometry {} {
 	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
 	--n-workers $catpanel(param,n-workers)]
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG photometry error: $err"
 	return
@@ -9962,6 +10400,7 @@ proc CatalogPanelLSBGSersic {} {
 	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
 	--n-workers $catpanel(param,n-workers)]
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG Sérsic fit error: $err"
 	return
@@ -10040,6 +10479,7 @@ proc CatalogPanelLSBGFilter {} {
 	lappend args --no-sersic-fit
     }
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG filter error: $err"
 	return
@@ -10054,6 +10494,211 @@ proc CatalogPanelLSBGFilter {} {
 
     CatalogPanelMarkAll
     set catpanel(status) "LSBG: $nsrc candidates passed filtering"
+}
+
+# --- SVM Classify ---
+
+proc CatalogPanelLSBGSVMClassify {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "LSBG SVM: No catalog loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_lsbg.py]
+    if {![file exists $script]} {
+	set catpanel(status) "LSBG SVM: ds9_lsbg.py not found"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {}} {
+	set catpanel(status) "LSBG SVM: No FITS file loaded"
+	return
+    }
+
+    set catpanel(status) "LSBG SVM: Classifying candidates..."
+    update idletasks
+
+    # Save current catalog to temp file
+    set tmpcat [file join [file normalize ~] .ds9 lsbg_svm_tmp.tsv]
+    if {[catch {
+	set fd [open $tmpcat w]
+	puts $fd $catpanel(alldata)
+	close $fd
+    } err]} {
+	set catpanel(status) "LSBG SVM: Cannot write temp catalog"
+	return
+    }
+
+    set args [list python3 $script $fn --mode svm-classify \
+	--catalog $tmpcat \
+	--svm-threshold $catpanel(lsbg,param,svm-threshold)]
+    if {$catpanel(lsbg,param,svm-checkpoint) ne {}} {
+	lappend args --svm-checkpoint $catpanel(lsbg,param,svm-checkpoint)
+    }
+
+    CatalogPanelCmdLog lsbg $args
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "LSBG SVM error: $err"
+	catch {file delete $tmpcat}
+	return
+    }
+    catch {file delete $tmpcat}
+
+    # Add SVM columns to catalog
+    CatalogPanelAddColumnsFromTSV $result
+
+    # Color markers by SVM result
+    CatalogPanelLSBGSVMColorMarkers $result
+
+    # Count results
+    set lines [split $result \n]
+    set n_lsbg 0
+    set n_total 0
+    foreach line [lrange $lines 1 end] {
+	if {[string trim $line] eq {}} continue
+	incr n_total
+	set fields [split $line "\t"]
+	if {[llength $fields] >= 2 && [lindex $fields 1] eq "1"} {
+	    incr n_lsbg
+	}
+    }
+    set catpanel(status) "LSBG SVM: $n_lsbg LSBG / $n_total total"
+}
+
+proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
+    global catpanel
+    global current
+
+    if {$current(frame) == {}} return
+    set frame $current(frame)
+
+    # Parse SVM results: NUMBER -> SVM_LSBG
+    array set svm_class {}
+    set lines [split $result_tsv \n]
+    foreach line [lrange $lines 1 end] {
+	set fields [split $line "\t"]
+	if {[llength $fields] < 2} continue
+	set src_num [lindex $fields 0]
+	set svm_lsbg [lindex $fields 1]
+	set svm_class($src_num) $svm_lsbg
+    }
+
+    # Delete existing markers and recreate with SVM colors
+    catch {$frame marker catalog sextract_all delete}
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+
+    set alllines [split $catpanel(alldata) \n]
+    if {[llength $alllines] < 2} return
+
+    set headers [split [lindex $alllines 0] "\t"]
+    set ncols [llength $headers]
+
+    # Find needed columns
+    set col_x -1
+    set col_y -1
+    set col_a -1
+    set col_b -1
+    set col_theta -1
+    set col_ir -1
+    set col_num -1
+    for {set c 0} {$c < $ncols} {incr c} {
+	set hdr [string trim [lindex $headers $c]]
+	switch -- $hdr {
+	    NUMBER      { set col_num $c }
+	    X_IMAGE     { set col_x $c }
+	    Y_IMAGE     { set col_y $c }
+	    A_IMAGE     { set col_a $c }
+	    B_IMAGE     { set col_b $c }
+	    THETA_IMAGE { set col_theta $c }
+	    ISO_RADIUS  { set col_ir $c }
+	}
+    }
+    if {$col_x < 0 || $col_y < 0} return
+
+    # Build region strings with SVM colors
+    set batch_size 500
+    set reg "image\n"
+    set count 0
+    set batch_count 0
+    global sextract_all_reg
+
+    for {set i 1} {$i < [llength $alllines]} {incr i} {
+	set line [lindex $alllines $i]
+	if {[string trim $line] eq {}} continue
+	set fields [split $line "\t"]
+
+	set x [string trim [lindex $fields $col_x]]
+	set y [string trim [lindex $fields $col_y]]
+	if {![string is double -strict $x] || ![string is double -strict $y]} continue
+
+	set src_num [expr {$i}]
+	if {$col_num >= 0} {
+	    set nv [string trim [lindex $fields $col_num]]
+	    if {$nv ne {}} { set src_num $nv }
+	}
+
+	# Ellipse parameters
+	set iso_radius 5.0
+	set a_image 0
+	set b_image 0
+	set theta 0
+
+	if {$col_ir >= 0} {
+	    set val [string trim [lindex $fields $col_ir]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
+		set iso_radius $v
+	    }
+	}
+	if {$col_a >= 0} {
+	    set val [string trim [lindex $fields $col_a]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
+	}
+	if {$col_b >= 0} {
+	    set val [string trim [lindex $fields $col_b]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
+	}
+	if {$col_theta >= 0} {
+	    set val [string trim [lindex $fields $col_theta]]
+	    if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
+	}
+
+	set semi_a $iso_radius
+	set semi_b $iso_radius
+	if {$a_image > 0 && $b_image > 0} {
+	    set semi_b [expr {$iso_radius * $b_image / $a_image}]
+	}
+
+	# Color: LSBG=green, contaminant=red, unclassified=yellow
+	set color yellow
+	if {[info exists svm_class($src_num)]} {
+	    if {$svm_class($src_num) eq "1"} {
+		set color green
+	    } else {
+		set color red
+	    }
+	}
+
+	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=$color width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
+
+	incr count
+	if {$count >= $batch_size} {
+	    set sextract_all_reg $reg
+	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    set reg "image\n"
+	    set count 0
+	    incr batch_count
+	}
+    }
+
+    # Flush remaining
+    if {$count > 0} {
+	set sextract_all_reg $reg
+	catch {$frame marker catalog command ds9 var sextract_all_reg}
+    }
 }
 
 # --- Run Full Pipeline ---
@@ -10075,6 +10720,9 @@ proc CatalogPanelLSBGRunAll {} {
 
     set catpanel(status) "LSBG: Running full pipeline..."
     update idletasks
+
+    # Reset cmdlog for new session
+    set catpanel(lsbg,cmdlog) {}
 
     set args [list python3 $script $fn --mode run \
 	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
@@ -10139,7 +10787,15 @@ proc CatalogPanelLSBGRunAll {} {
     } else {
 	lappend args --no-sersic-fit
     }
+    if {$catpanel(lsbg,param,svm-classify)} {
+	lappend args --svm-classify
+	lappend args --svm-threshold $catpanel(lsbg,param,svm-threshold)
+	if {$catpanel(lsbg,param,svm-checkpoint) ne {}} {
+	    lappend args --svm-checkpoint $catpanel(lsbg,param,svm-checkpoint)
+	}
+    }
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG pipeline error: $err"
 	return
@@ -10240,6 +10896,7 @@ proc CatalogPanelLSBGForcedPhot {} {
 	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
 	--n-workers $catpanel(param,n-workers)]
 
+    CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "LSBG forced phot error: $err"
 	return
@@ -10294,7 +10951,8 @@ proc CatalogPanelLSBGSettings {} {
 		   phot-apertures mag-zeropoint pixel-scale \
 		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
 		   ellipticity-max min-snr \
-		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max} {
+		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max \
+		   svm-classify svm-threshold svm-checkpoint} {
 	set ed(lsbg,$pname) $catpanel(lsbg,param,$pname)
     }
 
@@ -10542,6 +11200,21 @@ proc CatalogPanelLSBGSettings {} {
     ttk::entry $t4.esc2 -textvariable ed(lsbg,sersic-chi2-max) -width 10
     grid $t4.lsc2 -row $r -column 0 -sticky w -padx 8 -pady 4
     grid $t4.esc2 -row $r -column 1 -sticky w -padx 4 -pady 4
+    incr r
+
+    ttk::separator $t4.sep2 -orient horizontal
+    grid $t4.sep2 -row $r -column 0 -columnspan 2 -sticky ew -padx 8 -pady 6
+    incr r
+
+    ttk::checkbutton $t4.csvm -text "SVM Classification" \
+	-variable ed(lsbg,svm-classify)
+    grid $t4.csvm -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady 4
+    incr r
+
+    ttk::label $t4.lsvmt -text "SVM threshold:"
+    ttk::entry $t4.esvmt -textvariable ed(lsbg,svm-threshold) -width 10
+    grid $t4.lsvmt -row $r -column 0 -sticky w -padx 8 -pady 4
+    grid $t4.esvmt -row $r -column 1 -sticky w -padx 4 -pady 4
 
     # Buttons
     set bf [ttk::frame $w.buttons]
@@ -10575,7 +11248,8 @@ proc CatalogPanelLSBGSettingsApply {w} {
 		   phot-apertures mag-zeropoint pixel-scale \
 		   mu-eff-min mu-eff-max r-eff-min r-eff-max \
 		   ellipticity-max min-snr \
-		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max} {
+		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max \
+		   svm-classify svm-threshold svm-checkpoint} {
 	set catpanel(lsbg,param,$pname) $ed(lsbg,$pname)
     }
     CatalogPanelLSBGParamSave
@@ -10628,6 +11302,9 @@ proc CatalogPanelLSBGSettingsDefaults {} {
     set ed(lsbg,sersic-n-filter-min) 0.3
     set ed(lsbg,sersic-n-filter-max) 6.0
     set ed(lsbg,sersic-chi2-max) 10.0
+    set ed(lsbg,svm-classify) 0
+    set ed(lsbg,svm-threshold) 0.5
+    set ed(lsbg,svm-checkpoint) {}
 }
 
 # ===== Per-Frame Catalog Panel State Management =====

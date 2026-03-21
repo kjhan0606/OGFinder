@@ -149,7 +149,7 @@ def fit_sersic_2d(cutout, xc, yc, a, b, theta, flux, config):
     Steps:
     1. Extract radial profile in elliptical annuli
     2. Fit 1D Sérsic for initial (Ie, re, n)
-    3. Fit full 2D Sérsic model
+    3. Fit full 2D Sérsic model (C+OpenMP fast path when available)
 
     Parameters
     ----------
@@ -208,23 +208,46 @@ def fit_sersic_2d(cutout, xc, yc, a, b, theta, flux, config):
         xc + 5, yc + 5, 0.95, np.pi, np.inf
     ]
 
-    def residuals(params):
-        model = sersic_2d(params, xx, yy)
-        return (cutout - model).ravel()
-
+    # Check for C fast path: full LM in C
     try:
-        result = least_squares(
-            residuals, p0,
-            bounds=(bounds_lower, bounds_upper),
-            method='trf',
-            max_nfev=config.sersic_max_nfev
-        )
-    except Exception:
-        return None
+        from sersic_fit.fast import is_available, fit_sersic_2d_c
+        use_fast = is_available()
+    except ImportError:
+        use_fast = False
 
-    Ie, re, n, xc_f, yc_f, ellip_f, theta_f, bg_f = result.x
-    npix = len(result.fun)
-    chi2 = np.sum(result.fun ** 2) / max(1, npix - 8)
+    if use_fast:
+        xx_flat = np.ascontiguousarray(xx.ravel(), dtype=np.float64)
+        yy_flat = np.ascontiguousarray(yy.ravel(), dtype=np.float64)
+        data_flat = np.ascontiguousarray(cutout.ravel(), dtype=np.float64)
+
+        try:
+            params_out, chi2 = fit_sersic_2d_c(
+                data_flat, xx_flat, yy_flat, p0,
+                bounds_lower, bounds_upper,
+                max_iter=config.sersic_max_nfev
+            )
+        except Exception:
+            return None
+
+        Ie, re, n, xc_f, yc_f, ellip_f, theta_f, bg_f = params_out
+    else:
+        def residuals(params):
+            model = sersic_2d(params, xx, yy)
+            return (cutout - model).ravel()
+
+        try:
+            result = least_squares(
+                residuals, p0,
+                bounds=(bounds_lower, bounds_upper),
+                method='trf',
+                max_nfev=config.sersic_max_nfev
+            )
+        except Exception:
+            return None
+
+        Ie, re, n, xc_f, yc_f, ellip_f, theta_f, bg_f = result.x
+        npix_total = len(result.fun)
+        chi2 = np.sum(result.fun ** 2) / max(1, npix_total - 8)
 
     # Analytical total flux from Sérsic profile
     flux_total = sersic_total_flux(Ie, re, n, ellip_f)
@@ -245,7 +268,8 @@ def _extract_cutout(data, x, y, a, b, scale):
     """Extract a square cutout centered on source."""
     ny, nx = data.shape
     r = max(a, b) * scale
-    r = max(r, 10)  # minimum 10 pixels
+    r = max(r, 50)  # minimum 50 pixels (13" at 0.262"/px)
+    r = min(r, 200)  # maximum 200 pixels to keep 2D fit tractable
     half = int(r)
 
     ix, iy = int(round(x)), int(round(y))
@@ -261,8 +285,43 @@ def _extract_cutout(data, x, y, a, b, scale):
     return cutout, xc_cut, yc_cut
 
 
+def _worker_sersic(args):
+    """Parallel worker for Sérsic fitting."""
+    import os
+    from parallel import SharedArraySpec
+
+    # Limit OpenMP threads inside multiprocessing workers
+    if 'OMP_NUM_THREADS' not in os.environ:
+        os.environ['OMP_NUM_THREADS'] = '2'
+
+    data_spec, obj_dict, config = args
+
+    data_arr, data_shm = data_spec.attach()
+
+    try:
+        x = obj_dict['x']
+        y = obj_dict['y']
+        a = obj_dict['a']
+        b = obj_dict['b']
+        theta = obj_dict['theta']
+        flux = obj_dict['flux']
+
+        cutout, xc, yc = _extract_cutout(
+            data_arr, x, y, a, b, config.sersic_cutout_scale
+        )
+
+        if cutout.size < 25:
+            return None
+
+        return fit_sersic_2d(cutout, xc, yc, a, b, theta, flux, config)
+    finally:
+        data_shm.close()
+
+
 def fit_sources_sersic(data, objects, config):
     """Fit 2D Sérsic profiles to all detected LSBG candidates.
+
+    Parallelized using SharedArray + parallel_map.
 
     Parameters
     ----------
@@ -278,7 +337,7 @@ def fit_sources_sersic(data, objects, config):
     results : list of dict or None
         Sérsic fit results for each source (None if fit failed).
     """
-    from parallel import resolve_n_workers
+    from parallel import SharedArray, parallel_map, resolve_n_workers
 
     n_sources = len(objects)
     if n_sources == 0:
@@ -286,31 +345,56 @@ def fit_sources_sersic(data, objects, config):
 
     actual_workers = resolve_n_workers(config.n_workers)
 
-    results = []
-    for i in range(n_sources):
-        obj = objects[i]
-        x = float(obj['x'])
-        y = float(obj['y'])
-        a = float(obj['a'])
-        b = float(obj['b'])
-        theta = float(obj['theta'])
-        flux = float(obj['flux'])
+    # Sequential mode
+    if actual_workers <= 1 or n_sources < 10:
+        results = []
+        for i in range(n_sources):
+            obj = objects[i]
+            x = float(obj['x'])
+            y = float(obj['y'])
+            a = float(obj['a'])
+            b = float(obj['b'])
+            theta = float(obj['theta'])
+            flux = float(obj['flux'])
 
-        cutout, xc, yc = _extract_cutout(
-            data, x, y, a, b, config.sersic_cutout_scale
-        )
+            cutout, xc, yc = _extract_cutout(
+                data, x, y, a, b, config.sersic_cutout_scale
+            )
 
-        if cutout.size < 25:  # too small
-            results.append(None)
-            continue
+            if cutout.size < 25:
+                results.append(None)
+                continue
 
-        fit = fit_sersic_2d(cutout, xc, yc, a, b, theta, flux, config)
-        results.append(fit)
+            fit = fit_sersic_2d(cutout, xc, yc, a, b, theta, flux, config)
+            results.append(fit)
 
-        if (i + 1) % 50 == 0:
-            n_ok = sum(1 for r in results if r is not None)
-            print(f"  Sérsic fit: {i + 1}/{n_sources} "
-                  f"({n_ok} succeeded)", file=sys.stderr)
+            if (i + 1) % 50 == 0:
+                n_ok = sum(1 for r in results if r is not None)
+                print(f"  Sérsic fit: {i + 1}/{n_sources} "
+                      f"({n_ok} succeeded)", file=sys.stderr)
+
+        n_ok = sum(1 for r in results if r is not None)
+        print(f"Sérsic fit: {n_ok}/{n_sources} succeeded", file=sys.stderr)
+        return results
+
+    # Parallel mode
+    print(f"Sérsic fit: {n_sources} sources, {actual_workers} workers",
+          file=sys.stderr)
+
+    data_c = np.ascontiguousarray(data, dtype=np.float64)
+
+    with SharedArray(data_c) as data_spec:
+        tasks = [
+            (data_spec,
+             {name: float(objects[i][name]) if objects.dtype[name] != np.int32
+              else int(objects[i][name])
+              for name in objects.dtype.names},
+             config)
+            for i in range(n_sources)
+        ]
+        results = parallel_map(_worker_sersic, tasks,
+                               n_workers=config.n_workers,
+                               label="Sérsic fit")
 
     n_ok = sum(1 for r in results if r is not None)
     print(f"Sérsic fit: {n_ok}/{n_sources} succeeded", file=sys.stderr)

@@ -40,19 +40,41 @@ def fit_sersic(cutout, x0, y0, a, b, theta, flux, cfg=None):
     bounds_lower = [0, cfg.re_min, cfg.n_min, x0 - 5, y0 - 5, 0.0, -np.pi, -np.inf]
     bounds_upper = [np.inf, max(a * 5, 50), cfg.n_max, x0 + 5, y0 + 5, 0.95, np.pi, np.inf]
 
-    def residuals(params):
-        model = sersic_2d(params, xx, yy)
-        return (cutout - model).ravel()
-
+    # Check for C fast path: full LM in C
     try:
-        result = least_squares(residuals, p0,
-                                bounds=(bounds_lower, bounds_upper),
-                                method='trf', max_nfev=500)
-    except Exception:
-        return None
+        from .fast import is_available, fit_sersic_2d_c
+        use_fast = is_available()
+    except ImportError:
+        use_fast = False
 
-    Ie, re, n, xc, yc, ellip, theta_fit, bg = result.x
-    chi2 = np.sum(result.fun**2) / max(1, len(result.fun) - 8)
+    if use_fast:
+        xx_flat = np.ascontiguousarray(xx.ravel(), dtype=np.float64)
+        yy_flat = np.ascontiguousarray(yy.ravel(), dtype=np.float64)
+        data_flat = np.ascontiguousarray(cutout.ravel(), dtype=np.float64)
+
+        try:
+            params_out, chi2 = fit_sersic_2d_c(
+                data_flat, xx_flat, yy_flat, p0,
+                bounds_lower, bounds_upper, max_iter=500
+            )
+        except Exception:
+            return None
+
+        Ie, re, n, xc, yc, ellip, theta_fit, bg = params_out
+    else:
+        def residuals(params):
+            model = sersic_2d(params, xx, yy)
+            return (cutout - model).ravel()
+
+        try:
+            result = least_squares(residuals, p0,
+                                    bounds=(bounds_lower, bounds_upper),
+                                    method='trf', max_nfev=500)
+        except Exception:
+            return None
+
+        Ie, re, n, xc, yc, ellip, theta_fit, bg = result.x
+        chi2 = np.sum(result.fun**2) / max(1, len(result.fun) - 8)
 
     return {
         'n': n,

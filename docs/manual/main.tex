@@ -994,6 +994,39 @@ Calibration & mag-zeropoint & 25.0 & Photometric zeropoint \\
 Settings are saved to \texttt{\textasciitilde/.ds9/icl.prf} and loaded automatically on startup.
 
 
+\section{Export / Import Script}
+\label{sec:icl-export-import}
+
+\textbf{Menu}: ICL $\to$ Export Script\ldots{} / Import Script\ldots
+
+The \textbf{Export Script} feature saves the ICL pipeline commands executed in the current GUI session as a standalone bash script.  Two modes are supported:
+
+\begin{enumerate}
+  \item \textbf{Command log mode} --- If any ICL commands have been executed (Mask, Background, Profile, etc.), the exact commands are exported in execution order.
+  \item \textbf{Settings-based fallback} --- If no commands have been executed, a full 4-step pipeline script (mask $\to$ background $\to$ profile $\to$ measure) is generated from the current parameter settings.
+\end{enumerate}
+
+\noindent The exported script substitutes file paths with shell variables for portability:
+
+\begin{itemize}
+  \item \texttt{\$INPUT} --- The input FITS file (first positional argument)
+  \item \texttt{\$OUTDIR} --- Output directory for intermediate files (second argument, default \texttt{./output})
+  \item \texttt{\$SCRIPT\_DIR} --- Directory containing \texttt{ds9\_icl.py}
+\end{itemize}
+
+\begin{codebox}[Usage]
+\begin{lstlisting}[style=bash,numbers=none]
+bash icl_pipeline.sh input.fits ./output
+\end{lstlisting}
+\end{codebox}
+
+\noindent The \textbf{Import Script} feature loads a previously exported \texttt{.sh} file and re-executes all \texttt{python3} commands against the currently loaded FITS image.  Variable substitution is applied in reverse (\texttt{\$INPUT} $\to$ current FITS path, \texttt{\$OUTDIR} $\to$ \texttt{\textasciitilde/.ds9/}).  After execution, the best available result image (background-subtracted or masked) is displayed in a new frame, and any TSV output is loaded into the catalog table.
+
+\begin{important}
+The command log is reset each time a new Mask operation is started, so the exported script reflects the most recent analysis session.
+\end{important}
+
+
 \section{ICL CLI Reference}
 
 \begin{codebox}[Synopsis]
@@ -1428,13 +1461,36 @@ Filter & pixel-scale & 0.06 & Arcsec per pixel \\
 Settings are saved to \texttt{\textasciitilde/.ds9/lsbg.prf} and loaded automatically on startup.
 
 
+\section{Export / Import Script}
+\label{sec:lsbg-export-import}
+
+\textbf{Menu}: LSBG $\to$ Export Script\ldots{} / Import Script\ldots
+
+Same functionality as the ICL Export/Import (Section~\ref{sec:icl-export-import}), adapted for the LSBG pipeline:
+
+\begin{enumerate}
+  \item \textbf{Command log mode} --- Exports the exact LSBG commands executed in the GUI session (Mask, Clean, Detect, Photometry, Filter, SVM Classify, Forced Photometry, etc.) in execution order.
+  \item \textbf{Settings-based fallback} --- Generates a single \texttt{--mode run} command with all current LSBG parameter settings.
+\end{enumerate}
+
+\noindent The command log is reset when starting a new Mask operation or when using Run Full Pipeline.
+
+On import, the script is re-executed against the currently loaded FITS image.  After completion, the cleaned image is displayed in a new frame, and the final catalog is loaded into the table with source markers.
+
+\begin{codebox}[Usage]
+\begin{lstlisting}[style=bash,numbers=none]
+bash lsbg_pipeline.sh input.fits ./output
+\end{lstlisting}
+\end{codebox}
+
+
 \section{LSBG CLI Reference}
 
 \begin{codebox}[Synopsis]
 \begin{lstlisting}[style=bash,numbers=none]
 python3 ds9_lsbg.py FITS --mode {mask,import-mask,clean,detect,
                                   photometry,sersic,filter,
-                                  run,forced} [OPTIONS]
+                                  svm-classify,run,forced} [OPTIONS]
 \end{lstlisting}
 \end{codebox}
 
@@ -1457,6 +1513,8 @@ python3 ds9_lsbg.py FITS --mode {mask,import-mask,clean,detect,
 \texttt{sersic} & \texttt{--cleaned}, \texttt{--segmap}, \texttt{--sersic-n-min/max} & 1D$\to$2D S\'ersic profile fitting \\
 \midrule
 \texttt{filter} & \texttt{--mu-eff-*}, \texttt{--sersic-n-*}, \texttt{--sersic-chi2-max} & LSBG filtering + A/B/C/D grading \\
+\midrule
+\texttt{svm-classify} & \texttt{--catalog}, \texttt{--svm-threshold}, \texttt{--svm-checkpoint} & SVM classification of LSBG candidates \\
 \midrule
 \texttt{run} & all above + \texttt{--n-workers} & Full pipeline (all steps) \\
 \midrule
@@ -2317,6 +2375,396 @@ Use \textbf{ICL $\rightarrow$ Save Profile\ldots} to export the profile
 TSV to a permanent location.
 All intermediate FITS files (mask, background, background-subtracted image)
 are stored in \texttt{\~{}/.ds9/} and can be accessed from there.
+
+
+%======================================================
+\chapter{Worked Example: LSBG Detection in DESI Legacy Survey}
+\label{ch:example-lsbg}
+%======================================================
+
+This chapter demonstrates the complete LSBG (Low Surface Brightness Galaxy)
+detection pipeline using ground-based data from the DESI Legacy Survey
+DR9~\cite{dey2019}, reproducing the analysis of
+\textcite{du2024}.\footnote{Du et~al.\ 2024, RAA 24, 055015 --- ``Low Surface
+Brightness Galaxies from BASS+MzLS with Machine Learning''}
+We show both the \textbf{command-line} workflow (a self-contained bash script)
+and the equivalent \textbf{GUI} workflow using the DS9 LSBG panel.
+
+This complements the ICL worked example (Chapter~\ref{ch:example}) by
+demonstrating the LSBG pipeline on ground-based survey data with very
+different characteristics from JWST.
+
+\section{Data and Goals}
+
+\begin{itemize}
+  \item \textbf{Survey}: DESI Legacy Survey DR9 North (BASS+MzLS)~\cite{dey2019}
+  \item \textbf{Pixel scale}: $0\rlap{.}{''}262$/pixel (ground-based)
+  \item \textbf{Mag zero-point}: 22.5 (nanomaggy system)
+  \item \textbf{Brick}: 2828p530 (RA${}=282\rlap{.}{\circ}8$,
+        Dec${}=+53\rlap{.}{\circ}0$)
+  \item \textbf{Image}: $3600\times3600$ pixels, $r$-band coadd ($\sim$50\,MB)
+  \item \textbf{PSF FWHM}: $\sim1\rlap{.}{''}4$ ($\sim5.3$ pixels)
+\end{itemize}
+
+\noindent
+The goals are to:
+\begin{enumerate}
+  \item Detect low surface brightness galaxies by direct image analysis
+        (SEP-based detection + S\'ersic fitting)
+  \item Compare with the Du+2024 reference catalog constructed from
+        Tractor model-fitting photometry + XGBoost classification
+  \item Evaluate completeness and contamination of the image-based
+        approach versus the catalog-based ML approach
+\end{enumerate}
+
+\noindent
+Du+2024 selection criteria:
+\begin{itemize}
+  \item $24.2 < \mu_\mathrm{eff,g} < 28.8$\,mag\,arcsec$^{-2}$
+  \item $r_\mathrm{eff} > 2\rlap{.}{''}5$
+  \item ellipticity $< 0.7$
+  \item Color: $-0.4 < g-r < 1.0$
+  \item Quality: $\texttt{fracmasked} < 0.5$, $\texttt{fracflux} < 5$,
+        $\texttt{fracin} > 0.3$
+\end{itemize}
+
+\begin{remark}
+Unlike the ICL pipeline which preserves diffuse light, the LSBG pipeline
+\emph{detects} individual extended objects.
+The parameter tuning is fundamentally different: lower detection thresholds,
+multi-scale analysis, and photometric filtering replace the masking-heavy
+ICL approach.
+\end{remark}
+
+
+\section{Parameter Comparison: JWST vs DESI}
+
+The table below highlights why different parameters are needed for
+ground-based DESI data versus space-based JWST data.
+
+\begin{center}
+\begin{tabular}{L{4.0cm} L{3.0cm} L{3.0cm} L{4.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{JWST ICL} & \textbf{DESI LSBG} & \textbf{Reason} \\
+\midrule
+\texttt{pixel-scale}         & 0.063       & 0.262       & NIRCam vs ground-based \\
+\texttt{mag-zeropoint}       & auto (26.5) & 22.5        & MJy/sr vs nanomaggies \\
+\texttt{detect-thresh}       & $5\sigma$   & $1\sigma$   & ICL preserving vs LSB detecting \\
+\texttt{detect-minarea}      & 5 pix       & 100 pix     & HST resolution vs seeing-limited \\
+\texttt{detect-filter-kernel} & ---         & gauss7x7   & Larger PSF needs broader kernel \\
+\texttt{mu-eff-min}          & ---          & 24.0        & LSBG definition cutoff \\
+\texttt{r-eff-min}           & ---          & 2.5\arcsec  & Du+2024 criterion \\
+\texttt{multiscale}          & No           & Yes (1,2,4) & Extended diffuse sources \\
+\texttt{bkg-mesh-size}       & ---          & 256         & Large-scale gradients \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+\section{CLI Pipeline}
+\label{sec:example-lsbg-cli}
+
+The complete analysis is encapsulated in
+\texttt{scripts/reproduce\_du2024.sh}.
+Below we walk through each step with the exact commands.
+
+\subsection{Step 0: Data Preparation}
+
+Download the DESI DR9 image and construct the reference catalog from the
+Tractor photometric database.
+
+\begin{codebox}[Step 0: Fetch data]
+\begin{lstlisting}[style=bash,numbers=none]
+# Download image + query Tractor catalog + apply Du+2024 cuts
+python3 scripts/fetch_du2024_data.py
+\end{lstlisting}
+\end{codebox}
+
+\noindent
+This produces three files:
+\begin{itemize}
+  \item \texttt{data/desi\_dr9\_2828p530\_r.fits} --- $r$-band coadd ($\sim$50\,MB)
+  \item \texttt{data/du2024\_tractor\_2828p530.csv} --- Tractor sources ($r_e > 2.5''$)
+  \item \texttt{data/du2024\_reference\_lsbg.csv} --- Reference LSBGs after Du+2024 cuts
+\end{itemize}
+
+\subsection{Step 1: Configuration}
+
+\begin{codebox}[Step 1: Parameters]
+\begin{lstlisting}[style=bash,numbers=none]
+PIXEL_SCALE=0.262     # arcsec/pixel (ground-based)
+MAG_ZP=22.5           # nanomaggy zeropoint
+DETECT_THRESH=1.0     # low threshold for LSB detection
+DETECT_MINAREA=100    # ~27 arcsec^2 (PSF ~1.4" FWHM)
+FILTER_KERNEL=gauss7x7  # broader kernel for larger PSF
+MU_EFF_MIN=24.0       # LSBG cutoff
+MU_EFF_MAX=29.0       # faint limit
+R_EFF_MIN=2.5         # arcsec (Du+2024 criterion)
+R_EFF_MAX=60.0        # arcsec
+ELLIPTICITY_MAX=0.7   # Du+2024 criterion
+MASK_THRESH=1.5       # source masking threshold
+MASK_MAG_THRESH=22.0  # only mask bright sources
+\end{lstlisting}
+\end{codebox}
+
+\begin{remark}
+The detection threshold is set to $1\sigma$ --- much lower than the
+$5\sigma$ used for ICL source masking. This is because we \emph{want}
+to detect faint extended objects, not avoid them.
+The larger \texttt{detect-minarea} (100 vs 5 pixels) compensates for the
+lower threshold by requiring spatially coherent detections.
+\end{remark}
+
+\subsection{Step 2: Full Pipeline}
+
+The LSBG pipeline runs all steps (masking, background, detection,
+photometry, S\'ersic fitting, filtering) in a single command.
+
+\begin{codebox}[Step 2: Run full pipeline]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 ds9/library/ds9_lsbg.py $FITS --mode run \
+    --pixel-scale 0.262 \
+    --mag-zeropoint 22.5 \
+    --mask-detect-thresh 1.5 \
+    --mask-mag-threshold 22.0 \
+    --mask-expand-factor 1.5 \
+    --max-dilate-radius 30 \
+    --lsb-protect --lsb-mu-threshold 24.0 \
+    --bkg-method sep_large \
+    --bkg-mesh-size 256 \
+    --bkg-n-iterations 3 \
+    --bkg-convergence-tol 0.01 \
+    --detect-thresh 1.0 \
+    --detect-minarea 100 \
+    --detect-filter-kernel gauss7x7 \
+    --multiscale --multiscale-factors 1,2,4 \
+    --mu-eff-min 24.0 --mu-eff-max 29.0 \
+    --r-eff-min 2.5 --r-eff-max 60.0 \
+    --ellipticity-max 0.7 \
+    --sersic-fit \
+    --catalog-output results/du2024/lsbg_detected.tsv \
+    --mask-output results/du2024/lsbg_mask.fits \
+    --cleaned-output results/du2024/lsbg_cleaned.fits \
+    --segmap-output results/du2024/lsbg_segmap.fits
+\end{lstlisting}
+\end{codebox}
+
+\noindent
+The pipeline internally executes:
+\begin{enumerate}
+  \item \textbf{Masking}: Detect sources above $1.5\sigma$ with magnitude
+        $< 22.0$; dilate masks while protecting LSB structures
+        ($\mu > 24$\,mag\,arcsec$^{-2}$)
+  \item \textbf{Background}: Iterative SEP mesh-based background with
+        256-pixel mesh, 3 iterations, lower-quantile RMS for sensitivity
+  \item \textbf{Detection}: Multi-scale detection at $1\times$, $2\times$,
+        $4\times$ rebinning, merged into a unified source list
+  \item \textbf{Photometry}: Kron elliptical + multi-aperture photometry;
+        surface brightness and effective radius calculation
+  \item \textbf{S\'ersic fitting}: 2D radial profile fitting per source
+  \item \textbf{Filtering}: Apply $\mu_\mathrm{eff}$, $r_\mathrm{eff}$,
+        ellipticity, SNR, and S\'ersic quality cuts;
+        assign A/B/C/D confidence grades
+\end{enumerate}
+
+\subsection{Step 3: Comparison}
+
+Compare detected LSBGs with the Du+2024 reference catalog.
+
+\begin{codebox}[Step 3: Generate comparison figures]
+\begin{lstlisting}[style=bash,numbers=none]
+python3 scripts/compare_du2024.py
+\end{lstlisting}
+\end{codebox}
+
+
+\section{Results}
+\label{sec:example-lsbg-results}
+
+Figure~\ref{fig:lsbg-sky} shows the sky distribution of Du+2024 reference
+LSBGs (red squares) and our OGFinder detections (blue circles) in the
+brick~2828p530 region. Green outlines highlight matched sources.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig_sky_map.png}
+  \caption{Sky distribution of LSBG candidates in DESI DR9 brick 2828p530.
+    Red squares: Du+2024 reference (Tractor+XGBoost);
+    blue circles: OGFinder detections (SEP+S\'ersic);
+    green outlines: cross-matched sources (radius $5''$).}
+  \label{fig:lsbg-sky}
+\end{figure}
+
+Figure~\ref{fig:lsbg-mureff} presents the $\mu_\mathrm{eff}$ vs.\
+$r_\mathrm{eff}$ diagram with the Du+2024 selection box overlaid.
+Our detections populate the expected LSBG parameter space.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{fig_mu_reff.png}
+  \caption{$\mu_\mathrm{eff}$ vs.\ $r_\mathrm{eff}$ diagram.
+    Dashed box: Du+2024 selection region
+    ($24.2 < \mu_\mathrm{eff,g} < 28.8$, $r_e > 2.5''$).
+    Red squares: reference catalog; blue circles: OGFinder detections.}
+  \label{fig:lsbg-mureff}
+\end{figure}
+
+Figure~\ref{fig:lsbg-sersic} shows the S\'ersic index distribution.
+The median $n \approx 1$ is consistent with the Du+2024 result and
+the expectation for disk-dominated LSBGs and ultra-diffuse galaxies.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.7\textwidth]{fig_sersic_dist.png}
+  \caption{S\'ersic index distribution of detected LSBG candidates.
+    Red dashed line: Du+2024 median $n = 1$.
+    Green shading: typical UDG range ($n = 0.5$--$1.5$).}
+  \label{fig:lsbg-sersic}
+\end{figure}
+
+Figure~\ref{fig:lsbg-completeness} shows the completeness (fraction of
+Du+2024 reference LSBGs recovered) and contamination (fraction of our
+detections not in the reference) as functions of $\mu_\mathrm{eff}$.
+The completeness is highest at intermediate surface brightnesses
+($\mu_\mathrm{eff} \approx 25$--$26$) and decreases toward fainter levels.
+Some contamination is expected since the reference catalog was filtered
+by XGBoost, while our detections use photometric cuts and S\'ersic grading.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{fig_completeness.png}
+  \caption{Left: completeness (recovery rate) vs.\ $\mu_\mathrm{eff}$.
+    Right: contamination (false positive rate).
+    Du+2024 uses XGBoost ML filtering; OGFinder uses S\'ersic-based grading.}
+  \label{fig:lsbg-completeness}
+\end{figure}
+
+Figure~\ref{fig:lsbg-cutouts} presents representative cutout images.
+Top rows show matched detections (green borders); bottom rows show
+sources detected by OGFinder but absent from the reference catalog
+(orange borders).
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{fig_cutouts.png}
+  \caption{LSBG candidate cutouts ($42'' \times 42''$).
+    Top two rows: sources matched with Du+2024 reference (green).
+    Bottom two rows: additional OGFinder detections not in reference (orange).
+    Labels show catalog number, $\mu_\mathrm{eff}$, $r_e$, and grade.}
+  \label{fig:lsbg-cutouts}
+\end{figure}
+
+\begin{important}
+The differences between our results and Du+2024 arise from fundamentally
+different approaches:
+\begin{itemize}
+  \item Du+2024 uses \emph{Tractor catalog} photometry (model-fitting on
+        coadd images) + XGBoost classifier trained on visual labels
+  \item OGFinder uses \emph{direct image detection} (SEP on pixel data)
+        + S\'ersic profile fitting + photometric grading
+\end{itemize}
+Neither approach is strictly superior; they are complementary.
+The Tractor-based method leverages multi-band model fitting, while the
+image-based method can find sources that Tractor may have missed or
+mis-classified.
+\end{important}
+
+
+\section{Equivalent GUI Workflow}
+\label{sec:example-lsbg-gui}
+
+The same analysis can be performed entirely through the DS9 GUI.
+Open the FITS file in OGFinder, then use the \textbf{LSBG} menu button
+on the title bar.
+
+\subsection{Step 1: Configure Settings}
+
+Open \textbf{LSBG $\rightarrow$ Settings\ldots} and adjust the parameters
+for DESI data:
+
+\begin{center}
+\begin{tabular}{L{3.5cm} L{4.5cm} L{4.5cm}}
+\toprule
+\textbf{Tab} & \textbf{Key Parameters} & \textbf{Values for DESI DR9} \\
+\midrule
+Masking &
+  \texttt{mask-detect-thresh} \newline
+  \texttt{mask-mag-threshold} \newline
+  \texttt{max-dilate-radius} \newline
+  LSB Protect (checkbox) &
+  1.5 \newline
+  22.0 \newline
+  30 \newline
+  Enabled ($\mu > 24.0$) \\
+\midrule
+Background &
+  \texttt{bkg-method} \newline
+  \texttt{bkg-mesh-size} \newline
+  \texttt{bkg-n-iterations} &
+  sep\_large \newline
+  256 \newline
+  3 \\
+\midrule
+Detection &
+  \texttt{detect-thresh} \newline
+  \texttt{detect-minarea} \newline
+  \texttt{filter-kernel} \newline
+  Multiscale (checkbox) &
+  1.0 \newline
+  100 \newline
+  gauss7x7 \newline
+  Enabled (1,2,4) \\
+\midrule
+Calibration &
+  \texttt{pixel-scale} \newline
+  \texttt{mag-zeropoint} \newline
+  \texttt{mu-eff-min / max} \newline
+  \texttt{r-eff-min / max} &
+  0.262 \newline
+  22.5 \newline
+  24.0 / 29.0 \newline
+  2.5 / 60.0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Click \textbf{Apply} to save. Settings persist in
+\texttt{\~{}/.ds9/lsbg.prf} across sessions.
+
+\subsection{Step 2: Source Masking}
+
+\textbf{LSBG $\rightarrow$ Source Masking}
+
+Creates a magnitude-based mask that protects LSB structures.
+Inspect with \textbf{LSBG $\rightarrow$ View Mask}.
+
+\subsection{Step 3: Background Cleaning}
+
+\textbf{LSBG $\rightarrow$ Clean Background}
+
+Runs iterative background refinement with the SEP large-mesh method.
+The cleaned image appears in a new frame.
+Use \textbf{LSBG $\rightarrow$ View Clean} to inspect.
+
+\subsection{Step 4: Detect LSBGs}
+
+\textbf{LSBG $\rightarrow$ Detect LSBGs}
+
+Runs multi-scale low-threshold detection on the cleaned image.
+Detected sources appear as yellow ellipse markers on the image.
+
+\subsection{Step 5: Measure Photometry}
+
+\textbf{LSBG $\rightarrow$ Photometry}
+
+Measures Kron and aperture photometry, computes surface brightness and
+effective radius, fits S\'ersic profiles, and applies the A/B/C/D grading.
+The filtered LSBG catalog appears in the catalog panel.
+
+\subsection{Step 6: Run All (One-Click)}
+
+Alternatively, \textbf{LSBG $\rightarrow$ Run All} executes the entire
+pipeline (Steps 2--5) with a single click, using the current settings.
 
 
 %------------------------------------------------------

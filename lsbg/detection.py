@@ -53,6 +53,15 @@ def build_convolution_kernel(name='gauss5x5'):
     elif name == 'tophat7':
         y, x = np.mgrid[-3:4, -3:4]
         k = ((x * x + y * y) <= 9).astype(float)
+    elif name == 'gauss15x15':
+        y, x = np.mgrid[-7:8, -7:8]
+        k = np.exp(-(x * x + y * y) / (2 * 4.0 ** 2))
+    elif name == 'gauss21x21':
+        y, x = np.mgrid[-10:11, -10:11]
+        k = np.exp(-(x * x + y * y) / (2 * 5.0 ** 2))
+    elif name == 'gauss33x33':
+        y, x = np.mgrid[-16:17, -16:17]
+        k = np.exp(-(x * x + y * y) / (2 * 8.0 ** 2))
     elif name == 'mexhat':
         y, x = np.mgrid[-4:5, -4:5]
         r2 = x * x + y * y
@@ -98,7 +107,11 @@ def detect_lsbg_candidates(data, bkg_rms=None, detect_thresh=0.8,
     rms : 2D array
         RMS map used for detection.
     """
-    data_c = np.ascontiguousarray(data, dtype=np.float64)
+    # Ensure contiguous float64 (avoid copy if already correct)
+    if data.dtype == np.float64 and data.flags['C_CONTIGUOUS']:
+        data_c = data
+    else:
+        data_c = np.ascontiguousarray(data, dtype=np.float64)
 
     # Compute RMS if not provided
     if bkg_rms is None:
@@ -110,7 +123,10 @@ def detect_lsbg_candidates(data, bkg_rms=None, detect_thresh=0.8,
                                np.std(data_c[data_c != 0]) if
                                np.any(data_c != 0) else 1.0)
     else:
-        rms = np.ascontiguousarray(bkg_rms, dtype=np.float64)
+        if bkg_rms.dtype == np.float64 and bkg_rms.flags['C_CONTIGUOUS']:
+            rms = bkg_rms
+        else:
+            rms = np.ascontiguousarray(bkg_rms, dtype=np.float64)
 
     # Build convolution kernel
     kernel = build_convolution_kernel(filter_kernel)
@@ -127,12 +143,31 @@ def detect_lsbg_candidates(data, bkg_rms=None, detect_thresh=0.8,
     if kernel is not None:
         kwargs['filter_kernel'] = kernel
 
+    # Scale pixstack to image size: at low thresholds (~0.8σ), up to
+    # ~21% of noise pixels exceed threshold, plus real signal pixels.
+    # Use 50% of total pixels as buffer, with 10M minimum.
+    npixels = data_c.shape[0] * data_c.shape[1]
+    pixstack = max(10_000_000, int(npixels * 0.5))
+    sep.set_extract_pixstack(pixstack)
+    sep.set_sub_object_limit(4096)
+
     try:
         objects, segmap = sep.extract(data_c, **kwargs)
     except Exception as e:
         print(f"LSBG detection failed: {e}", file=sys.stderr)
-        objects = np.array([])
-        segmap = np.zeros(data.shape, dtype=np.int32)
+        # Retry with higher threshold if pixstack/deblend overflow
+        if 'pixel buffer full' in str(e) or 'deblending overflow' in str(e):
+            print("  retrying with detect_thresh * 1.5...", file=sys.stderr)
+            kwargs['thresh'] = detect_thresh * 1.5
+            try:
+                objects, segmap = sep.extract(data_c, **kwargs)
+            except Exception as e2:
+                print(f"  retry also failed: {e2}", file=sys.stderr)
+                objects = np.array([])
+                segmap = np.zeros(data.shape, dtype=np.int32)
+        else:
+            objects = np.array([])
+            segmap = np.zeros(data.shape, dtype=np.int32)
 
     print(f"LSBG detect: {len(objects)} candidates at {detect_thresh}sigma, "
           f"minarea={detect_minarea}", file=sys.stderr)
@@ -274,9 +309,14 @@ def detect_multiscale(data, bkg_rms=None, detect_thresh=0.8,
                     'scale': factor,
                 })
 
+    # Ensure valid fallbacks for segmap and rms
+    if native_segmap is None:
+        native_segmap = np.zeros(data.shape, dtype=np.int32)
+    if native_rms is None:
+        native_rms = np.ones_like(data, dtype=np.float64)
+
     if not all_detections:
-        return np.array([]), np.zeros(data.shape, dtype=np.int32), \
-               native_rms if native_rms is not None else np.ones_like(data)
+        return np.array([]), native_segmap, native_rms
 
     # Merge: remove duplicates (keep native-scale when overlapping)
     merged = _merge_detections(all_detections, match_radius)
@@ -294,24 +334,54 @@ def _merge_detections(detections, match_radius):
     """Merge multi-scale detections, removing duplicates.
 
     Priority: native scale > 2× > 4× (prefer higher resolution).
+    Uses KDTree for O(N log N) when N > 500, brute-force otherwise.
     """
     # Sort by scale (native first)
     sorted_dets = sorted(detections, key=lambda d: d['scale'])
 
+    n = len(sorted_dets)
+    if n <= 500:
+        # Brute-force for small catalogs
+        merged = []
+        for det in sorted_dets:
+            is_dup = False
+            for existing in merged:
+                dx = det['x'] - existing['x']
+                dy = det['y'] - existing['y']
+                dist = np.sqrt(dx * dx + dy * dy)
+                effective_radius = match_radius * max(det['scale'],
+                                                       existing['scale'])
+                if dist < effective_radius:
+                    is_dup = True
+                    break
+            if not is_dup:
+                merged.append(det)
+        return merged
+
+    # KDTree approach for large catalogs
+    from scipy.spatial import cKDTree
+
+    # Maximum possible match radius (for tree query)
+    max_scale = max(d['scale'] for d in sorted_dets)
+    max_match = match_radius * max_scale
+
     merged = []
+    merged_xy = []  # separate list for building tree incrementally
+
     for det in sorted_dets:
-        is_dup = False
-        for existing in merged:
-            dx = det['x'] - existing['x']
-            dy = det['y'] - existing['y']
-            dist = np.sqrt(dx * dx + dy * dy)
-            # Use larger match radius for larger-scale detections
-            effective_radius = match_radius * max(det['scale'], existing['scale'])
-            if dist < effective_radius:
-                is_dup = True
-                break
-        if not is_dup:
-            merged.append(det)
+        if merged_xy:
+            # Query existing merged detections
+            tree = cKDTree(np.array(merged_xy))
+            dists, idxs = tree.query([det['x'], det['y']], k=1)
+            if dists < max_match:
+                # Check exact effective radius
+                existing = merged[idxs]
+                effective_radius = match_radius * max(det['scale'],
+                                                       existing['scale'])
+                if dists < effective_radius:
+                    continue
+        merged.append(det)
+        merged_xy.append([det['x'], det['y']])
 
     return merged
 
