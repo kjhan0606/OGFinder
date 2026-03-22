@@ -13,6 +13,12 @@ PHYS_PARAM_NAMES = [
     "log_tau",    # log10(e-folding timescale / yr), tau-model SFH
 ]
 
+# Available SPS backend names
+BACKEND_NAMES = [
+    "auto", "analytic", "fsps", "bagpipes",
+    "prospector", "cigale", "dense_basis",
+]
+
 # Output parameter names (inverse model predicts these; z is input)
 OUTPUT_PARAM_NAMES = [
     "log_mass",
@@ -72,3 +78,11 @@ class TrainConfig:
     def checkpoint_inverse_path(self):
         import os
         return os.path.join(self.checkpoint_dir, self.checkpoint_inverse)
+
+
+@dataclass
+class FitConfig:
+    """Configuration for direct SPS backend fitting."""
+    backend: str = "auto"        # SPS backend name
+    n_grid: int = 10000          # grid points for chi2 fitting
+    timeout_per_source: int = 60  # seconds per source (native fitters)

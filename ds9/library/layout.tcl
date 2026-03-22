@@ -560,6 +560,10 @@ proc CreateCatalogPanel {} {
     $f.menubar.analysis.m add command \
 	-label "Bulge+Disk Decomp..." \
 	-command CatalogPanelBulgeDisk
+    $f.menubar.analysis.m add separator
+    $f.menubar.analysis.m add command \
+	-label "Analysis Viewer..." \
+	-command CatalogPanelAnalysisViewer
 
     pack $f.menubar.sextract -side left
     pack $f.menubar.display -side left
@@ -834,6 +838,7 @@ proc CreateCatalogPanel {} {
     set catpanel(sed,param,photoz-column) PHOTO_Z
     set catpanel(sed,param,checkpoint-emulator) {}
     set catpanel(sed,param,checkpoint-inverse)  {}
+    set catpanel(sed,param,backend) auto
     CatalogPanelSEDParamLoad
 
     # Bulge+Disk state
@@ -12381,7 +12386,7 @@ proc CatalogPanelSEDParamSave {} {
     set prf [file join [file normalize ~] .ds9 sed_fit.prf]
     catch {file mkdir [file dirname $prf]}
     if {[catch {set fd [open $prf w]}]} return
-    foreach key {bands mag-columns photoz-column checkpoint-emulator checkpoint-inverse} {
+    foreach key {bands mag-columns photoz-column checkpoint-emulator checkpoint-inverse backend} {
 	if {[info exists catpanel(sed,param,$key)]} {
 	    puts $fd "$key=$catpanel(sed,param,$key)"
 	}
@@ -12409,13 +12414,18 @@ proc CatalogPanelSEDFit {} {
     if {[winfo exists $w]} { raise $w; return }
     toplevel $w
     wm title $w "SED Fitting (AI)"
-    wm geometry $w 420x330
+    wm geometry $w 420x380
 
     if {!$has_pz} {
 	ttk::label $w.warn -text "Warning: PHOTO_Z column not found.\nRun Photo-z first for best results." \
 	    -foreground red
 	grid $w.warn - -padx 5 -pady 5
     }
+
+    ttk::label $w.lbackend -text "SPS Backend:"
+    ttk::combobox $w.backend -width 15 -state readonly \
+	-values {auto analytic fsps bagpipes prospector cigale dense_basis}
+    $w.backend set $catpanel(sed,param,backend)
 
     ttk::label $w.lbands -text "Bands (comma-sep):"
     ttk::entry $w.bands -width 30
@@ -12453,6 +12463,7 @@ proc CatalogPanelSEDFit {} {
     ttk::button $w.btns.close -text "Close" -command [list destroy $w]
     pack $w.btns.run $w.btns.close -side left -padx 5
 
+    grid $w.lbackend $w.backend -padx 5 -pady 4 -sticky w
     grid $w.lbands $w.bands -padx 5 -pady 4 -sticky w
     grid $w.lmags  $w.mags  -padx 5 -pady 4 -sticky w
     grid $w.lpzcol $w.pzcol -padx 5 -pady 4 -sticky w
@@ -12464,12 +12475,14 @@ proc CatalogPanelSEDFit {} {
 proc CatalogPanelSEDFitRun {dlg} {
     global catpanel
 
+    set backend [$dlg.backend get]
     set bands [$dlg.bands get]
     set magcols [$dlg.mags get]
     set pzcol [$dlg.pzcol get]
     set cke [$dlg.cke get]
     set cki [$dlg.cki get]
 
+    set catpanel(sed,param,backend) $backend
     set catpanel(sed,param,bands) $bands
     set catpanel(sed,param,mag-columns) $magcols
     set catpanel(sed,param,photoz-column) $pzcol
@@ -12495,10 +12508,11 @@ proc CatalogPanelSEDFitRun {dlg} {
 	return
     }
 
-    set catpanel(status) "Running SED fitting..."
+    set catpanel(status) "Running SED fitting ($backend)..."
     update idletasks
 
     set args [list python3 $script $fn --catalog $tmpcat]
+    if {$backend ne {}} { lappend args --backend $backend }
     if {$bands ne {}} { lappend args --bands $bands }
     if {$magcols ne {}} { lappend args --mag-columns $magcols }
     if {$pzcol ne {}} { lappend args --photo-z-column $pzcol }
@@ -12522,8 +12536,44 @@ proc CatalogPanelSEDFitRun {dlg} {
 
     CatalogPanelAddColumnsFromTSV $data \
 	{LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR}
-    set catpanel(status) "SED fitting complete"
+    set catpanel(status) "SED fitting complete ($backend)"
     catch {destroy $dlg}
+}
+
+# ============================================================
+# Feature: Analysis Viewer (standalone GUI)
+# ============================================================
+
+proc CatalogPanelAnalysisViewer {} {
+    global catpanel
+
+    set script [CatalogPanelGetScript ds9_analysis_gui.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_analysis_gui.py"
+	return
+    }
+
+    set args [list python3 $script]
+
+    # Pass FITS file if available
+    set fn [CatalogPanelGetFITS]
+    if {$fn ne {} && [file exists $fn]} {
+	lappend args --fits $fn
+    }
+
+    # Pass catalog if available
+    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+	set tmpcat [CatalogPanelSaveTempCatalog "analysis_viewer"]
+	if {$tmpcat ne {}} {
+	    lappend args --catalog $tmpcat
+	}
+    }
+
+    # Launch non-blocking
+    set catpanel(status) "Launching Analysis Viewer..."
+    update idletasks
+    exec {*}$args &
+    set catpanel(status) "Analysis Viewer launched"
 }
 
 # ============================================================

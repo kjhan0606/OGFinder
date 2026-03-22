@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-DS9 SED Fitting (AI SPS Emulator) CLI.
+DS9 SED Fitting (AI SPS Emulator + Multi-Backend) CLI.
 
 Uses Inverse MLP+MDN to estimate galaxy physical properties from
 multi-band photometry + photo-z. Falls back to empirical color-mass
 relation if no checkpoint available.
+
+Supports multiple SPS backends (FSPS, Bagpipes, Prospector, CIGALE,
+Dense Basis) for direct SED fitting when --backend is specified.
 
 Usage:
     ds9_sed_fit.py FITSFILE --catalog catalog.tsv
@@ -12,6 +15,8 @@ Usage:
                    [--photo-z-column PHOTO_Z]
                    [--checkpoint-emulator sps_emulator_best.pt]
                    [--checkpoint-inverse inverse_sed_best.pt]
+                   [--backend auto|analytic|fsps|bagpipes|prospector|cigale|dense_basis]
+                   [--mode fit|list-backends]
                    [--n-workers 4]
 """
 
@@ -151,10 +156,38 @@ def estimate_sed_mdn(mags, mag_errs, photo_z, band_names,
         return estimate_sed_empirical(mags, mag_errs, photo_z, band_names)
 
 
+def estimate_sed_backend(mags, mag_errs, photo_z, band_names, backend_name):
+    """SED fitting using an SPS backend (direct fitting)."""
+    from sed_fit.backends import get_backend
+
+    backend = get_backend(backend_name)
+    print(f"Using SPS backend: {backend.name()}", file=sys.stderr)
+
+    result = backend.fit_sed(mags, mag_errs, photo_z, band_names)
+
+    return (result.log_mass, result.log_mass_err,
+            result.log_age, result.log_age_err,
+            result.log_Z, result.Av, result.sfr)
+
+
+def mode_list_backends():
+    """Print available SPS backends and exit."""
+    from sed_fit.backends import list_all, list_available
+
+    all_backends = list_all()
+    avail = list_available()
+
+    print("#BACKENDS")
+    for name in all_backends:
+        status = "available" if name in avail else "not_installed"
+        print(f"{name}\t{status}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='DS9 SED Fitting (AI)')
-    parser.add_argument('fits', help='Path to FITS file')
-    parser.add_argument('--catalog', required=True, help='Path to catalog TSV')
+    parser.add_argument('fits', nargs='?', default=None,
+                        help='Path to FITS file')
+    parser.add_argument('--catalog', default=None, help='Path to catalog TSV')
     parser.add_argument('--bands', default='g,r,i,z',
                         help='Band names (comma-separated)')
     parser.add_argument('--mag-columns', default='',
@@ -165,9 +198,27 @@ def main():
                         help='Path to SPS emulator checkpoint')
     parser.add_argument('--checkpoint-inverse', default=None,
                         help='Path to inverse model checkpoint')
+    parser.add_argument('--backend', default='auto',
+                        help='SPS backend: auto, analytic, fsps, bagpipes, '
+                             'prospector, cigale, dense_basis '
+                             '(default: auto)')
+    parser.add_argument('--mode', default='fit',
+                        choices=['fit', 'list-backends'],
+                        help='Operation mode (default: fit)')
     parser.add_argument('--n-workers', type=int, default=1,
                         help='Number of workers (unused for SED)')
     args = parser.parse_args()
+
+    # Handle list-backends mode
+    if args.mode == 'list-backends':
+        mode_list_backends()
+        return
+
+    # Fit mode requires FITS + catalog
+    if args.fits is None or args.catalog is None:
+        print("ERROR: FITS file and --catalog required for fit mode",
+              file=sys.stderr)
+        sys.exit(1)
 
     # Parse catalog
     print(f"Loading catalog: {args.catalog}", file=sys.stderr)
@@ -257,21 +308,31 @@ def main():
         print("  WARNING: No PHOTO_Z column, using default z=0.1",
               file=sys.stderr)
 
-    # Run SED fitting
-    use_mdn = (args.checkpoint_emulator and
-               os.path.exists(args.checkpoint_emulator) and
-               args.checkpoint_inverse and
-               os.path.exists(args.checkpoint_inverse))
+    # Determine fitting method based on backend
+    backend = args.backend.lower()
+    use_sps_backend = (backend not in ('auto', 'analytic'))
 
-    if use_mdn:
-        print(f"Using MDN model", file=sys.stderr)
-        results = estimate_sed_mdn(
-            mags, mag_errs, photo_z, bands,
-            args.checkpoint_emulator, args.checkpoint_inverse)
+    if use_sps_backend:
+        # Direct SPS backend fitting
+        print(f"SPS backend: {backend}", file=sys.stderr)
+        results = estimate_sed_backend(mags, mag_errs, photo_z, bands,
+                                        backend)
     else:
-        print("Using empirical color-mass relations (no checkpoint)",
-              file=sys.stderr)
-        results = estimate_sed_empirical(mags, mag_errs, photo_z, bands)
+        # AI pipeline (MDN) or empirical fallback
+        use_mdn = (args.checkpoint_emulator and
+                   os.path.exists(args.checkpoint_emulator) and
+                   args.checkpoint_inverse and
+                   os.path.exists(args.checkpoint_inverse))
+
+        if use_mdn:
+            print(f"Using MDN model", file=sys.stderr)
+            results = estimate_sed_mdn(
+                mags, mag_errs, photo_z, bands,
+                args.checkpoint_emulator, args.checkpoint_inverse)
+        else:
+            print("Using empirical color-mass relations (no checkpoint)",
+                  file=sys.stderr)
+            results = estimate_sed_empirical(mags, mag_errs, photo_z, bands)
 
     log_mass, log_mass_err, log_age, log_age_err, log_z, av_arr, sfr_arr = results
 

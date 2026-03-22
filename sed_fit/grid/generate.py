@@ -6,6 +6,7 @@ No dependency on FSPS or other SPS libraries required.
 """
 
 import os
+import sys
 import argparse
 import numpy as np
 
@@ -254,8 +255,33 @@ def generate_sps_grid(n_samples, bands, output_path, seed=42):
     return params, mags
 
 
+def generate_grid_with_backend(backend_name, n_samples, bands, output_path,
+                                seed=42):
+    """Generate SPS grid using a specified backend.
+
+    Parameters
+    ----------
+    backend_name : str
+        Backend name ('auto', 'analytic', 'fsps', etc.).
+    n_samples : int
+    bands : list of str
+    output_path : str
+    seed : int
+
+    Returns
+    -------
+    params, mags : np.ndarray
+    """
+    from ..backends import get_backend
+    backend = get_backend(backend_name)
+    print(f"Using backend: {backend.name()}", file=sys.stderr)
+    return backend.generate_grid(n_samples, bands, output_path, seed=seed)
+
+
 def main():
     """CLI entry point for SPS grid generation."""
+    import sys
+
     parser = argparse.ArgumentParser(
         description='Generate SPS grid for SED fitting emulator training')
     parser.add_argument('--n-samples', type=int, default=100000,
@@ -266,6 +292,10 @@ def main():
                         help='Output HDF5 path')
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed (default: 42)')
+    parser.add_argument('--backend', type=str, default='analytic',
+                        help='SPS backend: auto, analytic, fsps, bagpipes, '
+                             'prospector, cigale, dense_basis '
+                             '(default: analytic)')
     args = parser.parse_args()
 
     bands = args.bands if args.bands else DEFAULT_BANDS
@@ -279,7 +309,13 @@ def main():
     else:
         output_path = args.output
 
-    generate_sps_grid(args.n_samples, bands, output_path, seed=args.seed)
+    if args.backend == 'analytic':
+        # Use existing optimized function directly
+        generate_sps_grid(args.n_samples, bands, output_path, seed=args.seed)
+    else:
+        generate_grid_with_backend(
+            args.backend, args.n_samples, bands, output_path,
+            seed=args.seed)
 
 
 if __name__ == '__main__':
