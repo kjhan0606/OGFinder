@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build ds9_sextract binary from sep/ sources and ds9/library/ds9_sextract.c
+# Build ds9_sextract binary from sep_src/ sources and ds9/library/ds9_sextract.c
 #
 # Prerequisites:
 #   - cfitsio (brew install cfitsio on macOS, yum/dnf install cfitsio-devel on Linux)
@@ -12,7 +12,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SEP_DIR="$SCRIPT_DIR/sep"
+SEP_DIR="$SCRIPT_DIR/sep_src"
 SRC="$SCRIPT_DIR/ds9/library/ds9_sextract.c"
 BINDIR="$SCRIPT_DIR/bin"
 OUTPUT="$BINDIR/ds9_sextract"
