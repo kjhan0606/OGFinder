@@ -547,6 +547,19 @@ proc CreateCatalogPanel {} {
     $f.menubar.analysis.m add command \
 	-label "Completeness Simulation..." \
 	-command CatalogPanelCompleteness
+    $f.menubar.analysis.m add separator
+    $f.menubar.analysis.m add command \
+	-label "Interactive Plot..." \
+	-command CatalogPanelPlotDialog
+    $f.menubar.analysis.m add command \
+	-label "Photo-z (AI)..." \
+	-command CatalogPanelPhotoZ
+    $f.menubar.analysis.m add command \
+	-label "SED Fitting (AI)..." \
+	-command CatalogPanelSEDFit
+    $f.menubar.analysis.m add command \
+	-label "Bulge+Disk Decomp..." \
+	-command CatalogPanelBulgeDisk
 
     pack $f.menubar.sextract -side left
     pack $f.menubar.display -side left
@@ -805,6 +818,30 @@ proc CreateCatalogPanel {} {
     set catpanel(lsbg,param,svm-threshold)              0.3
     set catpanel(lsbg,param,svm-checkpoint)             {}
     CatalogPanelLSBGParamLoad
+
+    # Interactive Plot state
+    set catpanel(plot,counter) 0
+
+    # Photo-z state
+    set catpanel(photoz,param,bands)       {g,r,i,z}
+    set catpanel(photoz,param,mag-columns) {}
+    set catpanel(photoz,param,checkpoint)  {}
+    CatalogPanelPhotoZParamLoad
+
+    # SED Fitting state
+    set catpanel(sed,param,bands)       {g,r,i,z}
+    set catpanel(sed,param,mag-columns) {}
+    set catpanel(sed,param,photoz-column) PHOTO_Z
+    set catpanel(sed,param,checkpoint-emulator) {}
+    set catpanel(sed,param,checkpoint-inverse)  {}
+    CatalogPanelSEDParamLoad
+
+    # Bulge+Disk state
+    set catpanel(bd,param,max-sources)   100
+    set catpanel(bd,param,free-bulge-n)  0
+    set catpanel(bd,param,mag-zeropoint) 25.0
+    set catpanel(bd,param,pixel-scale)   0.263
+    CatalogPanelBDParamLoad
 
     # Ctrl key tracking (Feature A/C)
     set ::catpanel_ctrl 0
@@ -9070,8 +9107,8 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	    ChangeScaleMode
 	}
     } else {
-	# LSBG: show last input FITS used (e.g. g-band for riz+g pipeline)
-	if {![catch {LoadFitsFile $last_input_fits {} {}}]} {
+	# LSBG: show first input FITS (detection image, coordinates match catalog)
+	if {![catch {LoadFitsFile $fn {} {}}]} {
 	    global scale
 	    set scale(mode) zscale
 	    ChangeScaleMode
@@ -11901,4 +11938,734 @@ proc CatalogPanelClearAll {} {
 	}
     }
     set catpanel(morph,map) {}
+}
+
+# ============================================================
+# Feature: Interactive Plot (BLT Graph)
+# ============================================================
+
+proc CatalogPanelPlotDialog {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    # Get column names from header
+    set lines [split $catpanel(alldata) "\n"]
+    set header [lindex $lines 0]
+    set colnames [split $header "\t"]
+
+    set w .catplotdlg
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+    toplevel $w
+    wm title $w "Interactive Plot"
+    wm geometry $w 340x260
+
+    # Plot type
+    ttk::label $w.lttype -text "Plot Type:"
+    ttk::combobox $w.ptype -values {Scatter Histogram} \
+	-state readonly -width 14
+    $w.ptype set "Scatter"
+
+    # X axis column
+    ttk::label $w.ltx -text "X Column:"
+    ttk::combobox $w.xcol -values $colnames -state readonly -width 18
+    if {[llength $colnames] > 0} { $w.xcol set [lindex $colnames 0] }
+
+    # Y axis column
+    ttk::label $w.lty -text "Y Column:"
+    ttk::combobox $w.ycol -values $colnames -state readonly -width 18
+    if {[llength $colnames] > 1} { $w.ycol set [lindex $colnames 1] }
+
+    # Log scale
+    set catpanel(plot,logx) 0
+    set catpanel(plot,logy) 0
+    ttk::checkbutton $w.logx -text "Log X" -variable catpanel(plot,logx)
+    ttk::checkbutton $w.logy -text "Log Y" -variable catpanel(plot,logy)
+
+    # Histogram bins
+    ttk::label $w.ltbins -text "Hist Bins:"
+    ttk::spinbox $w.bins -from 10 -to 200 -increment 10 -width 6
+    $w.bins set 50
+
+    # Buttons
+    ttk::frame $w.btns
+    ttk::button $w.btns.plot -text "Plot" -command [list CatalogPanelPlotRun $w]
+    ttk::button $w.btns.close -text "Close" -command [list destroy $w]
+    pack $w.btns.plot $w.btns.close -side left -padx 5
+
+    grid $w.lttype $w.ptype     -padx 5 -pady 3 -sticky w
+    grid $w.ltx    $w.xcol      -padx 5 -pady 3 -sticky w
+    grid $w.lty    $w.ycol      -padx 5 -pady 3 -sticky w
+    grid $w.logx   $w.logy      -padx 5 -pady 3 -sticky w
+    grid $w.ltbins $w.bins      -padx 5 -pady 3 -sticky w
+    grid $w.btns   -            -padx 5 -pady 10
+}
+
+proc CatalogPanelPlotRun {dlg} {
+    global catpanel
+
+    set ptype [$dlg.ptype get]
+    set xcol  [$dlg.xcol get]
+    set ycol  [$dlg.ycol get]
+    set logx  $catpanel(plot,logx)
+    set logy  $catpanel(plot,logy)
+    set nbins [$dlg.bins get]
+
+    if {$xcol eq {}} {
+	set catpanel(status) "Select X column"
+	return
+    }
+
+    # Parse data
+    set lines [split $catpanel(alldata) "\n"]
+    set header [split [lindex $lines 0] "\t"]
+
+    set xi -1
+    set yi -1
+    set ni -1
+    for {set i 0} {$i < [llength $header]} {incr i} {
+	set h [lindex $header $i]
+	if {$h eq $xcol} { set xi $i }
+	if {$h eq $ycol} { set yi $i }
+	if {$h eq "NUMBER"} { set ni $i }
+    }
+    if {$xi < 0} {
+	set catpanel(status) "Column $xcol not found"
+	return
+    }
+
+    # Extract numeric data
+    set xdata {}
+    set ydata {}
+    set nums {}
+    for {set r 1} {$r < [llength $lines]} {incr r} {
+	set row [lindex $lines $r]
+	if {[string trim $row] eq {}} continue
+	set fields [split $row "\t"]
+	set xv [lindex $fields $xi]
+	if {![string is double -strict $xv]} continue
+	if {$logx && $xv > 0} { set xv [expr {log10($xv)}] }
+	lappend xdata $xv
+	if {$yi >= 0} {
+	    set yv [lindex $fields $yi]
+	    if {![string is double -strict $yv]} { set yv 0 }
+	    if {$logy && $yv > 0} { set yv [expr {log10($yv)}] }
+	    lappend ydata $yv
+	}
+	if {$ni >= 0} { lappend nums [lindex $fields $ni] }
+    }
+
+    if {[llength $xdata] == 0} {
+	set catpanel(status) "No numeric data in $xcol"
+	return
+    }
+
+    # Create plot window
+    incr catpanel(plot,counter)
+    set n $catpanel(plot,counter)
+    set w .catplot_$n
+    toplevel $w
+    wm geometry $w 560x440
+
+    if {$ptype eq "Histogram"} {
+	CatalogPanelPlotHistogram $w $xdata $xcol $nbins $logx
+    } else {
+	if {$yi < 0 || $ycol eq {}} {
+	    set catpanel(status) "Select Y column for scatter"
+	    destroy $w
+	    return
+	}
+	CatalogPanelPlotScatter $w $xdata $ydata $xcol $ycol $nums $logx $logy
+    }
+}
+
+proc CatalogPanelPlotScatter {w xdata ydata xcol ycol nums logx logy} {
+    global catpanel
+
+    set xlabel $xcol
+    set ylabel $ycol
+    if {$logx} { set xlabel "log10($xcol)" }
+    if {$logy} { set ylabel "log10($ycol)" }
+    wm title $w "$ylabel vs $xlabel"
+
+    # Create BLT vectors
+    set xvec catplot_xv_$catpanel(plot,counter)
+    set yvec catplot_yv_$catpanel(plot,counter)
+    blt::vector create $xvec $yvec
+    $xvec set $xdata
+    $yvec set $ydata
+
+    # Create graph
+    blt::graph $w.g -width 520 -height 400 \
+	-plotpadx {60 10} -plotpady {10 40} \
+	-title "$ylabel vs $xlabel"
+    pack $w.g -fill both -expand 1
+
+    $w.g element create data -xdata $xvec -ydata $yvec \
+	-symbol circle -pixels 3 -color blue -linewidth 0 \
+	-label ""
+
+    $w.g axis configure x -title $xlabel
+    $w.g axis configure y -title $ylabel
+
+    # Store mapping for click → source
+    set catpanel(plot,$w,nums) $nums
+    set catpanel(plot,$w,graph) $w.g
+
+    # Bind click for source selection
+    bind $w.g <ButtonPress-1> [list CatalogPanelPlotClick $w %x %y]
+
+    # Cleanup on close
+    bind $w <Destroy> [list CatalogPanelPlotCleanup $w $xvec $yvec]
+}
+
+proc CatalogPanelPlotHistogram {w xdata xcol nbins logx} {
+    global catpanel
+
+    set xlabel $xcol
+    if {$logx} { set xlabel "log10($xcol)" }
+    wm title $w "Histogram of $xlabel"
+
+    # Compute bins
+    set xmin [lindex $xdata 0]
+    set xmax $xmin
+    foreach v $xdata {
+	if {$v < $xmin} { set xmin $v }
+	if {$v > $xmax} { set xmax $v }
+    }
+    set range [expr {$xmax - $xmin}]
+    if {$range <= 0} { set range 1.0 }
+    set binw [expr {$range / double($nbins)}]
+
+    # Count per bin
+    set counts {}
+    set centers {}
+    for {set i 0} {$i < $nbins} {incr i} {
+	lappend counts 0
+	lappend centers [expr {$xmin + ($i + 0.5) * $binw}]
+    }
+    foreach v $xdata {
+	set bi [expr {int(($v - $xmin) / $binw)}]
+	if {$bi >= $nbins} { set bi [expr {$nbins - 1}] }
+	if {$bi < 0} { set bi 0 }
+	lset counts $bi [expr {[lindex $counts $bi] + 1}]
+    }
+
+    # BLT barchart
+    set xvec catplot_hx_$catpanel(plot,counter)
+    set yvec catplot_hy_$catpanel(plot,counter)
+    blt::vector create $xvec $yvec
+    $xvec set $centers
+    $yvec set $counts
+
+    blt::barchart $w.g -width 520 -height 400 \
+	-plotpadx {60 10} -plotpady {10 40} \
+	-title "Histogram of $xlabel" -barwidth $binw
+    pack $w.g -fill both -expand 1
+
+    $w.g element create hist -xdata $xvec -ydata $yvec \
+	-foreground steelblue -borderwidth 1 -label ""
+
+    $w.g axis configure x -title $xlabel
+    $w.g axis configure y -title "Count"
+
+    bind $w <Destroy> [list CatalogPanelPlotCleanup $w $xvec $yvec]
+}
+
+proc CatalogPanelPlotClick {w sx sy} {
+    global catpanel
+
+    if {![info exists catpanel(plot,$w,graph)]} return
+    set g $catpanel(plot,$w,graph)
+
+    if {[catch {$g element closest $sx $sy info -halo 10}]} return
+    if {![info exists info(index)]} return
+
+    set idx $info(index)
+    if {[info exists catpanel(plot,$w,nums)]} {
+	set num [lindex $catpanel(plot,$w,nums) $idx]
+	if {$num ne {}} {
+	    CatalogPanelGotoSource $num
+	}
+    }
+}
+
+proc CatalogPanelPlotCleanup {w xvec yvec} {
+    global catpanel
+    catch {blt::vector destroy $xvec}
+    catch {blt::vector destroy $yvec}
+    catch {unset catpanel(plot,$w,nums)}
+    catch {unset catpanel(plot,$w,graph)}
+}
+
+# ============================================================
+# Feature: Photo-z (AI Photometric Redshift)
+# ============================================================
+
+proc CatalogPanelPhotoZParamLoad {} {
+    global catpanel
+    set prf [file join [file normalize ~] .ds9 photo_z.prf]
+    if {![file exists $prf]} return
+    if {[catch {
+	set fd [open $prf r]
+	set data [read $fd]
+	close $fd
+    }]} return
+    foreach line [split $data "\n"] {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set eq [string first "=" $line]
+	if {$eq < 0} continue
+	set key [string trim [string range $line 0 [expr {$eq-1}]]]
+	set val [string trim [string range $line [expr {$eq+1}] end]]
+	set catpanel(photoz,param,$key) $val
+    }
+}
+
+proc CatalogPanelPhotoZParamSave {} {
+    global catpanel
+    set prf [file join [file normalize ~] .ds9 photo_z.prf]
+    catch {file mkdir [file dirname $prf]}
+    if {[catch {set fd [open $prf w]}]} return
+    foreach key {bands mag-columns checkpoint} {
+	if {[info exists catpanel(photoz,param,$key)]} {
+	    puts $fd "$key=$catpanel(photoz,param,$key)"
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelPhotoZ {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    # Get column names for band mapping
+    set lines [split $catpanel(alldata) "\n"]
+    set header [split [lindex $lines 0] "\t"]
+
+    set w .catphotoz
+    if {[winfo exists $w]} { raise $w; return }
+    toplevel $w
+    wm title $w "Photo-z (AI)"
+    wm geometry $w 400x280
+
+    ttk::label $w.lbands -text "Bands (comma-sep):"
+    ttk::entry $w.bands -width 30
+    $w.bands insert 0 $catpanel(photoz,param,bands)
+
+    ttk::label $w.lmags -text "Mag columns (comma-sep):"
+    ttk::entry $w.mags -width 30
+    # Auto-detect magnitude columns
+    set magcols {}
+    foreach c $header {
+	if {[string match "MAG_*" $c] || [string match "mag_*" $c]} {
+	    lappend magcols $c
+	}
+    }
+    set default_mags [join $magcols ","]
+    if {$catpanel(photoz,param,mag-columns) ne {}} {
+	set default_mags $catpanel(photoz,param,mag-columns)
+    }
+    $w.mags insert 0 $default_mags
+
+    ttk::label $w.lckpt -text "Checkpoint:"
+    ttk::entry $w.ckpt -width 30
+    $w.ckpt insert 0 $catpanel(photoz,param,checkpoint)
+
+    ttk::frame $w.btns
+    ttk::button $w.btns.run -text "Run Photo-z" \
+	-command [list CatalogPanelPhotoZRun $w]
+    ttk::button $w.btns.close -text "Close" -command [list destroy $w]
+    pack $w.btns.run $w.btns.close -side left -padx 5
+
+    grid $w.lbands $w.bands -padx 5 -pady 4 -sticky w
+    grid $w.lmags  $w.mags  -padx 5 -pady 4 -sticky w
+    grid $w.lckpt  $w.ckpt  -padx 5 -pady 4 -sticky w
+    grid $w.btns   -        -padx 5 -pady 10
+}
+
+proc CatalogPanelPhotoZRun {dlg} {
+    global catpanel
+
+    set bands [$dlg.bands get]
+    set magcols [$dlg.mags get]
+    set ckpt [$dlg.ckpt get]
+
+    # Save params
+    set catpanel(photoz,param,bands) $bands
+    set catpanel(photoz,param,mag-columns) $magcols
+    set catpanel(photoz,param,checkpoint) $ckpt
+    CatalogPanelPhotoZParamSave
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_photo_z.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_photo_z.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "photoz"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Running Photo-z estimation..."
+    update idletasks
+
+    set args [list python3 $script $fn --catalog $tmpcat]
+    if {$bands ne {}} { lappend args --bands $bands }
+    if {$magcols ne {}} { lappend args --mag-columns $magcols }
+    if {$ckpt ne {} && [file exists $ckpt]} {
+	lappend args --checkpoint $ckpt
+    }
+    lappend args --n-workers $catpanel(param,n-workers)
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Photo-z error: $err"
+	return
+    }
+
+    if {[string trim $data] eq {}} {
+	set catpanel(status) "Photo-z: no output"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data \
+	{PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER}
+    set catpanel(status) "Photo-z estimation complete"
+    catch {destroy $dlg}
+}
+
+# ============================================================
+# Feature: SED Fitting (AI SPS Emulator)
+# ============================================================
+
+proc CatalogPanelSEDParamLoad {} {
+    global catpanel
+    set prf [file join [file normalize ~] .ds9 sed_fit.prf]
+    if {![file exists $prf]} return
+    if {[catch {
+	set fd [open $prf r]
+	set data [read $fd]
+	close $fd
+    }]} return
+    foreach line [split $data "\n"] {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set eq [string first "=" $line]
+	if {$eq < 0} continue
+	set key [string trim [string range $line 0 [expr {$eq-1}]]]
+	set val [string trim [string range $line [expr {$eq+1}] end]]
+	set catpanel(sed,param,$key) $val
+    }
+}
+
+proc CatalogPanelSEDParamSave {} {
+    global catpanel
+    set prf [file join [file normalize ~] .ds9 sed_fit.prf]
+    catch {file mkdir [file dirname $prf]}
+    if {[catch {set fd [open $prf w]}]} return
+    foreach key {bands mag-columns photoz-column checkpoint-emulator checkpoint-inverse} {
+	if {[info exists catpanel(sed,param,$key)]} {
+	    puts $fd "$key=$catpanel(sed,param,$key)"
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelSEDFit {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    # Check for PHOTO_Z column
+    set lines [split $catpanel(alldata) "\n"]
+    set header [split [lindex $lines 0] "\t"]
+    set has_pz 0
+    foreach c $header {
+	if {$c eq "PHOTO_Z"} { set has_pz 1; break }
+    }
+
+    set w .catsedfit
+    if {[winfo exists $w]} { raise $w; return }
+    toplevel $w
+    wm title $w "SED Fitting (AI)"
+    wm geometry $w 420x330
+
+    if {!$has_pz} {
+	ttk::label $w.warn -text "Warning: PHOTO_Z column not found.\nRun Photo-z first for best results." \
+	    -foreground red
+	grid $w.warn - -padx 5 -pady 5
+    }
+
+    ttk::label $w.lbands -text "Bands (comma-sep):"
+    ttk::entry $w.bands -width 30
+    $w.bands insert 0 $catpanel(sed,param,bands)
+
+    ttk::label $w.lmags -text "Mag columns (comma-sep):"
+    ttk::entry $w.mags -width 30
+    set magcols {}
+    foreach c $header {
+	if {[string match "MAG_*" $c] || [string match "mag_*" $c]} {
+	    lappend magcols $c
+	}
+    }
+    set default_mags [join $magcols ","]
+    if {$catpanel(sed,param,mag-columns) ne {}} {
+	set default_mags $catpanel(sed,param,mag-columns)
+    }
+    $w.mags insert 0 $default_mags
+
+    ttk::label $w.lpzcol -text "Photo-z column:"
+    ttk::entry $w.pzcol -width 20
+    $w.pzcol insert 0 $catpanel(sed,param,photoz-column)
+
+    ttk::label $w.lcke -text "Emulator checkpoint:"
+    ttk::entry $w.cke -width 30
+    $w.cke insert 0 $catpanel(sed,param,checkpoint-emulator)
+
+    ttk::label $w.lcki -text "Inverse checkpoint:"
+    ttk::entry $w.cki -width 30
+    $w.cki insert 0 $catpanel(sed,param,checkpoint-inverse)
+
+    ttk::frame $w.btns
+    ttk::button $w.btns.run -text "Run SED Fit" \
+	-command [list CatalogPanelSEDFitRun $w]
+    ttk::button $w.btns.close -text "Close" -command [list destroy $w]
+    pack $w.btns.run $w.btns.close -side left -padx 5
+
+    grid $w.lbands $w.bands -padx 5 -pady 4 -sticky w
+    grid $w.lmags  $w.mags  -padx 5 -pady 4 -sticky w
+    grid $w.lpzcol $w.pzcol -padx 5 -pady 4 -sticky w
+    grid $w.lcke   $w.cke   -padx 5 -pady 4 -sticky w
+    grid $w.lcki   $w.cki   -padx 5 -pady 4 -sticky w
+    grid $w.btns   -        -padx 5 -pady 10
+}
+
+proc CatalogPanelSEDFitRun {dlg} {
+    global catpanel
+
+    set bands [$dlg.bands get]
+    set magcols [$dlg.mags get]
+    set pzcol [$dlg.pzcol get]
+    set cke [$dlg.cke get]
+    set cki [$dlg.cki get]
+
+    set catpanel(sed,param,bands) $bands
+    set catpanel(sed,param,mag-columns) $magcols
+    set catpanel(sed,param,photoz-column) $pzcol
+    set catpanel(sed,param,checkpoint-emulator) $cke
+    set catpanel(sed,param,checkpoint-inverse) $cki
+    CatalogPanelSEDParamSave
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_sed_fit.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_sed_fit.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "sedfit"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Running SED fitting..."
+    update idletasks
+
+    set args [list python3 $script $fn --catalog $tmpcat]
+    if {$bands ne {}} { lappend args --bands $bands }
+    if {$magcols ne {}} { lappend args --mag-columns $magcols }
+    if {$pzcol ne {}} { lappend args --photo-z-column $pzcol }
+    if {$cke ne {} && [file exists $cke]} {
+	lappend args --checkpoint-emulator $cke
+    }
+    if {$cki ne {} && [file exists $cki]} {
+	lappend args --checkpoint-inverse $cki
+    }
+    lappend args --n-workers $catpanel(param,n-workers)
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "SED fit error: $err"
+	return
+    }
+
+    if {[string trim $data] eq {}} {
+	set catpanel(status) "SED fit: no output"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data \
+	{LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR}
+    set catpanel(status) "SED fitting complete"
+    catch {destroy $dlg}
+}
+
+# ============================================================
+# Feature: Bulge+Disk Decomposition
+# ============================================================
+
+proc CatalogPanelBDParamLoad {} {
+    global catpanel
+    set prf [file join [file normalize ~] .ds9 bulge_disk.prf]
+    if {![file exists $prf]} return
+    if {[catch {
+	set fd [open $prf r]
+	set data [read $fd]
+	close $fd
+    }]} return
+    foreach line [split $data "\n"] {
+	set line [string trim $line]
+	if {$line eq {} || [string index $line 0] eq "#"} continue
+	set eq [string first "=" $line]
+	if {$eq < 0} continue
+	set key [string trim [string range $line 0 [expr {$eq-1}]]]
+	set val [string trim [string range $line [expr {$eq+1}] end]]
+	set catpanel(bd,param,$key) $val
+    }
+}
+
+proc CatalogPanelBDParamSave {} {
+    global catpanel
+    set prf [file join [file normalize ~] .ds9 bulge_disk.prf]
+    catch {file mkdir [file dirname $prf]}
+    if {[catch {set fd [open $prf w]}]} return
+    foreach key {max-sources free-bulge-n mag-zeropoint pixel-scale} {
+	if {[info exists catpanel(bd,param,$key)]} {
+	    puts $fd "$key=$catpanel(bd,param,$key)"
+	}
+    }
+    close $fd
+}
+
+proc CatalogPanelBulgeDisk {} {
+    global catpanel
+
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "Extract sources first"
+	return
+    }
+
+    set fn [CatalogPanelGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	set catpanel(status) "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelGetScript ds9_bulge_disk.py]
+    if {![file exists $script]} {
+	set catpanel(status) "Script not found: ds9_bulge_disk.py"
+	return
+    }
+
+    set tmpcat [CatalogPanelSaveTempCatalog "bulgedisk"]
+    if {$tmpcat eq {}} {
+	set catpanel(status) "Failed to save temp catalog"
+	return
+    }
+
+    set catpanel(status) "Running Bulge+Disk decomposition..."
+    update idletasks
+
+    set args [list python3 $script $fn --catalog $tmpcat]
+    lappend args --mag-zeropoint $catpanel(bd,param,mag-zeropoint)
+    lappend args --pixel-scale $catpanel(bd,param,pixel-scale)
+    lappend args --max-sources $catpanel(bd,param,max-sources)
+
+    if {$catpanel(bd,param,free-bulge-n)} {
+	lappend args --free-bulge-n
+    }
+
+    # Use PSF if available
+    if {[info exists catpanel(psf,file)] && [file exists $catpanel(psf,file)]} {
+	lappend args --psf $catpanel(psf,file)
+    }
+
+    lappend args --n-workers $catpanel(param,n-workers)
+
+    if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "Bulge+Disk error: $err"
+	return
+    }
+
+    if {[string trim $data] eq {}} {
+	set catpanel(status) "Bulge+Disk: no output"
+	return
+    }
+
+    CatalogPanelAddColumnsFromTSV $data \
+	{BT_RATIO BULGE_RE BULGE_MAG DISK_RS DISK_MAG BD_CHI2 BD_FLAG}
+    set catpanel(status) "Bulge+Disk decomposition complete"
+}
+
+proc CatalogPanelBulgeDiskSettings {} {
+    global catpanel
+
+    set w .catbdsettings
+    if {[winfo exists $w]} { raise $w; return }
+    toplevel $w
+    wm title $w "Bulge+Disk Settings"
+    wm geometry $w 300x220
+
+    ttk::label $w.lmax -text "Max sources:"
+    ttk::spinbox $w.maxsrc -from 10 -to 1000 -increment 10 -width 8
+    $w.maxsrc set $catpanel(bd,param,max-sources)
+
+    ttk::label $w.lzp -text "Mag zeropoint:"
+    ttk::entry $w.zp -width 10
+    $w.zp insert 0 $catpanel(bd,param,mag-zeropoint)
+
+    ttk::label $w.lps -text "Pixel scale (\"/px):"
+    ttk::entry $w.ps -width 10
+    $w.ps insert 0 $catpanel(bd,param,pixel-scale)
+
+    set catpanel(bd,dlg,free_n) $catpanel(bd,param,free-bulge-n)
+    ttk::checkbutton $w.freen -text "Free bulge Sérsic n" \
+	-variable catpanel(bd,dlg,free_n)
+
+    ttk::frame $w.btns
+    ttk::button $w.btns.ok -text "OK" -command [list CatalogPanelBDSettingsApply $w]
+    ttk::button $w.btns.cancel -text "Cancel" -command [list destroy $w]
+    pack $w.btns.ok $w.btns.cancel -side left -padx 5
+
+    grid $w.lmax  $w.maxsrc -padx 5 -pady 4 -sticky w
+    grid $w.lzp   $w.zp     -padx 5 -pady 4 -sticky w
+    grid $w.lps   $w.ps     -padx 5 -pady 4 -sticky w
+    grid $w.freen -         -padx 5 -pady 4 -sticky w
+    grid $w.btns  -         -padx 5 -pady 10
+}
+
+proc CatalogPanelBDSettingsApply {w} {
+    global catpanel
+    set catpanel(bd,param,max-sources) [$w.maxsrc get]
+    set catpanel(bd,param,mag-zeropoint) [$w.zp get]
+    set catpanel(bd,param,pixel-scale) [$w.ps get]
+    set catpanel(bd,param,free-bulge-n) $catpanel(bd,dlg,free_n)
+    CatalogPanelBDParamSave
+    destroy $w
 }
