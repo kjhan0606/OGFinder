@@ -205,6 +205,7 @@ def main():
     # Output TSV
     out = sys.stdout
     if args.output:
+        os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
         out = open(args.output, 'w')
 
     columns = [

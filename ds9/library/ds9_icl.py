@@ -788,6 +788,9 @@ def main():
 
     args = parser.parse_args()
 
+    # Ensure ~/.ds9 directory exists
+    os.makedirs(os.path.expanduser('~/.ds9'), exist_ok=True)
+
     if args.mode == 'mask':
         mode_mask(args)
     elif args.mode == 'import-mask':

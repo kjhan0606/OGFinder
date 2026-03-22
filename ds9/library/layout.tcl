@@ -238,12 +238,8 @@ proc CreateCatalogPanel {} {
     $f.menubar.display.m add command \
 	-label "Load Separated Catalog..." \
 	-command CatalogPanelSeparateLoad
-
-    # AI Merge menu
-    ttk::menubutton $f.menubar.aimerge -text "AI Merge" \
-	-menu $f.menubar.aimerge.m -style CatMenu.TMenubutton
-    menu $f.menubar.aimerge.m -tearoff 0
-    $f.menubar.aimerge.m add command -label "Run AI Merge" \
+    $f.menubar.display.m add separator
+    $f.menubar.display.m add command -label "AI Merge..." \
 	-command CatalogPanelAIMerge
 
     # Galaxy Model menu
@@ -567,7 +563,6 @@ proc CreateCatalogPanel {} {
 
     pack $f.menubar.sextract -side left
     pack $f.menubar.display -side left
-    pack $f.menubar.aimerge -side left
     pack $f.menubar.galaxy -side left
     pack $f.menubar.starpsf -side left
     pack $f.menubar.deconv -side left
@@ -676,6 +671,12 @@ proc CreateCatalogPanel {} {
     set catpanel(ai,total) 0
     set catpanel(ai,threshold) 0.7
     set catpanel(ai,active) 0
+
+    # Ensure ~/.ds9 directory exists
+    set ds9dir [file join [file normalize ~] .ds9]
+    if {![file isdirectory $ds9dir]} {
+	file mkdir $ds9dir
+    }
 
     # PSF/Deconv state
     set catpanel(psf,stars) {}
