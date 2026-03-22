@@ -1074,6 +1074,10 @@ mkdir -p results/tanoglidis2021               # create output dir
 \noindent Then use Import Script in the GUI to re-execute the analysis commands interactively.
 \end{important}
 
+\begin{important}
+If the reproduction script has already been run from the terminal and output TSV files exist, the Import Script will detect them automatically and offer to load the existing results directly without re-executing the analysis commands.  Select \textbf{Yes} to load instantly, \textbf{No} to re-run all steps, or \textbf{Cancel} to abort.
+\end{important}
+
 
 \section{ICL CLI Reference}
 
@@ -1537,6 +1541,10 @@ mkdir -p results/tanoglidis2021_riz            # create output dir
 \end{lstlisting}
 \end{codebox}
 \noindent Then open the detection image in ds9 and use LSBG~$\to$~Import Script to load \texttt{reproduce\_tanoglidis2021\_riz.sh}.
+\end{important}
+
+\begin{important}
+If the output TSV files from a previous CLI run already exist, Import Script will detect them and offer to load the results directly---no need to re-run the analysis.
 \end{important}
 
 \begin{codebox}[CLI usage]

@@ -8912,6 +8912,86 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	return
     }
 
+    # --- Phase 2.5: Check if output files already exist ---
+    # Scan commands for output files and check if they exist
+    set existing_outputs {}
+    foreach cmdline $commands {
+	# Look for --output FILE, --*-output FILE, > FILE patterns
+	set parts [split $cmdline " "]
+	set nparts [llength $parts]
+	for {set i 0} {$i < $nparts} {incr i} {
+	    set p [lindex $parts $i]
+	    set next_i [expr {$i + 1}]
+	    if {$next_i < $nparts} {
+		set nextarg [lindex $parts $next_i]
+		# Strip quotes from nextarg
+		set nextarg [string trim $nextarg "\"'"]
+		if {([string match "--*-output" $p] || $p eq "--output" || $p eq ">") &&
+		    [regexp {\.(tsv|fits)(\.gz)?$} $nextarg]} {
+		    # Resolve path: substitute shell vars, check ds9dir
+		    set resolved $nextarg
+		    dict for {k v} $shell_vars {
+			set resolved [string map [list "\$$k" $v "\${$k}" $v] $resolved]
+		    }
+		    # Also check ~/.ds9/ version (Import redirects outputs there)
+		    set ds9ver [file join [file join [file normalize ~] .ds9] [file tail $resolved]]
+		    if {[file exists $resolved] && [string match "*.tsv" $resolved]} {
+			lappend existing_outputs $resolved
+		    } elseif {[file exists $ds9ver] && [string match "*.tsv" $ds9ver]} {
+			lappend existing_outputs $ds9ver
+		    }
+		}
+	    }
+	}
+    }
+
+    # If output TSV files exist, offer to load them directly
+    if {[llength $existing_outputs] > 0} {
+	set flist [join $existing_outputs "\n  "]
+	set msg "Previously generated output files found:\n  $flist\n\nLoad existing results without re-running?"
+	set answer [tk_messageBox -type yesnocancel -icon question \
+	    -title "$pipeline: Existing Results Found" \
+	    -message $msg \
+	    -detail "Yes = Load existing files (fast)\nNo = Re-run all steps\nCancel = Abort"]
+	if {$answer eq "cancel"} return
+	if {$answer eq "yes"} {
+	    # Load the best existing TSV (prefer one with X_IMAGE)
+	    set best_tsv {}
+	    foreach tsvfile $existing_outputs {
+		if {[catch {set fd [open $tsvfile r]; set data [read $fd]; close $fd}]} continue
+		if {$data eq {}} continue
+		set hdr [lindex [split $data \n] 0]
+		if {[string match "*X_IMAGE*" $hdr]} {
+		    set best_tsv $data
+		    break
+		}
+		if {$best_tsv eq {}} { set best_tsv $data }
+	    }
+	    if {$best_tsv ne {}} {
+		set catpanel(alldata) $best_tsv
+		CatalogPanelLoadTSV $best_tsv $pipeline
+		CatalogPanelMarkAll
+
+		# Update pipeline state from existing files
+		if {$pipeline eq "icl"} {
+		    if {[file exists $catpanel(icl,mask_file)]}    { set catpanel(icl,has_mask) 1 }
+		    if {[file exists $catpanel(icl,bkg_file)]}     { set catpanel(icl,has_bkg) 1 }
+		    if {[file exists $catpanel(icl,profile_file)]} { set catpanel(icl,has_profile) 1 }
+		} elseif {$pipeline eq "lsbg"} {
+		    if {[file exists $catpanel(lsbg,mask_file)]}    { set catpanel(lsbg,has_mask) 1 }
+		    if {[file exists $catpanel(lsbg,cleaned_file)]} { set catpanel(lsbg,has_clean) 1 }
+		    if {[file exists $catpanel(lsbg,segmap_file)]}  { set catpanel(lsbg,has_detect) 1 }
+		    set catpanel(lsbg,has_catalog) 1
+		}
+
+		set n [expr {[llength [split $best_tsv \n]] - 1}]
+		set catpanel(status) "$pipeline: Loaded existing results ($n sources)"
+		return
+	    }
+	    set catpanel(status) "$pipeline: Could not read existing files, re-running..."
+	}
+    }
+
     # --- Phase 3: Execute commands ---
     set script_path [CatalogPanelGetScript ds9_${pipeline}.py]
     set script_dir [file dirname $script_path]
