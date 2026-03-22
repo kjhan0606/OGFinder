@@ -126,6 +126,7 @@ class AnalysisGUI:
 
         # State
         self.mode = "overview"
+        self._pick_map = {}  # scatter artist → array of row indices
 
         # Settings
         self.settings = dict(DEFAULT_SETTINGS)
@@ -158,9 +159,15 @@ class AnalysisGUI:
         self._build_table_area()
 
         self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(self.root, textvariable=self.status_var,
+        status_frame = ttk.Frame(self.root)
+        status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        ttk.Label(status_frame, textvariable=self.status_var,
                   relief=tk.SUNKEN, anchor=tk.W).pack(
-                      side=tk.BOTTOM, fill=tk.X)
+                      side=tk.LEFT, fill=tk.X, expand=True)
+        self.progress = ttk.Progressbar(
+            status_frame, mode='indeterminate', length=120)
+
+        self._bind_shortcuts()
 
     def _build_menu(self):
         menubar = tk.Menu(self.root)
@@ -290,6 +297,7 @@ class AnalysisGUI:
 
         self.canvas = FigureCanvasTkAgg(self.fig, master=plot_frame)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self.canvas.mpl_connect('pick_event', self._on_pick)
 
         nav_frame = ttk.Frame(plot_frame)
         nav_frame.pack(side=tk.BOTTOM, fill=tk.X)
@@ -357,6 +365,50 @@ class AnalysisGUI:
         tree_container.grid_columnconfigure(0, weight=1)
 
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
+
+    def _bind_shortcuts(self):
+        self.root.bind('<Control-o>', lambda e: self._open_catalog())
+        self.root.bind('<Control-f>', lambda e: self._open_fits())
+        self.root.bind('<Control-e>', lambda e: self._export_catalog())
+        self.root.bind('<Key-1>', lambda e: self._set_mode('overview'))
+        self.root.bind('<Key-2>', lambda e: self._set_mode('photoz'))
+        self.root.bind('<Key-3>', lambda e: self._set_mode('sed'))
+        self.root.bind('<Key-4>', lambda e: self._set_mode('classify'))
+        self.root.bind('<Key-5>', lambda e: self._set_mode('structure'))
+        self.root.bind('<Key-6>', lambda e: self._set_mode('plot'))
+        self.root.bind('<Key-n>', lambda e: self._nav_source(1))
+        self.root.bind('<Key-p>', lambda e: self._nav_source(-1))
+
+    def _nav_source(self, delta):
+        """Navigate to next/previous source in filtered list."""
+        if not self.filtered_indices:
+            return
+        if self.selected_idx < 0:
+            new_idx = self.filtered_indices[0]
+        else:
+            try:
+                pos = self.filtered_indices.index(self.selected_idx)
+                pos = max(0, min(pos + delta, len(self.filtered_indices) - 1))
+                new_idx = self.filtered_indices[pos]
+            except ValueError:
+                new_idx = self.filtered_indices[0]
+        self.selected_idx = new_idx
+        iid = str(new_idx)
+        if self.tree.exists(iid):
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+        self._update_plots()
+
+    def _busy_start(self):
+        self.progress.pack(side=tk.RIGHT, padx=4)
+        self.progress.start(10)
+        self.root.config(cursor='watch')
+        self.root.update_idletasks()
+
+    def _busy_stop(self):
+        self.progress.stop()
+        self.progress.pack_forget()
+        self.root.config(cursor='')
 
     # ================================================================
     # Data Loading & Table
@@ -461,6 +513,31 @@ class AnalysisGUI:
             self.selected_idx = int(sel[0])
             self._update_plots()
 
+    def _on_pick(self, event):
+        """Handle click on scatter plot point → select source in table."""
+        artist = event.artist
+        if artist not in self._pick_map:
+            return
+        ind = event.ind
+        if len(ind) == 0:
+            return
+        row_indices = self._pick_map[artist]
+        row_idx = row_indices[ind[0]]
+        self.selected_idx = row_idx
+        # Select in tree
+        iid = str(row_idx)
+        if self.tree.exists(iid):
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+        self._update_plots()
+
+    def _scatter_pick(self, ax, x, y, indices, **kwargs):
+        """Scatter plot with pick support. Returns artist."""
+        kwargs.setdefault('picker', 5)
+        sc = ax.scatter(x, y, **kwargs)
+        self._pick_map[sc] = np.asarray(indices)
+        return sc
+
     def _col_idx(self, name):
         try:
             return self.header.index(name)
@@ -503,7 +580,7 @@ class AnalysisGUI:
     # ================================================================
 
     def _load_fits_data(self):
-        """Load and cache the FITS image data."""
+        """Load and cache the FITS image data + auto-detect header info."""
         if self.fits_data is not None:
             return True
         if not self.fits_path or not os.path.exists(self.fits_path):
@@ -517,10 +594,53 @@ class AnalysisGUI:
                 for hdu in hdul:
                     if hdu.data is not None and hdu.data.ndim == 2:
                         self.fits_data = hdu.data.astype(np.float32)
+                        self._read_fits_header(hdu.header)
                         return True
             return False
         except Exception:
             return False
+
+    def _read_fits_header(self, hdr):
+        """Auto-detect pixel scale, zeropoint, instrument from FITS header."""
+        # Pixel scale (arcsec/pixel)
+        if self.settings['pixel_scale'] == 0.0:
+            for key in ('CDELT2', 'CD2_2'):
+                if key in hdr:
+                    val = abs(float(hdr[key]))
+                    if val < 1.0:  # degrees
+                        self.settings['pixel_scale'] = round(val * 3600, 4)
+                        break
+            if self.settings['pixel_scale'] == 0.0 and 'PIXAR_A2' in hdr:
+                self.settings['pixel_scale'] = round(
+                    float(hdr['PIXAR_A2']) ** 0.5, 4)
+
+        # Mag zeropoint (JWST surface brightness)
+        if 'PIXAR_SR' in hdr and 'PHOTFNU' in hdr:
+            try:
+                pixar_sr = float(hdr['PIXAR_SR'])
+                photfnu = float(hdr['PHOTFNU'])
+                # AB mag ZP for point source (MJy/sr → Jy → AB)
+                flux_jy = photfnu * pixar_sr * 1e6
+                if flux_jy > 0:
+                    zp = -2.5 * np.log10(flux_jy) + 8.9
+                    self.settings['mag_zeropoint'] = round(zp, 2)
+            except (ValueError, TypeError):
+                pass
+        elif 'PHOTZPT' in hdr:
+            self.settings['mag_zeropoint'] = round(float(hdr['PHOTZPT']), 2)
+        elif 'MAGZERO' in hdr:
+            self.settings['mag_zeropoint'] = round(float(hdr['MAGZERO']), 2)
+
+        # Instrument info for title
+        parts = []
+        for key in ('TELESCOP', 'INSTRUME', 'FILTER', 'FILTER1', 'FILTER2'):
+            if key in hdr and str(hdr[key]).strip():
+                v = str(hdr[key]).strip()
+                if v.upper() not in ('N/A', 'NONE', 'CLEAR'):
+                    parts.append(v)
+        if parts:
+            info = " / ".join(parts[:3])
+            self.fits_var.set(f"{os.path.basename(self.fits_path)} [{info}]")
 
     def _plot_cutout(self):
         """Plot FITS cutout for the selected source."""
@@ -687,7 +807,8 @@ class AnalysisGUI:
             self.settings['pixel_scale'] = ps_var.get()
             self.settings['mag_zeropoint'] = zp_var.get()
             self._save_settings()
-            self.fits_data = None  # reset cutout on size change
+            if self.selected_idx >= 0:
+                self._update_plots()
             w.destroy()
 
         row += 1
@@ -863,7 +984,7 @@ class AnalysisGUI:
             script_name.replace('.py', '').replace('ds9_', ''))
 
         self.status_var.set(status_msg)
-        self.root.update_idletasks()
+        self._busy_start()
 
         def run():
             try:
@@ -879,25 +1000,36 @@ class AnalysisGUI:
                     cmd, capture_output=True, text=True, timeout=600)
 
                 if result.returncode != 0:
-                    self.root.after(0, lambda: self._show_error(
-                        f"{script_name} failed:\n{result.stderr[:500]}"))
+                    self.root.after(0, lambda: (
+                        self._busy_stop(),
+                        self._show_error(
+                            f"{script_name} failed:\n"
+                            f"{result.stderr[:500]}")))
                     return
 
                 stdout = result.stdout.strip()
                 if not stdout:
-                    self.root.after(0, lambda: self.status_var.set(
-                        f"{script_name}: no output"))
+                    self.root.after(0, lambda: (
+                        self._busy_stop(),
+                        self.status_var.set(
+                            f"{script_name}: no output")))
                     return
 
-                self.root.after(0, lambda: self._merge_results(
-                    stdout, output_columns,
-                    status_msg.replace("...", " done")))
+                def finish():
+                    self._busy_stop()
+                    self._merge_results(
+                        stdout, output_columns,
+                        status_msg.replace("...", " done"))
+                self.root.after(0, finish)
 
             except subprocess.TimeoutExpired:
-                self.root.after(0, lambda: self._show_error(
-                    f"{script_name} timed out"))
+                self.root.after(0, lambda: (
+                    self._busy_stop(),
+                    self._show_error(f"{script_name} timed out")))
             except Exception as e:
-                self.root.after(0, lambda: self._show_error(str(e)))
+                self.root.after(0, lambda: (
+                    self._busy_stop(),
+                    self._show_error(str(e))))
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -910,11 +1042,11 @@ class AnalysisGUI:
                 header_idx = i
                 break
 
-        res_header = lines[header_idx].split('\t')
+        res_header = [h.strip() for h in lines[header_idx].split('\t')]
         res_rows = {}
         num_col = -1
         for i, h in enumerate(res_header):
-            if h.strip() == "NUMBER":
+            if h == "NUMBER":
                 num_col = i
                 break
 
@@ -927,10 +1059,14 @@ class AnalysisGUI:
             if len(vals) > num_col:
                 res_rows[vals[num_col]] = vals
 
+        # Auto-detect columns if col_names is empty
+        if not col_names:
+            col_names = [h for h in res_header if h != "NUMBER"]
+
         col_indices = {}
         for cname in col_names:
             for i, h in enumerate(res_header):
-                if h.strip() == cname:
+                if h == cname:
                     col_indices[cname] = i
                     break
 
@@ -1102,6 +1238,7 @@ class AnalysisGUI:
         self.ax1.clear()
         self.ax_cutout.clear()
         self.ax2.clear()
+        self._pick_map.clear()
 
         # Remove leftover colorbars
         while len(self.fig.axes) > 3:
@@ -1185,7 +1322,9 @@ class AnalysisGUI:
         y = self._col_values("Y_IMAGE")
         if x is not None and y is not None:
             v = np.isfinite(x) & np.isfinite(y)
-            self.ax2.scatter(x[v], y[v], s=2, alpha=0.5, c='steelblue')
+            idx_v = np.where(v)[0]
+            self._scatter_pick(self.ax2, x[v], y[v], idx_v,
+                               s=2, alpha=0.5, c='steelblue')
             self.ax2.set_xlabel("X_IMAGE")
             self.ax2.set_ylabel("Y_IMAGE")
             self.ax2.set_title("Source Positions")
@@ -1224,8 +1363,9 @@ class AnalysisGUI:
         if mag is not None:
             both = valid & np.isfinite(mag) & (mag > 0) & (mag < 90)
             if np.sum(both) > 0:
-                self.ax2.scatter(pz[both], mag[both], s=5, alpha=0.4,
-                                  c='darkorange')
+                idx_b = np.where(both)[0]
+                self._scatter_pick(self.ax2, pz[both], mag[both], idx_b,
+                                   s=5, alpha=0.4, c='darkorange')
                 self.ax2.set_xlabel("Photo-z")
                 self.ax2.set_ylabel("MAG_AUTO")
                 self.ax2.set_title("Magnitude vs Redshift")
@@ -1281,8 +1421,10 @@ class AnalysisGUI:
                     self.fig.colorbar(sc, ax=self.ax2, label="Av",
                                       shrink=0.8, pad=0.02)
                 else:
-                    self.ax2.scatter(lm[valid_s], sfr[valid_s], s=8,
-                                     alpha=0.5, c='mediumpurple')
+                    idx_s = np.where(valid_s)[0]
+                    self._scatter_pick(self.ax2, lm[valid_s], sfr[valid_s],
+                                       idx_s, s=8, alpha=0.5,
+                                       c='mediumpurple')
 
                 # Main sequence reference (Speagle+2014 at z~1)
                 ms_x = np.linspace(8, 12, 50)
@@ -1480,8 +1622,9 @@ class AnalysisGUI:
             if gini is not None and m20 is not None:
                 v = np.isfinite(gini) & np.isfinite(m20) & (gini > 0)
                 if np.sum(v) > 0:
-                    self.ax1.scatter(m20[v], gini[v], s=8,
-                                     alpha=0.5, c='teal')
+                    idx_v = np.where(v)[0]
+                    self._scatter_pick(self.ax1, m20[v], gini[v], idx_v,
+                                       s=8, alpha=0.5, c='teal')
                     self.ax1.set_xlabel("M$_{20}$")
                     self.ax1.set_ylabel("Gini")
                     self.ax1.set_title("Gini-M20 Diagram")
@@ -1498,8 +1641,9 @@ class AnalysisGUI:
             if conc is not None and asym is not None:
                 v = np.isfinite(conc) & np.isfinite(asym)
                 if np.sum(v) > 0:
-                    self.ax1.scatter(asym[v], conc[v], s=8,
-                                     alpha=0.5, c='coral')
+                    idx_v = np.where(v)[0]
+                    self._scatter_pick(self.ax1, asym[v], conc[v], idx_v,
+                                       s=8, alpha=0.5, c='coral')
                     self.ax1.set_xlabel("Asymmetry")
                     self.ax1.set_ylabel("Concentration")
                     self.ax1.set_title("C-A Diagram")
@@ -1513,8 +1657,9 @@ class AnalysisGUI:
                 v = (np.isfinite(sn) & np.isfinite(sre)
                      & (sn > 0) & (sre > 0))
                 if np.sum(v) > 0:
-                    self.ax2.scatter(sre[v], sn[v], s=8, alpha=0.5,
-                                     c='darkorchid')
+                    idx_v = np.where(v)[0]
+                    self._scatter_pick(self.ax2, sre[v], sn[v], idx_v,
+                                       s=8, alpha=0.5, c='darkorchid')
                     self.ax2.set_xlabel("R$_e$ (pix)")
                     self.ax2.set_ylabel("Sérsic n")
                     self.ax2.set_title("Sérsic Index vs R_e")
@@ -1567,8 +1712,9 @@ class AnalysisGUI:
             if xvals is not None and yvals is not None:
                 v = np.isfinite(xvals) & np.isfinite(yvals)
                 if np.sum(v) > 0:
-                    self.ax1.scatter(xvals[v], yvals[v], s=5,
-                                     alpha=0.4, c='steelblue')
+                    idx_v = np.where(v)[0]
+                    self._scatter_pick(self.ax1, xvals[v], yvals[v], idx_v,
+                                       s=5, alpha=0.4, c='steelblue')
                     self.ax1.set_xlabel(xcol)
                     self.ax1.set_ylabel(ycol)
                     self.ax1.set_title(f"{ycol} vs {xcol}")
