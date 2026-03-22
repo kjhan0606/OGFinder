@@ -1062,6 +1062,18 @@ bash icl_pipeline.sh input.fits ./output
 The command log is reset each time a new Mask operation is started, so the exported script reflects the most recent analysis session.
 \end{important}
 
+\begin{important}
+When importing a multi-step reproduction script (e.g., \texttt{scripts/reproduce\_montes2022.sh}), ensure that all prerequisite data files and output directories exist \emph{before} importing.  Reproduction scripts typically include data-fetching steps (\texttt{fetch\_*.py}) and \texttt{mkdir~-p} commands that the Import Script engine does not execute---it only processes \texttt{python3} commands.  Run the data-preparation steps from the terminal first:
+\begin{codebox}
+\begin{lstlisting}[style=bash,numbers=none]
+cd OGFinder
+python3 scripts/fetch_tanoglidis2021_data.py   # download data
+mkdir -p results/tanoglidis2021               # create output dir
+\end{lstlisting}
+\end{codebox}
+\noindent Then use Import Script in the GUI to re-execute the analysis commands interactively.
+\end{important}
+
 
 \section{ICL CLI Reference}
 
@@ -1512,6 +1524,20 @@ Same core functionality as the ICL Export/Import (Section~\ref{sec:icl-export-im
 \noindent The command log is reset when starting a new Mask operation or when using Run Full Pipeline.
 
 On import, any bash script containing \texttt{python3 ds9\_lsbg.py} commands can be loaded---including hand-written reproduction scripts such as \texttt{scripts/reproduce\_tanoglidis2021.sh}.  Shell variables and line continuations are parsed automatically.  After completion, the cleaned image is displayed in a new frame, and the final catalog is loaded into the table with source markers.
+
+\begin{important}
+Before importing a reproduction script, you must run the prerequisite data-fetching and directory-creation steps from the terminal.  The Import Script engine only re-executes \texttt{python3} commands; it does \emph{not} run shell commands such as \texttt{mkdir}, \texttt{bash}, or data download scripts.  For example, to import the Tanoglidis+2021 r+i+z pipeline:
+\begin{codebox}
+\begin{lstlisting}[style=bash,numbers=none]
+cd OGFinder
+bash scripts/fetch_des_riz.sh                  # download r/i/z tiles
+python3 scripts/make_riz_coadd.py              # create riz coadd
+python3 scripts/fetch_tanoglidis2021_data.py   # download g-band data
+mkdir -p results/tanoglidis2021_riz            # create output dir
+\end{lstlisting}
+\end{codebox}
+\noindent Then open the detection image in ds9 and use LSBG~$\to$~Import Script to load \texttt{reproduce\_tanoglidis2021\_riz.sh}.
+\end{important}
 
 \begin{codebox}[CLI usage]
 \begin{lstlisting}[style=bash,numbers=none]
