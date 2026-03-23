@@ -16,6 +16,7 @@ Usage: python3 scripts/sep_detect_riz.py <riz_coadd.fits> [options]
 
 import argparse
 import math
+import os
 import sys
 
 import numpy as np
