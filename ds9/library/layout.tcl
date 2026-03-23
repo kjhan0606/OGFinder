@@ -9167,7 +9167,8 @@ proc CatalogPanelImportCLIScript {pipeline} {
 
 	    # 4. Redirect intermediate file inputs to ~/.ds9/
 	    if {$prev_flag in {--mask --cleaned --segmap --catalog
-			       --profile-file --import-mask-file} &&
+			       --profile-file --import-mask-file
+			       --detection --forced} &&
 		[regexp {\.(fits|tsv|fit|fts)(\.gz)?$} $arg]} {
 		set arg [file join $ds9dir [file tail $arg]]
 		lappend new_args $arg
