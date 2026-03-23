@@ -723,7 +723,8 @@ proc CreateCatalogPanel {} {
 
     CatalogPanelPSFParamLoad
 
-    # ICL state
+    # ICL state (default paths; updated per-FITS by CatalogPanelICLUpdateFiles)
+    set catpanel(icl,fits_base)    {}
     set catpanel(icl,mask_file)    [file join [file normalize ~] .ds9 icl_mask.fits]
     set catpanel(icl,masked_file)  [file join [file normalize ~] .ds9 icl_masked.fits]
     set catpanel(icl,bkg_file)     [file join [file normalize ~] .ds9 icl_background.fits]
@@ -763,7 +764,8 @@ proc CreateCatalogPanel {} {
     set catpanel(icl,param,bkg-refine-thresh)      2.0
     CatalogPanelICLParamLoad
 
-    # LSBG state
+    # LSBG state (default paths; updated per-FITS by CatalogPanelLSBGUpdateFiles)
+    set catpanel(lsbg,fits_base)    {}
     set catpanel(lsbg,mask_file)    [file join [file normalize ~] .ds9 lsbg_mask.fits]
     set catpanel(lsbg,masked_file)  [file join [file normalize ~] .ds9 lsbg_masked.fits]
     set catpanel(lsbg,bkg_file)     [file join [file normalize ~] .ds9 lsbg_background.fits]
@@ -7442,6 +7444,67 @@ proc CatalogPanelGetFITS {} {
     return $fn
 }
 
+# --- Helper: Extract FITS base name (without path and extensions) ---
+
+proc CatalogPanelFitsBaseName {fn} {
+    set base [file tail $fn]
+    # Strip .gz first if present
+    if {[string match "*.gz" $base]} {
+	set base [file rootname $base]
+    }
+    # Strip .fits/.fit/.fts
+    set base [file rootname $base]
+    return $base
+}
+
+# --- Helper: Update ICL intermediate file paths based on FITS name ---
+
+proc CatalogPanelICLUpdateFiles {fn} {
+    global catpanel
+    if {$fn eq {}} return
+    set base [CatalogPanelFitsBaseName $fn]
+    if {$base eq {}} return
+    # Skip if already set for this base
+    if {[info exists catpanel(icl,fits_base)] &&
+	$catpanel(icl,fits_base) eq $base} return
+    set catpanel(icl,fits_base) $base
+    set ds9dir [file join [file normalize ~] .ds9]
+    set catpanel(icl,mask_file)    [file join $ds9dir "icl_mask_${base}.fits"]
+    set catpanel(icl,masked_file)  [file join $ds9dir "icl_masked_${base}.fits"]
+    set catpanel(icl,bkg_file)     [file join $ds9dir "icl_background_${base}.fits"]
+    set catpanel(icl,bgsub_file)   [file join $ds9dir "icl_bgsub_${base}.fits"]
+    set catpanel(icl,profile_file) [file join $ds9dir "icl_profile_${base}.tsv"]
+    # Detect if previous results exist for this FITS
+    set catpanel(icl,has_mask)    [file exists $catpanel(icl,mask_file)]
+    set catpanel(icl,has_bkg)     [file exists $catpanel(icl,bkg_file)]
+    set catpanel(icl,has_profile) [file exists $catpanel(icl,profile_file)]
+}
+
+# --- Helper: Update LSBG intermediate file paths based on FITS name ---
+
+proc CatalogPanelLSBGUpdateFiles {fn} {
+    global catpanel
+    if {$fn eq {}} return
+    set base [CatalogPanelFitsBaseName $fn]
+    if {$base eq {}} return
+    # Skip if already set for this base
+    if {[info exists catpanel(lsbg,fits_base)] &&
+	$catpanel(lsbg,fits_base) eq $base} return
+    set catpanel(lsbg,fits_base) $base
+    set ds9dir [file join [file normalize ~] .ds9]
+    set catpanel(lsbg,mask_file)    [file join $ds9dir "lsbg_mask_${base}.fits"]
+    set catpanel(lsbg,masked_file)  [file join $ds9dir "lsbg_masked_${base}.fits"]
+    set catpanel(lsbg,bkg_file)     [file join $ds9dir "lsbg_background_${base}.fits"]
+    set catpanel(lsbg,cleaned_file) [file join $ds9dir "lsbg_cleaned_${base}.fits"]
+    set catpanel(lsbg,segmap_file)  [file join $ds9dir "lsbg_segmap_${base}.fits"]
+    set catpanel(lsbg,catalog_file) [file join $ds9dir "lsbg_catalog_${base}.tsv"]
+    # Detect if previous results exist for this FITS
+    set catpanel(lsbg,has_mask)    [file exists $catpanel(lsbg,mask_file)]
+    set catpanel(lsbg,has_clean)   [file exists $catpanel(lsbg,cleaned_file)]
+    set catpanel(lsbg,has_detect)  [file exists $catpanel(lsbg,segmap_file)]
+    set catpanel(lsbg,has_catalog) [file exists $catpanel(lsbg,catalog_file)]
+}
+
 # --- Helper: Save current catalog to temp TSV ---
 
 proc CatalogPanelSaveTempCatalog {suffix} {
@@ -8625,6 +8688,7 @@ proc CatalogPanelIclGenerateScript {} {
     global catpanel
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} return
+    CatalogPanelICLUpdateFiles $fn
     set script [CatalogPanelGetScript ds9_icl.py]
     set commands {}
 
@@ -8685,6 +8749,7 @@ proc CatalogPanelLsbgGenerateScript {} {
     global catpanel
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} return
+    CatalogPanelLSBGUpdateFiles $fn
     set script [CatalogPanelGetScript ds9_lsbg.py]
 
     set args [list python3 $script $fn --mode run \
@@ -8845,6 +8910,13 @@ proc CatalogPanelImportCLIScript {pipeline} {
 	    set scale(mode) zscale
 	    ChangeScaleMode
 	}
+    }
+
+    # Update intermediate file paths for this FITS
+    if {$pipeline eq "icl"} {
+	CatalogPanelICLUpdateFiles $fn
+    } elseif {$pipeline eq "lsbg"} {
+	CatalogPanelLSBGUpdateFiles $fn
     }
 
     # --- Phase 1: Parse shell variable assignments ---
@@ -9222,6 +9294,7 @@ proc CatalogPanelICLMask {} {
 	set catpanel(status) "ICL: No FITS file loaded"
 	return
     }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -9304,7 +9377,7 @@ proc CatalogPanelICLSaveMask {} {
 
     set fname [tk_getSaveFile \
 	-title "Save ICL Mask As..." \
-	-initialfile icl_mask.fits \
+	-initialfile [file tail $catpanel(icl,mask_file)] \
 	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
     if {$fname eq {}} return
 
@@ -9323,6 +9396,7 @@ proc CatalogPanelICLImportMask {} {
 	set catpanel(status) "ICL: No FITS file loaded"
 	return
     }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -9373,6 +9447,7 @@ proc CatalogPanelICLBackground {method} {
 	set catpanel(status) "ICL: No FITS file loaded"
 	return
     }
+    CatalogPanelICLUpdateFiles $fn
 
     # Use masked image if available, otherwise raw
     set input $fn
@@ -9639,6 +9714,7 @@ proc CatalogPanelICLProfile {} {
 	set catpanel(status) "ICL: No image available"
 	return
     }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -9765,6 +9841,7 @@ proc CatalogPanelICLSectorProfileRun {w} {
 	set catpanel(status) "ICL: No image available"
 	return
     }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -9813,6 +9890,7 @@ proc CatalogPanelICLMeasure {} {
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} { set fn "dummy.fits" }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -9896,6 +9974,7 @@ proc CatalogPanelICLMeasureMulti {} {
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} { set fn "dummy.fits" }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -9947,6 +10026,7 @@ proc CatalogPanelICLDecompose {} {
 	set catpanel(status) "ICL: No FITS image available"
 	return
     }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -10076,6 +10156,7 @@ proc CatalogPanelICLColorProfileRun {w} {
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} { set fn "dummy.fits" }
+    CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -10124,7 +10205,7 @@ proc CatalogPanelICLSaveProfile {} {
 
     set fname [tk_getSaveFile -defaultextension .tsv \
 	-filetypes {{{TSV} {.tsv}} {{All} *}} \
-	-initialfile icl_profile.tsv]
+	-initialfile [file tail $catpanel(icl,profile_file)]]
     if {$fname eq {}} return
 
     if {[catch {file copy -force $catpanel(icl,profile_file) $fname} err]} {
@@ -10481,6 +10562,7 @@ proc CatalogPanelLSBGMask {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -10565,7 +10647,7 @@ proc CatalogPanelLSBGSaveMask {} {
 
     set fname [tk_getSaveFile \
 	-title "Save LSBG Mask As..." \
-	-initialfile lsbg_mask.fits \
+	-initialfile [file tail $catpanel(lsbg,mask_file)] \
 	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
     if {$fname eq {}} return
 
@@ -10584,6 +10666,7 @@ proc CatalogPanelLSBGImportMask {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -10635,6 +10718,7 @@ proc CatalogPanelLSBGClean {method} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     if {![file exists $catpanel(lsbg,mask_file)]} {
 	set catpanel(status) "LSBG: No mask — run Mask Bright Sources first"
@@ -10722,6 +10806,7 @@ proc CatalogPanelLSBGDetect {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -10802,6 +10887,7 @@ proc CatalogPanelLSBGPhotometry {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -10862,6 +10948,7 @@ proc CatalogPanelLSBGSersic {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -10927,6 +11014,7 @@ proc CatalogPanelLSBGFilter {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -11007,6 +11095,7 @@ proc CatalogPanelLSBGSVMClassify {} {
 	set catpanel(status) "LSBG SVM: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set catpanel(status) "LSBG SVM: Classifying candidates..."
     update idletasks
@@ -11201,6 +11290,7 @@ proc CatalogPanelLSBGRunAll {} {
 	set catpanel(status) "LSBG: No FITS file loaded"
 	return
     }
+    CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
@@ -11874,6 +11964,7 @@ proc CatalogPanelRestoreFrameState {frame} {
 	set catpanel(psf,star_indices) {}
 	set catpanel(psf,file) [file join [file normalize ~] .ds9 psf_current.fits]
 	set catpanel(psf,has_psf) 0
+	set catpanel(icl,fits_base) {}
 	set catpanel(icl,has_mask) 0
 	set catpanel(icl,has_bkg) 0
 	set catpanel(icl,has_profile) 0
@@ -11885,6 +11976,7 @@ proc CatalogPanelRestoreFrameState {frame} {
 	set catpanel(icl,bkg_file) [file join [file normalize ~] .ds9 icl_background.fits]
 	set catpanel(icl,bgsub_file) [file join [file normalize ~] .ds9 icl_bgsub.fits]
 	set catpanel(icl,profile_file) [file join [file normalize ~] .ds9 icl_profile.tsv]
+	set catpanel(lsbg,fits_base) {}
 	set catpanel(lsbg,has_mask) 0
 	set catpanel(lsbg,has_clean) 0
 	set catpanel(lsbg,has_detect) 0
