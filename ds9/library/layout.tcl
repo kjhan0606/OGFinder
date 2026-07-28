@@ -512,6 +512,24 @@ proc CreateCatalogPanel {} {
 	-label "Settings..." \
 	-command CatalogPanelLSBGSettings
 
+    # NEO and CODES orbit menu
+    ttk::menubutton $f.menubar.neo -text "NEO" \
+	-menu $f.menubar.neo.m -style CatMenu.TMenubutton
+    menu $f.menubar.neo.m -tearoff 0
+    $f.menubar.neo.m add command \
+	-label "Detect Moving Sources in Loaded Frames" \
+	-command CatalogPanelNEODetectSequence
+    $f.menubar.neo.m add command \
+	-label "Fit CODES Orbit from Astrometry CSV..." \
+	-command CatalogPanelNEOCodesOrbit
+    $f.menubar.neo.m add command \
+	-label "Load Last CODES Regions" \
+	-command CatalogPanelNEOLoadRegions
+    $f.menubar.neo.m add separator
+    $f.menubar.neo.m add command \
+	-label "Settings..." \
+	-command CatalogPanelNEOSettings
+
     # Analysis menu
     ttk::menubutton $f.menubar.analysis -text "Analysis" \
 	-menu $f.menubar.analysis.m -style CatMenu.TMenubutton
@@ -568,6 +586,7 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.deconv -side left
     pack $f.menubar.icl -side left
     pack $f.menubar.lsbg -side left
+    pack $f.menubar.neo -side left
     pack $f.menubar.analysis -side left
 
     # Search/Filter bar
@@ -7429,6 +7448,109 @@ proc CatalogPanelGetScript {scriptname} {
 	set script [file join $libdir $scriptname]
     }
     return $script
+}
+
+# ============================================================
+# NEO / CODES bridge
+# ============================================================
+
+proc CatalogPanelNEODetectSequence {} {
+    global catpanel current ds9
+
+    if {[llength $ds9(frames)] < 3} {
+	set catpanel(status) "NEO: load at least three FITS frames"
+	return
+    }
+    set script [CatalogPanelGetScript ds9_neo_detect.py]
+    if {![file exists $script]} {
+	set catpanel(status) "NEO: ds9_neo_detect.py not found"
+	return
+    }
+    set files {}
+    foreach frame $ds9(frames) {
+	set filename {}
+	catch {set filename [$frame get fits file name full]}
+	set filename [string trim $filename "{}"]
+	regsub {\[.*\]$} $filename {} filename
+	if {$filename ne {}} {lappend files $filename}
+    }
+    if {[llength $files] < 3} {
+	set catpanel(status) "NEO: loaded frames do not contain FITS files"
+	return
+    }
+    set output [file join [file normalize ~] .ds9 neo_codes detection]
+    file mkdir $output
+    set args [list python3 $script {*}$files --output-dir $output]
+    set catpanel(status) "NEO: detecting and linking moving sources..."
+    update idletasks
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "NEO detection error: $err"
+	return
+    }
+    set catpanel(neo,last_detection_regions) [file join $output neo_candidates.reg]
+    set catpanel(neo,last_detection_csv) [file join $output neo_candidates.csv]
+    set frameNumber 1
+    foreach frame $ds9(frames) {
+	set frameRegions [file join $output "neo_candidates_f${frameNumber}.reg"]
+	if {[file exists $frameRegions]} {
+	    catch {MarkerLoadFrames $frameRegions [list $frame] ds9 physical fk5}
+	}
+	incr frameNumber
+    }
+    set catpanel(status) "NEO: candidate tracks marked in all loaded frames"
+}
+
+proc CatalogPanelNEOCodesOrbit {} {
+    global catpanel current
+
+    if {$current(frame) == {}} {
+	set catpanel(status) "NEO: no active FITS frame"
+	return
+    }
+    set observations [tk_getOpenFile \
+	-title "Open optical astrometry CSV" \
+	-filetypes {{{Observation CSV} {.csv}} {{All files} {*}}}]
+    if {$observations eq {}} return
+
+    set script [CatalogPanelGetScript ds9_neo.py]
+    if {![file exists $script]} {
+	set catpanel(status) "NEO: ds9_neo.py not found"
+	return
+    }
+    set output [file join [file normalize ~] .ds9 neo_codes]
+    file mkdir $output
+    set args [list python3 $script $observations \
+	--output-dir $output \
+	--codes-root /home/kjhan/BACKUP/CODES \
+	--kernel-dir /home/kjhan/BACKUP/CODES/kernels]
+    set catpanel(status) "NEO: fitting preliminary orbit with CODES..."
+    update idletasks
+    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
+	set catpanel(status) "NEO/CODES error: $err"
+	return
+    }
+    set catpanel(neo,last_regions) [file join $output observations.reg]
+    set catpanel(neo,last_summary) [file join $output ds9_codes_summary.json]
+    if {[file exists $catpanel(neo,last_regions)]} {
+	catch {MarkerLoadFrames $catpanel(neo,last_regions) $current(frame) ds9 physical fk5}
+    }
+    set catpanel(status) "NEO/CODES orbit fit complete"
+}
+
+proc CatalogPanelNEOLoadRegions {} {
+    global catpanel current
+    if {![info exists catpanel(neo,last_regions)] ||
+	![file exists $catpanel(neo,last_regions)]} {
+	set catpanel(status) "NEO: no CODES region result available"
+	return
+    }
+    catch {MarkerLoadFrames $catpanel(neo,last_regions) $current(frame) ds9 physical fk5}
+    set catpanel(status) "NEO: CODES astrometry regions loaded"
+}
+
+proc CatalogPanelNEOSettings {} {
+    tk_messageBox -title "NEO / CODES" -icon info -message \
+	"The first implementation uses Earth-centered optical astrometry in a CSV.\n\nRequired columns:\n  obstime_utc or jd_tdb\n  ra_deg\n  dec_deg\n\nThe result is a preliminary orbit. CODES then refines and propagates the fitted state with the selected JPL ephemeris."
 }
 
 # --- Helper: Get FITS filename from current frame ---
