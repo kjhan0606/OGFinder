@@ -77,6 +77,66 @@ def _link(detections: list[Detection], max_step: float) -> list[list[Detection]]
     return tracks
 
 
+def _tracklet_row(track_id: int, track: list[Detection]) -> dict[str, str | int]:
+    ordered = sorted(track, key=lambda item: item.jd_tdb)
+    jd = np.asarray([item.jd_tdb for item in ordered], dtype=float)
+    ra_rad = np.unwrap(np.deg2rad([item.ra_deg for item in ordered]))
+    dec_deg = np.asarray([item.dec_deg for item in ordered], dtype=float)
+    jd_mid = float(np.median(jd))
+    ra_mid_rad = float(np.median(ra_rad))
+    dec_mid_deg = float(np.median(dec_deg))
+    hours = (jd - jd_mid) * 24.0
+    east_arcsec = (ra_rad - ra_mid_rad) * np.cos(np.deg2rad(dec_mid_deg)) * 206264.806247
+    north_arcsec = (dec_deg - dec_mid_deg) * 3600.0
+    design = np.column_stack((hours, np.ones_like(hours)))
+    east_rate, east_offset = np.linalg.lstsq(design, east_arcsec, rcond=None)[0]
+    north_rate, north_offset = np.linalg.lstsq(design, north_arcsec, rcond=None)[0]
+    east_residual = east_arcsec - (east_rate * hours + east_offset)
+    north_residual = north_arcsec - (north_rate * hours + north_offset)
+    rms_arcsec = float(np.sqrt(np.mean(east_residual**2 + north_residual**2)))
+    rate_arcsec_hour = float(np.hypot(east_rate, north_rate))
+    position_angle_deg = float(np.degrees(np.arctan2(east_rate, north_rate)) % 360.0)
+    ra_mid_deg = float(np.degrees(ra_mid_rad) % 360.0)
+    utc_mid = Time(jd_mid, format="jd", scale="tdb").utc.isot
+    return {
+        "ID": f"NEO-{track_id:02d}",
+        "NDET": len(ordered),
+        "RA_DEG": f"{ra_mid_deg:.6f}",
+        "DEC_DEG": f"{dec_mid_deg:.6f}",
+        "UTC_MID": utc_mid,
+        "RATE_AS_H": f"{rate_arcsec_hour:.2f}",
+        "PA_DEG": f"{position_angle_deg:.1f}",
+        "SNR_MED": f"{np.median([item.snr for item in ordered]):.1f}",
+        "RMS_AS": f"{rms_arcsec:.2f}",
+        "STATUS": "REVIEW",
+    }
+
+
+def _write_tracklet_catalog(tracks: list[list[Detection]], path: Path) -> None:
+    fieldnames = [
+        "ID",
+        "NDET",
+        "RA_DEG",
+        "DEC_DEG",
+        "UTC_MID",
+        "RATE_AS_H",
+        "PA_DEG",
+        "SNR_MED",
+        "RMS_AS",
+        "STATUS",
+    ]
+    with path.open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=fieldnames,
+            delimiter="\t",
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for track_id, track in enumerate(tracks, start=1):
+            writer.writerow(_tracklet_row(track_id, track))
+
+
 def run(paths: list[Path], output_dir: Path, threshold_sigma: float, max_step: float, min_track_length: int) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     all_detections = []
@@ -84,6 +144,7 @@ def run(paths: list[Path], output_dir: Path, threshold_sigma: float, max_step: f
         all_detections.extend(_detections(path, frame, threshold_sigma))
     tracks = [track for track in _link(all_detections, max_step) if len(track) >= min_track_length]
     csv_path = output_dir / "neo_candidates.csv"
+    tracklet_path = output_dir / "neo_tracklets.tsv"
     region_path = output_dir / "neo_candidates.reg"
     with csv_path.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=["track_id", "frame", "obstime_utc", "ra_deg", "dec_deg", "sigma_arcsec", "observer", "snr"])
@@ -91,6 +152,7 @@ def run(paths: list[Path], output_dir: Path, threshold_sigma: float, max_step: f
         for track_id, track in enumerate(tracks, start=1):
             for item in track:
                 writer.writerow({"track_id": track_id, "frame": item.frame, "obstime_utc": Time(item.jd_tdb, format="jd", scale="tdb").utc.isot + "Z", "ra_deg": item.ra_deg, "dec_deg": item.dec_deg, "sigma_arcsec": 0.5, "observer": "EARTH", "snr": item.snr})
+    _write_tracklet_catalog(tracks, tracklet_path)
     with region_path.open("w", encoding="utf-8") as stream:
         stream.write("# Region file format: DS9 version 4.1\n")
         stream.write('global color=cyan width=3 font="helvetica 10 bold"\n')
@@ -110,7 +172,7 @@ def run(paths: list[Path], output_dir: Path, threshold_sigma: float, max_step: f
                     if item.frame == frame:
                         stream.write(f"point({item.ra_deg},{item.dec_deg}) # point=circle text={{NEO {track_id}}}\n")
         frame_regions.append(str(frame_region_path.resolve()))
-    summary = {"frames": len(paths), "detections": len(all_detections), "tracks": len(tracks), "csv": str(csv_path.resolve()), "regions": str(region_path.resolve()), "frame_regions": frame_regions, "status": "candidate tracks ready for CODES/OpenOrb"}
+    summary = {"frames": len(paths), "detections": len(all_detections), "tracks": len(tracks), "csv": str(csv_path.resolve()), "tracklets": str(tracklet_path.resolve()), "regions": str(region_path.resolve()), "frame_regions": frame_regions, "status": "candidate tracks ready for CODES/OpenOrb"}
     (output_dir / "neo_detection_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary
 

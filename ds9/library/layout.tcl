@@ -520,6 +520,9 @@ proc CreateCatalogPanel {} {
 	-label "Detect Moving Sources in Loaded Frames" \
 	-command CatalogPanelNEODetectSequence
     $f.menubar.neo.m add command \
+	-label "Load Last Candidate Catalog" \
+	-command CatalogPanelNEOLoadCandidateCatalog
+    $f.menubar.neo.m add command \
 	-label "Fit CODES Orbit from Astrometry CSV..." \
 	-command CatalogPanelNEOCodesOrbit
     $f.menubar.neo.m add command \
@@ -7489,6 +7492,7 @@ proc CatalogPanelNEODetectSequence {} {
     }
     set catpanel(neo,last_detection_regions) [file join $output neo_candidates.reg]
     set catpanel(neo,last_detection_csv) [file join $output neo_candidates.csv]
+    set catpanel(neo,last_tracklet_tsv) [file join $output neo_tracklets.tsv]
     set frameNumber 1
     foreach frame $ds9(frames) {
 	set frameRegions [file join $output "neo_candidates_f${frameNumber}.reg"]
@@ -7497,7 +7501,47 @@ proc CatalogPanelNEODetectSequence {} {
 	}
 	incr frameNumber
     }
-    set catpanel(status) "NEO: candidate tracks marked in all loaded frames"
+    set ntracks [CatalogPanelNEOLoadCandidateCatalog $catpanel(neo,last_tracklet_tsv)]
+    if {$ntracks >= 0} {
+	set catpanel(status) \
+	    "NEO: $ntracks candidate tracks loaded and marked in [llength $files] frames"
+    }
+}
+
+proc CatalogPanelNEOLoadCandidateCatalog {{catalogPath {}}} {
+    global catpanel
+
+    if {$catalogPath eq {}} {
+	if {[info exists catpanel(neo,last_tracklet_tsv)]} {
+	    set catalogPath $catpanel(neo,last_tracklet_tsv)
+	} else {
+	    set catalogPath [file join [file normalize ~] \
+		.ds9 neo_codes detection neo_tracklets.tsv]
+	}
+    }
+    if {![file exists $catalogPath]} {
+	set catpanel(status) "NEO: no candidate catalog available"
+	return -1
+    }
+    if {[catch {
+	set stream [open $catalogPath r]
+	set data [read $stream]
+	close $stream
+    } err]} {
+	set catpanel(status) "NEO catalog error: $err"
+	return -1
+    }
+    CatalogPanelLoadTSV [string trimright $data "\n"] "NEO candidates"
+    $catpanel(tbl) width \
+	1 9 2 6 3 12 4 12 5 24 \
+	6 11 7 9 8 10 9 8 10 9
+    set ntracks 0
+    foreach line [lrange [split $data "\n"] 1 end] {
+	if {[string trim $line] ne {}} {
+	    incr ntracks
+	}
+    }
+    return $ntracks
 }
 
 proc CatalogPanelNEOCodesOrbit {} {
