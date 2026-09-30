@@ -94,7 +94,8 @@ proc ViewDef {} {
     set view(info) 1
     set view(panner) 1
     set view(magnifier) 1
-    set view(buttons) 1
+    # buttons bar duplicates the menubar, so hide it by default
+    set view(buttons) 0
     set view(icons) 1
     set view(colorbar) 1
     set view(graph,horz) 0
@@ -187,6 +188,9 @@ proc CreateCatalogPanel {} {
     ttk::menubutton $f.menubar.sextract -text "SExtractor" \
 	-menu $f.menubar.sextract.m -style CatMenu.TMenubutton
     menu $f.menubar.sextract.m -tearoff 0
+    $f.menubar.sextract.m add checkbutton -label "Detach Catalog Panel" \
+	-variable catpanel(detached) -command CatalogPanelToggleDetach
+    $f.menubar.sextract.m add separator
     $f.menubar.sextract.m add command -label "Extract" \
 	-command CatalogPanelExtract
     $f.menubar.sextract.m add command -label "Dual-Image Extract..." \
@@ -570,16 +574,27 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.lsbg -side left
     pack $f.menubar.analysis -side left
 
+    # Info area: same height as the left pane header so the catalog
+    # table lines up with the image display
+    set catpanel(detached) 0
+    set catpanel(infoarea) [ttk::frame $f.info -height 154]
+    pack propagate $f.info 0
+    ttk::separator $f.infosep -orient horizontal
+    set catpanel(hdrw) [expr {[info exists ds9(header)] ? $ds9(header) : {}}]
+
     # Search/Filter bar
     set catpanel(searchbar) [ttk::frame $f.searchbar]
     ttk::label $f.searchbar.lbl -text "Filter:"
     set catpanel(search_var) {}
     ttk::entry $f.searchbar.entry -textvariable catpanel(search_var) -width 20
+    # Compact button so the Filter row has the same height (21 px) as
+    # the File row in the left pane
+    ttk::style configure CatApply.TButton -padding {2 0}
     ttk::button $f.searchbar.go -text "Apply" \
-	-command CatalogPanelFilter -width 6
-    pack $f.searchbar.lbl -side left -padx 4 -pady 2
-    pack $f.searchbar.entry -side left -padx 2 -pady 2 -fill x -expand true
-    pack $f.searchbar.go -side right -padx 2 -pady 2
+	-command CatalogPanelFilter -width 6 -style CatApply.TButton
+    pack $f.searchbar.lbl -side left -padx 2 -pady 0
+    pack $f.searchbar.entry -side left -padx 2 -pady 0 -fill x -expand true
+    pack $f.searchbar.go -side right -padx 2 -pady 0 -fill y
     bind $f.searchbar.entry <Return> CatalogPanelFilter
 
     # Table frame with scrollbars
@@ -634,13 +649,39 @@ proc CreateCatalogPanel {} {
     set catpanel(statusbar) [ttk::frame $f.statusbar]
     ttk::label $f.statusbar.lbl -textvariable catpanel(status) \
 	-anchor w -relief sunken
-    pack $f.statusbar.lbl -fill x -expand true -padx 2 -pady 2
+    pack $f.statusbar.lbl -fill x -expand true -padx 2 -pady 0
 
     # Pack all into catalog frame
+    # Quick actions and selected source summary
+    set catpanel(sel,text) {No source selected}
+    ttk::style configure CatQuick.TButton -padding {4 0}
+    set qb [ttk::frame $f.quick]
+    ttk::button $qb.extract -text "Extract" -style CatQuick.TButton \
+	-command CatalogPanelExtract
+    ttk::button $qb.mark -text "Mark All" -style CatQuick.TButton \
+	-command CatalogPanelMarkAll
+    ttk::button $qb.unmark -text "Clear Marks" -style CatQuick.TButton \
+	-command CatalogPanelClearMarkers
+    ttk::button $qb.clear -text "Clear" -style CatQuick.TButton \
+	-command CatalogPanelClear
+    pack $qb.extract $qb.mark $qb.unmark $qb.clear -side left -padx 2
+    ttk::label $f.selinfo -textvariable catpanel(sel,text) \
+	-anchor nw -justify left -relief groove -padding 4
+
     pack $f.menubar -fill x -side top
-    pack $f.searchbar -fill x -side top
-    pack $f.statusbar -fill x -side bottom
+    pack $f.info -fill x -side top
+    pack $f.infosep -fill x -side top
+    pack $f.searchbar -in $f.info -fill x -side top -pady 2
+    pack $f.quick -in $f.info -fill x -side top -pady 2
+    pack $f.statusbar -in $f.info -fill x -side top
+    pack $f.selinfo -in $f.info -fill both -expand true -side top \
+	-padx 2 -pady 2
     pack $f.tblf -fill both -expand true -side top
+
+    # Keep the info area height equal to the left header height
+    if {$catpanel(hdrw) ne {}} {
+	bind $catpanel(hdrw) <Configure> {+CatalogPanelSyncInfoHeight}
+    }
 
     # Initialize state
     set catpanel(alldata) {}
@@ -1095,6 +1136,7 @@ proc CatalogPanelClear {} {
 	-cols 19 -rows 20
 
     set catpanel(status) {Ready}
+    set catpanel(sel,text) {No source selected}
     set catpanel(filename) {}
     set catpanel(alldata) {}
 
@@ -1317,6 +1359,96 @@ proc CatalogPanelAutoExtract {} {
 }
 
 # Row selection: navigate to source and mark it on the image
+# Detach the catalog panel into its own window, or attach it back to the
+# main window.  catpanel(detached) holds the requested state.
+proc CatalogPanelToggleDetach {} {
+    global ds9
+    global catpanel
+
+    set f $ds9(catalog_frame)
+    set tl [winfo toplevel $f]
+    set is_detached [expr {$tl eq $f}]
+
+    if {$catpanel(detached) && !$is_detached} {
+	# Detach
+	set cw [winfo width $f]
+	set ch [winfo height $f]
+	set mw [winfo width .]
+	set mh [winfo height .]
+	set catpanel(detach,cw) $cw
+	set catpanel(detach,ch) $ch
+	$ds9(toppw) forget $f
+	wm manage $f
+	wm title $f "Catalog - [wm title .]"
+	wm protocol $f WM_DELETE_WINDOW {
+	    set catpanel(detached) 0
+	    CatalogPanelToggleDetach
+	}
+	wm geometry $f ${cw}x${ch}
+	# give the width back to the main window
+	set nw [expr {max($mw - $cw - 5, 400)}]
+	wm geometry . ${nw}x${mh}
+	update idletasks
+	CatalogPanelSyncInfoHeight
+    } elseif {!$catpanel(detached) && $is_detached} {
+	# Attach
+	set cw [winfo width $f]
+	set mw [winfo width .]
+	set mh [winfo height .]
+	wm forget $f
+	$ds9(toppw) add $f -weight 2
+	wm geometry . [expr {$mw + $cw + 5}]x${mh}
+	update idletasks
+	CatalogPanelSyncInfoHeight
+    }
+}
+
+proc CatalogPanelSyncInfoHeight {} {
+    global catpanel
+    global ds9
+    if {![info exists catpanel(hdrw)] || ![winfo exists $catpanel(hdrw)]} return
+    set h [winfo height $catpanel(hdrw)]
+    if {$h > 1} {
+	catch {$ds9(catalog_frame).info configure -height $h}
+    }
+}
+
+# Show key columns of the selected catalog row in the info area
+proc CatalogPanelUpdateSelInfo {row} {
+    global catpanel
+    global $catpanel(tbldb)
+
+    set want {NUMBER X_IMAGE Y_IMAGE ALPHA_J2000 DELTA_J2000 MAG_AUTO
+	FWHM_IMAGE ELLIPTICITY CLASS_STAR}
+    set idx {}
+    set ncols [$catpanel(tbl) cget -cols]
+    for {set c 1} {$c <= $ncols} {incr c} {
+	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
+	    dict set idx [set ${catpanel(tbldb)}(0,$c)] $c
+	}
+    }
+    set v {}
+    foreach k $want {
+	set val {-}
+	if {[dict exists $idx $k]} {
+	    set c [dict get $idx $k]
+	    if {[info exists ${catpanel(tbldb)}($row,$c)]} {
+		set val [set ${catpanel(tbldb)}($row,$c)]
+	    }
+	}
+	if {[string is double -strict $val] && $k ne {NUMBER}} {
+	    set val [format %.4g $val]
+	}
+	dict set v $k $val
+    }
+    set catpanel(sel,text) [format \
+	"Source #%s   x,y = %s, %s\nRA,Dec = %s, %s\nMAG_AUTO = %s   FWHM = %s   e = %s   Star = %s" \
+	[dict get $v NUMBER] [dict get $v X_IMAGE] [dict get $v Y_IMAGE] \
+	[dict get $v ALPHA_J2000] [dict get $v DELTA_J2000] \
+	[dict get $v MAG_AUTO] [dict get $v FWHM_IMAGE] \
+	[dict get $v ELLIPTICITY] [dict get $v CLASS_STAR]]
+}
+
 proc CatalogPanelSelectCmd {prev cur} {
     global catpanel
 
@@ -1324,6 +1456,7 @@ proc CatalogPanelSelectCmd {prev cur} {
     set row [lindex [split $cur ,] 0]
     if {![string is integer -strict $row] || $row <= 0} return
 
+    catch {CatalogPanelUpdateSelInfo $row}
     after cancel CatalogPanelGotoSource
     after 100 [list CatalogPanelGotoSource $row]
 }

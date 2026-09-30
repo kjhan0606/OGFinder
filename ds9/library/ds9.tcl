@@ -562,7 +562,9 @@ pack $ds9(leftmenubar) -fill x -side top
 pack $ds9(main) -fill both -expand true
 
 # create catalog panel frame (right pane)
-set ds9(catalog_frame) [ttk::frame ${ds9(top)}catf]
+# classic frame (not ttk) so that it can be detached with wm manage
+set ds9(catalog_frame) [frame ${ds9(top)}catf -bd 0 -highlightthickness 0 \
+			    -bg [ttk::style lookup TFrame -background]]
 $ds9(toppw) add $ds9(catalog_frame) -weight 2
 
 # Create image canvas
