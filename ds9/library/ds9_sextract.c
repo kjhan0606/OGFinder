@@ -244,6 +244,344 @@ static float conv_tophat[25] = {
     0, 1, 1, 1, 0
 };
 
+
+/* ====================================================================
+ * Multi-band support: --info, and forced / dual-image photometry
+ *   ds9_sextract DET.fits --forced-catalog CAT.tsv --measure-image B.fits
+ *                [--band NAME] [--mag-zeropoint ZP] [--snr-min S] ...
+ * Detection-band positions/ellipses are mapped to the measurement image
+ * through the two WCS solutions (identity when both share one grid) and
+ * measured with per-band background/RMS and zeropoint.
+ * ==================================================================== */
+
+/* World -> pixel (1-indexed) for the simple TAN WCS. Returns 0 on success. */
+static int world2pix(const simple_wcs_t *w, double ra, double dec,
+                     double *xpix, double *ypix) {
+    if (!w->valid) return -1;
+    double d2r = M_PI / 180.0;
+    double a = ra * d2r, d = dec * d2r;
+    double a0 = w->crval1 * d2r, d0 = w->crval2 * d2r;
+    double cosc = sin(d0) * sin(d) + cos(d0) * cos(d) * cos(a - a0);
+    if (cosc <= 1e-9) return -1;
+    double xi  = cos(d) * sin(a - a0) / cosc;
+    double eta = (cos(d0) * sin(d) - sin(d0) * cos(d) * cos(a - a0)) / cosc;
+    xi  /= d2r;  eta /= d2r;      /* degrees */
+    double det = w->cd11 * w->cd22 - w->cd12 * w->cd21;
+    if (fabs(det) < 1e-30) return -1;
+    double dx = ( w->cd22 * xi - w->cd12 * eta) / det;
+    double dy = (-w->cd21 * xi + w->cd11 * eta) / det;
+    *xpix = w->crpix1 + dx;
+    *ypix = w->crpix2 + dy;
+    return 0;
+}
+
+static int wcs_same(const simple_wcs_t *a, const simple_wcs_t *b) {
+    if (!a->valid || !b->valid) return 0;
+    double sc = fabs(a->cd11) + fabs(a->cd12) + fabs(a->cd21) + fabs(a->cd22);
+    double tol = 1e-9 * (sc > 0 ? sc : 1.0);
+    return fabs(a->crpix1 - b->crpix1) < 1e-6 && fabs(a->crpix2 - b->crpix2) < 1e-6 &&
+           fabs(a->crval1 - b->crval1) < 1e-9 && fabs(a->crval2 - b->crval2) < 1e-9 &&
+           fabs(a->cd11 - b->cd11) < tol && fabs(a->cd12 - b->cd12) < tol &&
+           fabs(a->cd21 - b->cd21) < tol && fabs(a->cd22 - b->cd22) < tol;
+}
+
+/* Open file and position at first 2D image HDU. */
+static int open_image_hdu(const char *path, fitsfile **fp, long naxes[2]) {
+    int status = 0, naxis = 0, bitpix = 0;
+    if (fits_open_file(fp, path, READONLY, &status)) return -1;
+    fits_get_img_param(*fp, 2, &bitpix, &naxis, naxes, &status);
+    if (status || naxis < 2) {
+        status = 0;
+        int nhdu = 0, found = 0;
+        fits_get_num_hdus(*fp, &nhdu, &status);
+        for (int hh = 2; hh <= nhdu; hh++) {
+            int hdutype = 0;
+            fits_movabs_hdu(*fp, hh, &hdutype, &status);
+            if (status || hdutype != IMAGE_HDU) { status = 0; continue; }
+            fits_get_img_param(*fp, 2, &bitpix, &naxis, naxes, &status);
+            if (status == 0 && naxis >= 2 && naxes[0] > 1 && naxes[1] > 1) { found = 1; break; }
+            status = 0;
+        }
+        if (!found) { fits_close_file(*fp, &status); return -1; }
+    }
+    return 0;
+}
+
+static void read_str_key(fitsfile *fp, const char *key, char *out, size_t n) {
+    int st = 0;
+    char buf[FLEN_VALUE];
+    out[0] = 0;
+    if (fits_read_key(fp, TSTRING, key, buf, NULL, &st) == 0) {
+        /* strip quotes / spaces */
+        char *p = buf;
+        while (*p == ' ' || *p == '\'') p++;
+        size_t l = strlen(p);
+        while (l > 0 && (p[l-1] == ' ' || p[l-1] == '\'')) p[--l] = 0;
+        strncpy(out, p, n - 1);
+        out[n - 1] = 0;
+    }
+}
+
+/* --info FILE: print key=value lines used by the DS9 Bands manager */
+static int info_mode(const char *path) {
+    fitsfile *fp = NULL;
+    long naxes[2] = {0, 0};
+    if (open_image_hdu(path, &fp, naxes)) {
+        fprintf(stderr, "ERROR: cannot open image %s\n", path);
+        return 1;
+    }
+    simple_wcs_t w;
+    read_wcs(fp, &w);
+    char filt[80], pupil[80], inst[80], bunit[80];
+    read_str_key(fp, "FILTER", filt, sizeof filt);
+    if (!filt[0]) read_str_key(fp, "FILTER1", filt, sizeof filt);
+    read_str_key(fp, "PUPIL", pupil, sizeof pupil);
+    read_str_key(fp, "INSTRUME", inst, sizeof inst);
+    read_str_key(fp, "BUNIT", bunit, sizeof bunit);
+    double photflam = 0, photplam = 0, pixar_sr = 0, photfnu = 0, exptime = 0, gain = 0;
+    int st = 0;
+    fits_read_key(fp, TDOUBLE, "PHOTFLAM", &photflam, NULL, &st); st = 0;
+    fits_read_key(fp, TDOUBLE, "PHOTPLAM", &photplam, NULL, &st); st = 0;
+    fits_read_key(fp, TDOUBLE, "PIXAR_SR", &pixar_sr, NULL, &st); st = 0;
+    fits_read_key(fp, TDOUBLE, "PHOTFNU",  &photfnu,  NULL, &st); st = 0;
+    fits_read_key(fp, TDOUBLE, "EXPTIME",  &exptime,  NULL, &st); st = 0;
+    fits_read_key(fp, TDOUBLE, "GAIN",     &gain,     NULL, &st); st = 0;
+    printf("FILE=%s\n", path);
+    printf("NAXIS1=%ld\nNAXIS2=%ld\n", naxes[0], naxes[1]);
+    printf("FILTER=%s\n", filt);
+    if (pupil[0]) printf("PUPIL=%s\n", pupil);
+    printf("INSTRUME=%s\nBUNIT=%s\n", inst, bunit);
+    if (photflam > 0 && photplam > 0)
+        printf("ZP_AB=%.4f\nPIVOT=%.1f\n",
+               -2.5 * log10(photflam) - 5.0 * log10(photplam) - 2.408, photplam);
+    else if (pixar_sr > 0)
+        printf("ZP_AB=%.4f\n", -6.10 - 2.5 * log10(pixar_sr));
+    else if (photfnu > 0)
+        printf("ZP_AB=%.4f\n", -2.5 * log10(photfnu) + 8.90);
+    if (exptime > 0) printf("EXPTIME=%.1f\n", exptime);
+    if (w.valid) {
+        double ps = sqrt(fabs(w.cd11 * w.cd22 - w.cd12 * w.cd21)) * 3600.0;
+        printf("PIXSCALE=%.5f\n", ps);
+        printf("CRPIX1=%.6f\nCRPIX2=%.6f\nCRVAL1=%.9f\nCRVAL2=%.9f\n",
+               w.crpix1, w.crpix2, w.crval1, w.crval2);
+        printf("CD1_1=%.12e\nCD1_2=%.12e\nCD2_1=%.12e\nCD2_2=%.12e\n",
+               w.cd11, w.cd12, w.cd21, w.cd22);
+    }
+    printf("WCSVALID=%d\n", w.valid);
+    fits_close_file(fp, &st);
+    return 0;
+}
+
+/* Split a line on tabs in place. Returns number of fields. */
+static int split_tabs(char *line, char **fld, int maxf) {
+    int n = 0;
+    char *p = line;
+    while (n < maxf) {
+        fld[n++] = p;
+        char *t = strchr(p, '\t');
+        if (!t) break;
+        *t = 0;
+        p = t + 1;
+    }
+    /* strip trailing newline / CR from last field */
+    size_t l = strlen(fld[n-1]);
+    while (l > 0 && (fld[n-1][l-1] == '\n' || fld[n-1][l-1] == '\r')) fld[n-1][--l] = 0;
+    return n;
+}
+
+static double mag_from_flux(double f, double zp) {
+    return (f > 0) ? -2.5 * log10(f) + zp : 99.0;
+}
+
+static int forced_mode(const char *detfile, const char *catfile,
+                       const char *measfile, const char *band,
+                       const config_t *cfg, double snr_min) {
+    int status = 0;
+    fitsfile *fp = NULL;
+    long dn[2] = {0, 0}, mn[2] = {0, 0};
+    simple_wcs_t wdet, wmeas;
+
+    /* --- detection-image WCS (header only) --- */
+    if (open_image_hdu(detfile, &fp, dn)) {
+        fprintf(stderr, "ERROR: cannot open detection image %s\n", detfile);
+        return 1;
+    }
+    read_wcs(fp, &wdet);
+    fits_close_file(fp, &status);
+
+    /* --- measurement image --- */
+    if (open_image_hdu(measfile, &fp, mn)) {
+        fprintf(stderr, "ERROR: cannot open measurement image %s\n", measfile);
+        return 1;
+    }
+    read_wcs(fp, &wmeas);
+    long nx = mn[0], ny = mn[1], npix = nx * ny;
+    double *data = (double *)malloc(npix * sizeof(double));
+    unsigned char *mask = (unsigned char *)calloc(npix, 1);
+    double *rms = (double *)malloc(npix * sizeof(double));
+    if (!data || !mask || !rms) { fprintf(stderr, "ERROR: out of memory\n"); return 1; }
+    long fpixel[2] = {1, 1};
+    int anynul = 0;
+    status = 0;
+    fits_read_pix(fp, TDOUBLE, fpixel, npix, NULL, data, &anynul, &status);
+    double hgain = cfg->gain;
+    if (hgain <= 0) {
+        int s2 = 0; double g = 0;
+        fits_read_key(fp, TDOUBLE, "GAIN", &g, NULL, &s2);
+        if (s2 == 0 && g > 0) hgain = g;
+    }
+    fits_close_file(fp, &status);
+    if (status) { fprintf(stderr, "ERROR: cannot read %s\n", measfile); return 1; }
+
+    long nmask = 0;
+    for (long i = 0; i < npix; i++) {
+        if (isnan(data[i]) || isinf(data[i]) || data[i] == 0.0) {
+            mask[i] = 1; nmask++; data[i] = 0.0;
+        }
+    }
+
+    sep_image im;
+    memset(&im, 0, sizeof im);
+    im.data = data; im.dtype = SEP_TDOUBLE; im.w = nx; im.h = ny;
+    im.mask = mask; im.mdtype = SEP_TBYTE; im.maskthresh = 0.5;
+    im.gain = hgain > 0 ? hgain : 0.0;
+    sep_bkg *bkg = NULL;
+    int ss = sep_background(&im, cfg->back_size, cfg->back_size,
+                            cfg->back_filtersize, cfg->back_filtersize, 0.0, &bkg);
+    if (ss) { fprintf(stderr, "ERROR: background estimation failed for %s\n", measfile); return 1; }
+    sep_bkg_subarray(bkg, data, SEP_TDOUBLE);
+    sep_bkg_rmsarray(bkg, rms, SEP_TDOUBLE);
+    double gbkg = bkg->global, grms = bkg->globalrms;
+    sep_bkg_free(bkg);
+    im.noise = rms; im.ndtype = SEP_TDOUBLE; im.noise_type = SEP_NOISE_STDDEV;
+
+    int same = wcs_same(&wdet, &wmeas);
+    if (!same && (!wdet.valid || !wmeas.valid)) {
+        if (dn[0] == mn[0] && dn[1] == mn[1]) {
+            same = 1;
+            fprintf(stderr, "WARN: no WCS in one image; assuming identical pixel grids (same size)\n");
+        } else {
+            fprintf(stderr, "ERROR: images differ in size and lack WCS; cannot map\n");
+            return 1;
+        }
+    }
+    fprintf(stderr, "band %s: %ldx%ld, masked(no-data)=%ld, bkg=%.4g rms=%.4g, grid=%s, ZP=%.4f\n",
+            band, nx, ny, nmask, gbkg, grms, same ? "identical" : "WCS-mapped",
+            cfg->mag_zeropoint);
+
+    /* --- read the catalog --- */
+    FILE *fc = fopen(catfile, "r");
+    if (!fc) { fprintf(stderr, "ERROR: cannot open catalog %s\n", catfile); return 1; }
+    size_t bufsz = 1 << 16;
+    char *line = (char *)malloc(bufsz);
+    char *fld[512];
+    int c_num = -1, c_x = -1, c_y = -1, c_a = -1, c_b = -1, c_th = -1, c_kr = -1, nh = 0;
+    if (!fgets(line, bufsz, fc)) { fprintf(stderr, "ERROR: empty catalog\n"); return 1; }
+    nh = split_tabs(line, fld, 512);
+    for (int i = 0; i < nh; i++) {
+        if (!strcmp(fld[i], "NUMBER")) c_num = i;
+        else if (!strcmp(fld[i], "X_IMAGE")) c_x = i;
+        else if (!strcmp(fld[i], "Y_IMAGE")) c_y = i;
+        else if (!strcmp(fld[i], "A_IMAGE")) c_a = i;
+        else if (!strcmp(fld[i], "B_IMAGE")) c_b = i;
+        else if (!strcmp(fld[i], "THETA_IMAGE")) c_th = i;
+        else if (!strcmp(fld[i], "KRON_RADIUS")) c_kr = i;
+    }
+    if (c_num < 0 || c_x < 0 || c_y < 0) {
+        fprintf(stderr, "ERROR: catalog needs NUMBER, X_IMAGE, Y_IMAGE columns\n");
+        return 1;
+    }
+
+    printf("NUMBER\tX_%s\tY_%s\tSCALE_%s\tFLUX_AUTO_%s\tFLUXERR_AUTO_%s\tMAG_AUTO_%s\tMAGERR_AUTO_%s\t"
+           "FLUX_APER_%s\tFLUXERR_APER_%s\tMAG_APER_%s\tMAGERR_APER_%s\tFLAGS_%s\n",
+           band, band, band, band, band, band, band, band, band, band, band, band);
+
+    const double zp = cfg->mag_zeropoint;
+    long nrow = 0, n_det1 = 0, n_out = 0;
+    while (fgets(line, bufsz, fc)) {
+        if (line[0] == '\n' || line[0] == 0) continue;
+        int nf = split_tabs(line, fld, 512);
+        if (nf <= c_y || nf <= c_x || nf <= c_num) continue;
+        int num = atoi(fld[c_num]);
+        double x = atof(fld[c_x]), y = atof(fld[c_y]);     /* 1-indexed, detection grid */
+        double a = (c_a >= 0 && nf > c_a) ? atof(fld[c_a]) : 0.0;
+        double b = (c_b >= 0 && nf > c_b) ? atof(fld[c_b]) : 0.0;
+        double th = (c_th >= 0 && nf > c_th) ? atof(fld[c_th]) * M_PI / 180.0 : 0.0;
+        double kr = (c_kr >= 0 && nf > c_kr) ? atof(fld[c_kr]) : 3.5;
+        if (kr < 3.5) kr = 3.5;
+        nrow++;
+
+        /* map position + local Jacobian to the measurement grid */
+        double xm = x, ym = y, J[4] = {1, 0, 0, 1};
+        int ok = 1;
+        if (!same) {
+            double ra, dec, x1, y1, x2, y2;
+            pix2world(&wdet, x, y, &ra, &dec);
+            ok = (world2pix(&wmeas, ra, dec, &xm, &ym) == 0);
+            if (ok) {
+                pix2world(&wdet, x + 1.0, y, &ra, &dec);
+                ok = (world2pix(&wmeas, ra, dec, &x1, &y1) == 0);
+                pix2world(&wdet, x, y + 1.0, &ra, &dec);
+                ok = ok && (world2pix(&wmeas, ra, dec, &x2, &y2) == 0);
+                if (ok) { J[0] = x1 - xm; J[2] = y1 - ym; J[1] = x2 - xm; J[3] = y2 - ym; }
+            }
+        }
+        double detJ = fabs(J[0] * J[3] - J[1] * J[2]);
+        double scale = sqrt(detJ > 0 ? detJ : 1.0);
+        double flux_auto = 0, err_auto = 0, flux_ap = 0, err_ap = 0, area = 0;
+        short fl_auto = 0, fl_ap = 0;
+        int flags = 0;
+        int inside = ok && xm >= 1 && xm <= nx && ym >= 1 && ym <= ny;
+        if (!inside) {
+            flags |= 0x1000;             /* outside measurement image */
+        } else {
+            double ap = a, bp = b, tp = th;
+            if (a > 0 && b > 0) {
+                /* Sigma = R diag(a^2,b^2) R^T, transformed by J */
+                double c = cos(th), s = sin(th);
+                double s11 = a*a*c*c + b*b*s*s, s22 = a*a*s*s + b*b*c*c, s12 = (a*a - b*b)*c*s;
+                double t11 = J[0]*(J[0]*s11 + J[1]*s12) + J[1]*(J[0]*s12 + J[1]*s22);
+                double t12 = J[0]*(J[2]*s11 + J[3]*s12) + J[1]*(J[2]*s12 + J[3]*s22);
+                double t22 = J[2]*(J[2]*s11 + J[3]*s12) + J[3]*(J[2]*s12 + J[3]*s22);
+                double tr = 0.5 * (t11 + t22);
+                double df = sqrt(0.25 * (t11 - t22) * (t11 - t22) + t12 * t12);
+                double l1 = tr + df, l2 = tr - df;
+                if (l2 < 1e-4) l2 = 1e-4;
+                ap = sqrt(l1); bp = sqrt(l2);
+                tp = 0.5 * atan2(2.0 * t12, t11 - t22);
+            } else {
+                /* no shape: fall back to a circular Kron-like aperture */
+                ap = bp = 2.0; tp = 0.0; kr = 3.5;
+                flags |= 0x100;
+            }
+            sep_sum_ellipse(&im, xm - 1.0, ym - 1.0, ap, bp, tp, 2.5 * kr,
+                            0, 5, 0, &flux_auto, &err_auto, &area, &fl_auto);
+            double area2 = 0;
+            sep_sum_circle(&im, xm - 1.0, ym - 1.0, 0.5 * cfg->phot_aperture * scale,
+                           0, 5, 0, &flux_ap, &err_ap, &area2, &fl_ap);
+            flags |= (fl_auto | fl_ap);
+        }
+        int det_auto = inside && !(fl_auto & SEP_APER_ALLMASKED) &&
+                       flux_auto > 0 && err_auto > 0 && flux_auto >= snr_min * err_auto;
+        int det_ap = inside && !(fl_ap & SEP_APER_ALLMASKED) &&
+                       flux_ap > 0 && err_ap > 0 && flux_ap >= snr_min * err_ap;
+        if (det_auto) n_det1++;
+        if (!inside) n_out++;
+        double mag_a = det_auto ? mag_from_flux(flux_auto, zp) : 99.0;
+        double mer_a = det_auto ? 1.0857 * err_auto / flux_auto : 99.0;
+        double mag_p = det_ap ? mag_from_flux(flux_ap, zp) : 99.0;
+        double mer_p = det_ap ? 1.0857 * err_ap / flux_ap : 99.0;
+        printf("%d\t%.2f\t%.2f\t%.4f\t%.4g\t%.4g\t%.3f\t%.4f\t%.4g\t%.4g\t%.3f\t%.4f\t%d\n",
+               num, xm, ym, scale, flux_auto, err_auto, mag_a, mer_a,
+               flux_ap, err_ap, mag_p, mer_p, flags);
+    }
+    fclose(fc);
+    fprintf(stderr, "band %s: measured %ld objects; S/N>=%.1f (AUTO): %ld (%.1f%%), outside image: %ld\n",
+            band, nrow, snr_min, n_det1, nrow ? 100.0 * n_det1 / nrow : 0.0, n_out);
+    free(line); free(data); free(mask); free(rms);
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     config_t cfg;
     fitsfile *fptr = NULL;
@@ -292,7 +630,13 @@ int main(int argc, char *argv[]) {
             "  --phot-aperture-2 <f>  2nd aperture diameter (%.1f)\n"
             "  --phot-aperture-3 <f>  3rd aperture diameter (%.1f)\n"
             "  --phot-aperture-5 <f>  4th aperture diameter (%.1f)\n"
-            "  --conv-filter <s>      Convolution filter: default|gauss5x5|mexhat|tophat\n",
+            "  --conv-filter <s>      Convolution filter: default|gauss5x5|mexhat|tophat\n"
+            "Multi-band (forced / dual-image photometry):\n"
+            "  --forced-catalog <f>   Detection catalog (TSV from a previous run)\n"
+            "  --measure-image <f>    Image to measure at the catalog positions\n"
+            "  --band <name>          Band label used in output column names\n"
+            "  --snr-min <f>          Below this S/N, MAG=99 (non-detection) (1.0)\n"
+            "  ds9_sextract --info <f>  Print FILTER/ZP_AB/PIXSCALE/WCS of an image\n",
             DEF_DETECT_THRESH, DEF_DETECT_MINAREA, DEF_DEBLEND_NTHRESH,
             DEF_DEBLEND_MINCONT, DEF_PHOT_APERTURE, DEF_MAG_ZEROPOINT,
             DEF_GAIN, DEF_PIXEL_SCALE, DEF_SEEING_FWHM,
@@ -301,8 +645,19 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    if (!strcmp(argv[1], "--info")) {
+        if (argc < 3) { fprintf(stderr, "Usage: ds9_sextract --info file.fits\n"); return 1; }
+        return info_mode(argv[2]);
+    }
+
     const char *fitsfile = argv[1];
+    const char *forced_cat = NULL, *measure_img = NULL, *band_name = "B";
+    double snr_min = 1.0;
     for (int i = 2; i < argc - 1; i += 2) {
+        if      (!strcmp(argv[i], "--forced-catalog"))  { forced_cat  = argv[i+1]; continue; }
+        else if (!strcmp(argv[i], "--measure-image"))   { measure_img = argv[i+1]; continue; }
+        else if (!strcmp(argv[i], "--band"))            { band_name   = argv[i+1]; continue; }
+        else if (!strcmp(argv[i], "--snr-min"))         { snr_min     = atof(argv[i+1]); continue; }
         if      (!strcmp(argv[i], "--detect-thresh"))   cfg.detect_thresh   = atof(argv[i+1]);
         else if (!strcmp(argv[i], "--detect-minarea"))  cfg.detect_minarea  = atoi(argv[i+1]);
         else if (!strcmp(argv[i], "--deblend-nthresh")) cfg.deblend_nthresh = atoi(argv[i+1]);
@@ -323,6 +678,15 @@ int main(int argc, char *argv[]) {
             else if (!strcmp(argv[i+1], "tophat"))    cfg.conv_filter = 3;
             else                                     cfg.conv_filter = 0;
         }
+    }
+
+    /* Forced / dual-image photometry mode (multi-band) */
+    if (forced_cat || measure_img) {
+        if (!forced_cat || !measure_img) {
+            fprintf(stderr, "ERROR: --forced-catalog and --measure-image go together\n");
+            return 1;
+        }
+        return forced_mode(fitsfile, forced_cat, measure_img, band_name, &cfg, snr_min);
     }
 
     /* ================================================================

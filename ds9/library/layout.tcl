@@ -178,7 +178,7 @@ proc CreateCatalogPanel {} {
 	    }
 	}
     }
-    ttk::style configure CatMenu.TMenubutton -relief flat
+    ttk::style configure CatMenu.TMenubutton -relief flat -padding {2 3}
     ttk::style map CatMenu.TMenubutton -relief {
 	pressed flat
 	active  flat
@@ -361,15 +361,85 @@ proc CreateCatalogPanel {} {
 
     # Separate items moved into Display menu above
 
+    # Bands menu (multi-band simultaneous processing)
+    ttk::menubutton $f.menubar.bands -text "Bands" \
+	-menu $f.menubar.bands.m -style CatMenu.TMenubutton
+    menu $f.menubar.bands.m -tearoff 0
+    $f.menubar.bands.m add command -label "Register Current Frame as Band..." \
+	-command CatalogPanelBandsRegister
+    $f.menubar.bands.m add command -label "Load Band..." \
+	-command CatalogPanelBandsLoad
+    menu $f.menubar.bands.m.det -tearoff 0 \
+	-postcommand [list OGFBandsPostDetect $f.menubar.bands.m.det]
+    $f.menubar.bands.m add cascade -label "Detection Band" \
+	-menu $f.menubar.bands.m.det
+    menu $f.menubar.bands.m.rm -tearoff 0 \
+	-postcommand [list OGFBandsPostRemove $f.menubar.bands.m.rm]
+    $f.menubar.bands.m add cascade -label "Remove Band" \
+	-menu $f.menubar.bands.m.rm
+    $f.menubar.bands.m add command -label "List Bands..." \
+	-command CatalogPanelBandsList
+    $f.menubar.bands.m add separator
+    $f.menubar.bands.m add command -label "Detect in Detection Band" \
+	-command CatalogPanelBandsDetect
+    $f.menubar.bands.m add command -label "Measure in All Bands..." \
+	-command CatalogPanelBandsMeasure
+    $f.menubar.bands.m add separator
+    $f.menubar.bands.m add command -label "Tile Bands" \
+	-command CatalogPanelBandsTile
+    $f.menubar.bands.m add command -label "Single Frame View" \
+	-command CatalogPanelBandsSingleView
+    $f.menubar.bands.m add separator
+    $f.menubar.bands.m add command -label "Copy Mask to Other Bands" \
+	-command CatalogPanelMaskCopyToBands
+
+    # Mask menu (one shared mask per image)
+    ttk::menubutton $f.menubar.mask -text "Mask" \
+	-menu $f.menubar.mask.m -style CatMenu.TMenubutton
+    menu $f.menubar.mask.m -tearoff 0
+    $f.menubar.mask.m add command -label "Auto Mask..." \
+	-command CatalogPanelMaskAuto
+    $f.menubar.mask.m add checkbutton -label "Show Mask Overlay" \
+	-variable ogfmask(overlay) -command CatalogPanelMaskToggleOverlay
+    $f.menubar.mask.m add command -label "Overlay Colour/Transparency..." \
+	-command CatalogPanelMaskOverlaySettings
+    $f.menubar.mask.m add separator
+    $f.menubar.mask.m add command -label "Add Regions to Mask" \
+	-command [list CatalogPanelMaskRegions 0]
+    $f.menubar.mask.m add command -label "Erase Regions from Mask" \
+	-command [list CatalogPanelMaskRegions 1]
+    $f.menubar.mask.m add command -label "Grow..." \
+	-command [list CatalogPanelMaskGrow 0]
+    $f.menubar.mask.m add command -label "Shrink..." \
+	-command [list CatalogPanelMaskGrow 1]
+    $f.menubar.mask.m add command -label "Invert" \
+	-command [list CatalogPanelMaskSimple invert]
+    $f.menubar.mask.m add command -label "Clear Mask" \
+	-command [list CatalogPanelMaskSimple clear]
+    $f.menubar.mask.m add separator
+    $f.menubar.mask.m add command -label "Undo" \
+	-command [list CatalogPanelMaskSimple undo]
+    $f.menubar.mask.m add command -label "Redo" \
+	-command [list CatalogPanelMaskSimple redo]
+    $f.menubar.mask.m add separator
+    $f.menubar.mask.m add command -label "Save As..." \
+	-command CatalogPanelMaskSaveAs
+    $f.menubar.mask.m add command -label "Import..." \
+	-command CatalogPanelMaskImport
+    $f.menubar.mask.m add command -label "Show Masked Image" \
+	-command CatalogPanelMaskShowMasked
+    $f.menubar.mask.m add command -label "Statistics" \
+	-command CatalogPanelMaskStats
+
     # ICL menu
     ttk::menubutton $f.menubar.icl -text "ICL" \
 	-menu $f.menubar.icl.m -style CatMenu.TMenubutton
     menu $f.menubar.icl.m -tearoff 0
     $f.menubar.icl.m add command \
-	-label "1. Source Masking" \
+	-label "1. Source Masking (shared mask)" \
 	-command CatalogPanelICLMask
     $f.menubar.icl.m add command \
-	-label "   View Mask" \
+	-label "   Show Mask Overlay" \
 	-command CatalogPanelICLViewMask
     $f.menubar.icl.m add command \
 	-label "   Save Mask As..." \
@@ -442,10 +512,10 @@ proc CreateCatalogPanel {} {
 	-menu $f.menubar.lsbg.m -style CatMenu.TMenubutton
     menu $f.menubar.lsbg.m -tearoff 0
     $f.menubar.lsbg.m add command \
-	-label "1. Mask Bright Sources" \
+	-label "1. Mask Bright Sources (shared mask)" \
 	-command CatalogPanelLSBGMask
     $f.menubar.lsbg.m add command \
-	-label "   View Masked Image" \
+	-label "   Show Masked Image" \
 	-command CatalogPanelLSBGViewMask
     $f.menubar.lsbg.m add command \
 	-label "   Save Mask As..." \
@@ -570,6 +640,8 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.galaxy -side left
     pack $f.menubar.starpsf -side left
     pack $f.menubar.deconv -side left
+    pack $f.menubar.bands -side left
+    pack $f.menubar.mask -side left
     pack $f.menubar.icl -side left
     pack $f.menubar.lsbg -side left
     pack $f.menubar.analysis -side left
@@ -928,6 +1000,11 @@ proc CreateCatalogPanel {} {
     # Initialize extraction parameters
     CatalogPanelParamDef
 
+    # OGFinder extension modules (link / bands / mask)
+    OGFBandsInit
+    OGFMaskInit
+    OGFLinkInit
+
     # Force ttk widgets to redraw on resize (X11 compositing conflict)
     bind $f <Configure> [list CatalogPanelRedrawTtk $f]
 }
@@ -1136,6 +1213,7 @@ proc CatalogPanelClear {} {
 	-cols 19 -rows 20
 
     set catpanel(status) {Ready}
+    catch {CatalogPanelClearSelection}
     set catpanel(sel,text) {No source selected}
     set catpanel(filename) {}
     set catpanel(alldata) {}
@@ -1457,11 +1535,19 @@ proc CatalogPanelSelectCmd {prev cur} {
     if {![string is integer -strict $row] || $row <= 0} return
 
     catch {CatalogPanelUpdateSelInfo $row}
+    # keep the link state in step with clicks in the table itself
+    set num [OGFNumberOfRow $row]
+    if {$num ne {}} {
+	set catpanel(sel,nums) [list $num]
+	catch {$catpanel(tbl) tag delete msel}
+	catch {$catpanel(tbl) tag configure msel -bg #9cc7f5 -fg black}
+	OGFSetSelBase $catpanel(sel,text)
+    }
     after cancel CatalogPanelGotoSource
     after 100 [list CatalogPanelGotoSource $row]
 }
 
-proc CatalogPanelGotoSource {row} {
+proc CatalogPanelGotoSource {row {pan 1}} {
     global catpanel
     global current
     global ds9
@@ -1545,9 +1631,12 @@ proc CatalogPanelGotoSource {row} {
 	set semi_b [expr {$iso_radius * $b_image / $a_image}]
     }
 
-    # Delete previous selection markers
+    # Delete previous selection markers (in every registered band frame)
     set frame $current(frame)
-    catch {$frame marker catalog sextract_sel delete}
+    set frames [OGFSelFrames]
+    foreach fr $frames {
+	catch {$fr marker catalog sextract_sel delete}
+    }
 
     # Rebuild sextract_all markers from alldata to keep image in sync
     if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
@@ -1557,22 +1646,28 @@ proc CatalogPanelGotoSource {row} {
     # Use global variable for marker creation (var form requires global access)
     global sextract_sel_reg
 
-    # Create cross point marker (cyan)
-    set sextract_sel_reg "image\ncross point($x $y) # color=cyan width=2 point=cross 15 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
-    catch {$frame marker catalog command ds9 var sextract_sel_reg}
-
-    # If R_EFF_PIX is available, show a circle with effective radius
-    if {$r_eff_pix > 0} {
-	set sextract_sel_reg "image\ncircle($x $y ${r_eff_pix}i) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
-	catch {$frame marker catalog command ds9 var sextract_sel_reg}
+    # Marker in each band frame (positions mapped through the WCS when the
+    # band has a different pixel grid; identity on a shared grid)
+    set num [OGFNumberOfRow $row]
+    foreach fr $frames {
+	if {![$fr has fits]} continue
+	lassign [OGFBandPos $fr $num $x $y] bx by same
+	set isdet [expr {$same}]
+	set sextract_sel_reg "image\ncross point($bx $by) # color=cyan width=2 point=cross 15 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
+	catch {$fr marker catalog command ds9 var sextract_sel_reg}
+	if {$fr ne $frame && !$isdet} continue
+	if {$r_eff_pix > 0} {
+	    set sextract_sel_reg "image\ncircle($bx $by ${r_eff_pix}i) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
+	    catch {$fr marker catalog command ds9 var sextract_sel_reg}
+	}
+	set sextract_sel_reg "image\nellipse($bx $by ${semi_a}i ${semi_b}i $theta) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
+	catch {$fr marker catalog command ds9 var sextract_sel_reg}
     }
 
-    # Create ellipse marker (green, dashed)
-    set sextract_sel_reg "image\nellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=green width=2 dash=1 tag={sextract_sel} select=0 edit=0 move=0 rotate=0 delete=1\n"
-    catch {$frame marker catalog command ds9 var sextract_sel_reg}
-
-    # Pan to the object
-    PanToFrame $current(frame) $x $y image {}
+    # Pan to the object (locked band frames follow through the WCS lock)
+    if {$pan} {
+	PanToFrame $current(frame) $x $y image {}
+    }
 
     set catpanel(status) "Source at image ($x, $y)"
 }
@@ -1966,12 +2061,8 @@ proc CatalogPanelMarkerCB {num_str id} {
 
     if {$target_row < 0} return
 
-    # Select and scroll to row in table
-    $catpanel(tbl) selection set $target_row,1
-    $catpanel(tbl) see $target_row,1
-
-    # Show selection marker and pan
-    CatalogPanelGotoSource $target_row
+    # Select, scroll, summary, markers (shared link path)
+    CatalogPanelLinkSelect $num_str replace 1
 }
 
 proc CatalogPanelMarkerUnCB {num_str id} {
@@ -2643,6 +2734,10 @@ proc CatalogPanelEscapeKey {} {
     if {$catpanel(merge,active)} {
 	CatalogPanelMergeCancel
     }
+    if {[llength $catpanel(sel,nums)] > 0} {
+	CatalogPanelClearSelection
+	set catpanel(status) "Selection cleared"
+    }
 }
 
 # --- Log Scale ---
@@ -2762,7 +2857,7 @@ proc CatalogPanelAIMerge {} {
 
     # Run prediction — capture stderr for error diagnostics
     set errfile [file join [file normalize ~] .ds9 ai_merge_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -4650,7 +4745,7 @@ proc CatalogPanelGalaxyMorphology {} {
 
     # Run classification
     set errfile [file join [file normalize ~] .ds9 morph_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -4995,7 +5090,7 @@ proc CatalogPanelStarFinder {} {
 
     # Run classification
     set errfile [file join [file normalize ~] .ds9 star_finder_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -5318,7 +5413,7 @@ proc CatalogPanelFindStars {method} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -5495,7 +5590,7 @@ proc CatalogPanelBuildPSF {method} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -5695,7 +5790,7 @@ proc CatalogPanelBuildExtendedPSFExec {w} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -5741,7 +5836,7 @@ proc CatalogPanelCheckSimAvail {} {
     }
 
     # Use a dummy fits arg for check_sim mode
-    if {[catch {set data [exec python3 $script dummy.fits --mode check_sim 2>/dev/null]} err]} {
+    if {[catch {set data [exec [OGFPython] $script dummy.fits --mode check_sim 2>/dev/null]} err]} {
 	set catpanel(psf,sim_webbpsf_ok) 0
 	set catpanel(psf,sim_tinytim_ok) 0
 	return
@@ -5913,7 +6008,7 @@ proc CatalogPanelSimPSFWebbPSFExec {w} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -6082,7 +6177,7 @@ proc CatalogPanelSimPSFTinyTimExec {w} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -6287,7 +6382,7 @@ print(f'{w0}x{h0}  peak={vmax:.4g}')
 }
     close $fd
 
-    if {[catch {set info [exec python3 $tmpscript $psffile $tmpimg]} err]} {
+    if {[catch {set info [exec [OGFPython] $tmpscript $psffile $tmpimg]} err]} {
 	catch {$w.info configure -text "Render error: $err"}
 	catch {file delete $tmpscript}
 	return
@@ -6430,7 +6525,7 @@ proc CatalogPanelDeconvolve {algorithm} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -7092,7 +7187,7 @@ proc CatalogPanelSeparateSelected {} {
     lappend paramargs "--back-size" $catpanel(param,sep-back-size)
 
     set errfile [file join [file normalize ~] .ds9 separate_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -7469,7 +7564,7 @@ proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
     lappend paramargs "--phot-aperture" $catpanel(param,phot-aperture)
 
     set errfile [file join [file normalize ~] .ds9 add_source_stderr.txt]
-    if {[catch {set data [exec python3 $script $fn {*}$paramargs 2>$errfile]} err]} {
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
 	    set fd [open $errfile r]
@@ -7602,8 +7697,9 @@ proc CatalogPanelICLUpdateFiles {fn} {
 	$catpanel(icl,fits_base) eq $base} return
     set catpanel(icl,fits_base) $base
     set ds9dir [file join [file normalize ~] .ds9]
-    set catpanel(icl,mask_file)    [file join $ds9dir "icl_mask_${base}.fits"]
-    set catpanel(icl,masked_file)  [file join $ds9dir "icl_masked_${base}.fits"]
+    # shared mask (ds9_mask.py): boolean view + on-demand interpolated image
+    set catpanel(icl,mask_file)    [file join $ds9dir "mask_${base}_bool.fits"]
+    set catpanel(icl,masked_file)  [file join $ds9dir "mask_${base}_masked.fits"]
     set catpanel(icl,bkg_file)     [file join $ds9dir "icl_background_${base}.fits"]
     set catpanel(icl,bgsub_file)   [file join $ds9dir "icl_bgsub_${base}.fits"]
     set catpanel(icl,profile_file) [file join $ds9dir "icl_profile_${base}.tsv"]
@@ -7625,8 +7721,8 @@ proc CatalogPanelLSBGUpdateFiles {fn} {
 	$catpanel(lsbg,fits_base) eq $base} return
     set catpanel(lsbg,fits_base) $base
     set ds9dir [file join [file normalize ~] .ds9]
-    set catpanel(lsbg,mask_file)    [file join $ds9dir "lsbg_mask_${base}.fits"]
-    set catpanel(lsbg,masked_file)  [file join $ds9dir "lsbg_masked_${base}.fits"]
+    set catpanel(lsbg,mask_file)    [file join $ds9dir "mask_${base}_bool.fits"]
+    set catpanel(lsbg,masked_file)  [file join $ds9dir "mask_${base}_masked.fits"]
     set catpanel(lsbg,bkg_file)     [file join $ds9dir "lsbg_background_${base}.fits"]
     set catpanel(lsbg,cleaned_file) [file join $ds9dir "lsbg_cleaned_${base}.fits"]
     set catpanel(lsbg,segmap_file)  [file join $ds9dir "lsbg_segmap_${base}.fits"]
@@ -7893,7 +7989,7 @@ proc CatalogPanelExportFITS {} {
     update idletasks
 
     if {[catch {
-	set data [exec python3 $script --input $tmpfile --output $fn 2>@stderr]
+	set data [exec [OGFPython] $script --input $tmpfile --output $fn 2>@stderr]
     } err]} {
 	set catpanel(status) "FITS export error: $err"
 	return
@@ -7922,7 +8018,7 @@ proc CatalogPanelSegmentationMap {} {
     set catpanel(status) "Generating segmentation map..."
     update idletasks
 
-    set args [list python3 $script $fn]
+    set args [list [OGFPython] $script $fn]
     if {[info exists catpanel(param,detect-thresh)]} {
 	lappend args --detect-thresh $catpanel(param,detect-thresh)
     }
@@ -7989,7 +8085,7 @@ proc CatalogPanelMorphometry {} {
     update idletasks
 
     if {[catch {
-	set data [exec python3 $script $fn --catalog $tmpcat \
+	set data [exec [OGFPython] $script $fn --catalog $tmpcat \
 	    --n-workers $catpanel(param,n-workers) 2>@stderr]
     } err]} {
 	set catpanel(status) "Morphometry error: $err"
@@ -8037,7 +8133,7 @@ proc CatalogPanelSersicFit {} {
     set catpanel(status) "Sérsic profile fitting..."
     update idletasks
 
-    set args [list python3 $script $fn --catalog $tmpcat]
+    set args [list [OGFPython] $script $fn --catalog $tmpcat]
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
@@ -8090,7 +8186,7 @@ proc CatalogPanelPSFPhotometry {} {
     set catpanel(status) "PSF photometry..."
     update idletasks
 
-    set args [list python3 $script $fn --catalog $tmpcat --psf $catpanel(psf,file)]
+    set args [list [OGFPython] $script $fn --catalog $tmpcat --psf $catpanel(psf,file)]
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
@@ -8182,7 +8278,7 @@ proc CatalogPanelMultiBand {} {
     set catpanel(status) "Multi-band photometry ([llength $bands] bands)..."
     update idletasks
 
-    set args [list python3 $script --detect-image $detect_img \
+    set args [list [OGFPython] $script --detect-image $detect_img \
 	--bands [join $bands ","]]
 
     # Use existing catalog if available
@@ -8243,7 +8339,7 @@ proc CatalogPanelCrowdedPhot {} {
     set catpanel(status) "Crowded field photometry..."
     update idletasks
 
-    set args [list python3 $script $fn --catalog $tmpcat \
+    set args [list [OGFPython] $script $fn --catalog $tmpcat \
 	--psf $catpanel(psf,file)]
     if {[info exists catpanel(param,mag-zeropoint)]} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
@@ -8325,7 +8421,7 @@ proc CatalogPanelCrossMatch {} {
     update idletasks
 
     if {[catch {
-	set data [exec python3 $script --catalog $tmpcat \
+	set data [exec [OGFPython] $script --catalog $tmpcat \
 	    --vizier-cat $vizcat --radius $matchrad 2>@stderr]
     } err]} {
 	set catpanel(status) "Cross-match error: $err"
@@ -8409,7 +8505,7 @@ proc CatalogPanelDualExtract {} {
     set catpanel(status) "Dual-image extraction..."
     update idletasks
 
-    set args [list python3 $script \
+    set args [list [OGFPython] $script \
 	--detect-image $detect_img --measure-image $measure_img]
     if {[info exists catpanel(param,detect-thresh)]} {
 	lappend args --detect-thresh $catpanel(param,detect-thresh)
@@ -8498,7 +8594,7 @@ proc CatalogPanelCompleteness {} {
     set catpanel(status) "Completeness simulation ($nbins bins)..."
     update idletasks
 
-    set args [list python3 $script $fn \
+    set args [list [OGFPython] $script $fn \
 	--n-inject $ninject --mag-min $magmin --mag-max $magmax --n-bins $nbins]
     if {[info exists catpanel(param,detect-thresh)]} {
 	lappend args --detect-thresh $catpanel(param,detect-thresh)
@@ -8825,20 +8921,26 @@ proc CatalogPanelIclGenerateScript {} {
     set script [CatalogPanelGetScript ds9_icl.py]
     set commands {}
 
-    # Step 1: Mask
-    set args [list python3 $script $fn --mode mask \
+    # Step 1: shared mask (ds9_mask.py) + interpolated image for the fit
+    set mscript [CatalogPanelGetScript ds9_mask.py]
+    set mp [OGFMaskPaths $fn]
+    set args [list [OGFPython] $mscript $fn --mode auto \
+	--mask [dict get $mp mask] \
 	--expand-factor $catpanel(icl,param,expand-factor) \
 	--max-dilate-radius $catpanel(icl,param,max-dilate-radius) \
 	--bright-star-mag-limit $catpanel(icl,param,bright-star-mag-limit) \
 	--bright-star-radius-scale $catpanel(icl,param,bright-star-radius-scale) \
-	--interp-method $catpanel(icl,param,interp-method) \
 	--detect-thresh $catpanel(icl,param,detect-thresh) \
-	--mask-output $catpanel(icl,mask_file) \
+	--mag-zeropoint $catpanel(param,mag-zeropoint)]
+    lappend commands $args
+    set args [list [OGFPython] $mscript $fn --mode masked \
+	--mask [dict get $mp mask] \
+	--interp-method $catpanel(icl,param,interp-method) \
 	--masked-output $catpanel(icl,masked_file)]
     lappend commands $args
 
     # Step 2: Background
-    set args [list python3 $script $catpanel(icl,masked_file) --mode background \
+    set args [list [OGFPython] $script $catpanel(icl,masked_file) --mode background \
 	--bkg-method $catpanel(icl,param,bkg-method) \
 	--bkg-order $catpanel(icl,param,bkg-order) \
 	--bkg-sigma-clip $catpanel(icl,param,bkg-sigma-clip) \
@@ -8850,7 +8952,7 @@ proc CatalogPanelIclGenerateScript {} {
 
     # Step 3: Profile (if center is set)
     if {$catpanel(icl,center_x) ne {} && $catpanel(icl,center_y) ne {}} {
-	set args [list python3 $script $catpanel(icl,bgsub_file) --mode profile \
+	set args [list [OGFPython] $script $catpanel(icl,bgsub_file) --mode profile \
 	    --center "$catpanel(icl,center_x),$catpanel(icl,center_y)" \
 	    --rmin $catpanel(icl,param,rmin) \
 	    --rmax $catpanel(icl,param,rmax) \
@@ -8865,7 +8967,7 @@ proc CatalogPanelIclGenerateScript {} {
 	lappend commands $args
 
 	# Step 4: Measure
-	set args [list python3 $script $fn --mode measure \
+	set args [list [OGFPython] $script $fn --mode measure \
 	    --profile-file $catpanel(icl,profile_file) \
 	    --mu-threshold $catpanel(icl,param,mu-threshold) \
 	    --mu-levels $catpanel(icl,param,mu-levels) \
@@ -8885,7 +8987,7 @@ proc CatalogPanelLsbgGenerateScript {} {
     CatalogPanelLSBGUpdateFiles $fn
     set script [CatalogPanelGetScript ds9_lsbg.py]
 
-    set args [list python3 $script $fn --mode run \
+    set args [list [OGFPython] $script $fn --mode run \
 	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
 	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
 	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
@@ -8926,7 +9028,8 @@ proc CatalogPanelLsbgGenerateScript {} {
 	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
 	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
 	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
-	--mask-output $catpanel(lsbg,mask_file) \
+	--mask-input $catpanel(lsbg,mask_file) \
+	--mask-output [OGFMaskRefinedPath lsbg] \
 	--masked-output $catpanel(lsbg,masked_file) \
 	--bkg-output $catpanel(lsbg,bkg_file) \
 	--cleaned-output $catpanel(lsbg,cleaned_file) \
@@ -9421,154 +9524,21 @@ proc CatalogPanelLSBGImportScript {} {
 # --- 1. Source Masking ---
 
 proc CatalogPanelICLMask {} {
-    global catpanel current
-
-    set fn [CatalogPanelGetFITS]
-    if {$fn eq {}} {
-	set catpanel(status) "ICL: No FITS file loaded"
-	return
-    }
-    CatalogPanelICLUpdateFiles $fn
-
-    set script [CatalogPanelGetScript ds9_icl.py]
-    if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
-	return
-    }
-
-    set catpanel(status) "ICL: Creating source mask..."
-    update idletasks
-
-    # Reset cmdlog for new session
-    set catpanel(icl,cmdlog) {}
-
-    set args [list python3 $script $fn --mode mask \
-	--expand-factor $catpanel(icl,param,expand-factor) \
-	--max-dilate-radius $catpanel(icl,param,max-dilate-radius) \
-	--bright-star-mag-limit $catpanel(icl,param,bright-star-mag-limit) \
-	--bright-star-radius-scale $catpanel(icl,param,bright-star-radius-scale) \
-	--interp-method $catpanel(icl,param,interp-method) \
-	--detect-thresh $catpanel(icl,param,detect-thresh) \
-	--mask-output $catpanel(icl,mask_file) \
-	--masked-output $catpanel(icl,masked_file)]
-
-    # Add catalog if available
-    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
-	set catfile [CatalogPanelSaveTempCatalog icl]
-	if {$catfile ne {}} {
-	    lappend args --catalog $catfile
-	}
-    }
-
-    CatalogPanelCmdLog icl $args
-    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL mask error: $err"
-	return
-    }
-
-    set catpanel(icl,has_mask) 1
-
-    # Auto-display masked image in new frame
-    if {[file exists $catpanel(icl,masked_file)]} {
-	CreateFrame
-	if {![catch {LoadFitsFile $catpanel(icl,masked_file) {} {}}]} {
-	    global scale
-	    set scale(mode) zscale
-	    ChangeScaleMode
-	}
-    }
-
-    set catpanel(status) "ICL: Source mask created"
+    OGFMaskPipelineMask icl
 }
 
 proc CatalogPanelICLViewMask {} {
-    global catpanel
-
-    if {![file exists $catpanel(icl,masked_file)]} {
-	set catpanel(status) "ICL: No mask available — run Source Masking first"
-	return
-    }
-
-    CreateFrame
-    if {[catch {LoadFitsFile $catpanel(icl,masked_file) {} {}} err]} {
-	set catpanel(status) "ICL: Error loading masked image: $err"
-	return
-    }
-    global scale
-    set scale(mode) zscale
-    ChangeScaleMode
-    set catpanel(icl,has_mask) 1
-    set catpanel(status) "ICL: Masked image loaded in new frame"
+    global ogfmask
+    set ogfmask(overlay) 1
+    CatalogPanelMaskToggleOverlay
 }
 
 proc CatalogPanelICLSaveMask {} {
-    global catpanel
-
-    if {!$catpanel(icl,has_mask) || ![file exists $catpanel(icl,mask_file)]} {
-	set catpanel(status) "ICL: No mask available — run Source Masking first"
-	return
-    }
-
-    set fname [tk_getSaveFile \
-	-title "Save ICL Mask As..." \
-	-initialfile [file tail $catpanel(icl,mask_file)] \
-	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
-    if {$fname eq {}} return
-
-    if {[catch {file copy -force $catpanel(icl,mask_file) $fname} err]} {
-	set catpanel(status) "ICL: Save mask error: $err"
-	return
-    }
-    set catpanel(status) "ICL: Mask saved to $fname"
+    CatalogPanelMaskSaveAs
 }
 
 proc CatalogPanelICLImportMask {} {
-    global catpanel current
-
-    set fn [CatalogPanelGetFITS]
-    if {$fn eq {}} {
-	set catpanel(status) "ICL: No FITS file loaded"
-	return
-    }
-    CatalogPanelICLUpdateFiles $fn
-
-    set script [CatalogPanelGetScript ds9_icl.py]
-    if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
-	return
-    }
-
-    set fname [tk_getOpenFile \
-	-title "Import Mask FITS..." \
-	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
-    if {$fname eq {}} return
-
-    set catpanel(status) "ICL: Importing mask..."
-    update idletasks
-
-    set args [list python3 $script $fn --mode import-mask \
-	--import-mask-file $fname \
-	--interp-method $catpanel(icl,param,interp-method) \
-	--mask-output $catpanel(icl,mask_file) \
-	--masked-output $catpanel(icl,masked_file)]
-
-    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL import mask error: $err"
-	return
-    }
-
-    set catpanel(icl,has_mask) 1
-
-    if {[file exists $catpanel(icl,masked_file)]} {
-	CreateFrame
-	if {![catch {LoadFitsFile $catpanel(icl,masked_file) {} {}}]} {
-	    global scale
-	    set scale(mode) zscale
-	    ChangeScaleMode
-	}
-    }
-
-    set catpanel(status) "ICL: Mask imported and applied"
+    CatalogPanelMaskImport
 }
 
 # --- 2. Background Model ---
@@ -9583,10 +9553,10 @@ proc CatalogPanelICLBackground {method} {
     }
     CatalogPanelICLUpdateFiles $fn
 
-    # Use masked image if available, otherwise raw
+    # Shared mask -> interpolated image produced now (on demand); raw if no mask
     set input $fn
-    if {$catpanel(icl,has_mask) && [file exists $catpanel(icl,masked_file)]} {
-	set input $catpanel(icl,masked_file)
+    if {[OGFMaskExists]} {
+	set input [OGFMaskMaskedFor icl $fn]
     }
 
     set script [CatalogPanelGetScript ds9_icl.py]
@@ -9598,7 +9568,7 @@ proc CatalogPanelICLBackground {method} {
     set catpanel(status) "ICL: Fitting background ($method)..."
     update idletasks
 
-    set args [list python3 $script $input --mode background \
+    set args [list [OGFPython] $script $input --mode background \
 	--bkg-method $method \
 	--bkg-order $catpanel(icl,param,bkg-order) \
 	--bkg-sigma-clip $catpanel(icl,param,bkg-sigma-clip) \
@@ -9606,8 +9576,8 @@ proc CatalogPanelICLBackground {method} {
 	--bkg-output $catpanel(icl,bkg_file) \
 	--bgsub-output $catpanel(icl,bgsub_file)]
 
-    if {$catpanel(icl,has_mask) && [file exists $catpanel(icl,mask_file)]} {
-	lappend args --mask $catpanel(icl,mask_file)
+    if {[OGFMaskExists]} {
+	lappend args --mask [OGFMaskBoolPath]
     }
 
     # Iterative background refinement
@@ -9617,7 +9587,7 @@ proc CatalogPanelICLBackground {method} {
 	    --bkg-n-iterations $catpanel(icl,param,bkg-n-iterations) \
 	    --bkg-convergence-tol $catpanel(icl,param,bkg-convergence-tol) \
 	    --bkg-refine-thresh $catpanel(icl,param,bkg-refine-thresh) \
-	    --mask-output $catpanel(icl,mask_file)
+	    --mask-output [OGFMaskRefinedPath icl]
     }
 
     CatalogPanelCmdLog icl $args
@@ -9627,11 +9597,17 @@ proc CatalogPanelICLBackground {method} {
     }
 
     set catpanel(icl,has_bkg) 1
+    if {$catpanel(icl,param,bkg-iterative) && [file exists [OGFMaskRefinedPath icl]]} {
+	# iterative refinement result feeds the profile step; shared mask untouched
+	set catpanel(icl,mask_file) [OGFMaskRefinedPath icl]
+    }
 
-    # Auto-display bgsub image in new frame
-    if {[file exists $catpanel(icl,bgsub_file)]} {
+    # Auto-display bgsub image in new frame.  (CreateFrame resets the
+    # per-frame panel state, so grab the path first.)
+    set _bgsub $catpanel(icl,bgsub_file)
+    if {[file exists $_bgsub]} {
 	CreateFrame
-	if {![catch {LoadFitsFile $catpanel(icl,bgsub_file) {} {}}]} {
+	if {![catch {LoadFitsFile $_bgsub {} {}}]} {
 	    global scale
 	    set scale(mode) zscale
 	    ChangeScaleMode
@@ -9861,7 +9837,7 @@ proc CatalogPanelICLProfile {} {
 
     set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
 
-    set args [list python3 $script $fn --mode profile \
+    set args [list [OGFPython] $script $fn --mode profile \
 	--center $center \
 	--rmin $catpanel(icl,param,rmin) \
 	--rmax $catpanel(icl,param,rmax) \
@@ -9988,7 +9964,7 @@ proc CatalogPanelICLSectorProfileRun {w} {
 
     set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
 
-    set args [list python3 $script $fn --mode profile \
+    set args [list [OGFPython] $script $fn --mode profile \
 	--center $center \
 	--rmin $catpanel(icl,param,rmin) \
 	--rmax $catpanel(icl,param,rmax) \
@@ -10035,7 +10011,7 @@ proc CatalogPanelICLMeasure {} {
     set catpanel(status) "ICL: Computing ICL measurements..."
     update idletasks
 
-    set args [list python3 $script $fn --mode measure \
+    set args [list [OGFPython] $script $fn --mode measure \
 	--profile-file $catpanel(icl,profile_file) \
 	--mu-threshold $catpanel(icl,param,mu-threshold) \
 	--mu-levels $catpanel(icl,param,mu-levels) \
@@ -10119,7 +10095,7 @@ proc CatalogPanelICLMeasureMulti {} {
     set catpanel(status) "ICL: Computing multi-threshold ICL..."
     update idletasks
 
-    set args [list python3 $script $fn --mode measure-multi \
+    set args [list [OGFPython] $script $fn --mode measure-multi \
 	--profile-file $catpanel(icl,profile_file) \
 	--pixel-scale $catpanel(icl,param,pixel-scale)]
 
@@ -10175,7 +10151,7 @@ proc CatalogPanelICLDecompose {} {
     set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
 
     # First: measure profile on original (unmasked) image
-    set prof_args [list python3 $script $fn --mode profile \
+    set prof_args [list [OGFPython] $script $fn --mode profile \
 	--center $center \
 	--rmin $catpanel(icl,param,rmin) \
 	--rmax $catpanel(icl,param,rmax) \
@@ -10194,7 +10170,7 @@ proc CatalogPanelICLDecompose {} {
     }
 
     # Then: decompose using that profile
-    set args [list python3 $script $fn --mode decompose \
+    set args [list [OGFPython] $script $fn --mode decompose \
 	--profile-file $catpanel(icl,profile_file) \
 	--pixel-scale $catpanel(icl,param,pixel-scale) \
 	--mag-zeropoint $catpanel(icl,param,mag-zeropoint)]
@@ -10303,7 +10279,7 @@ proc CatalogPanelICLColorProfileRun {w} {
 
     set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
 
-    set args [list python3 $script $fn --mode color \
+    set args [list [OGFPython] $script $fn --mode color \
 	--center $center \
 	--bands $bands \
 	--rmin $catpanel(icl,param,rmin) \
@@ -10689,157 +10665,21 @@ proc CatalogPanelLSBGParamSave {} {
 # --- 1. Mask Bright Sources ---
 
 proc CatalogPanelLSBGMask {} {
-    global catpanel current
-
-    set fn [CatalogPanelGetFITS]
-    if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
-	return
-    }
-    CatalogPanelLSBGUpdateFiles $fn
-
-    set script [CatalogPanelGetScript ds9_lsbg.py]
-    if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
-	return
-    }
-
-    set catpanel(status) "LSBG: Masking bright sources..."
-    update idletasks
-
-    # Reset cmdlog for new session
-    set catpanel(lsbg,cmdlog) {}
-
-    set args [list python3 $script $fn --mode mask \
-	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
-	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
-	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
-	--max-dilate-radius $catpanel(lsbg,param,max-dilate-radius) \
-	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
-	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
-	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
-	--interp-method $catpanel(lsbg,param,interp-method) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--lsb-mu-threshold $catpanel(lsbg,param,lsb-mu-threshold) \
-	--mask-output $catpanel(lsbg,mask_file) \
-	--masked-output $catpanel(lsbg,masked_file) \
-	--n-workers $catpanel(param,n-workers)]
-    if {$catpanel(lsbg,param,lsb-protect)} {
-	lappend args --lsb-protect
-    } else {
-	lappend args --no-lsb-protect
-    }
-
-    CatalogPanelCmdLog lsbg $args
-    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG mask error: $err"
-	return
-    }
-
-    set catpanel(lsbg,has_mask) 1
-
-    # Auto-display masked image in new frame
-    CreateFrame
-    if {[catch {LoadFitsFile $catpanel(lsbg,masked_file) {} {}} err]} {
-	set catpanel(status) "LSBG: Mask done but could not display: $err"
-    } else {
-	global scale
-	set scale(mode) zscale
-	ChangeScaleMode
-    }
-
-    set catpanel(status) "LSBG: Bright source mask created (new frame)"
+    OGFMaskPipelineMask lsbg
 }
 
 proc CatalogPanelLSBGViewMask {} {
-    global catpanel
-
-    if {![file exists $catpanel(lsbg,masked_file)]} {
-	set catpanel(status) "LSBG: No mask available — run Mask Bright Sources first"
-	return
-    }
-
-    CreateFrame
-    if {[catch {LoadFitsFile $catpanel(lsbg,masked_file) {} {}} err]} {
-	set catpanel(status) "LSBG: Error loading masked image: $err"
-	return
-    }
-    global scale
-    set scale(mode) zscale
-    ChangeScaleMode
-    set catpanel(status) "LSBG: Masked image loaded in new frame"
+    global ogfmask
+    set ogfmask(overlay) 1
+    CatalogPanelMaskToggleOverlay
 }
 
 proc CatalogPanelLSBGSaveMask {} {
-    global catpanel
-
-    if {!$catpanel(lsbg,has_mask) || ![file exists $catpanel(lsbg,mask_file)]} {
-	set catpanel(status) "LSBG: No mask available — run Mask Bright Sources first"
-	return
-    }
-
-    set fname [tk_getSaveFile \
-	-title "Save LSBG Mask As..." \
-	-initialfile [file tail $catpanel(lsbg,mask_file)] \
-	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
-    if {$fname eq {}} return
-
-    if {[catch {file copy -force $catpanel(lsbg,mask_file) $fname} err]} {
-	set catpanel(status) "LSBG: Save mask error: $err"
-	return
-    }
-    set catpanel(status) "LSBG: Mask saved to $fname"
+    CatalogPanelMaskSaveAs
 }
 
 proc CatalogPanelLSBGImportMask {} {
-    global catpanel current
-
-    set fn [CatalogPanelGetFITS]
-    if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
-	return
-    }
-    CatalogPanelLSBGUpdateFiles $fn
-
-    set script [CatalogPanelGetScript ds9_lsbg.py]
-    if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
-	return
-    }
-
-    set fname [tk_getOpenFile \
-	-title "Import Mask FITS..." \
-	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
-    if {$fname eq {}} return
-
-    set catpanel(status) "LSBG: Importing mask..."
-    update idletasks
-
-    set args [list python3 $script $fn --mode import-mask \
-	--import-mask-file $fname \
-	--interp-method $catpanel(lsbg,param,interp-method) \
-	--mask-output $catpanel(lsbg,mask_file) \
-	--masked-output $catpanel(lsbg,masked_file) \
-	--n-workers $catpanel(param,n-workers)]
-
-    if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG import mask error: $err"
-	return
-    }
-
-    set catpanel(lsbg,has_mask) 1
-
-    CreateFrame
-    if {[catch {LoadFitsFile $catpanel(lsbg,masked_file) {} {}} err]} {
-	set catpanel(status) "LSBG: Mask imported but could not display: $err"
-    } else {
-	global scale
-	set scale(mode) zscale
-	ChangeScaleMode
-    }
-
-    set catpanel(status) "LSBG: Mask imported and applied (new frame)"
+    CatalogPanelMaskImport
 }
 
 # --- 2. Background Model (Iterative Cleaning) ---
@@ -10854,8 +10694,8 @@ proc CatalogPanelLSBGClean {method} {
     }
     CatalogPanelLSBGUpdateFiles $fn
 
-    if {![file exists $catpanel(lsbg,mask_file)]} {
-	set catpanel(status) "LSBG: No mask — run Mask Bright Sources first"
+    if {![OGFMaskEnsure lsbg]} {
+	set catpanel(status) "LSBG: could not obtain a mask - run Mask > Auto Mask first"
 	return
     }
 
@@ -10868,7 +10708,7 @@ proc CatalogPanelLSBGClean {method} {
     set catpanel(status) "LSBG: Iterative background ($method)..."
     update idletasks
 
-    set args [list python3 $script $fn --mode clean \
+    set args [list [OGFPython] $script $fn --mode clean \
 	--mask $catpanel(lsbg,mask_file) \
 	--bkg-method $method \
 	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
@@ -10951,7 +10791,7 @@ proc CatalogPanelLSBGDetect {} {
     set catpanel(status) "LSBG: Detecting candidates..."
     update idletasks
 
-    set args [list python3 $script $fn --mode detect \
+    set args [list [OGFPython] $script $fn --mode detect \
 	--cleaned $catpanel(lsbg,cleaned_file) \
 	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
 	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
@@ -11032,7 +10872,7 @@ proc CatalogPanelLSBGPhotometry {} {
     set catpanel(status) "LSBG: Measuring photometry..."
     update idletasks
 
-    set args [list python3 $script $fn --mode photometry \
+    set args [list [OGFPython] $script $fn --mode photometry \
 	--cleaned $catpanel(lsbg,cleaned_file) \
 	--segmap $catpanel(lsbg,segmap_file) \
 	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
@@ -11093,7 +10933,7 @@ proc CatalogPanelLSBGSersic {} {
     set catpanel(status) "LSBG: Fitting Sérsic profiles..."
     update idletasks
 
-    set args [list python3 $script $fn --mode sersic \
+    set args [list [OGFPython] $script $fn --mode sersic \
 	--cleaned $catpanel(lsbg,cleaned_file) \
 	--segmap $catpanel(lsbg,segmap_file) \
 	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
@@ -11159,7 +10999,7 @@ proc CatalogPanelLSBGFilter {} {
     set catpanel(status) "LSBG: Filtering + grading candidates..."
     update idletasks
 
-    set args [list python3 $script $fn --mode filter \
+    set args [list [OGFPython] $script $fn --mode filter \
 	--cleaned $catpanel(lsbg,cleaned_file) \
 	--segmap $catpanel(lsbg,segmap_file) \
 	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
@@ -11245,7 +11085,7 @@ proc CatalogPanelLSBGSVMClassify {} {
 	return
     }
 
-    set args [list python3 $script $fn --mode svm-classify \
+    set args [list [OGFPython] $script $fn --mode svm-classify \
 	--catalog $tmpcat \
 	--svm-threshold $catpanel(lsbg,param,svm-threshold)]
     if {$catpanel(lsbg,param,svm-checkpoint) ne {}} {
@@ -11432,13 +11272,14 @@ proc CatalogPanelLSBGRunAll {} {
 	return
     }
 
+    OGFMaskEnsure lsbg
     set catpanel(status) "LSBG: Running full pipeline..."
     update idletasks
 
     # Reset cmdlog for new session
     set catpanel(lsbg,cmdlog) {}
 
-    set args [list python3 $script $fn --mode run \
+    set args [list [OGFPython] $script $fn --mode run \
 	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
 	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
 	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
@@ -11479,7 +11320,8 @@ proc CatalogPanelLSBGRunAll {} {
 	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
 	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
 	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
-	--mask-output $catpanel(lsbg,mask_file) \
+	--mask-input $catpanel(lsbg,mask_file) \
+	--mask-output [OGFMaskRefinedPath lsbg] \
 	--masked-output $catpanel(lsbg,masked_file) \
 	--bkg-output $catpanel(lsbg,bkg_file) \
 	--cleaned-output $catpanel(lsbg,cleaned_file) \
@@ -11603,7 +11445,7 @@ proc CatalogPanelLSBGForcedPhot {} {
     set catpanel(status) "LSBG: Forced photometry ($band_name)..."
     update idletasks
 
-    set args [list python3 $script $band_fits --mode forced \
+    set args [list [OGFPython] $script $band_fits --mode forced \
 	--catalog $tmpcat \
 	--band-name $band_name \
 	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
@@ -12185,6 +12027,10 @@ proc CatalogPanelRestoreFrameState {frame} {
 }
 
 proc CatalogPanelFrameChanged {old_frame new_frame} {
+    # registered band frames share one catalog: nothing to swap
+    if {$old_frame ne {} && [OGFBandsShareCatalog $old_frame $new_frame]} {
+	return
+    }
     if {$old_frame ne {} && $old_frame ne $new_frame} {
 	CatalogPanelSaveFrameState $old_frame
     }
@@ -12640,7 +12486,7 @@ proc CatalogPanelPhotoZRun {dlg} {
     set catpanel(status) "Running Photo-z estimation..."
     update idletasks
 
-    set args [list python3 $script $fn --catalog $tmpcat]
+    set args [list [OGFPython] $script $fn --catalog $tmpcat]
     if {$bands ne {}} { lappend args --bands $bands }
     if {$magcols ne {}} { lappend args --mag-columns $magcols }
     if {$ckpt ne {} && [file exists $ckpt]} {
@@ -12818,7 +12664,7 @@ proc CatalogPanelSEDFitRun {dlg} {
     set catpanel(status) "Running SED fitting ($backend)..."
     update idletasks
 
-    set args [list python3 $script $fn --catalog $tmpcat]
+    set args [list [OGFPython] $script $fn --catalog $tmpcat]
     if {$backend ne {}} { lappend args --backend $backend }
     if {$bands ne {}} { lappend args --bands $bands }
     if {$magcols ne {}} { lappend args --mag-columns $magcols }
@@ -12860,7 +12706,7 @@ proc CatalogPanelAnalysisViewer {} {
 	return
     }
 
-    set args [list python3 $script]
+    set args [list [OGFPython] $script]
 
     # Pass FITS file if available
     set fn [CatalogPanelGetFITS]
@@ -12949,7 +12795,7 @@ proc CatalogPanelBulgeDisk {} {
     set catpanel(status) "Running Bulge+Disk decomposition..."
     update idletasks
 
-    set args [list python3 $script $fn --catalog $tmpcat]
+    set args [list [OGFPython] $script $fn --catalog $tmpcat]
     lappend args --mag-zeropoint $catpanel(bd,param,mag-zeropoint)
     lappend args --pixel-scale $catpanel(bd,param,pixel-scale)
     lappend args --max-sources $catpanel(bd,param,max-sources)

@@ -617,15 +617,27 @@ def mode_run(args):
 
     config = build_config(args)
 
-    # Step 1: Mask bright sources (with LSB protection)
-    print("=== Step 1: Masking bright sources ===", file=sys.stderr)
-    mask, masked_data = create_lsbg_mask(data, config,
-                                         n_workers=args.n_workers)
+    # Step 1: Mask bright sources (with LSB protection), or reuse the
+    # shared OGFinder mask (--mask-input, written by ds9_mask.py)
+    if args.mask_input and os.path.exists(args.mask_input):
+        from astropy.io import fits as pyfits
+        from icl.masking import interpolate_masked
+        print("=== Step 1: Using shared mask %s ===" % args.mask_input,
+              file=sys.stderr)
+        with pyfits.open(args.mask_input) as hdul:
+            mask = hdul[0].data.astype(bool)
+        masked_data = interpolate_masked(data, mask, method=args.interp_method)
+        masked_path = args.masked_output
+        save_fits(masked_data, header, masked_path)
+    else:
+        print("=== Step 1: Masking bright sources ===", file=sys.stderr)
+        mask, masked_data = create_lsbg_mask(data, config,
+                                             n_workers=args.n_workers)
 
-    mask_path = args.mask_output
-    save_fits(mask.astype(np.int32), header, mask_path)
-    masked_path = args.masked_output
-    save_fits(masked_data, header, masked_path)
+        mask_path = args.mask_output
+        save_fits(mask.astype(np.int32), header, mask_path)
+        masked_path = args.masked_output
+        save_fits(masked_data, header, masked_path)
 
     # Step 2: Iterative background refinement (with convergence check)
     print("=== Step 2: Iterative background ===", file=sys.stderr)
@@ -873,6 +885,9 @@ def main():
                         default=os.path.expanduser('~/.ds9/lsbg_mask.fits'))
     parser.add_argument('--masked-output',
                         default=os.path.expanduser('~/.ds9/lsbg_masked.fits'))
+    parser.add_argument('--mask-input',
+                        help='Existing (shared) boolean mask to use in --mode run '
+                             'instead of generating one')
     parser.add_argument('--import-mask-file',
                         help='External mask FITS to import')
 

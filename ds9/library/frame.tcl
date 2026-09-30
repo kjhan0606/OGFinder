@@ -425,6 +425,7 @@ proc DeleteFrame {which} {
     $ds9(canvas) delete $which
 
     # Clean up catalog panel saved state for this frame
+    catch {OGFBandFrameDeleted $which}
     catch {CatalogPanelDeleteFrameState $which}
 
     # reset current(frame) if needed
@@ -820,7 +821,13 @@ proc DoMotion {which x y cursor1 cursor2} {
 	    UpdatePixelTableDialog $which $x $y canvas
 	    UpdateGraphsData $which $x $y canvas
 	}
-	none -
+	none {
+	    catch {CatalogPanelHover $which $x $y}
+	    UpdateColormapLevelMosaic $which $x $y canvas
+	    UpdateInfoBox $which $x $y canvas
+	    UpdatePixelTableDialog $which $x $y canvas
+	    UpdateGraphsData $which $x $y canvas
+	}
 	colorbar -
 	pan -
 	zoom -
@@ -866,10 +873,18 @@ proc Button1Frame {which x y} {
 		    return
 		}
 		# Check for sextract catalog marker click
+		set ds9(none_press_x) $x
+		set ds9(none_press_y) $y
+		set ds9(none_hit) 0
 		set _marker_id [$which get marker catalog id $x $y]
 		if {$_marker_id != 0} {
 		    CatalogPanelMarkerClick $which $x $y
 		    set ds9(nonepan) 0
+		    set ds9(none_hit) 1
+		} elseif {![catch {CatalogPanelLinkPress $which $x $y} _hit] && $_hit} {
+		    # catalog source hit without Mark All markers
+		    set ds9(nonepan) 0
+		    set ds9(none_hit) 1
 		} else {
 		    # Save click position in image coords for Add Objects (a key)
 		    set ds9(none_click_frame) $which
@@ -973,7 +988,11 @@ proc ShiftButton1Frame {which x y} {
     }
 
     switch -- $current(mode) {
-	none {}
+	none {
+	    if {$which == $current(frame)} {
+		catch {CatalogPanelLinkShiftClick $which $x $y}
+	    }
+	}
 	pointer -
 	region {
 	    if {$which == $current(frame)} {
@@ -1229,6 +1248,10 @@ proc Release1Frame {which x y} {
 	    if {$ds9(b1) && [info exists ds9(nonepan)] && $ds9(nonepan)} {
 		$which pan motion end $x $y
 		set ds9(nonepan) 0
+		# a click (no drag) on empty sky clears the catalog selection
+		if {[info exists ds9(none_hit)] && !$ds9(none_hit)} {
+		    catch {CatalogPanelLinkRelease $which $x $y}
+		}
 	    }
 	}
 	pointer -
@@ -1532,10 +1555,21 @@ proc KeyFrame {which K A xx yy} {
 		plus {CubeNext}
 		minus {CubePrev}
 
-		Up -
+		Up {
+		    # step to previous catalog source when one is selected
+		    if {[catch {CatalogPanelStepKey -1 1} _st] || !$_st} {
+			WarpCursor $ds9(canvas) $which 0 -1
+		    }
+		}
 		k {WarpCursor $ds9(canvas) $which 0 -1}
-		Down -
+		Down {
+		    if {[catch {CatalogPanelStepKey 1 1} _st] || !$_st} {
+			WarpCursor $ds9(canvas) $which 0 1
+		    }
+		}
 		j {WarpCursor $ds9(canvas) $which 0 1}
+		n {catch {CatalogPanelStepKey 1 1}}
+		p {catch {CatalogPanelStepKey -1 1}}
 		Left -
 		h {WarpCursor $ds9(canvas) $which -1 0}
 		Right -
