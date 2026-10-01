@@ -68,6 +68,15 @@ proc canned {py a} {
 	    set m [lindex $a [expr {[lsearch -exact $a --mode]+1}]]
 	    return "NUMBER\tX_IMAGE\tY_IMAGE\tMAG\tMODE\n1\t100\t100\t24.5\t$m\n2\t200\t150\t25.5\t$m\n3\t300\t90\t26.1\t$m"
 	}
+	ds9_separate.py {
+	    return "#SEPARATE\tN_SUB=2\nNUMBER\tX_IMAGE\tY_IMAGE\tA_IMAGE\tB_IMAGE\tTHETA_IMAGE\tISO_RADIUS\tFLUX_AUTO\tMAG_AUTO\tFLAGS\n2.1\t41.5\t42.5\t3\t2\t10\t5\t900\t18.1\t0\n2.2\t45.5\t44.5\t3\t2\t10\t5\t800\t18.2\t0"
+	}
+	ds9_ai_merge.py {
+	    return "#AI_MERGE\tN_GROUPS=2\tTHRESHOLD=0.70\nGROUP\tN_MEMBERS\tCONFIDENCE\tMEMBERS_X\tMEMBERS_Y\tMEMBERS_NUM\n0\t2\t0.91\t10.0,70.0\t10.0,70.0\t1,7\n1\t2\t0.80\t80.0,77.0\t80.0,88.0\t8,10"
+	}
+	ds9_add_source.py {
+	    return "#ADD_SOURCE\tFOUND=1\nNUMBER\tX_IMAGE\tY_IMAGE\tA_IMAGE\tB_IMAGE\tTHETA_IMAGE\tELLIPTICITY\tKRON_RADIUS\tISO_RADIUS\tFLUX_AUTO\tFLUX_APER\tMAG_AUTO\tMAG_APER\tPEAK\tCLASS_STAR\tFLAGS\tFWHM_IMAGE\n9\t77.0\t88.0\t2\t1.5\t5\t0.25\t3.5\t4\t500\t450\t19.0\t19.1\t30\t0.9\t0\t3.0"
+	}
 	ds9_completeness.py {return "MAG\tFRAC\n20.0\t0.99\n21.0\t0.9"}
 	ds9_multiband.py {return "NUMBER\tMAG_G\tMAG_R\n1\t20.1\t19.8"}
 	default {return ""}
@@ -297,6 +306,74 @@ proc run {} {
     foreach f [list $catpanel(lsbg,cleaned_file) $catpanel(lsbg,segmap_file)] {set fd [open $f w]; puts $fd x; close $fd}
     feature lsbg_photometry {CatalogPanelLSBGPhotometry} {status lsbg,has_catalog lsbg,cmdlog alldata}
     feature lsbg_filter {CatalogPanelLSBGFilter} {status lsbg,cmdlog alldata}
+    # ---------------------------------------------------------------- objects: merge / separate / delete / add / AI-merge / save+load
+    set synth "NUMBER\tX_IMAGE\tY_IMAGE\tA_IMAGE\tB_IMAGE\tTHETA_IMAGE\tISO_RADIUS\tFLUX_AUTO\tMAG_AUTO\tNPIX_ISO\tFLAGS"
+    for {set i 1} {$i <= 8} {incr i} {append synth "\n$i\t[expr {$i*10.0}]\t[expr {$i*10.0}]\t3.0\t2.0\t[expr {$i*5.0}]\t6.0\t[expr {1000.0*$i}]\t[format %.2f [expr {20.0-$i*0.1}]]\t[expr {20+$i}]\t0"}
+    CatalogPanelLoadTSV $synth synth
+    update; wait_idle 200
+    set catpanel(markall,on) 0
+    proc select_row {num} {
+	global catpanel
+	set db $catpanel(tbldb); global $db
+	for {set r 1} {$r < [$catpanel(tbl) cget -rows]} {incr r} {
+	    if {[info exists ${db}($r,1)] && [set ${db}($r,1)] eq $num} {$catpanel(tbl) selection clear all; $catpanel(tbl) selection set $r,1; return $r}
+	}
+	return -1
+    }
+    feature objects_selected_source {
+	P "  row=[select_row 4]"
+	P "  src=[lsort -stride 2 [CatalogPanelGetSelectedSource]]"
+    } {}
+    feature objects_merge {
+	set catpanel(merge,list) {2 3 5}; set catpanel(merge,active) 1
+	CatalogPanelMergeSources
+	P "  merged rows: [lrange [split [::ogf::cat::tsv] \n] end end]"
+    } {status merge,active merge,list alldata}
+    feature objects_merge_cancel {
+	set catpanel(merge,list) {1 2}; set catpanel(merge,active) 1
+	CatalogPanelMergeCancel
+    } {status merge,active merge,list}
+    feature objects_escape_key {
+        set catpanel(merge,active) 1; set catpanel(merge,list) {1}
+	CatalogPanelEscapeKey
+	set catpanel(ai,active) 0
+	set catpanel(sel,nums) {1}
+	CatalogPanelEscapeKey
+    } {status merge,active merge,list sel,nums ai,active}
+    feature objects_delete {
+	P "  row=[select_row 6]"
+	CatalogPanelDeleteSelected
+	P "  numbers: [join [lmap l [lrange [split [::ogf::cat::tsv] \n] 1 end] {lindex [split $l \t] 0}] ,]"
+    } {status alldata}
+    feature objects_separate {
+	P "  row=[select_row 4]"
+	CatalogPanelSeparateSelected
+	P "  numbers: [join [lmap l [lrange [split [::ogf::cat::tsv] \n] 1 end] {lindex [split $l \t] 0}] ,]"
+    } {status alldata}
+    set catpanel(add_objects_mode) 0
+    feature objects_add_disabled {CatalogPanelAddObjectAtPosition $current(frame) 77 88} {status add_objects_mode}
+    set catpanel(add_objects_mode) 1
+    feature objects_add {
+	CatalogPanelAddObjectAtPosition $current(frame) 77 88
+	P "  last row: [lindex [split [::ogf::cat::tsv] \n] end]"
+    } {status alldata add_objects_mode param,detect-thresh}
+    set ::tsvf [file join $::HOME saved_cat.tsv]
+    feature objects_save_load {
+	rename tk_getSaveFile ::orig_gsf; proc tk_getSaveFile {args} {return $::tsvf}
+	CatalogPanelSeparateSave
+	rename tk_getSaveFile {}; rename ::orig_gsf tk_getSaveFile
+	set fd [open $::tsvf r]; set d [read $fd]; close $fd
+	P "  saved bytes=[string length $d] lines=[llength [split $d \n]]"
+	rename tk_getOpenFile ::orig_gof; proc tk_getOpenFile {args} {return $::tsvf}
+	CatalogPanelSeparateLoad
+	rename tk_getOpenFile {}; rename ::orig_gof tk_getOpenFile
+    } {status alldata}
+    feature ai_merge_run {CatalogPanelAIMerge; P "  keys bound: [bind . <Key-n>]"} {status ai,groups ai,total ai,current ai,active extract_param,detect-thresh}
+    feature ai_merge_next {CatalogPanelAINext; CatalogPanelAINext} {status ai,current ai,total}
+    feature ai_merge_prev {CatalogPanelAIPrev; CatalogPanelAIPrev} {status ai,current}
+    feature ai_merge_reject {CatalogPanelAIReject} {status ai,groups ai,total ai,current}
+    feature ai_merge_accept {CatalogPanelAIAccept; P "  rows after accept: [llength [split [::ogf::cat::tsv] \n]]"} {status ai,groups ai,total ai,current ai,active merge,list merge,active}
+    feature ai_merge_done {CatalogPanelAIDone; P "  keys unbound: [expr {[bind . <Key-n>] eq {}}]"} {status ai,groups ai,total ai,active}
     feature moving_status {OGFMovStatus "linking 3 of 7"} {status}
     P "SUMMARY-DONE steps=[llength $ogfsess(steps)] exec=[llength $::EXEC]"
     close $::fh

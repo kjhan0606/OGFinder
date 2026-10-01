@@ -445,6 +445,90 @@ MESSAGEBOX Unable to load fits  <HOME>/.ds9/lsbg_segmap.fits
   catpanel(status) = LSBG: 3 candidates passed filtering
   catpanel(lsbg,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode photometry --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode filter --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit}
   catpanel(alldata) = <tsv rows=3 cols=5>
+=== objects_selected_source
+  row=4
+  src=a 3.0 b 2.0 iso_radius 6.0 number 4 row 4 theta 20.0 x 40.0 y 40.0
+=== objects_merge
+  merged rows: {9	38.0000	38.0000	17.8890	2.2326	44.6503	13.3616	10000	14.5000	70	0}
+  STEP catalog.merge manual |  | post= title=Merge sources 2,3,5 requires=catalog
+  catpanel(status) = Merged 3 sources into #9: pos=(38.00,38.00) mag=14.500
+  catpanel(merge,active) = 0
+  catpanel(merge,list) = 
+  catpanel(alldata) = <tsv rows=6 cols=11>
+=== objects_merge_cancel
+  catpanel(status) = Merge cancelled
+  catpanel(merge,active) = 0
+  catpanel(merge,list) = 
+=== objects_escape_key
+  catpanel(status) = Selection cleared
+  catpanel(merge,active) = 0
+  catpanel(merge,list) = 
+  catpanel(sel,nums) = 
+  catpanel(ai,active) = 0
+=== objects_delete
+  row=3
+  numbers: 1,4,7,8,9
+  STEP catalog.delete manual |  | post= title=Delete source 6 requires=catalog
+  catpanel(status) = Deleted source 6
+  catpanel(alldata) = <tsv rows=5 cols=11>
+=== objects_separate
+  row=2
+  numbers: 1,2.1,2.2,7,8,9
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_separate.py <FITS>/m51.fits --x 40.0 --y 40.0 --a 3.0 --b 2.0 --theta 20.0 --iso-radius 6.0 --parent-number 4 --deblend-nthresh 64 --deblend-mincont 0.0001 --detect-thresh 0.8 --detect-minarea 3 --radius-factor 3.0 --back-size 32
+  STEP catalog.separate manual |  | post= title=Separate source 4 (manual deblend) requires=
+  catpanel(status) = Source 4 separated into 2 sub-components
+  catpanel(alldata) = <tsv rows=6 cols=11>
+=== objects_add_disabled
+  catpanel(status) = Enable Add Objects in Display menu first
+  catpanel(add_objects_mode) = 0
+=== objects_add
+  last row: 9	77.0	88.0	2	1.5	5	4	500	19.0		0
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_add_source.py <FITS>/m51.fits --x 77 --y 88 --number 10 --detect-thresh 3.0 --detect-minarea 5 --deblend-nthresh 32 --deblend-mincont 0.005 --back-size 48 --mag-zeropoint 24.5 --phot-aperture 5.0
+  STEP catalog.add_object manual |  | post= title=Add object at (77, 88) by hand requires=
+  catpanel(status) = Added source #10 at (77, 88)
+  catpanel(alldata) = <tsv rows=7 cols=11>
+  catpanel(add_objects_mode) = 1
+  catpanel(param,detect-thresh) = 3.0
+=== objects_save_load
+  saved bytes=407 lines=8
+  catpanel(status) = Catalog loaded from <HOME>/saved_cat.tsv
+  catpanel(alldata) = <tsv rows=7 cols=11>
+=== ai_merge_run
+  keys bound: CatalogPanelAINext
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_ai_merge.py <FITS>/m51.fits --threshold 0.7 --catalog <HOME>/.ds9/ai_merge_catalog.tsv --detect-thresh 3.0 --detect-minarea 5 --deblend-nthresh 32 --deblend-mincont 0.005 --mag-zeropoint 25.0 --back-size 64 --back-filtersize 3 --checkpoint /workspace/OGFinder/ai_merge/data/checkpoints/mlp_best.pt
+  catpanel(status) = AI Group 1/2 (conf=0.91, 2 sources: 1,7) [n:Next p:Prev a:Accept r:Reject Esc:Done]
+  catpanel(ai,groups) = {0 2 0.91 10.0,70.0 10.0,70.0 1,7} {1 2 0.80 80.0,77.0 80.0,88.0 8,10}
+  catpanel(ai,total) = 2
+  catpanel(ai,current) = 0
+  catpanel(ai,active) = 1
+  catpanel(extract_param,detect-thresh) = 3.0
+=== ai_merge_next
+  catpanel(status) = AI Merge: last group reached. Press Esc to finish.
+  catpanel(ai,current) = 1
+  catpanel(ai,total) = 2
+=== ai_merge_prev
+  catpanel(status) = AI Merge: already at first group.
+  catpanel(ai,current) = 0
+=== ai_merge_reject
+  catpanel(status) = AI Group 1/1 (conf=0.80, 2 sources: 8,10) [n:Next p:Prev a:Accept r:Reject Esc:Done]
+  catpanel(ai,groups) = {1 2 0.80 80.0,77.0 80.0,88.0 8,10}
+  catpanel(ai,total) = 1
+  catpanel(ai,current) = 0
+=== ai_merge_accept
+  rows after accept: 8
+  catpanel(status) = AI Merge session ended
+  catpanel(ai,groups) = 
+  catpanel(ai,total) = 0
+  catpanel(ai,current) = 0
+  catpanel(ai,active) = 0
+  catpanel(merge,list) = 8 10
+  catpanel(merge,active) = 1
+=== ai_merge_done
+  keys unbound: 1
+  catpanel(status) = AI Merge session ended
+  catpanel(ai,groups) = 
+  catpanel(ai,total) = 0
+  catpanel(ai,active) = 0
 === moving_status
   catpanel(status) = Moving: linking 3 of 7
-SUMMARY-DONE steps=23 exec=22
+SUMMARY-DONE steps=27 exec=25
