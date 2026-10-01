@@ -1,0 +1,3542 @@
+{
+ "ds9-layout": {
+  "lines": 2615,
+  "n": 77,
+  "procs": [
+   [
+    "layout.tcl",
+    "CreateHeader",
+    7,
+    14
+   ],
+   [
+    "layout.tcl",
+    "CanvasDef",
+    15,
+    41
+   ],
+   [
+    "layout.tcl",
+    "BlinkDef",
+    42,
+    53
+   ],
+   [
+    "layout.tcl",
+    "FadeDef",
+    54,
+    69
+   ],
+   [
+    "layout.tcl",
+    "TileDef",
+    70,
+    87
+   ],
+   [
+    "layout.tcl",
+    "ViewDef",
+    88,
+    125
+   ],
+   [
+    "layout.tcl",
+    "CreateCanvas",
+    126,
+    163
+   ],
+   [
+    "layout.tcl",
+    "CreateCatalogPanel",
+    164,
+    1027
+   ],
+   [
+    "layout.tcl",
+    "ThemeConfigCanvas",
+    3622,
+    3645
+   ],
+   [
+    "layout.tcl",
+    "InitCanvas",
+    3646,
+    3653
+   ],
+   [
+    "layout.tcl",
+    "BindEventsCanvas",
+    3654,
+    3707
+   ],
+   [
+    "layout.tcl",
+    "UnBindEventsCanvas",
+    3708,
+    3761
+   ],
+   [
+    "layout.tcl",
+    "Button3Canvas",
+    3762,
+    3776
+   ],
+   [
+    "layout.tcl",
+    "Motion3Canvas",
+    3777,
+    3790
+   ],
+   [
+    "layout.tcl",
+    "Release3Canvas",
+    3791,
+    3805
+   ],
+   [
+    "layout.tcl",
+    "UnBindEventsCanvasItems",
+    3806,
+    3815
+   ],
+   [
+    "layout.tcl",
+    "BindEventsCanvasItems",
+    3816,
+    3825
+   ],
+   [
+    "layout.tcl",
+    "LayoutRaise",
+    3826,
+    3836
+   ],
+   [
+    "layout.tcl",
+    "LayoutView",
+    3837,
+    3859
+   ],
+   [
+    "layout.tcl",
+    "LayoutViewInit",
+    3860,
+    3891
+   ],
+   [
+    "layout.tcl",
+    "LayoutViewHorz",
+    3892,
+    3933
+   ],
+   [
+    "layout.tcl",
+    "LayoutViewVert",
+    3934,
+    3974
+   ],
+   [
+    "layout.tcl",
+    "LayoutViewBasic",
+    3975,
+    3986
+   ],
+   [
+    "layout.tcl",
+    "LayoutViewAdvanced",
+    3987,
+    4045
+   ],
+   [
+    "layout.tcl",
+    "LayoutFrames",
+    4046,
+    4099
+   ],
+   [
+    "layout.tcl",
+    "LayoutFramesNone",
+    4100,
+    4147
+   ],
+   [
+    "layout.tcl",
+    "LayoutFramesOneOrMore",
+    4148,
+    4169
+   ],
+   [
+    "layout.tcl",
+    "LayoutFrameOne",
+    4170,
+    4225
+   ],
+   [
+    "layout.tcl",
+    "LayoutFrame",
+    4226,
+    4258
+   ],
+   [
+    "layout.tcl",
+    "LayoutFrameNone",
+    4259,
+    4291
+   ],
+   [
+    "layout.tcl",
+    "TileRect",
+    4292,
+    4360
+   ],
+   [
+    "layout.tcl",
+    "TileRectNone",
+    4361,
+    4452
+   ],
+   [
+    "layout.tcl",
+    "LayoutFrameAdjust",
+    4453,
+    4550
+   ],
+   [
+    "layout.tcl",
+    "LayoutChangeWidth",
+    4551,
+    4563
+   ],
+   [
+    "layout.tcl",
+    "LayoutChangeHeight",
+    4564,
+    4576
+   ],
+   [
+    "layout.tcl",
+    "LayoutChangeSize",
+    4577,
+    4591
+   ],
+   [
+    "layout.tcl",
+    "DisplayDefaultDialog",
+    4592,
+    4645
+   ],
+   [
+    "layout.tcl",
+    "ProcessHeightCmd",
+    4646,
+    4659
+   ],
+   [
+    "layout.tcl",
+    "ProcessSendHeightCmd",
+    4660,
+    4664
+   ],
+   [
+    "layout.tcl",
+    "ProcessWidthCmd",
+    4665,
+    4678
+   ],
+   [
+    "layout.tcl",
+    "ProcessSendWidthCmd",
+    4679,
+    4683
+   ],
+   [
+    "layout.tcl",
+    "ProcessViewCmd",
+    4684,
+    4693
+   ],
+   [
+    "layout.tcl",
+    "ProcessSendViewCmd",
+    4694,
+    4705
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFImageInfo",
+    17,
+    28
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFSameGrid",
+    29,
+    41
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFPix2World",
+    42,
+    54
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFWorld2Pix",
+    55,
+    70
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandOfFrame",
+    71,
+    79
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandFrames",
+    80,
+    93
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandPos",
+    120,
+    133
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandFrameDeleted",
+    243,
+    247
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFCacheDirty",
+    24,
+    28
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFCacheBuild",
+    29,
+    82
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFHitTest",
+    83,
+    107
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFMagOfNumber",
+    108,
+    116
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFFrameIsDetGrid",
+    117,
+    123
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFTableCol",
+    124,
+    134
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFRowOfNumber",
+    135,
+    147
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFNumberOfRow",
+    148,
+    156
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFRefreshSelText",
+    157,
+    163
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFSetSelBase",
+    164,
+    168
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFMultiSummary",
+    169,
+    190
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFApplySelection",
+    219,
+    246
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFSelFrames",
+    247,
+    255
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFDrawExtraMarkers",
+    256,
+    281
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFHitAt",
+    296,
+    302
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFHoverFlush",
+    346,
+    355
+   ],
+   [
+    "ogf_link.tcl",
+    "OGFHoverDo",
+    356,
+    374
+   ],
+   [
+    "ogf_session.tcl",
+    "exec",
+    228,
+    235
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFJStr",
+    334,
+    354
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFJList",
+    355,
+    361
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFJDict",
+    362,
+    376
+   ],
+   [
+    "ogf_util.tcl",
+    "OGFPython",
+    8,
+    14
+   ],
+   [
+    "ogf_util.tcl",
+    "OGFSextractBin",
+    15,
+    20
+   ],
+   [
+    "ogf_util.tcl",
+    "OGFPrepareLibPath",
+    21,
+    35
+   ],
+   [
+    "ogf_util.tcl",
+    "OGFForm",
+    36,
+    91
+   ],
+   [
+    "ogf_util.tcl",
+    "OGFTextWindow",
+    92,
+    104
+   ]
+  ],
+  "write": {
+   "menubar": 1,
+   "detached": 1,
+   "infoarea": 1,
+   "hdrw": 1,
+   "searchbar": 1,
+   "search_var": 1,
+   "tblframe": 1,
+   "tbldb": 1,
+   "tbl": 1,
+   "status": 1,
+   "statusbar": 1,
+   "sel": 2,
+   "alldata": 1,
+   "filename": 1,
+   "delim": 1,
+   "sort": 2,
+   "visible_mode": 1,
+   "add_objects_mode": 1,
+   "markall": 1,
+   "merge": 2,
+   "trim": 1,
+   "ai": 5,
+   "psf": 35,
+   "icl": 38,
+   "lsbg": 59,
+   "plot": 1,
+   "photoz": 3,
+   "sed": 6,
+   "bd": 4,
+   "cache": 1,
+   "hover": 6
+  },
+  "read": {
+   "menubar": 1,
+   "detached": 2,
+   "visible_mode": 2,
+   "add_objects_mode": 2,
+   "infoarea": 1,
+   "hdrw": 3,
+   "searchbar": 1,
+   "search_var": 2,
+   "tblframe": 1,
+   "tbldb": 12,
+   "tbl": 14,
+   "status": 2,
+   "statusbar": 1,
+   "sel": 9,
+   "alldata": 4,
+   "filename": 1,
+   "delim": 1,
+   "sort": 2,
+   "markall": 1,
+   "merge": 2,
+   "trim": 1,
+   "ai": 5,
+   "psf": 35,
+   "icl": 38,
+   "lsbg": 59,
+   "plot": 1,
+   "photoz": 3,
+   "sed": 6,
+   "bd": 4,
+   "cache": 3,
+   "hover": 11
+  },
+  "calls": {
+   "catalog-core:CatalogPanelToggleDetach": 1,
+   "extract:CatalogPanelExtract": 3,
+   "extract:CatalogPanelDualExtract": 1,
+   "extract:CatalogPanelSettingsDialog": 1,
+   "trim:CatalogPanelTrimDialog": 1,
+   "catalog-core:CatalogPanelSaveCatalog": 2,
+   "catalog-core:CatalogPanelExportRegions": 1,
+   "catalog-core:CatalogPanelExportFITS": 1,
+   "catalog-core:CatalogPanelLoadCatalog": 2,
+   "catalog-core:CatalogPanelClear": 2,
+   "catalog-core:CatalogPanelMarkAll": 2,
+   "catalog-core:CatalogPanelClearMarkers": 2,
+   "catalog-core:CatalogPanelShowVisible": 1,
+   "separate/edit:CatalogPanelDeleteSelected": 1,
+   "separate/edit:CatalogPanelSeparateSelected": 1,
+   "separate/edit:CatalogPanelSeparateSettings": 1,
+   "separate/edit:CatalogPanelSeparateSave": 1,
+   "separate/edit:CatalogPanelSeparateLoad": 1,
+   "ai-merge:CatalogPanelAIMerge": 1,
+   "galaxy-model:CatalogPanelGalaxyMorphology": 1,
+   "galaxy-model:CatalogPanelGalaxyFit": 2,
+   "galaxy-model:CatalogPanelGalaxyParams": 1,
+   "star-psf:CatalogPanelFindStars": 3,
+   "star-psf:CatalogPanelShowStars": 1,
+   "star-psf:CatalogPanelClearStars": 1,
+   "star-psf:CatalogPanelBuildPSF": 4,
+   "star-psf:CatalogPanelBuildExtendedPSF": 1,
+   "star-psf:CatalogPanelSimPSFWebbPSF": 1,
+   "star-psf:CatalogPanelSimPSFTinyTim": 1,
+   "star-psf:CatalogPanelViewPSF": 1,
+   "star-psf:CatalogPanelSavePSF": 1,
+   "star-psf:CatalogPanelLoadPSF": 1,
+   "star-psf:CatalogPanelStarFinder": 1,
+   "star-psf:CatalogPanelStarPSFSettings": 1,
+   "deconv:CatalogPanelDeconvolve": 7,
+   "deconv:CatalogPanelDeconvSettings": 1,
+   "deconv:CatalogPanelQuickDeconvolve": 1,
+   "bands:CatalogPanelBandsRegister": 1,
+   "bands:CatalogPanelBandsLoad": 1,
+   "bands:OGFBandsPostDetect": 1,
+   "bands:OGFBandsPostRemove": 1,
+   "bands:CatalogPanelBandsList": 1,
+   "bands:CatalogPanelBandsDetect": 1,
+   "bands:CatalogPanelBandsMeasure": 1,
+   "bands:CatalogPanelBandsTile": 1,
+   "bands:CatalogPanelBandsSingleView": 1,
+   "mask:CatalogPanelMaskCopyToBands": 1,
+   "mask:CatalogPanelMaskAuto": 1,
+   "mask:CatalogPanelMaskToggleOverlay": 1,
+   "mask:CatalogPanelMaskOverlaySettings": 1,
+   "mask:CatalogPanelMaskRegions": 2,
+   "mask:CatalogPanelMaskGrow": 2,
+   "mask:CatalogPanelMaskSimple": 4,
+   "mask:CatalogPanelMaskSaveAs": 1,
+   "mask:CatalogPanelMaskImport": 1,
+   "mask:CatalogPanelMaskShowMasked": 1,
+   "mask:CatalogPanelMaskStats": 1,
+   "icl:CatalogPanelICLMask": 1,
+   "icl:CatalogPanelICLViewMask": 1,
+   "icl:CatalogPanelICLSaveMask": 1,
+   "icl:CatalogPanelICLImportMask": 1,
+   "icl:CatalogPanelICLBackground": 3,
+   "icl:CatalogPanelICLViewBkg": 1,
+   "icl:CatalogPanelICLSetCenter": 1,
+   "icl:CatalogPanelICLProfile": 1,
+   "icl:CatalogPanelICLSectorProfile": 1,
+   "icl:CatalogPanelICLMeasure": 1,
+   "icl:CatalogPanelICLMeasureMulti": 1,
+   "icl:CatalogPanelICLDecompose": 1,
+   "icl:CatalogPanelICLColorProfile": 1,
+   "icl:CatalogPanelICLSaveProfile": 1,
+   "icl:CatalogPanelICLLoadProfile": 1,
+   "icl:CatalogPanelICLExportScript": 1,
+   "icl:CatalogPanelICLImportScript": 1,
+   "icl:CatalogPanelICLSettings": 1,
+   "lsbg:CatalogPanelLSBGMask": 1,
+   "lsbg:CatalogPanelLSBGViewMask": 1,
+   "lsbg:CatalogPanelLSBGSaveMask": 1,
+   "lsbg:CatalogPanelLSBGImportMask": 1,
+   "lsbg:CatalogPanelLSBGClean": 3,
+   "lsbg:CatalogPanelLSBGViewClean": 1,
+   "lsbg:CatalogPanelLSBGDetect": 1,
+   "lsbg:CatalogPanelLSBGPhotometry": 1,
+   "lsbg:CatalogPanelLSBGSersic": 1,
+   "lsbg:CatalogPanelLSBGFilter": 1,
+   "lsbg:CatalogPanelLSBGSVMClassify": 1,
+   "lsbg:CatalogPanelLSBGForcedPhot": 1,
+   "lsbg:CatalogPanelLSBGRunAll": 1,
+   "lsbg:CatalogPanelLSBGExportScript": 1,
+   "lsbg:CatalogPanelLSBGImportScript": 1,
+   "lsbg:CatalogPanelLSBGSettings": 1,
+   "measure-misc:CatalogPanelMorphometry": 1,
+   "measure-misc:CatalogPanelSersicFit": 1,
+   "star-psf:CatalogPanelPSFPhotometry": 1,
+   "measure-misc:CatalogPanelMultiBand": 1,
+   "measure-misc:CatalogPanelCrowdedPhot": 1,
+   "measure-misc:CatalogPanelCrossMatch": 1,
+   "measure-misc:CatalogPanelSegmentationMap": 1,
+   "measure-misc:CatalogPanelCompleteness": 1,
+   "plot/viewer:CatalogPanelPlotDialog": 1,
+   "photo-z:CatalogPanelPhotoZ": 1,
+   "sed:CatalogPanelSEDFit": 1,
+   "bulge-disk:CatalogPanelBulgeDisk": 1,
+   "plot/viewer:CatalogPanelAnalysisViewer": 1,
+   "ai-services:OGFAIBuildMenu": 1,
+   "sessionlog:CatalogPanelSessionSave": 1,
+   "sessionlog:CatalogPanelSessionShow": 1,
+   "sessionlog:CatalogPanelSessionReset": 1,
+   "moving:OGFMovingMenu": 1,
+   "catalog-core:CatalogPanelFilter": 2,
+   "catalog-core:CatalogPanelSelectCmd": 1,
+   "catalog-core:CatalogPanelSyncInfoHeight": 1,
+   "star-psf:CatalogPanelPSFParamLoad": 1,
+   "icl:CatalogPanelICLUpdateFiles": 1,
+   "icl:CatalogPanelICLParamLoad": 1,
+   "lsbg:CatalogPanelLSBGUpdateFiles": 1,
+   "lsbg:CatalogPanelLSBGParamLoad": 1,
+   "photo-z:CatalogPanelPhotoZParamLoad": 1,
+   "sed:CatalogPanelSEDParamLoad": 1,
+   "bulge-disk:CatalogPanelBDParamLoad": 1,
+   "merge:CatalogPanelMergeSources": 1,
+   "catalog-core:CatalogPanelEscapeKey": 1,
+   "catalog-core:CatalogPanelTableClick": 1,
+   "extract:CatalogPanelParamDef": 1,
+   "bands:OGFBandsInit": 1,
+   "mask:OGFMaskInit": 1,
+   "link:OGFLinkInit": 1,
+   "sessionlog:OGFSessInit": 1,
+   "moving:OGFMovingInit": 1,
+   "catalog-core:CatalogPanelRedrawTtk": 1,
+   "catalog-core:CatalogPanelSaveFrameState": 1,
+   "bands:CatalogPanelBandsRemove": 1,
+   "catalog-core:CatalogPanelUpdateSelInfo": 1,
+   "catalog-core:CatalogPanelGotoSource": 2,
+   "sessionlog:OGFSessExecDone": 1
+  }
+ },
+ "catalog-core": {
+  "lines": 1912,
+  "n": 48,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelRedrawTtk",
+    1028,
+    1035
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelRedrawTtkDo",
+    1036,
+    1046
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLoadTSV",
+    1162,
+    1216
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelClear",
+    1217,
+    1267
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSaveCatalog",
+    1268,
+    1288
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSaveCatalogTo",
+    1289,
+    1335
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLoadCatalog",
+    1336,
+    1412
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelFilter",
+    1413,
+    1464
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelToggleDetach",
+    1475,
+    1516
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSyncInfoHeight",
+    1517,
+    1527
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelUpdateSelInfo",
+    1528,
+    1562
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSelectCmd",
+    1563,
+    1582
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelGotoSource",
+    1583,
+    1709
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelCreateAllMarkers",
+    1906,
+    2027
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMarkAll",
+    2028,
+    2042
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelClearMarkers",
+    2043,
+    2056
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMarkerCB",
+    2057,
+    2100
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMarkerUnCB",
+    2101,
+    2109
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSmallestEllipseAt",
+    2110,
+    2208
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMarkerClick",
+    2209,
+    2237
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMarkerCtrlClick",
+    2238,
+    2287
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelShowVisible",
+    2288,
+    2364
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelCtrlSelect",
+    2365,
+    2469
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelEscapeKey",
+    2763,
+    2780
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelTableClick",
+    3203,
+    3233
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSort",
+    3234,
+    3299
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSortCmpNum",
+    3300,
+    3309
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSortCmpStr",
+    3310,
+    3317
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelGetScript",
+    7717,
+    7728
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelGetFITS",
+    7729,
+    7741
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelFitsBaseName",
+    7742,
+    7754
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSaveTempCatalog",
+    7804,
+    7820
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAddColumnsFromTSV",
+    7821,
+    7953
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelExportRegions",
+    7954,
+    8023
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelExportFITS",
+    8024,
+    8069
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSaveFrameState",
+    11947,
+    11984
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelRestoreFrameState",
+    11985,
+    12107
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelFrameChanged",
+    12108,
+    12118
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelDeleteFrameState",
+    12119,
+    12127
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelClearAll",
+    12128,
+    12183
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelGotoBandFrame",
+    301,
+    307
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelLinkSelect",
+    191,
+    218
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelClearSelection",
+    282,
+    295
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelLinkPress",
+    303,
+    311
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelLinkShiftClick",
+    312,
+    319
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelLinkRelease",
+    320,
+    330
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelHover",
+    331,
+    345
+   ],
+   [
+    "ogf_link.tcl",
+    "CatalogPanelStepKey",
+    375,
+    399
+   ]
+  ],
+  "write": {
+   "status": 35,
+   "alldata": 6,
+   "delim": 1,
+   "sel": 5,
+   "filename": 3,
+   "merge": 9,
+   "markall": 5,
+   "visible_mode": 3,
+   "add_objects_mode": 3,
+   "trim": 3,
+   "ai": 12,
+   "detach": 2,
+   "detached": 1,
+   "psf": 8,
+   "sort": 8,
+   "icl": 18,
+   "lsbg": 17,
+   "search_var": 2,
+   "morph": 4,
+   "hover": 2
+  },
+  "read": {
+   "tbldb": 53,
+   "tbl": 30,
+   "status": 35,
+   "alldata": 49,
+   "delim": 1,
+   "sel": 12,
+   "filename": 4,
+   "merge": 14,
+   "markall": 7,
+   "visible_mode": 5,
+   "add_objects_mode": 5,
+   "trim": 3,
+   "ai": 17,
+   "search_var": 3,
+   "detached": 3,
+   "detach": 2,
+   "hdrw": 3,
+   "psf": 12,
+   "sort": 11,
+   "morph": 14,
+   "icl": 18,
+   "lsbg": 17,
+   "hover": 5,
+   "cache": 1
+  },
+  "calls": {
+   "sessionlog:OGFSessOnCatalogLoad": 1,
+   "sessionlog:OGFSessLog": 5,
+   "ai-merge:CatalogPanelAIUnbindKeys": 2,
+   "ds9-layout:OGFNumberOfRow": 3,
+   "ds9-layout:OGFSetSelBase": 2,
+   "ds9-layout:OGFSelFrames": 2,
+   "ds9-layout:OGFBandPos": 1,
+   "ai-merge:CatalogPanelAIDone": 1,
+   "merge:CatalogPanelMergeCancel": 1,
+   "sessionlog:OGFSessOnAddColumns": 1,
+   "ds9-layout:OGFPython": 2,
+   "bands:OGFBandsShareCatalog": 1,
+   "ds9-layout:OGFRowOfNumber": 2,
+   "ds9-layout:OGFApplySelection": 1,
+   "ds9-layout:OGFHitAt": 2,
+   "ds9-layout:OGFHoverFlush": 1,
+   "ds9-layout:OGFHoverDo": 1
+  }
+ },
+ "extract": {
+  "lines": 419,
+  "n": 8,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelExtract",
+    1047,
+    1161
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAutoExtract",
+    1465,
+    1474
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelParamDef",
+    1710,
+    1740
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelParamLoad",
+    1741,
+    1761
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelParamSave",
+    1762,
+    1782
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelParamDefaults",
+    1783,
+    1803
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSettingsDialog",
+    1804,
+    1905
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelDualExtract",
+    8511,
+    8608
+   ]
+  ],
+  "write": {
+   "status": 11,
+   "param": 22
+  },
+  "read": {
+   "status": 11,
+   "tbl": 1,
+   "detached": 1,
+   "param": 30,
+   "alldata": 1
+  },
+  "calls": {
+   "merge:CatalogPanelSetLogScale": 1,
+   "sessionlog:OGFSessLog": 2,
+   "catalog-core:CatalogPanelLoadTSV": 2,
+   "catalog-core:CatalogPanelMarkAll": 1,
+   "merge:CatalogPanelMergeSources": 1,
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "catalog-core:CatalogPanelGetScript": 1,
+   "ds9-layout:OGFPython": 1
+  }
+ },
+ "merge": {
+  "lines": 336,
+  "n": 3,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelMergeSources",
+    2470,
+    2748
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMergeCancel",
+    2749,
+    2762
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSetLogScale",
+    2781,
+    2823
+   ]
+  ],
+  "write": {
+   "status": 4,
+   "alldata": 1,
+   "merge": 4
+  },
+  "read": {
+   "merge": 10,
+   "status": 4,
+   "alldata": 3,
+   "param": 2,
+   "tbldb": 5,
+   "tbl": 4
+  },
+  "calls": {
+   "sessionlog:OGFSessLog": 1,
+   "catalog-core:CatalogPanelLoadTSV": 1,
+   "catalog-core:CatalogPanelCreateAllMarkers": 1,
+   "catalog-core:CatalogPanelGotoSource": 1
+  }
+ },
+ "ai-merge": {
+  "lines": 379,
+  "n": 9,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelAIMerge",
+    2824,
+    2972
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIBindKeys",
+    2973,
+    2989
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIUnbindKeys",
+    2990,
+    3002
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIShowGroup",
+    3003,
+    3094
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAINext",
+    3095,
+    3105
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIPrev",
+    3106,
+    3116
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIAccept",
+    3117,
+    3157
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIReject",
+    3158,
+    3176
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAIDone",
+    3177,
+    3202
+   ]
+  ],
+  "write": {
+   "status": 13,
+   "ai": 13,
+   "merge": 2
+  },
+  "read": {
+   "alldata": 3,
+   "status": 13,
+   "ai": 35,
+   "merge": 2
+  },
+  "calls": {
+   "extract:CatalogPanelExtract": 1,
+   "ds9-layout:OGFPython": 1,
+   "merge:CatalogPanelMergeSources": 1,
+   "catalog-core:CatalogPanelCreateAllMarkers": 1
+  }
+ },
+ "trim": {
+  "lines": 304,
+  "n": 6,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelTrimDialog",
+    3318,
+    3430
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelTrimSaveFromEd",
+    3431,
+    3446
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelTrimLoadToEd",
+    3447,
+    3470
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelTrimApply",
+    3471,
+    3573
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelTrimSave",
+    3574,
+    3601
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelTrimLoad",
+    3602,
+    3621
+   ]
+  ],
+  "write": {
+   "status": 3,
+   "trim": 2
+  },
+  "read": {
+   "alldata": 8,
+   "status": 3,
+   "trim": 2
+  },
+  "calls": {
+   "catalog-core:CatalogPanelLoadTSV": 2,
+   "ds9-layout:OGFJStr": 3,
+   "sessionlog:OGFSessLog": 1,
+   "catalog-core:CatalogPanelCreateAllMarkers": 1
+  }
+ },
+ "galaxy-model": {
+  "lines": 391,
+  "n": 6,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelGalaxyFit",
+    4706,
+    4719
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelGalaxyParams",
+    4720,
+    4733
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelGalaxyMorphology",
+    4734,
+    4823
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMorphParseResults",
+    4824,
+    4879
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMorphAddColumns",
+    4880,
+    4973
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMorphColorMarkers",
+    4974,
+    5096
+   ]
+  ],
+  "write": {
+   "status": 13,
+   "morph": 1,
+   "alldata": 1,
+   "markall": 1
+  },
+  "read": {
+   "alldata": 15,
+   "status": 13,
+   "morph": 3,
+   "markall": 1
+  },
+  "calls": {
+   "ai-services:OGFAIBackendHook": 2,
+   "sessionlog:OGFSessLog": 1,
+   "ds9-layout:OGFPython": 2,
+   "catalog-core:CatalogPanelLoadTSV": 1,
+   "catalog-core:CatalogPanelMarkerCB": 1,
+   "catalog-core:CatalogPanelMarkerUnCB": 1
+  }
+ },
+ "star-psf": {
+  "lines": 1704,
+  "n": 29,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelStarFinder",
+    5097,
+    5170
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelStarFinderParse",
+    5171,
+    5221
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelStarFinderColorMarkers",
+    5222,
+    5354
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFParamLoad",
+    5355,
+    5375
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFParamSave",
+    5376,
+    5397
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFGetScript",
+    5398,
+    5407
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFGetFITS",
+    5408,
+    5421
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelFindStars",
+    5422,
+    5522
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelShowStars",
+    5523,
+    5586
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelClearStars",
+    5587,
+    5599
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBuildPSF",
+    5600,
+    5682
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBuildExtendedPSF",
+    5683,
+    5794
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBuildExtendedPSFExec",
+    5795,
+    5883
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelCheckSimAvail",
+    5884,
+    5916
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSimPSFWebbPSF",
+    5917,
+    6028
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSimPSFWebbPSFExec",
+    6029,
+    6100
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSimPSFTinyTim",
+    6101,
+    6199
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSimPSFTinyTimExec",
+    6200,
+    6270
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSimPSFUpdateFilters",
+    6271,
+    6301
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSimPSFAutoDetect",
+    6302,
+    6352
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelViewPSF",
+    6353,
+    6394
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelViewPSFRender",
+    6395,
+    6463
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelViewPSFLoad",
+    6464,
+    6482
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSavePSF",
+    6483,
+    6503
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLoadPSF",
+    6504,
+    6526
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelStarPSFSettings",
+    6671,
+    6847
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelStarPSFSettingsApply",
+    6848,
+    6863
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelStarPSFSettingsDefaults",
+    6864,
+    6890
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFPhotometry",
+    8224,
+    8277
+   ]
+  ],
+  "write": {
+   "status": 65,
+   "markall": 1,
+   "psf": 16
+  },
+  "read": {
+   "alldata": 15,
+   "status": 65,
+   "psf": 87,
+   "markall": 1,
+   "param": 3
+  },
+  "calls": {
+   "ai-services:OGFAIBackendHook": 2,
+   "catalog-core:CatalogPanelGetFITS": 2,
+   "catalog-core:CatalogPanelGetScript": 2,
+   "catalog-core:CatalogPanelSaveTempCatalog": 2,
+   "sessionlog:OGFSessLog": 7,
+   "ds9-layout:OGFPython": 15,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 2,
+   "catalog-core:CatalogPanelMarkerCB": 1,
+   "catalog-core:CatalogPanelMarkerUnCB": 1
+  }
+ },
+ "deconv": {
+  "lines": 294,
+  "n": 8,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelDeconvolve",
+    6527,
+    6624
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelQuickDeconvolve",
+    6625,
+    6670
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelDeconvSettings",
+    6891,
+    6999
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelDeconvSettingsApply",
+    7000,
+    7011
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelDeconvSettingsDefaults",
+    7012,
+    7026
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFDeconvSettings",
+    7027,
+    7029
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFSettingsApply",
+    7030,
+    7032
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPSFSettingsDefaults",
+    7033,
+    7040
+   ]
+  ],
+  "write": {
+   "status": 17
+  },
+  "read": {
+   "psf": 16,
+   "status": 17,
+   "alldata": 2
+  },
+  "calls": {
+   "star-psf:CatalogPanelPSFGetFITS": 2,
+   "star-psf:CatalogPanelPSFGetScript": 1,
+   "sessionlog:OGFSessLog": 1,
+   "ds9-layout:OGFPython": 2,
+   "star-psf:CatalogPanelFindStars": 1,
+   "star-psf:CatalogPanelBuildPSF": 1,
+   "star-psf:CatalogPanelPSFParamSave": 1,
+   "star-psf:CatalogPanelStarPSFSettings": 1,
+   "star-psf:CatalogPanelStarPSFSettingsApply": 1,
+   "star-psf:CatalogPanelStarPSFSettingsDefaults": 1
+  }
+ },
+ "separate/edit": {
+  "lines": 676,
+  "n": 12,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateGetScript",
+    7041,
+    7051
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelGetSelectedSource",
+    7052,
+    7121
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelDeleteSelected",
+    7122,
+    7195
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateSelected",
+    7196,
+    7300
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateReplace",
+    7301,
+    7381
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateSettings",
+    7382,
+    7462
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateSettingsApply",
+    7463,
+    7474
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateSettingsDefaults",
+    7475,
+    7487
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateSave",
+    7488,
+    7515
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSeparateLoad",
+    7516,
+    7547
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAddObjectGetScript",
+    7548,
+    7557
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAddObjectAtPosition",
+    7558,
+    7716
+   ]
+  ],
+  "write": {
+   "status": 27,
+   "alldata": 3
+  },
+  "read": {
+   "tbl": 3,
+   "alldata": 22,
+   "tbldb": 15,
+   "status": 27,
+   "markall": 8,
+   "param": 13,
+   "add_objects_mode": 2
+  },
+  "calls": {
+   "sessionlog:OGFSessLog": 3,
+   "catalog-core:CatalogPanelLoadTSV": 4,
+   "catalog-core:CatalogPanelCreateAllMarkers": 4,
+   "ds9-layout:OGFPython": 2,
+   "extract:CatalogPanelParamSave": 1
+  }
+ },
+ "icl": {
+  "lines": 1233,
+  "n": 32,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelICLUpdateFiles",
+    7755,
+    7778
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLParamLoad",
+    8697,
+    8717
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLParamSave",
+    8718,
+    8743
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelIclGenerateScript",
+    8994,
+    9060
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLExportScript",
+    9145,
+    9148
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLImportScript",
+    9594,
+    9597
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLMask",
+    9604,
+    9607
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLViewMask",
+    9608,
+    9613
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSaveMask",
+    9614,
+    9617
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLImportMask",
+    9618,
+    9623
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLBackground",
+    9624,
+    9697
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLViewBkg",
+    9698,
+    9719
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSetCenter",
+    9720,
+    9816
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSetCenterByID",
+    9817,
+    9857
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSetCenterClickMode",
+    9858,
+    9864
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLClickSetCenter",
+    9865,
+    9887
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLProfile",
+    9888,
+    9946
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLDrawAnnuli",
+    9947,
+    9975
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSectorProfile",
+    9976,
+    10020
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSectorProfileRun",
+    10021,
+    10070
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLMeasure",
+    10071,
+    10111
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLDrawIsophotes",
+    10112,
+    10154
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLMeasureMulti",
+    10155,
+    10191
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLDecompose",
+    10192,
+    10267
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLColorProfile",
+    10268,
+    10311
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLColorBrowse",
+    10312,
+    10320
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLColorProfileRun",
+    10321,
+    10386
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSaveProfile",
+    10387,
+    10406
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLLoadProfile",
+    10407,
+    10431
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSettings",
+    10432,
+    10637
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSettingsApply",
+    10638,
+    10655
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelICLSettingsDefaults",
+    10656,
+    10690
+   ]
+  ],
+  "write": {
+   "icl": 21,
+   "status": 56
+  },
+  "read": {
+   "icl": 154,
+   "param": 1,
+   "status": 56,
+   "alldata": 3
+  },
+  "calls": {
+   "catalog-core:CatalogPanelFitsBaseName": 1,
+   "catalog-core:CatalogPanelGetFITS": 8,
+   "catalog-core:CatalogPanelGetScript": 9,
+   "mask:OGFMaskPaths": 1,
+   "ds9-layout:OGFPython": 13,
+   "cli-script:CatalogPanelExportCLIScript": 1,
+   "cli-script:CatalogPanelImportCLIScript": 1,
+   "mask:OGFMaskPipelineMask": 1,
+   "mask:CatalogPanelMaskToggleOverlay": 1,
+   "mask:CatalogPanelMaskSaveAs": 1,
+   "mask:CatalogPanelMaskImport": 1,
+   "mask:OGFMaskExists": 2,
+   "mask:OGFMaskMaskedFor": 1,
+   "mask:OGFMaskBoolPath": 1,
+   "mask:OGFMaskRefinedPath": 3,
+   "cli-script:CatalogPanelCmdLog": 7,
+   "catalog-core:CatalogPanelLoadTSV": 7,
+   "sessionlog:OGFSessFromCmdLog": 1
+  }
+ },
+ "lsbg": {
+  "lines": 1379,
+  "n": 23,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGUpdateFiles",
+    7779,
+    7803
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLsbgGenerateScript",
+    9061,
+    9144
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGExportScript",
+    9149,
+    9156
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGImportScript",
+    9598,
+    9603
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGParamLoad",
+    10691,
+    10711
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGParamSave",
+    10712,
+    10745
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGMask",
+    10746,
+    10749
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGViewMask",
+    10750,
+    10755
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSaveMask",
+    10756,
+    10759
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGImportMask",
+    10760,
+    10765
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGClean",
+    10766,
+    10827
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGViewClean",
+    10828,
+    10848
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGDetect",
+    10849,
+    10924
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGPhotometry",
+    10925,
+    10985
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSersic",
+    10986,
+    11051
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGFilter",
+    11052,
+    11131
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSVMClassify",
+    11132,
+    11202
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSVMColorMarkers",
+    11203,
+    11337
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGRunAll",
+    11338,
+    11468
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGForcedPhot",
+    11469,
+    11558
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSettings",
+    11559,
+    11865
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSettingsApply",
+    11866,
+    11893
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelLSBGSettingsDefaults",
+    11894,
+    11946
+   ]
+  ],
+  "write": {
+   "lsbg": 26,
+   "status": 59,
+   "alldata": 5
+  },
+  "read": {
+   "lsbg": 234,
+   "param": 8,
+   "status": 59,
+   "alldata": 18
+  },
+  "calls": {
+   "catalog-core:CatalogPanelFitsBaseName": 1,
+   "catalog-core:CatalogPanelGetFITS": 8,
+   "catalog-core:CatalogPanelGetScript": 9,
+   "ds9-layout:OGFPython": 9,
+   "mask:OGFMaskRefinedPath": 2,
+   "cli-script:CatalogPanelExportCLIScript": 1,
+   "cli-script:CatalogPanelImportCLIScript": 1,
+   "mask:OGFMaskPipelineMask": 1,
+   "mask:CatalogPanelMaskToggleOverlay": 1,
+   "mask:CatalogPanelMaskSaveAs": 1,
+   "mask:CatalogPanelMaskImport": 1,
+   "mask:OGFMaskEnsure": 2,
+   "cli-script:CatalogPanelCmdLog": 8,
+   "catalog-core:CatalogPanelLoadTSV": 5,
+   "catalog-core:CatalogPanelMarkAll": 4,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 2,
+   "catalog-core:CatalogPanelMarkerCB": 1,
+   "catalog-core:CatalogPanelMarkerUnCB": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1
+  }
+ },
+ "measure-misc": {
+  "lines": 475,
+  "n": 7,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelSegmentationMap",
+    8070,
+    8124
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMorphometry",
+    8125,
+    8175
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSersicFit",
+    8176,
+    8223
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelMultiBand",
+    8278,
+    8379
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelCrowdedPhot",
+    8380,
+    8433
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelCrossMatch",
+    8434,
+    8510
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelCompleteness",
+    8609,
+    8696
+   ]
+  ],
+  "write": {
+   "status": 47
+  },
+  "read": {
+   "status": 47,
+   "param": 20,
+   "alldata": 10,
+   "psf": 3
+  },
+  "calls": {
+   "catalog-core:CatalogPanelGetFITS": 6,
+   "catalog-core:CatalogPanelGetScript": 7,
+   "ds9-layout:OGFPython": 9,
+   "sessionlog:OGFSessLog": 7,
+   "catalog-core:CatalogPanelSaveTempCatalog": 5,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 4,
+   "catalog-core:CatalogPanelLoadTSV": 2
+  }
+ },
+ "cli-script": {
+  "lines": 687,
+  "n": 4,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelCmdLog",
+    8744,
+    8750
+   ],
+   [
+    "layout.tcl",
+    "ShellQuote",
+    8751,
+    8760
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelExportCLIScript",
+    8761,
+    8993
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelImportCLIScript",
+    9157,
+    9593
+   ]
+  ],
+  "write": {
+   "status": 9,
+   "alldata": 2,
+   "icl": 6,
+   "lsbg": 8
+  },
+  "read": {
+   "status": 9,
+   "alldata": 2,
+   "icl": 16,
+   "lsbg": 14
+  },
+  "calls": {
+   "sessionlog:OGFSessFromCmdLog": 1,
+   "catalog-core:CatalogPanelGetFITS": 2,
+   "catalog-core:CatalogPanelGetScript": 2,
+   "icl:CatalogPanelICLUpdateFiles": 1,
+   "lsbg:CatalogPanelLSBGUpdateFiles": 1,
+   "catalog-core:CatalogPanelLoadTSV": 2,
+   "catalog-core:CatalogPanelMarkAll": 2
+  }
+ },
+ "plot/viewer": {
+  "lines": 300,
+  "n": 7,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelPlotDialog",
+    12184,
+    12246
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPlotRun",
+    12247,
+    12324
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPlotScatter",
+    12325,
+    12364
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPlotHistogram",
+    12365,
+    12417
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPlotClick",
+    12418,
+    12435
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPlotCleanup",
+    12436,
+    12447
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelAnalysisViewer",
+    12783,
+    12818
+   ]
+  ],
+  "write": {
+   "status": 8,
+   "plot": 2
+  },
+  "read": {
+   "alldata": 6,
+   "status": 8,
+   "plot": 12
+  },
+  "calls": {
+   "catalog-core:CatalogPanelGotoSource": 1,
+   "catalog-core:CatalogPanelGetScript": 1,
+   "ds9-layout:OGFPython": 1,
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1
+  }
+ },
+ "photo-z": {
+  "lines": 150,
+  "n": 4,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelPhotoZParamLoad",
+    12448,
+    12467
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPhotoZParamSave",
+    12468,
+    12480
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPhotoZ",
+    12481,
+    12534
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelPhotoZRun",
+    12535,
+    12597
+   ]
+  ],
+  "write": {
+   "status": 8,
+   "photoz": 3
+  },
+  "read": {
+   "alldata": 3,
+   "status": 8,
+   "photoz": 7,
+   "param": 1
+  },
+  "calls": {
+   "ai-services:OGFAIBackendHook": 2,
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "catalog-core:CatalogPanelGetScript": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1,
+   "ds9-layout:OGFPython": 1,
+   "sessionlog:OGFSessLog": 1,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 1
+  }
+ },
+ "sed": {
+  "lines": 185,
+  "n": 4,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelSEDParamLoad",
+    12598,
+    12617
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSEDParamSave",
+    12618,
+    12630
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSEDFit",
+    12631,
+    12709
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelSEDFitRun",
+    12710,
+    12782
+   ]
+  ],
+  "write": {
+   "status": 8,
+   "sed": 6
+  },
+  "read": {
+   "alldata": 3,
+   "status": 8,
+   "sed": 13,
+   "param": 1
+  },
+  "calls": {
+   "ai-services:OGFAIBackendHook": 2,
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "catalog-core:CatalogPanelGetScript": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1,
+   "ds9-layout:OGFPython": 1,
+   "sessionlog:OGFSessLog": 1,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 1
+  }
+ },
+ "bulge-disk": {
+  "lines": 141,
+  "n": 5,
+  "procs": [
+   [
+    "layout.tcl",
+    "CatalogPanelBDParamLoad",
+    12819,
+    12838
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBDParamSave",
+    12839,
+    12851
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBulgeDisk",
+    12852,
+    12912
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBulgeDiskSettings",
+    12913,
+    12949
+   ],
+   [
+    "layout.tcl",
+    "CatalogPanelBDSettingsApply",
+    12950,
+    12959
+   ]
+  ],
+  "write": {
+   "status": 8,
+   "bd": 5
+  },
+  "read": {
+   "alldata": 2,
+   "status": 8,
+   "bd": 15,
+   "psf": 3,
+   "param": 1
+  },
+  "calls": {
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "catalog-core:CatalogPanelGetScript": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1,
+   "ds9-layout:OGFPython": 1,
+   "sessionlog:OGFSessLog": 1,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 1
+  }
+ },
+ "ai-services": {
+  "lines": 544,
+  "n": 27,
+  "procs": [
+   [
+    "ogf_ai.tcl",
+    "OGFAIInit",
+    24,
+    50
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIPrefFile",
+    51,
+    52
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIPrefSave",
+    53,
+    61
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIBuildMenu",
+    62,
+    71
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIScript",
+    72,
+    74
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIArgv",
+    75,
+    82
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIAppendLog",
+    83,
+    94
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIExec",
+    95,
+    104
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIServices",
+    105,
+    122
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIServiceInfo",
+    123,
+    128
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIIsNetwork",
+    129,
+    133
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIConfirm",
+    134,
+    148
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRowCount",
+    149,
+    157
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIImages",
+    158,
+    181
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRunTask",
+    182,
+    283
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIBackendHook",
+    284,
+    295
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegistry",
+    296,
+    346
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegRefresh",
+    347,
+    383
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegApplyPath",
+    384,
+    391
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegBrowse",
+    392,
+    400
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegCreate",
+    401,
+    413
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegSelected",
+    414,
+    420
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegToggle",
+    421,
+    431
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRegTest",
+    432,
+    452
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRunDialog",
+    453,
+    529
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIRunTaskChanged",
+    530,
+    550
+   ],
+   [
+    "ogf_ai.tcl",
+    "OGFAIShowLog",
+    551,
+    567
+   ]
+  ],
+  "write": {
+   "status": 14
+  },
+  "read": {
+   "alldata": 8,
+   "status": 14,
+   "sel": 2
+  },
+  "calls": {
+   "sessionlog:OGFSessWorkDir": 10,
+   "catalog-core:CatalogPanelGetScript": 1,
+   "ds9-layout:OGFPython": 1,
+   "bands:OGFBandsSorted": 1,
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1,
+   "sessionlog:OGFSessLog": 1,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 3,
+   "sessionlog:OGFSessSet": 1,
+   "sessionlog:OGFSessRoot": 1
+  }
+ },
+ "bands": {
+  "lines": 365,
+  "n": 21,
+  "procs": [
+   [
+    "ogf_bands.tcl",
+    "OGFBandsInit",
+    9,
+    16
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsActive",
+    94,
+    99
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsShareCatalog",
+    100,
+    105
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsRecomputeGrid",
+    106,
+    119
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsRegisterFrame",
+    134,
+    162
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsRegister",
+    163,
+    192
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsLoad",
+    193,
+    200
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsLoadFile",
+    201,
+    218
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsSetDetect",
+    219,
+    227
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsRemove",
+    228,
+    242
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsList",
+    248,
+    264
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsPostDetect",
+    265,
+    274
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsPostRemove",
+    275,
+    284
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsDetect",
+    285,
+    300
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsSorted",
+    308,
+    319
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsMeasure",
+    320,
+    373
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsRenameCols",
+    374,
+    388
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsCountDet",
+    389,
+    405
+   ],
+   [
+    "ogf_bands.tcl",
+    "OGFBandsAddColors",
+    406,
+    440
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsTile",
+    441,
+    470
+   ],
+   [
+    "ogf_bands.tcl",
+    "CatalogPanelBandsSingleView",
+    471,
+    476
+   ]
+  ],
+  "write": {
+   "status": 16,
+   "param": 2
+  },
+  "read": {
+   "status": 16,
+   "param": 4,
+   "alldata": 5,
+   "sel": 2
+  },
+  "calls": {
+   "ds9-layout:OGFBandOfFrame": 2,
+   "ds9-layout:OGFSameGrid": 1,
+   "ds9-layout:OGFImageInfo": 3,
+   "sessionlog:OGFSessLog": 4,
+   "catalog-core:CatalogPanelGetFITS": 1,
+   "ds9-layout:OGFForm": 2,
+   "ds9-layout:OGFTextWindow": 2,
+   "catalog-core:CatalogPanelGotoBandFrame": 3,
+   "extract:CatalogPanelExtract": 1,
+   "ds9-layout:OGFSextractBin": 1,
+   "ds9-layout:OGFPrepareLibPath": 1,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 2,
+   "ds9-layout:OGFApplySelection": 2,
+   "ds9-layout:OGFBandFrames": 1
+  }
+ },
+ "link": {
+  "lines": 17,
+  "n": 1,
+  "procs": [
+   [
+    "ogf_link.tcl",
+    "OGFLinkInit",
+    7,
+    23
+   ]
+  ],
+  "write": {
+   "sel": 2,
+   "hover": 5,
+   "cache": 1
+  },
+  "read": {
+   "sel": 2,
+   "hover": 5,
+   "cache": 1,
+   "alldata": 1,
+   "tbl": 3
+  },
+  "calls": {
+   "ds9-layout:OGFCacheDirty": 1,
+   "catalog-core:CatalogPanelStepKey": 2
+  }
+ },
+ "mask": {
+  "lines": 532,
+  "n": 34,
+  "procs": [
+   [
+    "ogf_mask.tcl",
+    "OGFMaskInit",
+    9,
+    28
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskBase",
+    29,
+    33
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskPaths",
+    34,
+    46
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskRun",
+    47,
+    84
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskSessLog",
+    85,
+    135
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskParseStats",
+    136,
+    152
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskRefreshOverlay",
+    153,
+    171
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskApplyStyle",
+    172,
+    181
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskToggleOverlay",
+    182,
+    197
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskOverlaySettings",
+    198,
+    210
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskAutoArgs",
+    211,
+    229
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskPresetICL",
+    230,
+    240
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskPresetLSBG",
+    241,
+    252
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskFormRefresh",
+    253,
+    260
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskAutoDialog",
+    261,
+    279
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskAuto",
+    280,
+    297
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskAfterEdit",
+    298,
+    307
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskSyncPipelines",
+    308,
+    318
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskEnsure",
+    319,
+    333
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskRegionsFile",
+    334,
+    355
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskRegions",
+    356,
+    370
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskGrow",
+    371,
+    380
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskSimple",
+    381,
+    385
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskStats",
+    386,
+    389
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskSaveAs",
+    390,
+    409
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskImport",
+    410,
+    419
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskMakeMasked",
+    420,
+    427
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskShowMasked",
+    428,
+    448
+   ],
+   [
+    "ogf_mask.tcl",
+    "CatalogPanelMaskCopyToBands",
+    449,
+    480
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskExists",
+    481,
+    486
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskBoolPath",
+    487,
+    493
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskRefinedPath",
+    494,
+    500
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskMaskedFor",
+    501,
+    517
+   ],
+   [
+    "ogf_mask.tcl",
+    "OGFMaskPipelineMask",
+    518,
+    540
+   ]
+  ],
+  "write": {
+   "status": 18
+  },
+  "read": {
+   "icl": 14,
+   "status": 21,
+   "param": 2,
+   "lsbg": 12,
+   "alldata": 2
+  },
+  "calls": {
+   "sessionlog:OGFSessInitMasks": 1,
+   "catalog-core:CatalogPanelFitsBaseName": 1,
+   "catalog-core:CatalogPanelGetFITS": 2,
+   "catalog-core:CatalogPanelGetScript": 2,
+   "ds9-layout:OGFPython": 2,
+   "sessionlog:OGFSessLog": 2,
+   "ds9-layout:OGFForm": 3,
+   "catalog-core:CatalogPanelSaveTempCatalog": 1,
+   "icl:CatalogPanelICLUpdateFiles": 1,
+   "lsbg:CatalogPanelLSBGUpdateFiles": 1
+  }
+ },
+ "moving": {
+  "lines": 575,
+  "n": 42,
+  "procs": [
+   [
+    "ogf_moving.tcl",
+    "OGFMovingInit",
+    9,
+    20
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovingMenu",
+    21,
+    41
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovScript",
+    42,
+    45
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovStatus",
+    46,
+    53
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovWork",
+    54,
+    59
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovWorkdir",
+    60,
+    65
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovSelectFiles",
+    66,
+    74
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovDefaultPos",
+    75,
+    86
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovRun",
+    87,
+    111
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovReadable",
+    112,
+    140
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovFetchDialog",
+    141,
+    177
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovFetchRun",
+    178,
+    189
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovFetchDone",
+    190,
+    204
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovReadTSV",
+    205,
+    215
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovTable",
+    216,
+    234
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovFillTable",
+    235,
+    245
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovShowCandidates",
+    246,
+    256
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovShowMovers",
+    257,
+    277
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovShowTransients",
+    278,
+    294
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovShowDetections",
+    295,
+    315
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovRowSelected",
+    316,
+    336
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovLoadRegions",
+    337,
+    343
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovNeedFiles",
+    344,
+    352
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovAlign",
+    353,
+    360
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovDifference",
+    361,
+    373
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovDifferenceDone",
+    374,
+    378
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovDetect",
+    379,
+    387
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovLink",
+    388,
+    396
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovLinkDone",
+    397,
+    400
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovIdentify",
+    401,
+    407
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovIdentifyDone",
+    408,
+    411
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovTransients",
+    412,
+    426
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovTransientsDone",
+    427,
+    430
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovLightCurve",
+    431,
+    438
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovLCDone",
+    439,
+    449
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovExport",
+    450,
+    462
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovExportDone",
+    463,
+    466
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovDone",
+    467,
+    469
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovOrbitDialog",
+    470,
+    500
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovOrbitRun",
+    501,
+    518
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovOrbitDone",
+    519,
+    548
+   ],
+   [
+    "ogf_moving.tcl",
+    "OGFMovPlotResiduals",
+    549,
+    583
+   ]
+  ],
+  "write": {
+   "status": 1
+  },
+  "read": {
+   "status": 1
+  },
+  "calls": {
+   "catalog-core:CatalogPanelGetScript": 1,
+   "ds9-layout:OGFPython": 1,
+   "sessionlog:OGFSessLog": 2,
+   "ds9-layout:OGFPrepareLibPath": 1,
+   "sessionlog:OGFSessSet": 2,
+   "ds9-layout:OGFForm": 1
+  }
+ },
+ "sessionlog": {
+  "lines": 531,
+  "n": 29,
+  "procs": [
+   [
+    "ogf_session.tcl",
+    "OGFSessInit",
+    14,
+    26
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessRoot",
+    27,
+    30
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessWorkDir",
+    31,
+    34
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessCrc",
+    35,
+    39
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessCatCrc",
+    40,
+    45
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessCatInfo",
+    46,
+    56
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessIsImageFile",
+    57,
+    64
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessArgvImages",
+    65,
+    80
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessParams",
+    81,
+    98
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessTemplate",
+    99,
+    145
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessLog",
+    146,
+    203
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessSet",
+    204,
+    212
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessLast",
+    213,
+    219
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessPost",
+    220,
+    227
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessExecDone",
+    236,
+    256
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessFinalize",
+    257,
+    266
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessOnCatalogLoad",
+    267,
+    286
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessOnAddColumns",
+    287,
+    300
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessFromCmdLog",
+    301,
+    333
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessRecordJSON",
+    377,
+    399
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessKeys",
+    400,
+    419
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessMapArgs",
+    420,
+    440
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessExport",
+    441,
+    519
+   ],
+   [
+    "ogf_session.tcl",
+    "CatalogPanelSessionSave",
+    520,
+    539
+   ],
+   [
+    "ogf_session.tcl",
+    "CatalogPanelSessionReset",
+    540,
+    547
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessLogText",
+    548,
+    567
+   ],
+   [
+    "ogf_session.tcl",
+    "CatalogPanelSessionShow",
+    568,
+    583
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessNoteSeen",
+    584,
+    590
+   ],
+   [
+    "ogf_session.tcl",
+    "OGFSessInitMasks",
+    591,
+    595
+   ]
+  ],
+  "write": {
+   "status": 4
+  },
+  "read": {
+   "alldata": 8,
+   "param": 2,
+   "status": 4
+  },
+  "calls": {
+   "ds9-layout:OGFSextractBin": 1,
+   "ds9-layout:OGFPython": 2,
+   "catalog-core:CatalogPanelLoadTSV": 1,
+   "catalog-core:CatalogPanelAddColumnsFromTSV": 1,
+   "cli-script:CatalogPanelCmdLog": 1,
+   "mask:OGFMaskRun": 1,
+   "ds9-layout:OGFJStr": 7,
+   "ds9-layout:OGFJList": 2,
+   "ds9-layout:OGFJDict": 3,
+   "catalog-core:CatalogPanelFitsBaseName": 2,
+   "ds9-layout:OGFImageInfo": 1,
+   "catalog-core:CatalogPanelGetScript": 1
+  }
+ }
+}

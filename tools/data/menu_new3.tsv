@@ -1,0 +1,177 @@
+Workflow	radiobutton	Detect	OGFUIShowTab Detect	ogfui(tab)
+Workflow	radiobutton	Classify	OGFUIShowTab Classify	ogfui(tab)
+Workflow	radiobutton	Measure	OGFUIShowTab Measure	ogfui(tab)
+Workflow	radiobutton	Low-SB	OGFUIShowTab Low-SB	ogfui(tab)
+Workflow	radiobutton	Time-domain	OGFUIShowTab Time-domain	ogfui(tab)
+Workflow	radiobutton	Results	OGFUIShowTab Results	ogfui(tab)
+Workflow	command	Save Session as Python Script...	CatalogPanelSessionSave	
+Workflow	command	Show Session Log	CatalogPanelSessionShow	
+Workflow	command	Reset Session Log	CatalogPanelSessionReset	
+Tools	checkbutton	Detach Catalog Panel	CatalogPanelToggleDetach	catpanel(detached)
+Tools	checkbutton	Tile all frames	OGFUITileToggle	ogfui(tile)
+Tools	cascade	Tile layout		
+Tools > Tile layout	radiobutton	Grid	OGFUITileOptions	ogfui(tilemode)
+Tools > Tile layout	radiobutton	Column	OGFUITileOptions	ogfui(tilemode)
+Tools > Tile layout	radiobutton	Row	OGFUITileOptions	ogfui(tilemode)
+Tools	checkbutton	Lock pan/zoom (WCS) in tile	OGFUITileOptions	ogfui(lockwcs)
+Tools	checkbutton	Share scale limits in tile	OGFUITileOptions	ogfui(sharescale)
+Tools	cascade	Plugin settings		
+Tools > Plugin settings	command	Source extraction	OGFParamDialog extract	
+Tools > Plugin settings	command	Structure	OGFParamDialog morphology	
+Tools > Plugin settings	command	Deconvolution	OGFParamDialog deconv	
+Tools	command	Pipeline overview...	OGFUIOverview	
+Tools	command	Plugins...	OGFUIPluginManager	
+Tools	command	Plugin log...	OGFUIShowLog	
+Detect/extract	command	Extract	CatalogPanelExtract	
+Detect/extract	command	Dual-Image Extract...	CatalogPanelDualExtract	
+Detect/extract	command	Trim catalog...	CatalogPanelTrimDialog	
+Detect/extract	command	Settings...	OGFUISettings extract	
+Detect/objects	command	Mark All	CatalogPanelMarkAll	
+Detect/objects	command	Clear Markers	CatalogPanelClearMarkers	
+Detect/objects	checkbutton	Show Visible Only	CatalogPanelShowVisible	catpanel(visible_mode)
+Detect/objects	checkbutton	Add Objects (Click + A)		catpanel(add_objects_mode)
+Detect/objects	command	Delete Selected (Click + D)	CatalogPanelDeleteSelected	
+Detect/objects	command	Separate Selected (Click + S)	CatalogPanelSeparateSelected	
+Detect/objects	command	Save Separated Catalog...	CatalogPanelSeparateSave	
+Detect/objects	command	Load Separated Catalog...	CatalogPanelSeparateLoad	
+Detect/objects	command	AI Merge...	CatalogPanelAIMerge	
+Detect/objects	command	Settings...	OGFUISettings objects	
+Detect/bands	command	Register Current Frame as Band...	CatalogPanelBandsRegister	
+Detect/bands	command	Load Band...	CatalogPanelBandsLoad	
+Detect/bands	cascade	Detection Band...		
+Detect/bands > Detection Band...	command	(none)		
+Detect/bands	cascade	Remove Band...		
+Detect/bands > Remove Band...	command	(none)		
+Detect/bands	command	List Bands...	CatalogPanelBandsList	
+Detect/bands	command	Detect in Detection Band	CatalogPanelBandsDetect	
+Detect/bands	command	Measure in All Bands...	CatalogPanelBandsMeasure	
+Detect/bands	command	Tile Bands	CatalogPanelBandsTile	
+Detect/bands	command	Single Frame View	CatalogPanelBandsSingleView	
+Detect/bands	command	Copy Mask to Other Bands	CatalogPanelMaskCopyToBands	
+Classify/star_psf	cascade	Find Stars		
+Classify/star_psf > Find Stars	command	Combined	CatalogPanelFindStars combined	
+Classify/star_psf > Find Stars	command	CLASS_STAR	CatalogPanelFindStars class_star	
+Classify/star_psf > Find Stars	command	FWHM	CatalogPanelFindStars fwhm	
+Classify/star_psf	command	AI Star Classification	CatalogPanelStarFinder	
+Classify/star_psf	command	Show Stars	CatalogPanelShowStars	
+Classify/star_psf	command	Clear Stars	CatalogPanelClearStars	
+Classify/star_psf	cascade	Build PSF		
+Classify/star_psf > Build PSF	command	Median Stack	CatalogPanelBuildPSF median	
+Classify/star_psf > Build PSF	command	Moffat Fit	CatalogPanelBuildPSF moffat	
+Classify/star_psf > Build PSF	command	Gaussian Fit	CatalogPanelBuildPSF gaussian	
+Classify/star_psf > Build PSF	command	ePSF	CatalogPanelBuildPSF epsf	
+Classify/star_psf	command	Extended PSF...	CatalogPanelBuildExtendedPSF	
+Classify/star_psf	command	WebbPSF (JWST)...	CatalogPanelSimPSFWebbPSF	
+Classify/star_psf	command	TinyTim (HST)...	CatalogPanelSimPSFTinyTim	
+Classify/star_psf	command	View PSF	CatalogPanelViewPSF	
+Classify/star_psf	command	Save PSF...	CatalogPanelSavePSF	
+Classify/star_psf	command	Load PSF...	CatalogPanelLoadPSF	
+Classify/star_psf	command	PSF / Star Settings...	CatalogPanelStarPSFSettings	
+Classify/galaxy_model	command	AI Morphology Classification	CatalogPanelGalaxyMorphology	
+Classify/galaxy_model	cascade	Fit Galaxy Model		
+Classify/galaxy_model > Fit Galaxy Model	command	Elliptical	CatalogPanelGalaxyFit elliptical	
+Classify/galaxy_model > Fit Galaxy Model	command	Spiral	CatalogPanelGalaxyFit spiral	
+Classify/galaxy_model	command	Extract Parameters	CatalogPanelGalaxyParams	
+Measure/morphology	command	Sersic Fitting	CatalogPanelSersicFit	
+Measure/morphology	command	Non-Parametric Morphology (CAS/Gini/M20)	CatalogPanelMorphometry	
+Measure/morphology	command	Bulge+Disk Decomposition	CatalogPanelBulgeDisk	
+Measure/morphology	command	Settings...	OGFUISettings morphology	
+Measure/photometry	command	PSF Photometry	CatalogPanelPSFPhotometry	
+Measure/photometry	command	Multi-Band Photometry...	CatalogPanelMultiBand	
+Measure/photometry	command	Crowded Field Photometry	CatalogPanelCrowdedPhot	
+Measure/photometry	command	Cross-Match (VizieR)...	CatalogPanelCrossMatch	
+Measure/photometry	command	Segmentation Map	CatalogPanelSegmentationMap	
+Measure/photometry	command	Completeness Simulation...	CatalogPanelCompleteness	
+Measure/photoz_sed	command	Photo-z (AI)...	CatalogPanelPhotoZ	
+Measure/photoz_sed	command	SED Fitting (AI)...	CatalogPanelSEDFit	
+Measure/deconv	cascade	Deconvolve		
+Measure/deconv > Deconvolve	command	Richardson-Lucy	CatalogPanelDeconvolve rl	
+Measure/deconv > Deconvolve	command	Richardson-Lucy (Accelerated)	CatalogPanelDeconvolve rl_accelerated	
+Measure/deconv > Deconvolve	command	Richardson-Lucy (Regularized)	CatalogPanelDeconvolve rl_tv	
+Measure/deconv > Deconvolve	command	Wiener	CatalogPanelDeconvolve wiener	
+Measure/deconv > Deconvolve	command	Tikhonov	CatalogPanelDeconvolve tikhonov	
+Measure/deconv > Deconvolve	command	CLEAN	CatalogPanelDeconvolve clean	
+Measure/deconv > Deconvolve	command	Maximum Entropy (MEM)	CatalogPanelDeconvolve mem	
+Measure/deconv	command	Quick Deconvolve (RL)	CatalogPanelQuickDeconvolve	
+Measure/deconv	command	Settings...	OGFUISettings deconv	
+Low-SB/mask	command	Auto Mask...	CatalogPanelMaskAuto	
+Low-SB/mask	checkbutton	Show Mask Overlay	CatalogPanelMaskToggleOverlay	ogfmask(overlay)
+Low-SB/mask	command	Overlay Colour/Transparency...	CatalogPanelMaskOverlaySettings	
+Low-SB/mask	cascade	Edit Mask		
+Low-SB/mask > Edit Mask	command	Add Regions to Mask	CatalogPanelMaskRegions 0	
+Low-SB/mask > Edit Mask	command	Erase Regions from Mask	CatalogPanelMaskRegions 1	
+Low-SB/mask > Edit Mask	command	Grow...	CatalogPanelMaskGrow 0	
+Low-SB/mask > Edit Mask	command	Shrink...	CatalogPanelMaskGrow 1	
+Low-SB/mask > Edit Mask	command	Invert	CatalogPanelMaskSimple invert	
+Low-SB/mask > Edit Mask	command	Clear Mask	CatalogPanelMaskSimple clear	
+Low-SB/mask > Edit Mask	command	Undo	CatalogPanelMaskSimple undo	
+Low-SB/mask > Edit Mask	command	Redo	CatalogPanelMaskSimple redo	
+Low-SB/mask	command	Save Mask As...	CatalogPanelMaskSaveAs	
+Low-SB/mask	command	Import Mask...	CatalogPanelMaskImport	
+Low-SB/mask	command	Show Masked Image	CatalogPanelMaskShowMasked	
+Low-SB/mask	command	Mask Statistics	CatalogPanelMaskStats	
+Low-SB/icl	command	1. Source Masking (shared mask)	CatalogPanelICLMask	
+Low-SB/icl	command	Show Mask Overlay	CatalogPanelICLViewMask	
+Low-SB/icl	command	Save Mask As...	CatalogPanelICLSaveMask	
+Low-SB/icl	command	Import Mask...	CatalogPanelICLImportMask	
+Low-SB/icl	cascade	2. Background Model		
+Low-SB/icl > 2. Background Model	command	Polynomial Fit	CatalogPanelICLBackground polynomial	
+Low-SB/icl > 2. Background Model	command	Chebyshev Fit	CatalogPanelICLBackground chebyshev	
+Low-SB/icl > 2. Background Model	command	SEP Large Mesh	CatalogPanelICLBackground sep_large	
+Low-SB/icl	command	View Background	CatalogPanelICLViewBkg	
+Low-SB/icl	command	3. Set BCG Center	CatalogPanelICLSetCenter	
+Low-SB/icl	command	Measure Profile	CatalogPanelICLProfile	
+Low-SB/icl	command	Sector Profile...	CatalogPanelICLSectorProfile	
+Low-SB/icl	command	4. ICL Measurements	CatalogPanelICLMeasure	
+Low-SB/icl	command	Multi-Threshold ICL	CatalogPanelICLMeasureMulti	
+Low-SB/icl	command	5. BCG+ICL Decomposition	CatalogPanelICLDecompose	
+Low-SB/icl	command	Color Profile...	CatalogPanelICLColorProfile	
+Low-SB/icl	command	Save Profile...	CatalogPanelICLSaveProfile	
+Low-SB/icl	command	Load Profile...	CatalogPanelICLLoadProfile	
+Low-SB/icl	command	Export Script...	CatalogPanelICLExportScript	
+Low-SB/icl	command	Import Script...	CatalogPanelICLImportScript	
+Low-SB/icl	command	ICL Settings...	CatalogPanelICLSettings	
+Low-SB/lsbg	command	1. Mask Bright Sources (shared mask)	CatalogPanelLSBGMask	
+Low-SB/lsbg	command	Show Masked Image	CatalogPanelLSBGViewMask	
+Low-SB/lsbg	command	Save Mask As...	CatalogPanelLSBGSaveMask	
+Low-SB/lsbg	command	Import Mask...	CatalogPanelLSBGImportMask	
+Low-SB/lsbg	cascade	2. Background Model		
+Low-SB/lsbg > 2. Background Model	command	SEP Large Mesh	CatalogPanelLSBGClean sep_large	
+Low-SB/lsbg > 2. Background Model	command	Polynomial Fit	CatalogPanelLSBGClean polynomial	
+Low-SB/lsbg > 2. Background Model	command	Chebyshev Fit	CatalogPanelLSBGClean chebyshev	
+Low-SB/lsbg	command	View Cleaned Image	CatalogPanelLSBGViewClean	
+Low-SB/lsbg	command	3. Detect LSBG Candidates	CatalogPanelLSBGDetect	
+Low-SB/lsbg	command	4. Photometry	CatalogPanelLSBGPhotometry	
+Low-SB/lsbg	command	5. Sersic Profile Fit	CatalogPanelLSBGSersic	
+Low-SB/lsbg	command	6. Filter + Grade	CatalogPanelLSBGFilter	
+Low-SB/lsbg	command	7. SVM Classify	CatalogPanelLSBGSVMClassify	
+Low-SB/lsbg	command	Save Catalog...	CatalogPanelSaveCatalog	
+Low-SB/lsbg	command	Load Catalog...	CatalogPanelLoadCatalog	
+Low-SB/lsbg	command	8. Forced Photometry (Multi-Band)	CatalogPanelLSBGForcedPhot	
+Low-SB/lsbg	command	Run Full Pipeline	CatalogPanelLSBGRunAll	
+Low-SB/lsbg	command	Export Script...	CatalogPanelLSBGExportScript	
+Low-SB/lsbg	command	Import Script...	CatalogPanelLSBGImportScript	
+Low-SB/lsbg	command	LSBG Settings...	CatalogPanelLSBGSettings	
+Time-domain/moving	command	Fetch Reference...	OGFMovFetchDialog	
+Time-domain/moving	command	Align	OGFMovAlign	
+Time-domain/moving	command	Difference	OGFMovDifference	
+Time-domain/moving	command	Detect	OGFMovDetect	
+Time-domain/moving	command	Link Tracklets	OGFMovLink	
+Time-domain/moving	command	Identify Known Objects	OGFMovIdentify	
+Time-domain/moving	command	Orbit Fit...	OGFMovOrbitDialog	
+Time-domain/moving	command	Transient Candidates...	OGFMovTransients	
+Time-domain/moving	command	Light Curve	OGFMovLightCurve	
+Time-domain/moving	command	Export...	OGFMovExport	
+Time-domain/moving	command	Select Exposures...	OGFMovSelectFiles	
+Time-domain/moving	command	Work Directory...	OGFMovWorkdir	
+Time-domain/moving	command	Time-domain details...	OGFMovDetails	
+Results/catalog	command	Save Catalog	CatalogPanelSaveCatalog	
+Results/catalog	command	Export Regions (.reg)	CatalogPanelExportRegions	
+Results/catalog	command	Export FITS Table	CatalogPanelExportFITS	
+Results/catalog	command	Load Catalog	CatalogPanelLoadCatalog	
+Results/catalog	command	Clear	CatalogPanelClear	
+Results/catalog	command	Interactive Plot...	CatalogPanelPlotDialog	
+Results/catalog	command	Analysis Viewer...	CatalogPanelAnalysisViewer	
+Results/ai_services	command	Service Registry...	OGFAIRegistry	
+Results/ai_services	command	Run Task on Catalog...	OGFAIRunDialog	
+Results/ai_services	command	Show Last Run Log	OGFAIShowLog	
