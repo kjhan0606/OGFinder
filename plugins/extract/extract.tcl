@@ -306,3 +306,11 @@ proc CatalogPanelDualExtract {} {
     set catpanel(status) "Dual-image extraction complete"
 }
 
+# Hook: automatically extract sources after FITS file is loaded
+proc CatalogPanelAutoExtract {} {
+    global catpanel
+    if {[info exists catpanel(tbl)]} {
+	after 500 CatalogPanelExtract
+    }
+}
+

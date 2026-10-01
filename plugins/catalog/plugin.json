@@ -98,7 +98,10 @@
  "primary": "save",
  "tcl": [
   "plot_viewer.tcl",
-  "cli_script.tcl"
+  "cli_script.tcl",
+  "catalog_io.tcl",
+  "catalog_table.tcl",
+  "catalog_markers.tcl"
  ],
  "tcl_always": 1
 }
