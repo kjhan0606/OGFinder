@@ -516,7 +516,7 @@ instead of `catpanel(lsbg,tmp_bandname|band_dialog_done)` (nothing else read tho
 * `layout.tcl` (198) defines the defaults of all keys in `CreateCatalogPanel`; `ogf_link` (selection, 68), `ogf_td` (time-domain
   table, 35), `ogf_session` (recorder reads parameter keys, 12), `ogf_tile`.  These are core, not plugins; they were left alone so
   that the load order and the layout invariants (181/769/154) are not touched.
-* `catpanel_fdata(FRAME,KEY)` (per-frame snapshots of the keys) is still read directly by `plugins/icl/icl.tcl` (6 places).
+* `catpanel_fdata(FRAME,KEY)` (per-frame snapshots of the keys) is still read directly by `plugins/icl/icl.tcl` (8 lines).
 * The `ed()` dialog globals (not catpanel) remain in `extract` (`CatalogPanelParamDefaults`, dual extract, trim), `icl`
   (sector / colour-profile dialogs), `photometry` (multi-band, cross-match, completeness) and `star_psf` (extended PSF, WebbPSF,
   TinyTim dialogs).  They are dialog-local state; migrating them to `OGFParamDialog` (section 6, stage 6) would remove them.

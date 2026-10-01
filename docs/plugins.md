@@ -74,7 +74,7 @@ CLI steps go through the recorder automatically (`class` from `session`).  Tcl s
 | namespace | procs |
 |---|---|
 | `::ogf` | `log LEVEL MSG`, `status MSG` (status line) |
-| `::ogf::cat` | `tsv`, `has`, `columns`, `nrows`, `values COL`, `rows`, `selection`, `select NUMS ?mode? ?pan?`, `clear_selection`, `add_columns TSV NAMES`, `load_tsv TSV NAME`, `temp_file SUFFIX`, `image_file` |
+| `::ogf::cat` | `get KEY ?default?`, `set`, `exists`, `unset`, `unset_glob`, `append`, `lappend`, `keys`, `trace add/remove/info`, `registry`, `describe` (key accessor), `tsv`, `has`, `columns`, `nrows`, `values COL`, `rows`, `selection`, `select NUMS ?mode? ?pan?`, `clear_selection`, `add_columns TSV NAMES`, `load_tsv TSV NAME`, `temp_file SUFFIX`, `image_file` |
 | `::ogf::mask` | `paths`, `exists`, `bool_path`, `run MODE ...`, `overlay` |
 | `::ogf::bands` | `names`, `detect`, `path BAND`, `frames`, `sorted`, `register`, `set_detect`, `pos FRAME NUM X Y` |
 | `::ogf::session` | `log STEP CLASS ARGV ...`, `set_field SEQ KEY VAL`, `steps`, `crc TEXT` |
@@ -122,4 +122,6 @@ See `docs/architecture.md` section 6.  All feature procs now live in `plugins/<i
 `bands`, `mask` are `"required": 1`; `catalog`, `deconv`, `extract`, `galaxy_model`, `icl`, `lsbg`, `morphology`, `objects`, `photometry`, `photoz_sed`, `star_psf` use `tcl_always` because `layout.tcl`
 and the recorder call their procs unconditionally.  Parameter dialogs generated from the manifest
 (`"settings": "params"`): extract, deconv, morphology (bulge+disk), star-psf, objects, ICL, LSBG, mask overlay,
-AI services, example_hello.  The plugins still read and write `catpanel(...)` / `ed()` globals (not decoupled).
+AI services, example_hello.  Plugin Tcl reads and writes catalog-panel state through `::ogf::cat::get|set|exists|trace KEY` (key registry in
+`docs/architecture.md` section 7; 52 `catpanel(` references remain, almost all `catpanel(tbldb)`); the `ed()` dialog globals of a few
+hand-written dialogs remain.  New plugins: use the accessor and register new keys in `::ogf::cat::registry`.
