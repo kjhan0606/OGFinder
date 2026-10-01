@@ -48,7 +48,7 @@ chk_click_xevent() { need_x || { echo "no X server"; return 77; }; command -v xd
 chk_session_replay() { T=1800; "$HERE/verify_session_replay.sh" --workdir "$OUT/replay_work" 2>&1 | tail -400 > "$OUT/replay_tail.txt"
   grep -E "checks,|ALL CHECKS|FAIL" "$OUT/replay_tail.txt" | tail -5; grep -q "ALL CHECKS PASSED\|0 failed" "$OUT/replay_tail.txt" && ! grep -q "^FAIL" "$OUT/replay_tail.txt"; }
 chk_link_bench() { [ -f /workspace/work/inj1.json.pkl ] || { echo "injection sets /workspace/work/inj*.json.pkl missing"; return 77; }
-  (cd moving/validation && "$PY" link_bench.py 2>&1 | tail -12); }
+  (cd moving/validation && "$PY" link_bench.py /workspace/work/inj{1,2,3,4,5,6}.json.pkl 2>&1 | tail -12); }
 chk_moving_session() { [ -n "$OGF_MOVING_SESSION" ] || { echo "set OGF_MOVING_SESSION=session.py REF=dir FIELD=... (needs network, MAST cache)"; return 77; }
   "$HERE/verify_moving_session.sh" "$OGF_MOVING_SESSION" "$OGF_MOVING_REF" "$OGF_MOVING_FIELD"; }
 chk_cat_api() { need_x || { echo "no X server"; return 77; }
