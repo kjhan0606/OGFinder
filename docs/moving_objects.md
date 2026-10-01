@@ -211,7 +211,7 @@ corresponding assertions):
 Real HST ACS BB89 data (cached `j8pu38{c7,a,e,i}q_flc.fits`, 4 chips of 1240x1240 px around 150.1375, +2.361; template = median of the
 other exposures; script not in the repo, numbers from this box).  "pos" = positive detections with S/N >= 8 other than the known mover,
 a *proxy* for false positives (the field is full of cosmic-ray residuals, moving objects and unmasked stars, so most are not noise
-fluctuations); "mover" = number of exposures (of 7 chip-exposures at the mover position) where the known asteroid is found at >= 5 sigma:
+fluctuations); "mover" = number of difference-image detections of the known asteroid (7 with the classic setup):
 
 | configuration | pos (S/N>=8) | negative >= 5 | mover hits | static-star residuals |
 |---|---|---|---|---|
@@ -224,7 +224,7 @@ fluctuations); "mover" = number of exposures (of 7 chip-exposures at the mover p
 | template PSF measured separately | 7639 | 20 | 7 | 148 |
 
 Honest reading: (a) the astrometric term removes most of the residuals around bright static stars (static residuals 148 -> 36-48
-with a 0.3-0.5 px assumption, 148 -> 109 with the real sidecar rms, which is much smaller than 0.3 px), which is its purpose, but
+with a 0.3-0.5 px assumption, 148 -> 109 with the sidecar rms, which at 0.05"/px is 0.39 / 0.09 / 0.07 px for exposures 2-4 and absent for the anchor exposure), which is its purpose, but
 the large drop in "pos" for 0.3-0.5 px is mostly because it down-weights *everything* near sources in a crowded field, and it also
 costs 3 of the 7 mover detections (the asteroid passes near stars in some exposures); (b) the tiled-PSF and separate-template-PSF
 options changed nothing on this data because **no tile had enough field stars** (9-16 usable stars per chip with `min_stars` per tile
