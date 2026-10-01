@@ -359,14 +359,18 @@ flowchart TB
   `::ogf::reg` (registry: discovery of `plugins/*/plugin.json`, validation, enable/disable, `OGFRegisterPlugin`,
   `"required": 1` plugins cannot be disabled), `::ogf::step` (argv templating incl. `{plugin_dir}`, running a plugin
   step through the job runner and the recorder, stage progress).
-* `ogf_dialog.tcl` - `OGFParamDialog`: one dialog builder for all parameter specs (groups, Basic/Expert, validation,
-  presets, Reset, Apply/OK).  Used by extract, deconv, morphology (bulge+disk), example_hello.
+* `ogf_dialog.tcl` - `OGFParamDialog`: one dialog builder for all parameter specs (groups, Basic/Expert, tabs, validation,
+  presets, Reset, Apply/OK).  Used by extract, deconv, morphology (bulge+disk), star-psf, objects, ICL, LSBG, mask overlay,
+  AI services, example_hello.
+* `ogf_pick.tcl` - click chooser for overlapping markers/rows (`docs/click_selection.md`).
 * `ogf_ui.tcl` - menubar (`Workflow`, `Tools`), tab bar, plugin chips, progress strip + Stop.
 * `ogf_tile.tcl` - the image tab strip with `Single` / `Tile` / `Layout` (section 5.4) and marker drawing in every tile.
 * `ogf_td.tcl` - the time-domain table: kind registry, filter, sort, save, markers (section 5.3).
 * `plugins/*/plugin.json` - 16 built-in plugins that describe every existing step (+ `example_hello`, disabled by
   default).  For the plugins that are not migrated the steps call the *existing* procs (thin wrappers): computation,
   CLI argv and recorder calls are untouched.
+* Since section 6: the procs of every other feature live in `plugins/<id>/*.tcl` too (`layout.tcl` keeps only the panel
+  construction, detach/layout code and ds9 core).
 * `plugins/moving/moving.tcl`, `plugins/ai_services/ai.tcl`, `plugins/bands/bands.tcl`, `plugins/mask/mask.tcl` - the
   former `ogf_moving.tcl`, `ogf_ai.tcl`, `ogf_bands.tcl`, `ogf_mask.tcl`, moved with `git mv` (history kept) and sourced
   through the manifest's `"tcl"` field.  Their proc names are unchanged, so `layout.tcl`, the recorder and
@@ -410,21 +414,42 @@ entries of the old 11 menus are reachable (144 as the same command, the old `Sho
 filter of the shared table, the three old settings dialogs by `OGFParamDialog`); 23 entries are new (tabs, tile options,
 plugin dialogs, details window).  Panel width is 559 px instead of 620 px.
 
-## 6. Remaining migration
+## 6. Migration status
 
-Done in this pass: **moving**, **ai_services**, **bands**, **mask** (own file under `plugins/<id>/`, loaded through the
-manifest), **example_hello** (new, with a Python step), and removal of the superseded settings dialogs from `layout.tcl`
-(`CatalogPanelSettingsDialog`, `CatalogPanelDeconvSettings*`, `CatalogPanelBulgeDiskSettings`, `CatalogPanelBDSettingsApply`
-and the PSF compatibility aliases).  `layout.tcl` went from 12958 to 12198 lines.
+`layout.tcl`: 12958 lines originally, 12198 after the first pass (moving, ai_services, bands, mask), **1873 now**.
+Every feature procedure that a manifest wraps now lives in `plugins/<id>/*.tcl` (verbatim extraction; the proc inventory -
+name, argument count, body CRC - of all 3726 procs is identical to the baseline except the dialog procs replaced below,
+and it stays identical when `icl`, `lsbg`, `star_psf` or `catalog` is disabled, because the manifest field `tcl_always`
+sources the procs of a disabled plugin).
 
-Not migrated (the manifests wrap the legacy procs which still live in `layout.tcl`; line ranges in section 3):
-`extract` (+ dual image, trim), `merge`, `ai-merge`, `galaxy-model`, `star-psf`, `deconv` (compute part), `separate/edit`,
-`icl`, `lsbg`, `measure-misc` (morphometry, Sersic, PSF photometry, ...), `photo-z`, `sed`, `bulge-disk` (compute part),
-`cli-script` (CLI export/import), `plot/viewer`, and the catalogue core (table, markers, filter, sort, save).  The remaining
-settings dialogs (`CatalogPanelStarPSFSettings`, `...SeparateSettings` (objects), `...ICLSettings`, `...LSBGSettings`,
-`...MaskOverlaySettings`, `OGFAIRegistry`) are still hand-written.  All of them still read `catpanel(...)`.
-Suggested order: photo-z/sed, bulge-disk and deconv compute, star-psf, galaxy-model, then icl/lsbg (largest, interleaved
-with the CLI export code), finally extract + catalogue core behind `::ogf::cat`.
+| stage | commit | moved |
+|---|---|---|
+| 1 | `7aac298a7` | photo-z / SED, bulge+disk, morphology (Morphometry, Sersic), photometry, plot/viewer; loader: `tcl` may be a list, `tcl_always`, `source -encoding utf-8` |
+| 2 | `d4c5ff2a6` | star-psf, deconv, galaxy-model |
+| 3 | `39c3f714b` | extract (+ dual-image mode, trim), separate/edit, merge, AI-merge |
+| 4 | `0d12f535d` | ICL, LSBG, cli-script (CLI export/import) |
+| 5 | `5233a426f` | catalogue core: `catalog_io.tcl`, `catalog_table.tcl`, `catalog_markers.tcl`, auto-extract |
+| 6 | `3ad107939` | hand-written settings dialogs -> declarative `OGFParamDialog`: star-psf (20 params, tabbed), objects (6), ICL (24, tabbed), LSBG (46, tabbed), mask overlay (2), AI services (5) |
+| 7 | (this pass) | `ogf_pick.tcl`: click chooser for overlapping markers (section 5.6) |
+
+After every stage `make` was rebuilt and the replay harness re-run (78 checks, 0 failed; step signatures of the GUI
+sessions identical).  Table y / height / info area stayed 181 / 769 / 154, detach/reattach 1300x950 -> 736x950 -> 1300x950.
+
+Dialog behaviour change (deliberate): **Reset** now restores the start-up defaults of the parameter, the old *Defaults*
+buttons had a few different values (ICL expand-factor 1.5 vs 2.5, LSBG svm-threshold 0.3 vs 0.5).  Invalid input is
+rejected with a message (e.g. "PSF size: integer expected").
+
+### Not migrated, and why
+
+| proc(s) | lines | reason |
+|---|---|---|
+| `CreateCatalogPanel` | ~365 | builds the panel and holds the initial `catpanel(...)` defaults; calls the `*ParamLoad` procs before `OGFCoreReady` - moving it changes start-up order |
+| `CatalogPanelToggleDetach`, `SyncInfoHeight`, `RedrawTtk(+Do)` | | enforce the layout invariants (181/769/154) and touch the ds9 pane/canvas; kept in place on purpose |
+| `CreateHeader`, `CanvasDef`/`BlinkDef`/`FadeDef`/`TileDef`/`ViewDef`, `CreateCanvas`, `Layout*`, `TileRect*`, `Process*Cmd`, `*Canvas` bindings, `DisplayDefaultDialog` | | these are ds9 itself (SAOImageDS9 core), not OGFinder features |
+
+Still **not decoupled**: all migrated code reads and writes the `catpanel(...)` and `ed()` globals; it was moved
+verbatim, not rewritten behind the `::ogf::cat` service.  Moving a proc to a file does not remove that coupling; doing so
+is the next step and needs behaviour tests per feature (only the replay harness and `verify_ai_gui` cover it now).
 
 ## 7. Verification (measured on the final build, see the final report)
 
@@ -435,7 +460,7 @@ measured geometry, pixel counts and logs, not looked at.
 |---|---|---|
 | full replay harness (`scripts/verify_session_replay.sh`) | 78 checks, 0 failed | 78 checks (T1 21, T2 30, T3 12, T4 15), 0 failed |
 | step signatures of the GUI sessions (hudf 12 steps, m51 15 steps) | - | identical to the baseline (`diff` empty) |
-| `ai_bridge` pytest / `moving` pytest | 49 / 12 passed | 49 / 12 passed |
+| `ai_bridge` pytest / `moving` pytest | 49 / 12 passed | 49 / see final report (moving grew to 28+ tests) |
 | `scripts/verify_ai_gui` | 25/25 | 25/25 |
 | ICL export smoke | OK | OK |
 | leaf menu entries of the old 11 menus reachable | 145 | 145 of 145 (`Show Results Table` -> kind filter) |
@@ -443,5 +468,5 @@ measured geometry, pixel counts and logs, not looked at.
 | table y / h / info h | 181 / 769 / 154 | 181 / 769 / 154 in every state tested (6 tabs, 5 table kinds, single/tile, detached/reattached) |
 | image canvas | 675x772 | 736x745 (wider panel gone, 24 px tab strip added) |
 | detach / reattach | 1328x709 -> 738x709 + 585x709 -> 1328x709 | 1300x950 -> 736x950 + 559x950 -> 1300x950 |
-| `layout.tcl` lines | 12958 | 12198 |
+| `layout.tcl` lines | 12958 | 1873 (12198 after the first pass) |
 

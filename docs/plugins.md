@@ -43,8 +43,13 @@ A broken manifest is rejected with a message in Tools > Plugin log; other plugin
 | `primary` | step id run by the chip's ▶ button |
 | `settings` | `"params"` (declarative dialog) or the name of a Tcl proc to call from the gear button |
 | `store` | `{"array":"catpanel","key":"bd,param,%s","save":"ProcName"}`: bind the parameters to an existing Tcl array instead of the JSON file (legacy code keeps reading `catpanel(...)`); `save` is called after the dialog applies |
-| `tcl`, `init` | Tcl file to source; `init` proc called once the panel exists |
+| `tcl`, `init` | Tcl file to source (a string **or a list** of files, relative to the plugin dir); `init` proc called once the panel exists |
+| `tcl_always` | `1`: the `tcl` files are sourced even when the plugin is disabled (the procs are still called by `layout.tcl`, the recorder or other plugins; only the chip/menu entries disappear) |
 | `params` | list of parameter specs (above) |
+| `dialog_tabs` | `1`: the settings dialog is a notebook with one tab per parameter group (long dialogs: star-psf, ICL, LSBG) |
+| `on_open` | Tcl proc called before the dialog reads its values (lazy initialisation of the legacy store) |
+| `on_apply` | Tcl proc called after Apply/OK has validated, stored and saved the values |
+| `choices_proc` | on a parameter: Tcl proc returning the list of choices of a `choice` parameter at open time (e.g. AI backends) |
 | `steps` | list of step objects (below) |
 
 Step object: `id`, `label`, `title` (recorder title), `proc` **or** `cli`, `session` (`AUTO|CONFIG|MANUAL|NONE`),
@@ -110,11 +115,11 @@ share scale).  `Tile` is ds9's own one-canvas mosaic; the tabs never replace it.
 "Tile all" / "Single", the same functions (`OGFUIDisplay tile|single`).  Catalog markers are drawn in every tile
 (registered bands: positions mapped through the WCS); a click on a marker in any tile selects its table row.
 
-## Migration status (what is not a plugin yet)
+## Migration status
 
-See `docs/architecture.md` section 6.  Every feature is *registered* as a plugin and reachable from the tabs.  Fully
-moved into their own files (`plugins/<id>/*.tcl`, loaded through `"tcl"`): `moving`, `ai_services`, `bands`, `mask`
-(the last two are `"required": 1`: `layout.tcl` and the recorder call them unconditionally, so they cannot be disabled)
-and `example_hello`.  For the others the manifests wrap legacy `CatalogPanel*` procs that still live in `layout.tcl`
-(extract, objects, galaxy_model, star_psf, deconv compute, morphology compute, photometry, photoz_sed, icl, lsbg, catalog).
-Parameter dialogs generated from the manifest (`"settings": "params"`): extract, deconv, morphology (bulge+disk), example_hello.
+See `docs/architecture.md` section 6.  All feature procs now live in `plugins/<id>/*.tcl` (loaded through `"tcl"`);
+`layout.tcl` is 1873 lines (was 12958) and only holds the panel construction, detach/layout code and ds9 core.
+`bands`, `mask` are `"required": 1`; `catalog`, `deconv`, `extract`, `galaxy_model`, `icl`, `lsbg`, `morphology`, `objects`, `photometry`, `photoz_sed`, `star_psf` use `tcl_always` because `layout.tcl`
+and the recorder call their procs unconditionally.  Parameter dialogs generated from the manifest
+(`"settings": "params"`): extract, deconv, morphology (bulge+disk), star-psf, objects, ICL, LSBG, mask overlay,
+AI services, example_hello.  The plugins still read and write `catpanel(...)` / `ed()` globals (not decoupled).
