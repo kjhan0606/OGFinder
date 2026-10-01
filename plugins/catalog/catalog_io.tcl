@@ -57,6 +57,9 @@ proc CatalogPanelLoadTSV {data source_name} {
     ::ogf::cat::set status "$source_name: $nobj sources extracted"
     catch {OGFTDGalaxyLoaded}
     catch {OGFTDAppendKindColumn $ncols $row}
+    # column filters (::ogf::cat::filter_set, e.g. the review filter) stay in force across reloads (sort, add columns, merge ...)
+    ::ogf::cat::filter_prune $headers
+    if {[::ogf::cat::filter_active]} {CatalogPanelFilter} else {::ogf::cat::_table_filled}
 }
 
 proc CatalogPanelClear {} {

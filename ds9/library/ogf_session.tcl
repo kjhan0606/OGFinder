@@ -43,10 +43,29 @@ proc OGFSessCatCrc {} {
     return [OGFSessCrc $catpanel(alldata)]
 }
 
+# the review columns (plugins/report: REVIEW, REVIEW_NOTE, REVIEW_TIME) are hand annotations that the exported script never
+# reproduces: leave them out of the catalog fingerprint so that "catalog identical to the GUI session" still holds in replay mode.
+# Without such columns the text is returned untouched.
+proc OGFSessPlainTSV {d} {
+    set lines [split $d \n]
+    set h [split [lindex $lines 0] \t]
+    set drop {}
+    set i 0
+    foreach c $h {if {[string trim $c] in {REVIEW REVIEW_NOTE REVIEW_TIME}} {lappend drop $i}; incr i}
+    if {![llength $drop]} {return $d}
+    set out {}
+    foreach l $lines {
+	set f [split $l \t]
+	foreach j [lreverse $drop] {if {$j < [llength $f]} {set f [lreplace $f $j $j]}}
+	lappend out [join $f \t]
+    }
+    return [join $out \n]
+}
+
 proc OGFSessCatInfo {} {
     global catpanel
     set d {}
-    if {[info exists catpanel(alldata)]} {set d $catpanel(alldata)}
+    if {[info exists catpanel(alldata)]} {set d [OGFSessPlainTSV $catpanel(alldata)]}
     if {$d eq {}} {return [list crc 0 rows 0 cols 0]}
     set lines [split $d \n]
     set rows 0

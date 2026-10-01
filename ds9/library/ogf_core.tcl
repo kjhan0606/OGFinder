@@ -92,6 +92,113 @@ proc ::ogf::cat::select {nums {mode replace} {pan 1}} {
     }
 }
 proc ::ogf::cat::clear_selection {} {CatalogPanelClearSelection}
+# ---- column value filters (used by the review feature, usable by any plugin)
+# A filter keeps only the rows whose value in column COL is one of VALUES ({} = empty cell counts as a value).  All filters are
+# ANDed with the text search of CatalogPanelFilter.  Filters are dropped with filter_clear; nothing is stored in catpanel().
+namespace eval ::ogf::cat {variable colfilters {}}
+proc ::ogf::cat::filter_set {col values} {variable colfilters; dict set colfilters $col $values; return $values}
+proc ::ogf::cat::filter_clear {{col {}}} {
+    variable colfilters
+    if {$col eq {}} {::set colfilters {}} else {::catch {dict unset colfilters $col}}
+}
+proc ::ogf::cat::filter_active {} {variable colfilters; return [expr {[dict size $colfilters] > 0}]}
+proc ::ogf::cat::filters {} {variable colfilters; return $colfilters}
+# compiled for a header row: list of {column-index allowed-values}; a column that does not exist is all-empty
+proc ::ogf::cat::filter_specs {headers} {
+    variable colfilters
+    ::set out {}
+    dict for {col vals} $colfilters {
+        ::set i -1; ::set k 0
+        foreach h $headers {if {[string trim $h] eq $col} {::set i $k; break}; incr k}
+        ::lappend out [list $i $vals]
+    }
+    return $out
+}
+proc ::ogf::cat::filter_row_ok {specs fields} {
+    foreach sp $specs {
+        lassign $sp i vals
+        ::set v [expr {$i < 0 ? {} : [string trim [lindex $fields $i]]}]
+        if {$v ni $vals} {return 0}
+    }
+    return 1
+}
+proc ::ogf::cat::filter_text {} {
+    variable colfilters
+    ::set t {}
+    dict for {col vals} $colfilters {::lappend t "$col in {[join [lmap v $vals {expr {$v eq {} ? {(empty)} : $v}}] {, }]}"}
+    return [join $t {; }]
+}
+
+# commands called (no arguments) after the galaxy table has been (re)filled by CatalogPanelLoadTSV / CatalogPanelFilter: used to
+# decorate rows (the review colours)
+namespace eval ::ogf::cat {variable fillhooks {}}
+proc ::ogf::cat::on_table_filled {cmd} {variable fillhooks; if {$cmd ni $fillhooks} {::lappend fillhooks $cmd}}
+proc ::ogf::cat::_table_filled {} {
+    variable fillhooks
+    foreach c $fillhooks {if {[::catch {uplevel #0 $c} err]} {::ogf::log ERROR "table-filled hook $c: $err"}}
+}
+# column filters on columns that the new catalog does not have are dropped (a new extraction must not stay filtered by REVIEW)
+proc ::ogf::cat::filter_prune {headers} {
+    variable colfilters
+    ::set have [lmap h $headers {string trim $h}]
+    foreach col [dict keys $colfilters] {if {$col ni $have} {dict unset colfilters $col}}
+}
+
+# Write cells of the galaxy catalog.  changes = dict  NUMBER -> dict COLUMN -> VALUE.  Columns that do not exist yet are appended
+# (empty for the other rows).  The table is reloaded with the selection kept; the status line is left to the caller.  Returns the number of
+# rows changed.  This is the sanctioned way for a plugin to edit its own columns without a full add_columns round trip.
+proc ::ogf::cat::set_cells {changes} {
+    if {![has]} {return 0}
+    ::set lines [split [tsv] \n]
+    ::set headers [lmap h [split [lindex $lines 0] \t] {string trim $h}]
+    ::set ni [lsearch -exact $headers NUMBER]
+    if {$ni < 0} {error "catalog has no NUMBER column"}
+    ::set newcols {}
+    dict for {n d} $changes {dict for {c v} $d {if {$c ni $headers && $c ni $newcols} {::lappend newcols $c}}}
+    ::set allcols [concat $headers $newcols]
+    ::set out [list [join $allcols \t]]
+    ::set nchanged 0
+    foreach line [lrange $lines 1 end] {
+        if {[string trim $line] eq {}} continue
+        ::set f [split $line \t]
+        while {[llength $f] < [llength $headers]} {::lappend f {}}
+        foreach c $newcols {::lappend f {}}
+        ::set n [string trim [lindex $f $ni]]
+        if {[dict exists $changes $n]} {
+            dict for {c v} [dict get $changes $n] {lset f [lsearch -exact $allcols $c] $v}
+            incr nchanged
+        }
+        ::lappend out [join $f \t]
+    }
+    ::set sel [selection]
+    ::set status [get status {}]
+    CatalogPanelLoadTSV [join $out \n] review
+    ::set status $status
+    ::set first 1
+    foreach n $sel {CatalogPanelLinkSelect $n [expr {$first ? {replace} : {add}}] 0; ::set first 0}
+    return $nchanged
+}
+
+# NUMBERs of the rows the table shows now (text search AND column filters), in table order.  Galaxy catalog only.
+proc ::ogf::cat::shown_numbers {} {
+    if {![has]} {return {}}
+    ::set lines [split [tsv] \n]
+    ::set headers [split [lindex $lines 0] \t]
+    ::set ni [lsearch -exact [lmap h $headers {string trim $h}] NUMBER]
+    if {$ni < 0} {return {}}
+    ::set pat [get search_var {}]
+    ::set specs [expr {[filter_active] ? [filter_specs $headers] : {}}]
+    ::set out {}
+    foreach line [lrange $lines 1 end] {
+        if {[string trim $line] eq {}} continue
+        if {$pat ne {} && ![string match -nocase "*${pat}*" $line]} continue
+        ::set f [split $line \t]
+        if {[llength $specs] && ![filter_row_ok $specs $f]} continue
+        ::lappend out [string trim [lindex $f $ni]]
+    }
+    return $out
+}
+
 # result TSV (NUMBER + new columns) merged into the catalog; names = columns to take
 proc ::ogf::cat::add_columns {result_tsv names} {CatalogPanelAddColumnsFromTSV $result_tsv $names}
 proc ::ogf::cat::load_tsv {tsv name} {CatalogPanelLoadTSV $tsv $name}
@@ -120,6 +227,7 @@ namespace eval ::ogf::cat {
         {alldata                tsv    catalog   r    "the whole catalog as TSV text, header line first; written only by the catalog loaders (LoadTSV, AddColumns...); plugins use add_columns / load_tsv"}
         {sel,nums               list   catalog   r    "NUMBER values of the selected table rows"}
         {sel,*                  any    catalog   r    "selection internals (text, base)"}
+        {review,*               scalar report    rw   "review feature: review,show = which review states the table lists (all|accept|reject|uncertain|none|notrej); the decisions themselves live in the catalog columns REVIEW / REVIEW_NOTE / REVIEW_TIME"}
         {tbl                    widget catalog   r    "path of the table widget (legacy; not for new code)"}
         {tbldb                  array  catalog   r    "name of the table's data array (legacy; not for new code)"}
         {markall,on             bool   catalog   rw   "all catalog markers are drawn"}

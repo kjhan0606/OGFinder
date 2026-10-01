@@ -31,11 +31,14 @@ proc CatalogPanelFilter {} {
 
     # Filter data rows
     set row 1
+    set fspecs {}
+    if {[::ogf::cat::filter_active]} {set fspecs [::ogf::cat::filter_specs $headers]}
     for {set i 1} {$i < [llength $lines]} {incr i} {
 	set line [lindex $lines $i]
 	if {[string trim $line] eq {}} continue
 	if {$pattern ne {} && ![string match -nocase "*${pattern}*" $line]} continue
 	set fields [split $line "\t"]
+	if {[llength $fspecs] && ![::ogf::cat::filter_row_ok $fspecs $fields]} continue
 	for {set c 0} {$c < $ncols} {incr c} {
 	    set ${catpanel(tbldb)}($row,[expr {$c+1}]) \
 		[string trim [lindex $fields $c]]
@@ -48,8 +51,11 @@ proc CatalogPanelFilter {} {
 	-cols $ncols -rows $row
 
     catch {OGFTDAppendKindColumn $ncols $row}
+    ::ogf::cat::_table_filled
     set ndata [expr {$row - 1}]
-    if {$pattern eq {}} {
+    if {[llength $fspecs]} {
+	::ogf::cat::set status "Filtered: $ndata sources ([::ogf::cat::filter_text][expr {$pattern ne {} ? "; matching '$pattern'" : {}}])"
+    } elseif {$pattern eq {}} {
 	::ogf::cat::set status "Showing all $ndata sources"
     } else {
 	::ogf::cat::set status "Filtered: $ndata sources matching '$pattern'"
