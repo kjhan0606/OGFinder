@@ -7,17 +7,17 @@ proc CatalogPanelFilter {} {
     # time-domain views filter their own rows
     if {[catch {::ogf::td::active} _tda]} {set _tda 0}
     if {$_tda} {::ogf::td::fill; return}
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set pattern $catpanel(search_var)
+    set pattern [::ogf::cat::get search_var]
 
-    global $catpanel(tbldb)
+    global [::ogf::cat::get tbldb]
 
     # Unbind table while modifying
-    $catpanel(tbl) configure -variable {}
-    unset -nocomplain $catpanel(tbldb)
+    [::ogf::cat::get tbl] configure -variable {}
+    unset -nocomplain [::ogf::cat::get tbldb]
 
-    set data $catpanel(alldata)
+    set data [::ogf::cat::tsv]
     set lines [split $data \n]
 
     # Header
@@ -44,15 +44,15 @@ proc CatalogPanelFilter {} {
     }
 
     # Rebind table to trigger full refresh
-    $catpanel(tbl) configure -variable $catpanel(tbldb) \
+    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
 	-cols $ncols -rows $row
 
     catch {OGFTDAppendKindColumn $ncols $row}
     set ndata [expr {$row - 1}]
     if {$pattern eq {}} {
-	set catpanel(status) "Showing all $ndata sources"
+	::ogf::cat::set status "Showing all $ndata sources"
     } else {
-	set catpanel(status) "Filtered: $ndata sources matching '$pattern'"
+	::ogf::cat::set status "Filtered: $ndata sources matching '$pattern'"
     }
 }
 
@@ -60,12 +60,12 @@ proc CatalogPanelFilter {} {
 proc CatalogPanelUpdateSelInfo {row} {
     global catpanel
     if {![catch {::ogf::td::selinfo $row} _tds] && $_tds} return
-    global $catpanel(tbldb)
+    global [::ogf::cat::get tbldb]
 
     set want {NUMBER X_IMAGE Y_IMAGE ALPHA_J2000 DELTA_J2000 MAG_AUTO
 	FWHM_IMAGE ELLIPTICITY CLASS_STAR}
     set idx {}
-    set ncols [$catpanel(tbl) cget -cols]
+    set ncols [[::ogf::cat::get tbl] cget -cols]
     for {set c 1} {$c <= $ncols} {incr c} {
 	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
 	    dict set idx [set ${catpanel(tbldb)}(0,$c)] $c
@@ -85,7 +85,7 @@ proc CatalogPanelUpdateSelInfo {row} {
 	}
 	dict set v $k $val
     }
-    set catpanel(sel,text) [format \
+    ::ogf::cat::set sel,text [format \
 	"Source #%s   x,y = %s, %s\nRA,Dec = %s, %s\nMAG_AUTO = %s   FWHM = %s   e = %s   Star = %s" \
 	[dict get $v NUMBER] [dict get $v X_IMAGE] [dict get $v Y_IMAGE] \
 	[dict get $v ALPHA_J2000] [dict get $v DELTA_J2000] \
@@ -94,7 +94,6 @@ proc CatalogPanelUpdateSelInfo {row} {
 }
 
 proc CatalogPanelSelectCmd {prev cur} {
-    global catpanel
 
     # cur is "row,col" of current selection
     set row [lindex [split $cur ,] 0]
@@ -104,10 +103,10 @@ proc CatalogPanelSelectCmd {prev cur} {
     # keep the link state in step with clicks in the table itself
     set num [OGFNumberOfRow $row]
     if {$num ne {}} {
-	set catpanel(sel,nums) [list $num]
-	catch {$catpanel(tbl) tag delete msel}
-	catch {$catpanel(tbl) tag configure msel -bg #9cc7f5 -fg black}
-	OGFSetSelBase $catpanel(sel,text)
+	::ogf::cat::set sel,nums [list $num]
+	catch {[::ogf::cat::get tbl] tag delete msel}
+	catch {[::ogf::cat::get tbl] tag configure msel -bg #9cc7f5 -fg black}
+	OGFSetSelBase [::ogf::cat::get sel,text]
     }
     after cancel CatalogPanelGotoSource
     after 100 [list CatalogPanelGotoSource $row]
@@ -123,10 +122,10 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
-    global $catpanel(tbldb)
+    global [::ogf::cat::get tbldb]
 
     # Find column indices from header row
-    set ncols [$catpanel(tbl) cget -cols]
+    set ncols [[::ogf::cat::get tbl] cget -cols]
     set col_x -1
     set col_y -1
     set col_a -1
@@ -207,7 +206,7 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     }
 
     # Rebuild sextract_all markers from alldata to keep image in sync
-    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+    if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {
 	CatalogPanelCreateAllMarkers
     }
 
@@ -237,13 +236,13 @@ proc CatalogPanelGotoSource {row {pan 1}} {
 	PanToFrame $current(frame) $x $y image {}
     }
 
-    set catpanel(status) "Source at image ($x, $y)"
+    ::ogf::cat::set status "Source at image ($x, $y)"
 }
 
 proc CatalogPanelTableClick {x y} {
     global catpanel
 
-    set tbl $catpanel(tbl)
+    set tbl [::ogf::cat::get tbl]
     set idx [$tbl index @$x,$y]
     set row [lindex [split $idx ,] 0]
 
@@ -252,33 +251,32 @@ proc CatalogPanelTableClick {x y} {
 
     set col [lindex [split $idx ,] 1]
 
-    global $catpanel(tbldb)
+    global [::ogf::cat::get tbldb]
     if {![info exists ${catpanel(tbldb)}(0,$col)]} return
     set colname [set ${catpanel(tbldb)}(0,$col)]
 
     # Toggle direction if same column clicked again
-    if {$catpanel(sort,col) eq $colname} {
-	if {$catpanel(sort,dir) eq "ascending"} {
-	    set catpanel(sort,dir) descending
+    if {[::ogf::cat::get sort,col] eq $colname} {
+	if {[::ogf::cat::get sort,dir] eq "ascending"} {
+	    ::ogf::cat::set sort,dir descending
 	} else {
-	    set catpanel(sort,dir) ascending
+	    ::ogf::cat::set sort,dir ascending
 	}
     } else {
-	set catpanel(sort,col) $colname
-	set catpanel(sort,dir) ascending
+	::ogf::cat::set sort,col $colname
+	::ogf::cat::set sort,dir ascending
     }
 
-    CatalogPanelSort $colname $catpanel(sort,dir)
+    CatalogPanelSort $colname [::ogf::cat::get sort,dir]
 }
 
 proc CatalogPanelSort {colname direction} {
-    global catpanel
 
     if {[catch {::ogf::td::active} _tda]} {set _tda 0}
     if {$_tda} {::ogf::td::sort $colname $direction; return}
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
 
@@ -331,12 +329,12 @@ proc CatalogPanelSort {colname direction} {
     foreach drow $sortedrows {
 	append newdata "\n$drow"
     }
-    set catpanel(alldata) $newdata
+    ::ogf::cat::set alldata $newdata
 
     # Reload table
-    CatalogPanelLoadTSV $catpanel(alldata) "sorted"
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "sorted"
 
-    set catpanel(status) "Sorted by $colname $direction"
+    ::ogf::cat::set status "Sorted by $colname $direction"
 }
 
 proc CatalogPanelSortCmpNum {colidx a b} {

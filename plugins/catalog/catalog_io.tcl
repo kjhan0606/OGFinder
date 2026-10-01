@@ -5,25 +5,25 @@
 proc CatalogPanelLoadTSV {data source_name} {
     global catpanel
 
-    global $catpanel(tbldb)
+    global [::ogf::cat::get tbldb]
 
     # Unbind table from variable while modifying
-    $catpanel(tbl) configure -variable {}
+    [::ogf::cat::get tbl] configure -variable {}
 
-    unset -nocomplain $catpanel(tbldb)
+    unset -nocomplain [::ogf::cat::get tbldb]
 
     set lines [split $data \n]
     set nlines [llength $lines]
 
     if {$nlines < 2} {
-	set catpanel(status) "No sources detected"
-	$catpanel(tbl) configure -variable $catpanel(tbldb)
+	::ogf::cat::set status "No sources detected"
+	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb]
 	return
     }
 
     # Store for filtering
-    set catpanel(alldata) $data
-    set catpanel(delim) "\t"
+    ::ogf::cat::set alldata $data
+    ::ogf::cat::set delim "\t"
     catch {OGFSessOnCatalogLoad $source_name}
 
     # Parse header
@@ -50,17 +50,16 @@ proc CatalogPanelLoadTSV {data source_name} {
     }
 
     # Rebind table and configure dimensions to trigger full refresh
-    $catpanel(tbl) configure -variable $catpanel(tbldb) \
+    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
 	-cols $ncols -rows $row -state disabled
 
     set nobj [expr {$row - 1}]
-    set catpanel(status) "$source_name: $nobj sources extracted"
+    ::ogf::cat::set status "$source_name: $nobj sources extracted"
     catch {OGFTDGalaxyLoaded}
     catch {OGFTDAppendKindColumn $ncols $row}
 }
 
 proc CatalogPanelClear {} {
-    global catpanel
     global current
 
     # Delete all sextract markers
@@ -71,52 +70,51 @@ proc CatalogPanelClear {} {
     }
 
     catch {OGFSessLog catalog.clear manual {} -tool native -title "Clear catalog"}
-    global $catpanel(tbldb)
-    $catpanel(tbl) configure -variable {}
-    unset -nocomplain $catpanel(tbldb)
-    $catpanel(tbl) configure -variable $catpanel(tbldb) \
+    global [::ogf::cat::get tbldb]
+    [::ogf::cat::get tbl] configure -variable {}
+    unset -nocomplain [::ogf::cat::get tbldb]
+    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
 	-cols 19 -rows 20
 
-    set catpanel(status) {Ready}
+    ::ogf::cat::set status {Ready}
     catch {CatalogPanelClearSelection}
-    set catpanel(sel,text) {No source selected}
-    set catpanel(filename) {}
-    set catpanel(alldata) {}
+    ::ogf::cat::set sel,text {No source selected}
+    ::ogf::cat::set filename {}
+    ::ogf::cat::set alldata {}
     catch {OGFTDGalaxyLoaded}
 
     # Reset merge state
-    set catpanel(merge,list) {}
-    set catpanel(merge,active) 0
+    ::ogf::cat::set merge,list {}
+    ::ogf::cat::set merge,active 0
 
     # Reset mark all state
-    set catpanel(markall,on) 0
+    ::ogf::cat::set markall,on 0
 
     # Reset visible mode
-    set catpanel(visible_mode) 0
+    ::ogf::cat::set visible_mode 0
 
     # Reset add objects mode
-    set catpanel(add_objects_mode) 0
+    ::ogf::cat::set add_objects_mode 0
 
     # Reset trim state
-    set catpanel(trim,active) 0
+    ::ogf::cat::set trim,active 0
 
     # Reset AI merge state
     if {$current(frame) != {}} {
 	catch {$current(frame) marker catalog ai_merge delete}
     }
-    set catpanel(ai,groups) {}
-    set catpanel(ai,active) 0
-    set catpanel(ai,total) 0
-    set catpanel(ai,current) 0
+    ::ogf::cat::set ai,groups {}
+    ::ogf::cat::set ai,active 0
+    ::ogf::cat::set ai,total 0
+    ::ogf::cat::set ai,current 0
     CatalogPanelAIUnbindKeys
 }
 
 proc CatalogPanelSaveCatalog {} {
-    global catpanel
 
     if {[catch {::ogf::td::active} _tda]} {set _tda 0}
-    if {!$_tda && (![info exists catpanel(alldata)] || $catpanel(alldata) eq {})} {
-	set catpanel(status) "No catalog to save"
+    if {!$_tda && (![::ogf::cat::has])} {
+	::ogf::cat::set status "No catalog to save"
 	return
     }
 
@@ -134,11 +132,10 @@ proc CatalogPanelSaveCatalog {} {
 
 # Write the catalog to FN (.tsv or .csv).  Also what the session recorder replays.
 proc CatalogPanelSaveCatalogTo {fn} {
-    global catpanel
     if {[catch {::ogf::td::active} _tda]} {set _tda 0}
     if {$_tda} {::ogf::td::save $fn; return}
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No catalog to save"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No catalog to save"
 	return
     }
     OGFSessLog catalog.save auto {} -tool native -title "Save catalog as [file tail $fn]" \
@@ -147,7 +144,7 @@ proc CatalogPanelSaveCatalogTo {fn} {
 
     if {$ext eq ".csv"} {
 	# Convert TSV to CSV
-	set lines [split $catpanel(alldata) \n]
+	set lines [split [::ogf::cat::tsv] \n]
 	set csvdata {}
 	foreach line $lines {
 	    if {[string trim $line] eq {}} continue
@@ -165,7 +162,7 @@ proc CatalogPanelSaveCatalogTo {fn} {
 	}
 	set outdata [join $csvdata \n]
     } else {
-	set outdata $catpanel(alldata)
+	set outdata [::ogf::cat::tsv]
     }
 
     if {[catch {
@@ -173,17 +170,16 @@ proc CatalogPanelSaveCatalogTo {fn} {
 	puts -nonewline $fd $outdata
 	close $fd
     } err]} {
-	set catpanel(status) "Save error: $err"
+	::ogf::cat::set status "Save error: $err"
 	return
     }
 
-    set nlines [llength [split $catpanel(alldata) \n]]
+    set nlines [llength [split [::ogf::cat::tsv] \n]]
     set nobj [expr {$nlines - 1}]
-    set catpanel(status) "Saved $nobj sources to [file tail $fn]"
+    ::ogf::cat::set status "Saved $nobj sources to [file tail $fn]"
 }
 
 proc CatalogPanelLoadCatalog {} {
-    global catpanel
 
     set fn [tk_getOpenFile \
 		-title "Load Catalog" \
@@ -199,13 +195,13 @@ proc CatalogPanelLoadCatalog {} {
 	set rawdata [read $fd]
 	close $fd
     } err]} {
-	set catpanel(status) "Load error: $err"
+	::ogf::cat::set status "Load error: $err"
 	return
     }
 
     set rawdata [string trimright $rawdata \n]
     if {$rawdata eq {}} {
-	set catpanel(status) "Empty file: [file tail $fn]"
+	::ogf::cat::set status "Empty file: [file tail $fn]"
 	return
     }
 
@@ -292,13 +288,12 @@ proc CatalogPanelFitsBaseName {fn} {
 }
 
 proc CatalogPanelSaveTempCatalog {suffix} {
-    global catpanel
     set tmpdir [file join [file normalize ~] .ds9]
     if {![file isdirectory $tmpdir]} { file mkdir $tmpdir }
     set tmpfile [file join $tmpdir "${suffix}_catalog.tsv"]
     if {[catch {
 	set fd [open $tmpfile w]
-	puts -nonewline $fd $catpanel(alldata)
+	puts -nonewline $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
 	return {}
@@ -307,7 +302,6 @@ proc CatalogPanelSaveTempCatalog {suffix} {
 }
 
 proc CatalogPanelAddColumnsFromTSV {result_data col_names} {
-    global catpanel
     catch {OGFSessOnAddColumns $result_data $col_names}
 
     # Parse result
@@ -350,7 +344,7 @@ proc CatalogPanelAddColumnsFromTSV {result_data col_names} {
     }
 
     # Parse alldata
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set headers [split [lindex $lines 0] "\t"]
     set ncols [llength $headers]
 
@@ -433,15 +427,14 @@ proc CatalogPanelAddColumnsFromTSV {result_data col_names} {
 	}
     }
 
-    set catpanel(alldata) $newdata
-    CatalogPanelLoadTSV $catpanel(alldata) "analysis"
+    ::ogf::cat::set alldata $newdata
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "analysis"
 }
 
 proc CatalogPanelExportRegions {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No catalog to export"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No catalog to export"
 	return
     }
 
@@ -455,7 +448,7 @@ proc CatalogPanelExportRegions {} {
     if {$fn eq {}} return
 
     # Parse alldata
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set headers [split [lindex $lines 0] "\t"]
     set col_map {}
     for {set c 0} {$c < [llength $headers]} {incr c} {
@@ -464,7 +457,7 @@ proc CatalogPanelExportRegions {} {
 
     foreach needed {X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE NUMBER} {
 	if {![dict exists $col_map $needed]} {
-	    set catpanel(status) "Missing column: $needed"
+	    ::ogf::cat::set status "Missing column: $needed"
 	    return
 	}
     }
@@ -498,18 +491,17 @@ proc CatalogPanelExportRegions {} {
 	}
 	close $fd
     } err]} {
-	set catpanel(status) "Export error: $err"
+	::ogf::cat::set status "Export error: $err"
 	return
     }
 
-    set catpanel(status) "Exported $nreg regions to [file tail $fn]"
+    ::ogf::cat::set status "Exported $nreg regions to [file tail $fn]"
 }
 
 proc CatalogPanelExportFITS {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No catalog to export"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No catalog to export"
 	return
     }
 
@@ -525,35 +517,35 @@ proc CatalogPanelExportFITS {} {
     # Save temp TSV
     set tmpfile [CatalogPanelSaveTempCatalog "fits_export"]
     if {$tmpfile eq {}} {
-	set catpanel(status) "Failed to save temp catalog"
+	::ogf::cat::set status "Failed to save temp catalog"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_fits_export.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_fits_export.py"
+	::ogf::cat::set status "Script not found: ds9_fits_export.py"
 	return
     }
 
-    set catpanel(status) "Exporting FITS table..."
+    ::ogf::cat::set status "Exporting FITS table..."
     update idletasks
 
     OGFSessLog catalog.export_fits auto [list [OGFPython] $script --input $tmpfile --output $fn] -title "Export FITS table [file tail $fn]" -useroutputs [list $fn]
     if {[catch {
 	set data [exec [OGFPython] $script --input $tmpfile --output $fn 2>@stderr]
     } err]} {
-	set catpanel(status) "FITS export error: $err"
+	::ogf::cat::set status "FITS export error: $err"
 	return
     }
 
-    set catpanel(status) "Exported FITS table to [file tail $fn]"
+    ::ogf::cat::set status "Exported FITS table to [file tail $fn]"
 }
 
 proc CatalogPanelSaveFrameState {frame} {
-    global catpanel catpanel_fdata
+    global catpanel_fdata
 
     if {$frame eq {}} return
-    if {![info exists catpanel(alldata)]} return
+    if {![::ogf::cat::exists alldata]} return
 
     # Core catalog + display + merge + AI merge
     foreach key {
@@ -569,17 +561,17 @@ proc CatalogPanelSaveFrameState {frame} {
 	lsbg,segmap_file lsbg,catalog_file
 	status search_var
     } {
-	if {[info exists catpanel($key)]} {
-	    set catpanel_fdata($frame,$key) $catpanel($key)
+	if {[::ogf::cat::exists $key]} {
+	    set catpanel_fdata($frame,$key) [::ogf::cat::get $key]
 	}
     }
 
     # Morph data: save map + per-source entries
-    if {[info exists catpanel(morph,map)]} {
-	set catpanel_fdata($frame,morph,map) $catpanel(morph,map)
-	foreach src_num $catpanel(morph,map) {
-	    if {[info exists catpanel(morph,$src_num)]} {
-		set catpanel_fdata($frame,morph,$src_num) $catpanel(morph,$src_num)
+    if {[::ogf::cat::exists morph,map]} {
+	set catpanel_fdata($frame,morph,map) [::ogf::cat::get morph,map]
+	foreach src_num [::ogf::cat::get morph,map] {
+	    if {[::ogf::cat::exists morph,$src_num]} {
+		set catpanel_fdata($frame,morph,$src_num) [::ogf::cat::get morph,$src_num]
 	    }
 	}
     } else {
@@ -588,76 +580,76 @@ proc CatalogPanelSaveFrameState {frame} {
 }
 
 proc CatalogPanelRestoreFrameState {frame} {
-    global catpanel catpanel_fdata
+    global catpanel_fdata
 
     if {$frame eq {}} return
 
     # Unbind AI keys if active
-    if {[info exists catpanel(ai,active)] && $catpanel(ai,active)} {
+    if {[::ogf::cat::exists ai,active] && [::ogf::cat::get ai,active]} {
 	CatalogPanelAIUnbindKeys
     }
 
     # Check if we have saved data for this frame
     if {![info exists catpanel_fdata($frame,alldata)]} {
 	# No saved state — initialize to empty (without deleting markers)
-	global $catpanel(tbldb)
-	$catpanel(tbl) configure -variable {}
-	unset -nocomplain $catpanel(tbldb)
-	$catpanel(tbl) configure -variable $catpanel(tbldb) \
+	global [::ogf::cat::get tbldb]
+	[::ogf::cat::get tbl] configure -variable {}
+	unset -nocomplain [::ogf::cat::get tbldb]
+	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
 	    -cols 19 -rows 20
 
-	set catpanel(alldata) {}
-	set catpanel(filename) {}
-	set catpanel(sort,col) {}
-	set catpanel(sort,dir) {}
-	set catpanel(visible_mode) 0
-	set catpanel(markall,on) 0
-	set catpanel(add_objects_mode) 0
-	set catpanel(trim,active) 0
-	set catpanel(merge,list) {}
-	set catpanel(merge,active) 0
-	set catpanel(ai,groups) {}
-	set catpanel(ai,current) 0
-	set catpanel(ai,total) 0
-	set catpanel(ai,active) 0
-	set catpanel(psf,stars) {}
-	set catpanel(psf,star_indices) {}
-	set catpanel(psf,file) [file join [file normalize ~] .ds9 psf_current.fits]
-	set catpanel(psf,has_psf) 0
-	set catpanel(icl,fits_base) {}
-	set catpanel(icl,has_mask) 0
-	set catpanel(icl,has_bkg) 0
-	set catpanel(icl,has_profile) 0
-	set catpanel(icl,center_x) {}
-	set catpanel(icl,center_y) {}
-	set catpanel(icl,click_mode) 0
-	set catpanel(icl,mask_file) [file join [file normalize ~] .ds9 icl_mask.fits]
-	set catpanel(icl,masked_file) [file join [file normalize ~] .ds9 icl_masked.fits]
-	set catpanel(icl,bkg_file) [file join [file normalize ~] .ds9 icl_background.fits]
-	set catpanel(icl,bgsub_file) [file join [file normalize ~] .ds9 icl_bgsub.fits]
-	set catpanel(icl,profile_file) [file join [file normalize ~] .ds9 icl_profile.tsv]
-	set catpanel(lsbg,fits_base) {}
-	set catpanel(lsbg,has_mask) 0
-	set catpanel(lsbg,has_clean) 0
-	set catpanel(lsbg,has_detect) 0
-	set catpanel(lsbg,has_catalog) 0
-	set catpanel(lsbg,detect_data) {}
-	set catpanel(lsbg,mask_file) [file join [file normalize ~] .ds9 lsbg_mask.fits]
-	set catpanel(lsbg,masked_file) [file join [file normalize ~] .ds9 lsbg_masked.fits]
-	set catpanel(lsbg,bkg_file) [file join [file normalize ~] .ds9 lsbg_background.fits]
-	set catpanel(lsbg,cleaned_file) [file join [file normalize ~] .ds9 lsbg_cleaned.fits]
-	set catpanel(lsbg,segmap_file) [file join [file normalize ~] .ds9 lsbg_segmap.fits]
-	set catpanel(lsbg,catalog_file) [file join [file normalize ~] .ds9 lsbg_catalog.tsv]
-	set catpanel(status) {Ready}
-	set catpanel(search_var) {}
+	::ogf::cat::set alldata {}
+	::ogf::cat::set filename {}
+	::ogf::cat::set sort,col {}
+	::ogf::cat::set sort,dir {}
+	::ogf::cat::set visible_mode 0
+	::ogf::cat::set markall,on 0
+	::ogf::cat::set add_objects_mode 0
+	::ogf::cat::set trim,active 0
+	::ogf::cat::set merge,list {}
+	::ogf::cat::set merge,active 0
+	::ogf::cat::set ai,groups {}
+	::ogf::cat::set ai,current 0
+	::ogf::cat::set ai,total 0
+	::ogf::cat::set ai,active 0
+	::ogf::cat::set psf,stars {}
+	::ogf::cat::set psf,star_indices {}
+	::ogf::cat::set psf,file [file join [file normalize ~] .ds9 psf_current.fits]
+	::ogf::cat::set psf,has_psf 0
+	::ogf::cat::set icl,fits_base {}
+	::ogf::cat::set icl,has_mask 0
+	::ogf::cat::set icl,has_bkg 0
+	::ogf::cat::set icl,has_profile 0
+	::ogf::cat::set icl,center_x {}
+	::ogf::cat::set icl,center_y {}
+	::ogf::cat::set icl,click_mode 0
+	::ogf::cat::set icl,mask_file [file join [file normalize ~] .ds9 icl_mask.fits]
+	::ogf::cat::set icl,masked_file [file join [file normalize ~] .ds9 icl_masked.fits]
+	::ogf::cat::set icl,bkg_file [file join [file normalize ~] .ds9 icl_background.fits]
+	::ogf::cat::set icl,bgsub_file [file join [file normalize ~] .ds9 icl_bgsub.fits]
+	::ogf::cat::set icl,profile_file [file join [file normalize ~] .ds9 icl_profile.tsv]
+	::ogf::cat::set lsbg,fits_base {}
+	::ogf::cat::set lsbg,has_mask 0
+	::ogf::cat::set lsbg,has_clean 0
+	::ogf::cat::set lsbg,has_detect 0
+	::ogf::cat::set lsbg,has_catalog 0
+	::ogf::cat::set lsbg,detect_data {}
+	::ogf::cat::set lsbg,mask_file [file join [file normalize ~] .ds9 lsbg_mask.fits]
+	::ogf::cat::set lsbg,masked_file [file join [file normalize ~] .ds9 lsbg_masked.fits]
+	::ogf::cat::set lsbg,bkg_file [file join [file normalize ~] .ds9 lsbg_background.fits]
+	::ogf::cat::set lsbg,cleaned_file [file join [file normalize ~] .ds9 lsbg_cleaned.fits]
+	::ogf::cat::set lsbg,segmap_file [file join [file normalize ~] .ds9 lsbg_segmap.fits]
+	::ogf::cat::set lsbg,catalog_file [file join [file normalize ~] .ds9 lsbg_catalog.tsv]
+	::ogf::cat::set status {Ready}
+	::ogf::cat::set search_var {}
 
 	# Clear morph state
-	if {[info exists catpanel(morph,map)]} {
-	    foreach src_num $catpanel(morph,map) {
-		unset -nocomplain catpanel(morph,$src_num)
+	if {[::ogf::cat::exists morph,map]} {
+	    foreach src_num [::ogf::cat::get morph,map] {
+		::ogf::cat::unset morph,$src_num
 	    }
 	}
-	set catpanel(morph,map) {}
+	::ogf::cat::set morph,map {}
 
 	return
     }
@@ -677,35 +669,35 @@ proc CatalogPanelRestoreFrameState {frame} {
 	status search_var
     } {
 	if {[info exists catpanel_fdata($frame,$key)]} {
-	    set catpanel($key) $catpanel_fdata($frame,$key)
+	    ::ogf::cat::set $key $catpanel_fdata($frame,$key)
 	}
     }
 
     # Restore morph data
     # First clear old morph entries
-    if {[info exists catpanel(morph,map)]} {
-	foreach src_num $catpanel(morph,map) {
-	    unset -nocomplain catpanel(morph,$src_num)
+    if {[::ogf::cat::exists morph,map]} {
+	foreach src_num [::ogf::cat::get morph,map] {
+	    ::ogf::cat::unset morph,$src_num
 	}
     }
-    set catpanel(morph,map) {}
+    ::ogf::cat::set morph,map {}
     if {[info exists catpanel_fdata($frame,morph,map)]} {
-	set catpanel(morph,map) $catpanel_fdata($frame,morph,map)
-	foreach src_num $catpanel(morph,map) {
+	::ogf::cat::set morph,map $catpanel_fdata($frame,morph,map)
+	foreach src_num [::ogf::cat::get morph,map] {
 	    if {[info exists catpanel_fdata($frame,morph,$src_num)]} {
-		set catpanel(morph,$src_num) $catpanel_fdata($frame,morph,$src_num)
+		::ogf::cat::set morph,$src_num $catpanel_fdata($frame,morph,$src_num)
 	    }
 	}
     }
 
     # Reload the table from alldata
-    if {$catpanel(alldata) ne {}} {
-	CatalogPanelLoadTSV $catpanel(alldata) [file tail $catpanel(filename)]
+    if {[::ogf::cat::tsv] ne {}} {
+	CatalogPanelLoadTSV [::ogf::cat::tsv] [file tail [::ogf::cat::get filename]]
     } else {
-	global $catpanel(tbldb)
-	$catpanel(tbl) configure -variable {}
-	unset -nocomplain $catpanel(tbldb)
-	$catpanel(tbl) configure -variable $catpanel(tbldb) \
+	global [::ogf::cat::get tbldb]
+	[::ogf::cat::get tbl] configure -variable {}
+	unset -nocomplain [::ogf::cat::get tbldb]
+	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
 	    -cols 19 -rows 20
     }
 }
@@ -733,54 +725,53 @@ proc CatalogPanelDeleteFrameState {frame} {
 }
 
 proc CatalogPanelClearAll {} {
-    global catpanel
 
     # Clear table
-    if {[info exists catpanel(tbldb)] && [info exists catpanel(tbl)]} {
-	global $catpanel(tbldb)
-	$catpanel(tbl) configure -variable {}
-	unset -nocomplain $catpanel(tbldb)
-	$catpanel(tbl) configure -variable $catpanel(tbldb) \
+    if {[::ogf::cat::exists tbldb] && [::ogf::cat::exists tbl]} {
+	global [::ogf::cat::get tbldb]
+	[::ogf::cat::get tbl] configure -variable {}
+	unset -nocomplain [::ogf::cat::get tbldb]
+	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
 	    -cols 19 -rows 20
     }
 
-    set catpanel(alldata) {}
-    set catpanel(filename) {}
-    set catpanel(sort,col) {}
-    set catpanel(sort,dir) {}
-    set catpanel(visible_mode) 0
-    set catpanel(markall,on) 0
-    set catpanel(add_objects_mode) 0
-    set catpanel(trim,active) 0
-    set catpanel(merge,list) {}
-    set catpanel(merge,active) 0
-    set catpanel(ai,groups) {}
-    set catpanel(ai,current) 0
-    set catpanel(ai,total) 0
-    set catpanel(ai,active) 0
-    set catpanel(psf,stars) {}
-    set catpanel(psf,star_indices) {}
-    set catpanel(psf,has_psf) 0
-    set catpanel(icl,has_mask) 0
-    set catpanel(icl,has_bkg) 0
-    set catpanel(icl,has_profile) 0
-    set catpanel(icl,center_x) {}
-    set catpanel(icl,center_y) {}
-    set catpanel(icl,click_mode) 0
-    set catpanel(lsbg,has_mask) 0
-    set catpanel(lsbg,has_clean) 0
-    set catpanel(lsbg,has_detect) 0
-    set catpanel(lsbg,has_catalog) 0
-    set catpanel(lsbg,detect_data) {}
-    set catpanel(status) {Ready}
-    set catpanel(search_var) {}
+    ::ogf::cat::set alldata {}
+    ::ogf::cat::set filename {}
+    ::ogf::cat::set sort,col {}
+    ::ogf::cat::set sort,dir {}
+    ::ogf::cat::set visible_mode 0
+    ::ogf::cat::set markall,on 0
+    ::ogf::cat::set add_objects_mode 0
+    ::ogf::cat::set trim,active 0
+    ::ogf::cat::set merge,list {}
+    ::ogf::cat::set merge,active 0
+    ::ogf::cat::set ai,groups {}
+    ::ogf::cat::set ai,current 0
+    ::ogf::cat::set ai,total 0
+    ::ogf::cat::set ai,active 0
+    ::ogf::cat::set psf,stars {}
+    ::ogf::cat::set psf,star_indices {}
+    ::ogf::cat::set psf,has_psf 0
+    ::ogf::cat::set icl,has_mask 0
+    ::ogf::cat::set icl,has_bkg 0
+    ::ogf::cat::set icl,has_profile 0
+    ::ogf::cat::set icl,center_x {}
+    ::ogf::cat::set icl,center_y {}
+    ::ogf::cat::set icl,click_mode 0
+    ::ogf::cat::set lsbg,has_mask 0
+    ::ogf::cat::set lsbg,has_clean 0
+    ::ogf::cat::set lsbg,has_detect 0
+    ::ogf::cat::set lsbg,has_catalog 0
+    ::ogf::cat::set lsbg,detect_data {}
+    ::ogf::cat::set status {Ready}
+    ::ogf::cat::set search_var {}
 
     # Clear morph state
-    if {[info exists catpanel(morph,map)]} {
-	foreach src_num $catpanel(morph,map) {
-	    unset -nocomplain catpanel(morph,$src_num)
+    if {[::ogf::cat::exists morph,map]} {
+	foreach src_num [::ogf::cat::get morph,map] {
+	    ::ogf::cat::unset morph,$src_num
 	}
     }
-    set catpanel(morph,map) {}
+    ::ogf::cat::set morph,map {}
 }
 
