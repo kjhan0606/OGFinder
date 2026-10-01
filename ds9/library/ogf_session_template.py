@@ -399,7 +399,7 @@ def post_process(field, rec, out):
     kind = post.get('kind', '')
     res = strip_one_nl(out)
     tmp = os.path.join(field.work, 'last_result.tsv')
-    if kind in ('set', 'add', 'star', 'morph'):
+    if kind in ('set', 'add', 'star', 'morph', 'ai'):
         write_text(tmp, res)
     if kind == 'set':
         extra = ['--force'] if post.get('force') else []
@@ -415,6 +415,17 @@ def post_process(field, rec, out):
         cols = ','.join(post.get('cols', []))
         r = catalog_tool(field, 'add-columns', '--catalog', field.cat_path(), '--result', tmp, '--columns', cols)
         field.log('  catalog: ' + r.strip())
+    elif kind == 'ai':
+        # external AI service columns (ai.run): new columns first, then the ones that already exist
+        # (CatalogPanelAddColumnsFromTSV skips new columns when any requested one exists)
+        if not field.get_cat():
+            raise StepFail('no catalog to add columns to')
+        have = field.get_cat().split('\n')[0].split('\t')
+        cols = list(post.get('cols', []))
+        for grp in ([c for c in cols if c not in have], [c for c in cols if c in have]):
+            if grp:
+                r = catalog_tool(field, 'add-columns', '--catalog', field.cat_path(), '--result', tmp, '--columns', ','.join(grp))
+                field.log('  catalog: ' + r.strip())
     elif kind == 'star':
         r = catalog_tool(field, 'add-columns', '--catalog', field.cat_path(), '--result', tmp,
                          '--columns', 'AI_STAR,AI_STAR_CONF', '--strip-comments')
@@ -729,7 +740,7 @@ def check_requirements(field, rec):
             return 'intermediate input %s was not produced (the step that creates it did not run)' % os.path.relpath(
                 p, field.dir)
     if rec.get('network') and str(rec.get('network')) not in ('0', '') and not (field.replay or field.args.allow_network):
-        return 'needs network access (VizieR); use --allow-network'
+        return 'needs network access (%s); use --allow-network' % ('external AI service' if rec['step'] == 'ai.run' else 'VizieR')
     return None
 
 
@@ -1047,7 +1058,7 @@ def finish_field(field, status, fail_step, fail_msg, counts):
             if rel in ('manifest.json',) or f.endswith('.tmp'):
                 continue
             ent = {'path': rel, 'size': os.path.getsize(p)}
-            volatile = ('.undo' + os.sep in rel or '.redo' + os.sep in rel or f.endswith('.log')
+            volatile = ('.undo' + os.sep in rel or '.redo' + os.sep in rel or f.endswith('.log') or f.endswith('.provenance.json')
                         or rel.startswith('work' + os.sep + 'edit_'))
             if volatile:
                 ent['volatile'] = True
@@ -1288,7 +1299,7 @@ def main(argv=None):
     ap.add_argument('--trim', action='append', default=[], metavar='COL=MIN:MAX',
                     help='pipeline mode: replace the limits of the recorded catalog trim/filter steps '
                          '(either bound may be empty), e.g. --trim MAG_AUTO=18:27')
-    ap.add_argument('--allow-network', action='store_true', help='run steps that need network access (cross-match)')
+    ap.add_argument('--allow-network', action='store_true', help='run steps that need network access (cross-match, external AI services)')
     ap.add_argument('--jobs', type=int, default=1, help='fields processed in parallel')
     ap.add_argument('--resume', action='store_true', help='skip steps whose inputs/parameters are unchanged')
     ap.add_argument('--zp', action='append', default=[], metavar='[BAND=]ZP', help='AB zeropoint override')

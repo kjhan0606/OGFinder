@@ -1,0 +1,128 @@
+{
+  "_README": "EXAMPLE / TEMPLATE profiles for OGFinder 'AI Services'. Copy to ~/.ds9/ai_services.json and edit. JSON has no comments, so keys starting with '_' are notes and are ignored. NOTHING here is a verified endpoint: every URL uses the reserved host example.invalid and cannot work until you replace it with a service you have access to and whose API you have read. Secrets are NEVER stored here: 'auth.env' is only the NAME of an environment variable.",
+  "schema": "ogf-ai-bridge/1",
+  "services": [
+    {
+      "name": "template_photoz_rest",
+      "template": true,
+      "enabled": false,
+      "_note": "TEMPLATE. JSON-in/JSON-out REST service, one request per object, bearer token read from $MY_PHOTOZ_TOKEN.",
+      "description": "TEMPLATE: photo-z via a generic JSON REST endpoint (placeholder URL)",
+      "task": "photoz",
+      "transport": "https_json",
+      "base_url": "https://example.invalid/api",
+      "endpoint": "/v1/photoz",
+      "method": "POST",
+      "headers": {"Accept": "application/json"},
+      "auth": {"scheme": "bearer_env", "env": "MY_PHOTOZ_TOKEN"},
+      "request": {
+        "_placeholders": "{id} {x} {y} {ra} {dec} {mags} {mag_errs} {catalog_row_json} {cutout_png_base64[_BAND]} {cutout_fits_url} {param_NAME}",
+        "template": {"object_id": "{id}", "coordinates": {"ra": "{ra}", "dec": "{dec}"}, "photometry": "{mags}", "photometry_err": "{mag_errs}"}
+      },
+      "response": {
+        "request_id_header": "X-Request-Id",
+        "model_path": "model.version",
+        "error_path": "error",
+        "fields": {
+          "PHOTOZ":     {"path": "result.z",        "type": "float"},
+          "PHOTOZ_ERR": {"path": "result.z_sigma",  "type": "float"},
+          "PHOTOZ_P16": {"path": "result.pdf_pct[0]", "type": "float"},
+          "PHOTOZ_P84": {"path": "result.pdf_pct[2]", "type": "float"}
+        }
+      },
+      "timeout_s": 30, "retries": 3, "backoff_s": 1.0, "backoff_factor": 2.0, "backoff_max_s": 30,
+      "rate_limit_per_s": 5, "batch_size": 1, "max_payload_bytes": 2000000
+    },
+    {
+      "name": "template_batch_rest",
+      "template": true,
+      "enabled": false,
+      "_note": "TEMPLATE. Batched request: {items} expands to one item_template per object; response matched back by id_path.",
+      "task": "sed_fit",
+      "transport": "https_json",
+      "base_url": "https://example.invalid",
+      "endpoint": "/batch/sed",
+      "method": "POST",
+      "auth": {"scheme": "header_env", "header": "X-Api-Key", "env": "MY_SED_KEY"},
+      "batch_size": 50,
+      "request": {
+        "template": {"sources": "{items}"},
+        "item_template": {"id": "{id}", "mags": "{mags}", "mag_errs": "{mag_errs}", "z": "{param_redshift}"}
+      },
+      "params": {"redshift": null},
+      "response": {
+        "items_path": "results", "id_path": "id", "model_path": "model", "request_id_path": "request_id",
+        "fields": {
+          "LOG_MASS": {"path": "logmass", "type": "float"},
+          "SFR":      {"path": "sfr", "type": "float", "unit": "Msun/yr", "to_unit": "Msun/yr"}
+        }
+      }
+    },
+    {
+      "name": "template_morph_upload",
+      "template": true,
+      "enabled": false,
+      "_note": "TEMPLATE. Multipart image upload: one PNG cutout per request.",
+      "task": "morphology",
+      "transport": "https_multipart",
+      "base_url": "https://example.invalid",
+      "endpoint": "/classify",
+      "method": "POST",
+      "auth": {"scheme": "query_env", "param": "key", "env": "MY_MORPH_KEY"},
+      "cutouts": {"size_arcsec": 12, "normalize": "asinh", "format": "png"},
+      "request": {"multipart": {"fields": {"object_id": "{id}"}, "files": {"image": "{cutout_png_path}"}}},
+      "response": {"fields": {
+        "MORPH_TYPE": {"path": "label", "type": "str"},
+        "MORPH_CONF": {"path": "score", "type": "float"}
+      }}
+    },
+    {
+      "name": "template_local_classifier",
+      "template": true,
+      "enabled": false,
+      "_note": "TEMPLATE. A local executable you provide. stdin: one JSON document {contract,task,service,params,records:[...]}; stdout: {\"results\":[{\"id\":..,\"STAR_PROB\":..}],\"model\":\"name+version\"}. See docs/ai_services.md and ai_bridge/examples/echo_local_command.py.",
+      "task": "star_galaxy",
+      "transport": "local_command",
+      "command": ["/path/to/your/classifier", "--json-stdio"],
+      "env_passthrough": [],
+      "batch_size": 100,
+      "timeout_s": 600,
+      "cutouts": {"enabled": true, "size_pix": 64, "format": "npy", "normalize": "asinh"}
+    },
+    {
+      "name": "template_python_entry",
+      "template": true,
+      "enabled": false,
+      "_note": "TEMPLATE. module:function(records, params, context) -> list of {id, <columns>, error?}. Add sys_path if the module is not importable.",
+      "task": "real_bogus",
+      "transport": "python_callable",
+      "callable": "my_package.my_module:score_cutouts",
+      "sys_path": ["~/my_models"],
+      "batch_size": 64,
+      "cutouts": {"enabled": true, "size_pix": 51, "format": "fits", "normalize": "none"}
+    },
+    {
+      "name": "simbad_cone",
+      "template": false,
+      "enabled": true,
+      "_note": "REAL public IVOA TAP service (non-ML example). Cone search by object position in SIMBAD. Needs RA/Dec columns and --allow-network. Verified live on the date given in docs/ai_services.md.",
+      "description": "SIMBAD TAP: nearest object within a radius of each catalogue position (non-ML example)",
+      "task": "generic",
+      "transport": "tap_query",
+      "provenance_prefix": "SIMBAD",
+      "base_url": "https://simbad.cds.unistra.fr/simbad/sim-tap",
+      "auth": {"scheme": "none"},
+      "params": {"radius_arcsec": 3.0},
+      "request": {
+        "adql": "SELECT TOP 1 main_id, otype, ra, dec, DISTANCE(POINT('ICRS', ra, dec), POINT('ICRS', {ra}, {dec})) * 3600.0 AS sep_arcsec FROM basic WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {ra}, {dec}, {radius_deg})) ORDER BY sep_arcsec ASC",
+        "format": "csv"
+      },
+      "response": {"fields": {
+        "SIMBAD_ID":   {"path": "rows[0].main_id", "type": "str"},
+        "SIMBAD_TYPE": {"path": "rows[0].otype", "type": "str"},
+        "SIMBAD_SEP":  {"path": "rows[0].sep_arcsec", "type": "float"}
+      }},
+      "timeout_s": 60, "retries": 2, "backoff_s": 2.0, "rate_limit_per_s": 4, "model_label": "SIMBAD TAP (non-ML)"
+    }
+  ]
+}

@@ -16,3 +16,5 @@ SAOImageDS9 is fully funded by the Chandra X-ray Science Center (CXC) and is lic
 ## Session recorder / Python pipeline export (OGFinder)
 
 The catalog panel records the analysis steps of a GUI session. *Analysis > Save Session as Python Script...* writes a stand-alone script that re-runs the automatic steps on new FITS files (`--mode pipeline`, batch, `--jobs`, `--resume`) or replays the whole session on the original data (`--mode replay`). See [docs/session_python_script.md](docs/session_python_script.md).
+
+*Analysis > AI Services* provides connection points (not models) for external AI / astronomy services: JSON service profiles (`ai_services.example.json`, `~/.ds9/ai_services.json`), task contracts, cutout generation, response caching, provenance, and a CLI (`ds9_ai_bridge.py`); results are added as catalogue columns and recorded by the session recorder. Keys are read from environment variables only and payloads leave the machine - see [docs/ai_services.md](docs/ai_services.md). Built-in `mock` service for offline tests; the example profiles are templates with placeholder URLs.

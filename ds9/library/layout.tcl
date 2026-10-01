@@ -634,6 +634,8 @@ proc CreateCatalogPanel {} {
     $f.menubar.analysis.m add command \
 	-label "Analysis Viewer..." \
 	-command CatalogPanelAnalysisViewer
+    $f.menubar.analysis.m add cascade -label "AI Services" \
+	-menu [OGFAIBuildMenu $f.menubar.analysis.m.ai]
     $f.menubar.analysis.m add separator
     $f.menubar.analysis.m add command \
 	-label "Save Session as Python Script..." \
@@ -4730,6 +4732,7 @@ proc CatalogPanelGalaxyMorphology {} {
     global catpanel
     global current
     global ds9
+    if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook morphology]} return  ;# ogf_ai.tcl: backend local|external
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
@@ -5091,6 +5094,7 @@ proc CatalogPanelMorphColorMarkers {} {
 proc CatalogPanelStarFinder {} {
     global catpanel
     global current
+    if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook star]} return  ;# ogf_ai.tcl: backend local|external
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
@@ -12473,6 +12477,7 @@ proc CatalogPanelPhotoZParamSave {} {
 
 proc CatalogPanelPhotoZ {} {
     global catpanel
+    if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook photoz]} return  ;# ogf_ai.tcl: backend local|external
 
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
 	set catpanel(status) "Extract sources first"
@@ -12622,6 +12627,7 @@ proc CatalogPanelSEDParamSave {} {
 
 proc CatalogPanelSEDFit {} {
     global catpanel
+    if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook sed_fit]} return  ;# ogf_ai.tcl: backend local|external
 
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
 	set catpanel(status) "Extract sources first"
