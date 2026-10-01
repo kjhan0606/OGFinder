@@ -206,14 +206,15 @@ def psf_star_list(chip, snr_min=10.0):
     return st
 
 
-def estimate_psf(chips, size=25, nmax=200, snr_min=10.0):
-    """Empirical PSF pooled over one or several chips (same detector/filter): median of sub-pixel
-    re-centred, flux-normalised cutouts of isolated compact unsaturated stars.  Returns
-    (psf normalised to 1, fwhm_pix, n_stars) or (None, nan, n) if fewer than 3 stars."""
+def collect_star_cutouts(chips, size=25, nmax=200, snr_min=10.0, confirm=True):
+    """Sub-pixel re-centred, flux-normalised cutouts of isolated compact unsaturated stars confirmed in >= 1 other exposure.
+    Returns (stack list, fwhm list, x list, y list, chip-name list); x, y are the star positions in the pixel frame of the chip
+    they were measured on (full-chip frame; `Chip.origin` is NOT added).  `confirm=False` skips the other-exposure confirmation (for a template that is
+    already a median of several exposures, where cosmic rays are gone)."""
     from scipy.spatial import cKDTree
     chips = [chips] if isinstance(chips, Chip) else list(chips)
     r = size // 2
-    stack = []; fw = []
+    stack = []; fw = []; sx = []; sy = []; sc = []
     # cosmic rays are random: keep only stars whose sky position is also found (compact source) in >= 1 other exposure
     allst = {}
     for c in chips:
@@ -233,7 +234,7 @@ def estimate_psf(chips, size=25, nmax=200, snr_min=10.0):
                 continue
             d_, _j = trees[k2].query(xy, distance_upper_bound=1.0 / 3600.0)
             nconf += np.isfinite(d_)
-        keepm = nconf >= 1
+        keepm = (nconf >= 1) if confirm else np.ones(len(nconf), bool)
         if keepm.sum() < 1:
             continue
         st = dict(st); 
@@ -266,19 +267,97 @@ def estimate_psf(chips, size=25, nmax=200, snr_min=10.0):
             if ssum <= 0:
                 continue
             stack.append(sh / ssum)
-            fw.append(st["fwhm"])
+            fw.append(st["fwhm"]); sx.append(float(x0)); sy.append(float(y0)); sc.append(c.name)
             if len(stack) >= nmax:
                 break
-    if len(stack) < 3:
-        return None, np.nan, len(stack)
-    S_ = np.array(stack)
-    psf = np.median(S_, axis=0)
+    return stack, fw, sx, sy, sc
+
+
+def _combine_cutouts(stack, size):
+    """Median of normalised cutouts, apodised at the edge, unit sum.  Returns (psf, fwhm_pix)."""
+    r = size // 2
+    psf = np.median(np.array(stack), axis=0)
     yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
     rr = np.hypot(xx, yy)
     psf = np.clip(psf, 0, None) * np.clip((r - rr) / 3.0, 0, 1)
     psf /= psf.sum()
     hm = psf > psf.max() / 2
-    return psf, float(2.0 * np.sqrt(hm.sum() / np.pi)), len(stack)
+    return psf, float(2.0 * np.sqrt(hm.sum() / np.pi))
+
+
+def estimate_psf(chips, size=25, nmax=200, snr_min=10.0):
+    """Empirical PSF pooled over one or several chips (same detector/filter): median of sub-pixel
+    re-centred, flux-normalised cutouts of isolated compact unsaturated stars.  Returns
+    (psf normalised to 1, fwhm_pix, n_stars) or (None, nan, n) if fewer than 3 stars."""
+    stack = collect_star_cutouts(chips, size, nmax, snr_min)[0]
+    if len(stack) < 3:
+        return None, np.nan, len(stack)
+    psf, fw = _combine_cutouts(stack, size)
+    return psf, fw, len(stack)
+
+
+class PSFField:
+    """Spatially varying PSF on a grid of tiles of one chip.  `at(x, y)` returns the PSF (unit sum, odd size) of the tile containing the pixel
+    position; tiles with fewer than `min_stars` stars (own tile + `reach` tile widths around it) use the constant fallback PSF.
+    Attributes: `tiles` (ny_t, nx_t) tile size, `n_stars` (grid of counts), `from_stars` (bool grid), `fwhm` (grid, pixels), `constant` (fallback)."""
+
+    def __init__(self, shape, tile, psfs, n_stars, from_stars, fwhm, constant, constant_fwhm):
+        self.shape = shape; self.tile = tile; self.psfs = psfs; self.n_stars = n_stars; self.from_stars = from_stars
+        self.fwhm = fwhm; self.constant = constant; self.constant_fwhm = constant_fwhm
+
+    def at(self, x, y):
+        j = int(min(max(x // self.tile[1], 0), self.psfs.shape[1] - 1)); i = int(min(max(y // self.tile[0], 0), self.psfs.shape[0] - 1))
+        return self.psfs[i, j]
+
+    @property
+    def varies(self):
+        return bool(self.from_stars.any())
+
+    def summary(self):
+        return dict(tile=list(self.tile), n_tiles=int(self.psfs.size), tiles_from_stars=int(self.from_stars.sum()), stars=int(self.n_stars.sum()),
+                    fwhm_pix_min=float(np.nanmin(self.fwhm)), fwhm_pix_max=float(np.nanmax(self.fwhm)), constant_fwhm_pix=float(self.constant_fwhm))
+
+
+def constant_psf_field(shape, psf, fwhm, tile=(512, 512)):
+    ny, nx = shape; nty = int(np.ceil(ny / tile[0])); ntx = int(np.ceil(nx / tile[1]))
+    arr = np.empty((nty, ntx), object)
+    for i in range(nty):
+        for j in range(ntx):
+            arr[i, j] = psf
+    return PSFField(shape, tile, arr, np.zeros((nty, ntx), int), np.zeros((nty, ntx), bool), np.full((nty, ntx), float(fwhm)), psf, float(fwhm))
+
+
+def measure_psf_field(chips, shape, tile=(512, 512), size=25, min_stars=8, reach=0.5, snr_min=6.0, constant=None, origin=(0, 0), confirm=True,
+                      min_fwhm_pix=0.0):
+    """Measure the PSF per tile from field stars (`collect_star_cutouts`; stars of all `chips` given, which must share the detector pixel frame,
+    e.g. the chip and the other exposures' same chip) and return a `PSFField` for an image of `shape` (ny, nx) whose pixel (0, 0) is chip pixel
+    `origin` = (x0, y0).  A tile uses its own stars plus those within `reach` tile widths beyond its border; with fewer than `min_stars` it
+    falls back to `constant` = (psf, fwhm) (default: pooled over all stars, else a 2.2 px Gaussian).  A tile PSF narrower than `min_fwhm_pix` (cosmic-ray /
+    hot-pixel contamination of the star list) is rejected and the tile uses the fallback as well."""
+    stack, fw, sx, sy, sc = collect_star_cutouts(chips, size, 10 ** 6, snr_min, confirm)
+    ny, nx = shape
+    nty = int(np.ceil(ny / tile[0])); ntx = int(np.ceil(nx / tile[1]))
+    sx = np.asarray(sx) - origin[0]; sy = np.asarray(sy) - origin[1]
+    if constant is None and len(stack) >= 3:
+        constant = _combine_cutouts(stack, size)
+    if constant is None:
+        constant = (gaussian_psf(2.2, size), 2.2)
+    arr = np.empty((nty, ntx), object); ns = np.zeros((nty, ntx), int); fs = np.zeros((nty, ntx), bool); fwg = np.zeros((nty, ntx))
+    for i in range(nty):
+        for j in range(ntx):
+            y0, y1, x0, x1 = i * tile[0], (i + 1) * tile[0], j * tile[1], (j + 1) * tile[1]
+            m = (sx >= x0 - reach * tile[1]) & (sx < x1 + reach * tile[1]) & (sy >= y0 - reach * tile[0]) & (sy < y1 + reach * tile[0])
+            ns[i, j] = int(m.sum())
+            ok = False
+            if m.sum() >= min_stars:
+                p, f = _combine_cutouts([stack[k] for k in np.nonzero(m)[0]], size)
+                if f >= min_fwhm_pix:
+                    arr[i, j] = p; fs[i, j] = True; fwg[i, j] = f; ok = True
+            if not ok:
+                arr[i, j] = constant[0]; fwg[i, j] = constant[1]
+    return PSFField((ny, nx), tile, arr, ns, fs, fwg, constant[0], constant[1])
+
+
 
 
 def gaussian_psf(fwhm, size=25):
