@@ -4,13 +4,13 @@
 proc CatalogPanelPlotDialog {} {
     global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
     # Get column names from header
-    set lines [split $catpanel(alldata) "\n"]
+    set lines [split [::ogf::cat::tsv] "\n"]
     set header [lindex $lines 0]
     set colnames [split $header "\t"]
 
@@ -40,8 +40,8 @@ proc CatalogPanelPlotDialog {} {
     if {[llength $colnames] > 1} { $w.ycol set [lindex $colnames 1] }
 
     # Log scale
-    set catpanel(plot,logx) 0
-    set catpanel(plot,logy) 0
+    ::ogf::cat::set plot,logx 0
+    ::ogf::cat::set plot,logy 0
     ttk::checkbutton $w.logx -text "Log X" -variable catpanel(plot,logx)
     ttk::checkbutton $w.logy -text "Log Y" -variable catpanel(plot,logy)
 
@@ -70,17 +70,17 @@ proc CatalogPanelPlotRun {dlg} {
     set ptype [$dlg.ptype get]
     set xcol  [$dlg.xcol get]
     set ycol  [$dlg.ycol get]
-    set logx  $catpanel(plot,logx)
-    set logy  $catpanel(plot,logy)
+    set logx  [::ogf::cat::get plot,logx]
+    set logy  [::ogf::cat::get plot,logy]
     set nbins [$dlg.bins get]
 
     if {$xcol eq {}} {
-	set catpanel(status) "Select X column"
+	::ogf::cat::set status "Select X column"
 	return
     }
 
     # Parse data
-    set lines [split $catpanel(alldata) "\n"]
+    set lines [split [::ogf::cat::tsv] "\n"]
     set header [split [lindex $lines 0] "\t"]
 
     set xi -1
@@ -93,7 +93,7 @@ proc CatalogPanelPlotRun {dlg} {
 	if {$h eq "NUMBER"} { set ni $i }
     }
     if {$xi < 0} {
-	set catpanel(status) "Column $xcol not found"
+	::ogf::cat::set status "Column $xcol not found"
 	return
     }
 
@@ -119,13 +119,13 @@ proc CatalogPanelPlotRun {dlg} {
     }
 
     if {[llength $xdata] == 0} {
-	set catpanel(status) "No numeric data in $xcol"
+	::ogf::cat::set status "No numeric data in $xcol"
 	return
     }
 
     # Create plot window
     incr catpanel(plot,counter)
-    set n $catpanel(plot,counter)
+    set n [::ogf::cat::get plot,counter]
     set w .catplot_$n
     toplevel $w
     wm geometry $w 560x440
@@ -134,7 +134,7 @@ proc CatalogPanelPlotRun {dlg} {
 	CatalogPanelPlotHistogram $w $xdata $xcol $nbins $logx
     } else {
 	if {$yi < 0 || $ycol eq {}} {
-	    set catpanel(status) "Select Y column for scatter"
+	    ::ogf::cat::set status "Select Y column for scatter"
 	    destroy $w
 	    return
 	}
@@ -143,7 +143,6 @@ proc CatalogPanelPlotRun {dlg} {
 }
 
 proc CatalogPanelPlotScatter {w xdata ydata xcol ycol nums logx logy} {
-    global catpanel
 
     set xlabel $xcol
     set ylabel $ycol
@@ -152,8 +151,8 @@ proc CatalogPanelPlotScatter {w xdata ydata xcol ycol nums logx logy} {
     wm title $w "$ylabel vs $xlabel"
 
     # Create BLT vectors
-    set xvec catplot_xv_$catpanel(plot,counter)
-    set yvec catplot_yv_$catpanel(plot,counter)
+    set xvec catplot_xv_[::ogf::cat::get plot,counter]
+    set yvec catplot_yv_[::ogf::cat::get plot,counter]
     blt::vector create $xvec $yvec
     $xvec set $xdata
     $yvec set $ydata
@@ -172,8 +171,8 @@ proc CatalogPanelPlotScatter {w xdata ydata xcol ycol nums logx logy} {
     $w.g axis configure y -title $ylabel
 
     # Store mapping for click → source
-    set catpanel(plot,$w,nums) $nums
-    set catpanel(plot,$w,graph) $w.g
+    ::ogf::cat::set plot,$w,nums $nums
+    ::ogf::cat::set plot,$w,graph $w.g
 
     # Bind click for source selection
     bind $w.g <ButtonPress-1> [list CatalogPanelPlotClick $w %x %y]
@@ -183,7 +182,6 @@ proc CatalogPanelPlotScatter {w xdata ydata xcol ycol nums logx logy} {
 }
 
 proc CatalogPanelPlotHistogram {w xdata xcol nbins logx} {
-    global catpanel
 
     set xlabel $xcol
     if {$logx} { set xlabel "log10($xcol)" }
@@ -215,8 +213,8 @@ proc CatalogPanelPlotHistogram {w xdata xcol nbins logx} {
     }
 
     # BLT barchart
-    set xvec catplot_hx_$catpanel(plot,counter)
-    set yvec catplot_hy_$catpanel(plot,counter)
+    set xvec catplot_hx_[::ogf::cat::get plot,counter]
+    set yvec catplot_hy_[::ogf::cat::get plot,counter]
     blt::vector create $xvec $yvec
     $xvec set $centers
     $yvec set $counts
@@ -236,17 +234,16 @@ proc CatalogPanelPlotHistogram {w xdata xcol nbins logx} {
 }
 
 proc CatalogPanelPlotClick {w sx sy} {
-    global catpanel
 
-    if {![info exists catpanel(plot,$w,graph)]} return
-    set g $catpanel(plot,$w,graph)
+    if {![::ogf::cat::exists plot,$w,graph]} return
+    set g [::ogf::cat::get plot,$w,graph]
 
     if {[catch {$g element closest $sx $sy info -halo 10}]} return
     if {![info exists info(index)]} return
 
     set idx $info(index)
-    if {[info exists catpanel(plot,$w,nums)]} {
-	set num [lindex $catpanel(plot,$w,nums) $idx]
+    if {[::ogf::cat::exists plot,$w,nums]} {
+	set num [lindex [::ogf::cat::get plot,$w,nums] $idx]
 	if {$num ne {}} {
 	    CatalogPanelGotoSource $num
 	}
@@ -254,19 +251,17 @@ proc CatalogPanelPlotClick {w sx sy} {
 }
 
 proc CatalogPanelPlotCleanup {w xvec yvec} {
-    global catpanel
     catch {blt::vector destroy $xvec}
     catch {blt::vector destroy $yvec}
-    catch {unset catpanel(plot,$w,nums)}
-    catch {unset catpanel(plot,$w,graph)}
+    catch {::ogf::cat::unset plot,$w,nums}
+    catch {::ogf::cat::unset plot,$w,graph}
 }
 
 proc CatalogPanelAnalysisViewer {} {
-    global catpanel
 
     set script [CatalogPanelGetScript ds9_analysis_gui.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_analysis_gui.py"
+	::ogf::cat::set status "Script not found: ds9_analysis_gui.py"
 	return
     }
 
@@ -279,7 +274,7 @@ proc CatalogPanelAnalysisViewer {} {
     }
 
     # Pass catalog if available
-    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+    if {[::ogf::cat::has]} {
 	set tmpcat [CatalogPanelSaveTempCatalog "analysis_viewer"]
 	if {$tmpcat ne {}} {
 	    lappend args --catalog $tmpcat
@@ -287,9 +282,9 @@ proc CatalogPanelAnalysisViewer {} {
     }
 
     # Launch non-blocking
-    set catpanel(status) "Launching Analysis Viewer..."
+    ::ogf::cat::set status "Launching Analysis Viewer..."
     update idletasks
     exec {*}$args &
-    set catpanel(status) "Analysis Viewer launched"
+    ::ogf::cat::set status "Analysis Viewer launched"
 }
 

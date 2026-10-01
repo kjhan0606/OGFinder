@@ -5,12 +5,11 @@
 # This is the single source of truth for marker creation.
 # Called by: CatalogPanelMarkAll, CatalogPanelMergeSources, AI merge, GotoSource.
 proc CatalogPanelCreateAllMarkers {} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
     set frame $current(frame)
 
@@ -18,7 +17,7 @@ proc CatalogPanelCreateAllMarkers {} {
     OGFMarkDelete $frame
 
     # Parse directly from alldata (authoritative data source)
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     if {[llength $lines] < 2} return
 
     set headers [split [lindex $lines 0] "\t"]
@@ -122,17 +121,16 @@ proc CatalogPanelCreateAllMarkers {} {
 
     if {$count == 0} return
 
-    set catpanel(markall,on) 1
-    set catpanel(status) "Marked $count sources (yellow ellipses)"
+    ::ogf::cat::set markall,on 1
+    ::ogf::cat::set status "Marked $count sources (yellow ellipses)"
 }
 
 proc CatalogPanelMarkAll {} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
     set frame $current(frame)
 
@@ -142,15 +140,14 @@ proc CatalogPanelMarkAll {} {
 }
 
 proc CatalogPanelClearMarkers {} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
 
     set frame $current(frame)
     OGFMarkDelete $frame
-    set catpanel(markall,on) 0
-    set catpanel(status) "Markers cleared"
+    ::ogf::cat::set markall,on 0
+    ::ogf::cat::set status "Markers cleared"
 }
 
 proc CatalogPanelMarkerCB {num_str id} {
@@ -160,10 +157,10 @@ proc CatalogPanelMarkerCB {num_str id} {
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
-    global $catpanel(tbldb)
+    global [::ogf::cat::get tbldb]
 
     # Find NUMBER column index
-    set ncols [$catpanel(tbl) cget -cols]
+    set ncols [[::ogf::cat::get tbl] cget -cols]
     set col_num -1
     for {set c 1} {$c <= $ncols} {incr c} {
 	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
@@ -176,7 +173,7 @@ proc CatalogPanelMarkerCB {num_str id} {
     }
 
     # Find table row matching this source NUMBER
-    set nrows [$catpanel(tbl) cget -rows]
+    set nrows [[::ogf::cat::get tbl] cget -rows]
     set target_row -1
 
     if {$col_num >= 0} {
@@ -207,16 +204,15 @@ proc CatalogPanelMarkerUnCB {num_str id} {
 # When ellipses overlap, returns the source NUMBER with the smallest area.
 # Returns "" if no ellipse contains the point.
 proc CatalogPanelSmallestEllipseAt {frame cx cy} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} { return {} }
+    if {![::ogf::cat::has]} { return {} }
 
     # Convert canvas coords to 1-indexed image coords
     set imgcoord [$frame get coordinates $cx $cy image]
     set imgx [lindex $imgcoord 0]
     set imgy [lindex $imgcoord 1]
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     if {[llength $lines] < 2} { return {} }
 
     set headers [split [lindex $lines 0] "\t"]
@@ -306,15 +302,14 @@ proc CatalogPanelSmallestEllipseAt {frame cx cy} {
 }
 
 proc CatalogPanelMarkerClick {which x y} {
-    global catpanel
 
-    if {![info exists catpanel(tbl)]} return
+    if {![::ogf::cat::exists tbl]} return
     # time-domain markers (moving / transient / detection): select the table row of that object
     if {![catch {$which get marker catalog id $x $y} _mid] && $_mid != 0} {
 	set _tdk [OGFTDKeyFromTags [$which get marker catalog $_mid tag]]
 	if {$_tdk ne {}} {CatalogPanelLinkSelect $_tdk replace 1; return}
     }
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
     if {![$which has fits]} return
 
     # Quick test: is there any marker at this canvas position?
@@ -340,7 +335,6 @@ proc CatalogPanelMarkerClick {which x y} {
 
 # Ctrl+Click handler called from ControlButton1Frame in none mode
 proc CatalogPanelMarkerCtrlClick {which x y} {
-    global catpanel
 
     if {![$which has fits]} return
 
@@ -356,20 +350,20 @@ proc CatalogPanelMarkerCtrlClick {which x y} {
 	    # Delete the marker
 	    catch {$which marker catalog tag $tag delete}
 	    # Remove from star_indices list
-	    if {[info exists catpanel(psf,star_indices)]} {
-		set idx [lsearch -exact $catpanel(psf,star_indices) $star_num]
+	    if {[::ogf::cat::exists psf,star_indices]} {
+		set idx [lsearch -exact [::ogf::cat::get psf,star_indices] $star_num]
 		if {$idx >= 0} {
-		    set catpanel(psf,star_indices) [lreplace $catpanel(psf,star_indices) $idx $idx]
+		    ::ogf::cat::set psf,star_indices [lreplace [::ogf::cat::get psf,star_indices] $idx $idx]
 		}
-		set catpanel(status) "Removed star $star_num ([llength $catpanel(psf,star_indices)] stars remaining)"
+		::ogf::cat::set status "Removed star $star_num ([llength [::ogf::cat::get psf,star_indices]] stars remaining)"
 	    }
 	    return
 	}
     }
 
     # Not a star marker — proceed with source merge selection
-    if {![info exists catpanel(tbl)]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::exists tbl]} return
+    if {![::ogf::cat::has]} return
 
     # Among all overlapping ellipses, pick the smallest one
     set src_num [CatalogPanelSmallestEllipseAt $which $x $y]
@@ -392,14 +386,14 @@ proc CatalogPanelShowVisible {} {
     global current
     global ds9
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
     # checkbutton already toggled catpanel(visible_mode) before calling us
-    if {!$catpanel(visible_mode)} {
-	CatalogPanelLoadTSV $catpanel(alldata) "all"
-	set catpanel(status) "Showing all sources"
+    if {![::ogf::cat::get visible_mode]} {
+	CatalogPanelLoadTSV [::ogf::cat::tsv] "all"
+	::ogf::cat::set status "Showing all sources"
 	return
     }
 
@@ -426,7 +420,7 @@ proc CatalogPanelShowVisible {} {
     set y_max [expr {$cy + $ch / 2.0 / $zy}]
 
     # Parse alldata, find X_IMAGE/Y_IMAGE columns
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
     set ncols [llength $headers]
@@ -459,11 +453,10 @@ proc CatalogPanelShowVisible {} {
     }
 
     CatalogPanelLoadTSV $filtered "visible"
-    set catpanel(status) "Visible: $count of $total sources in current view"
+    ::ogf::cat::set status "Visible: $count of $total sources in current view"
 }
 
 proc CatalogPanelCtrlSelect {src_num} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
@@ -472,18 +465,18 @@ proc CatalogPanelCtrlSelect {src_num} {
     set frame $current(frame)
 
     # Toggle: if already in list, remove; otherwise add
-    set idx [lsearch -exact $catpanel(merge,list) $src_num]
+    set idx [lsearch -exact [::ogf::cat::get merge,list] $src_num]
     if {$idx >= 0} {
 	# Remove from merge list
-	set catpanel(merge,list) [lreplace $catpanel(merge,list) $idx $idx]
+	::ogf::cat::set merge,list [lreplace [::ogf::cat::get merge,list] $idx $idx]
 	# Delete this source's merge marker
 	catch {$frame marker catalog sextract_merge.$src_num delete}
     } else {
 	# Add to merge list
-	lappend catpanel(merge,list) $src_num
+	::ogf::cat::lappend merge,list $src_num
 
 	# Find source position from alldata
-	set lines [split $catpanel(alldata) \n]
+	set lines [split [::ogf::cat::tsv] \n]
 	set header [lindex $lines 0]
 	set headers [split $header "\t"]
 	set ncols [llength $headers]
@@ -557,13 +550,13 @@ proc CatalogPanelCtrlSelect {src_num} {
 	}
     }
 
-    set catpanel(merge,active) 1
-    set n [llength $catpanel(merge,list)]
+    ::ogf::cat::set merge,active 1
+    set n [llength [::ogf::cat::get merge,list]]
     if {$n == 0} {
-	set catpanel(merge,active) 0
-	set catpanel(status) "Merge selection cleared"
+	::ogf::cat::set merge,active 0
+	::ogf::cat::set status "Merge selection cleared"
     } else {
-	set catpanel(status) "Merge: $n sources selected (Ctrl+M to merge, Esc to cancel)"
+	::ogf::cat::set status "Merge: $n sources selected (Ctrl+M to merge, Esc to cancel)"
     }
 }
 
