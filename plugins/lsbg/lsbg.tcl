@@ -2,30 +2,28 @@
 # Loaded through the "tcl" field of plugins/lsbg/plugin.json.
 
 proc CatalogPanelLSBGUpdateFiles {fn} {
-    global catpanel
     if {$fn eq {}} return
     set base [CatalogPanelFitsBaseName $fn]
     if {$base eq {}} return
     # Skip if already set for this base
-    if {[info exists catpanel(lsbg,fits_base)] &&
-	$catpanel(lsbg,fits_base) eq $base} return
-    set catpanel(lsbg,fits_base) $base
+    if {[::ogf::cat::exists lsbg,fits_base] &&
+	[::ogf::cat::get lsbg,fits_base] eq $base} return
+    ::ogf::cat::set lsbg,fits_base $base
     set ds9dir [file join [file normalize ~] .ds9]
-    set catpanel(lsbg,mask_file)    [file join $ds9dir "mask_${base}_bool.fits"]
-    set catpanel(lsbg,masked_file)  [file join $ds9dir "mask_${base}_masked.fits"]
-    set catpanel(lsbg,bkg_file)     [file join $ds9dir "lsbg_background_${base}.fits"]
-    set catpanel(lsbg,cleaned_file) [file join $ds9dir "lsbg_cleaned_${base}.fits"]
-    set catpanel(lsbg,segmap_file)  [file join $ds9dir "lsbg_segmap_${base}.fits"]
-    set catpanel(lsbg,catalog_file) [file join $ds9dir "lsbg_catalog_${base}.tsv"]
+    ::ogf::cat::set lsbg,mask_file [file join $ds9dir "mask_${base}_bool.fits"]
+    ::ogf::cat::set lsbg,masked_file [file join $ds9dir "mask_${base}_masked.fits"]
+    ::ogf::cat::set lsbg,bkg_file [file join $ds9dir "lsbg_background_${base}.fits"]
+    ::ogf::cat::set lsbg,cleaned_file [file join $ds9dir "lsbg_cleaned_${base}.fits"]
+    ::ogf::cat::set lsbg,segmap_file [file join $ds9dir "lsbg_segmap_${base}.fits"]
+    ::ogf::cat::set lsbg,catalog_file [file join $ds9dir "lsbg_catalog_${base}.tsv"]
     # Detect if previous results exist for this FITS
-    set catpanel(lsbg,has_mask)    [file exists $catpanel(lsbg,mask_file)]
-    set catpanel(lsbg,has_clean)   [file exists $catpanel(lsbg,cleaned_file)]
-    set catpanel(lsbg,has_detect)  [file exists $catpanel(lsbg,segmap_file)]
-    set catpanel(lsbg,has_catalog) [file exists $catpanel(lsbg,catalog_file)]
+    ::ogf::cat::set lsbg,has_mask [file exists [::ogf::cat::get lsbg,mask_file]]
+    ::ogf::cat::set lsbg,has_clean [file exists [::ogf::cat::get lsbg,cleaned_file]]
+    ::ogf::cat::set lsbg,has_detect [file exists [::ogf::cat::get lsbg,segmap_file]]
+    ::ogf::cat::set lsbg,has_catalog [file exists [::ogf::cat::get lsbg,catalog_file]]
 }
 
 proc CatalogPanelLSBGParamLoad {} {
-    global catpanel
 
     set preffile [file join [file normalize ~] .ds9 lsbg.prf]
     if {![file exists $preffile]} return
@@ -37,8 +35,8 @@ proc CatalogPanelLSBGParamLoad {} {
 	if {[llength $parts] >= 2} {
 	    set key [lindex $parts 0]
 	    set val [lindex $parts 1]
-	    if {[info exists catpanel(lsbg,param,$key)]} {
-		set catpanel(lsbg,param,$key) $val
+	    if {[::ogf::cat::exists lsbg,param,$key]} {
+		::ogf::cat::set lsbg,param,$key $val
 	    }
 	}
     }
@@ -46,7 +44,6 @@ proc CatalogPanelLSBGParamLoad {} {
 }
 
 proc CatalogPanelLSBGParamSave {} {
-    global catpanel
 
     set prefdir [file join [file normalize ~] .ds9]
     if {![file isdirectory $prefdir]} {
@@ -72,7 +69,7 @@ proc CatalogPanelLSBGParamSave {} {
 		   ellipticity-max min-snr \
 		   sersic-n-filter-min sersic-n-filter-max sersic-chi2-max \
 		   svm-classify svm-threshold svm-checkpoint} {
-	puts $fd "$pname $catpanel(lsbg,param,$pname)"
+	puts $fd "$pname [::ogf::cat::get lsbg,param,$pname]"
     }
     close $fd
 }
@@ -96,123 +93,120 @@ proc CatalogPanelLSBGImportMask {} {
 }
 
 proc CatalogPanelLSBGClean {method} {
-    global catpanel
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
+	::ogf::cat::set status "LSBG: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
     if {![OGFMaskEnsure lsbg]} {
-	set catpanel(status) "LSBG: could not obtain a mask - run Mask > Auto Mask first"
+	::ogf::cat::set status "LSBG: could not obtain a mask - run Mask > Auto Mask first"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
-    set catpanel(status) "LSBG: Iterative background ($method)..."
+    ::ogf::cat::set status "LSBG: Iterative background ($method)..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode clean \
-	--mask $catpanel(lsbg,mask_file) \
+	--mask [::ogf::cat::get lsbg,mask_file] \
 	--bkg-method $method \
-	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
-	--bkg-poly-order $catpanel(lsbg,param,bkg-poly-order) \
-	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
-	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
-	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
-	--bkg-rms-quantile $catpanel(lsbg,param,bkg-rms-quantile) \
-	--bkg-convergence-tol $catpanel(lsbg,param,bkg-convergence-tol) \
-	--interp-method $catpanel(lsbg,param,interp-method) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--bkg-output $catpanel(lsbg,bkg_file) \
-	--cleaned-output $catpanel(lsbg,cleaned_file) \
-	--n-workers $catpanel(param,n-workers)]
+	--bkg-mesh-size [::ogf::cat::get lsbg,param,bkg-mesh-size] \
+	--bkg-poly-order [::ogf::cat::get lsbg,param,bkg-poly-order] \
+	--bkg-sigma-clip [::ogf::cat::get lsbg,param,bkg-sigma-clip] \
+	--bkg-n-iterations [::ogf::cat::get lsbg,param,bkg-n-iterations] \
+	--bkg-refine-thresh [::ogf::cat::get lsbg,param,bkg-refine-thresh] \
+	--bkg-rms-quantile [::ogf::cat::get lsbg,param,bkg-rms-quantile] \
+	--bkg-convergence-tol [::ogf::cat::get lsbg,param,bkg-convergence-tol] \
+	--interp-method [::ogf::cat::get lsbg,param,interp-method] \
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--bkg-output [::ogf::cat::get lsbg,bkg_file] \
+	--cleaned-output [::ogf::cat::get lsbg,cleaned_file] \
+	--n-workers [::ogf::cat::get param,n-workers]]
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG clean error: $err"
+	::ogf::cat::set status "LSBG clean error: $err"
 	return
     }
 
-    set catpanel(lsbg,has_clean) 1
+    ::ogf::cat::set lsbg,has_clean 1
 
     # Auto-display cleaned image in new frame
     CreateFrame
-    if {[catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}} err]} {
-	set catpanel(status) "LSBG: Clean done but could not display: $err"
+    if {[catch {LoadFitsFile [::ogf::cat::get lsbg,cleaned_file] {} {}} err]} {
+	::ogf::cat::set status "LSBG: Clean done but could not display: $err"
     } else {
 	global scale
 	set scale(mode) zscale
 	ChangeScaleMode
     }
 
-    set catpanel(status) "LSBG: Background cleaned ($method) (new frame)"
+    ::ogf::cat::set status "LSBG: Background cleaned ($method) (new frame)"
 }
 
 proc CatalogPanelLSBGViewClean {} {
-    global catpanel
 
-    if {![file exists $catpanel(lsbg,cleaned_file)]} {
-	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+    if {![file exists [::ogf::cat::get lsbg,cleaned_file]]} {
+	::ogf::cat::set status "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
     CreateFrame
-    if {[catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}} err]} {
-	set catpanel(status) "LSBG: Error loading cleaned image: $err"
+    if {[catch {LoadFitsFile [::ogf::cat::get lsbg,cleaned_file] {} {}} err]} {
+	::ogf::cat::set status "LSBG: Error loading cleaned image: $err"
 	return
     }
     global scale
     set scale(mode) zscale
     ChangeScaleMode
-    set catpanel(status) "LSBG: Cleaned image loaded in new frame"
+    ::ogf::cat::set status "LSBG: Cleaned image loaded in new frame"
 }
 
 proc CatalogPanelLSBGDetect {} {
-    global catpanel
 
-    if {![file exists $catpanel(lsbg,cleaned_file)]} {
-	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+    if {![file exists [::ogf::cat::get lsbg,cleaned_file]]} {
+	::ogf::cat::set status "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
+	::ogf::cat::set status "LSBG: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
-    set catpanel(status) "LSBG: Detecting candidates..."
+    ::ogf::cat::set status "LSBG: Detecting candidates..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode detect \
-	--cleaned $catpanel(lsbg,cleaned_file) \
-	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
-	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
-	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
-	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
-	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
-	--multiscale-factors $catpanel(lsbg,param,multiscale-factors) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--segmap-output $catpanel(lsbg,segmap_file) \
-	--n-workers $catpanel(param,n-workers)]
-    if {$catpanel(lsbg,param,multiscale)} {
+	--cleaned [::ogf::cat::get lsbg,cleaned_file] \
+	--detect-thresh [::ogf::cat::get lsbg,param,detect-thresh] \
+	--detect-minarea [::ogf::cat::get lsbg,param,detect-minarea] \
+	--detect-filter-kernel [::ogf::cat::get lsbg,param,detect-filter-kernel] \
+	--deblend-nthresh [::ogf::cat::get lsbg,param,deblend-nthresh] \
+	--deblend-mincont [::ogf::cat::get lsbg,param,deblend-mincont] \
+	--multiscale-factors [::ogf::cat::get lsbg,param,multiscale-factors] \
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--segmap-output [::ogf::cat::get lsbg,segmap_file] \
+	--n-workers [::ogf::cat::get param,n-workers]]
+    if {[::ogf::cat::get lsbg,param,multiscale]} {
 	lappend args --multiscale
     } else {
 	lappend args --no-multiscale
@@ -220,19 +214,19 @@ proc CatalogPanelLSBGDetect {} {
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG detect error: $err"
+	::ogf::cat::set status "LSBG detect error: $err"
 	return
     }
 
     # Parse detection results into table
-    set catpanel(lsbg,detect_data) $result
-    set catpanel(lsbg,has_detect) 1
+    ::ogf::cat::set lsbg,detect_data $result
+    ::ogf::cat::set lsbg,has_detect 1
 
     # Auto-display segmentation map in new frame
-    if {[file exists $catpanel(lsbg,segmap_file)]} {
+    if {[file exists [::ogf::cat::get lsbg,segmap_file]]} {
 	CreateFrame
-	if {[catch {LoadFitsFile $catpanel(lsbg,segmap_file) {} {}} err]} {
-	    set catpanel(status) "LSBG: Detect done but could not display segmap: $err"
+	if {[catch {LoadFitsFile [::ogf::cat::get lsbg,segmap_file] {} {}} err]} {
+	    ::ogf::cat::set status "LSBG: Detect done but could not display segmap: $err"
 	} else {
 	    global scale
 	    set scale(mode) zscale
@@ -241,194 +235,191 @@ proc CatalogPanelLSBGDetect {} {
     }
 
     # Load into panel table
-    set catpanel(alldata) $result
-    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
+    ::ogf::cat::set alldata $result
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "lsbg"
 
     # Count detections
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
-    set catpanel(status) "LSBG: $nsrc candidates detected (segmap in new frame)"
+    ::ogf::cat::set status "LSBG: $nsrc candidates detected (segmap in new frame)"
 }
 
 proc CatalogPanelLSBGPhotometry {} {
-    global catpanel
 
-    if {![file exists $catpanel(lsbg,cleaned_file)]} {
-	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+    if {![file exists [::ogf::cat::get lsbg,cleaned_file]]} {
+	::ogf::cat::set status "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
-    if {![file exists $catpanel(lsbg,segmap_file)]} {
-	set catpanel(status) "LSBG: No detections — run Detect first"
+    if {![file exists [::ogf::cat::get lsbg,segmap_file]]} {
+	::ogf::cat::set status "LSBG: No detections — run Detect first"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
+	::ogf::cat::set status "LSBG: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
-    set catpanel(status) "LSBG: Measuring photometry..."
+    ::ogf::cat::set status "LSBG: Measuring photometry..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode photometry \
-	--cleaned $catpanel(lsbg,cleaned_file) \
-	--segmap $catpanel(lsbg,segmap_file) \
-	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
-	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
-	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
-	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
-	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
-	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--n-workers $catpanel(param,n-workers)]
+	--cleaned [::ogf::cat::get lsbg,cleaned_file] \
+	--segmap [::ogf::cat::get lsbg,segmap_file] \
+	--detect-thresh [::ogf::cat::get lsbg,param,detect-thresh] \
+	--detect-minarea [::ogf::cat::get lsbg,param,detect-minarea] \
+	--detect-filter-kernel [::ogf::cat::get lsbg,param,detect-filter-kernel] \
+	--deblend-nthresh [::ogf::cat::get lsbg,param,deblend-nthresh] \
+	--deblend-mincont [::ogf::cat::get lsbg,param,deblend-mincont] \
+	--phot-apertures [::ogf::cat::get lsbg,param,phot-apertures] \
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--n-workers [::ogf::cat::get param,n-workers]]
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG photometry error: $err"
+	::ogf::cat::set status "LSBG photometry error: $err"
 	return
     }
 
-    set catpanel(alldata) $result
-    set catpanel(lsbg,has_catalog) 1
-    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
+    ::ogf::cat::set alldata $result
+    ::ogf::cat::set lsbg,has_catalog 1
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
 
     CatalogPanelMarkAll
-    set catpanel(status) "LSBG: $nsrc sources — photometry done"
+    ::ogf::cat::set status "LSBG: $nsrc sources — photometry done"
 }
 
 proc CatalogPanelLSBGSersic {} {
-    global catpanel
 
-    if {![file exists $catpanel(lsbg,cleaned_file)]} {
-	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+    if {![file exists [::ogf::cat::get lsbg,cleaned_file]]} {
+	::ogf::cat::set status "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
-    if {![file exists $catpanel(lsbg,segmap_file)]} {
-	set catpanel(status) "LSBG: No detections — run Detect first"
+    if {![file exists [::ogf::cat::get lsbg,segmap_file]]} {
+	::ogf::cat::set status "LSBG: No detections — run Detect first"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
+	::ogf::cat::set status "LSBG: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
-    set catpanel(status) "LSBG: Fitting Sérsic profiles..."
+    ::ogf::cat::set status "LSBG: Fitting Sérsic profiles..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode sersic \
-	--cleaned $catpanel(lsbg,cleaned_file) \
-	--segmap $catpanel(lsbg,segmap_file) \
-	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
-	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
-	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
-	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
-	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
-	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
-	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
-	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
-	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
-	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
-	--n-workers $catpanel(param,n-workers)]
+	--cleaned [::ogf::cat::get lsbg,cleaned_file] \
+	--segmap [::ogf::cat::get lsbg,segmap_file] \
+	--detect-thresh [::ogf::cat::get lsbg,param,detect-thresh] \
+	--detect-minarea [::ogf::cat::get lsbg,param,detect-minarea] \
+	--detect-filter-kernel [::ogf::cat::get lsbg,param,detect-filter-kernel] \
+	--deblend-nthresh [::ogf::cat::get lsbg,param,deblend-nthresh] \
+	--deblend-mincont [::ogf::cat::get lsbg,param,deblend-mincont] \
+	--phot-apertures [::ogf::cat::get lsbg,param,phot-apertures] \
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--sersic-n-min [::ogf::cat::get lsbg,param,sersic-n-min] \
+	--sersic-n-max [::ogf::cat::get lsbg,param,sersic-n-max] \
+	--sersic-re-min [::ogf::cat::get lsbg,param,sersic-re-min] \
+	--sersic-cutout-scale [::ogf::cat::get lsbg,param,sersic-cutout-scale] \
+	--sersic-max-nfev [::ogf::cat::get lsbg,param,sersic-max-nfev] \
+	--n-workers [::ogf::cat::get param,n-workers]]
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG Sérsic fit error: $err"
+	::ogf::cat::set status "LSBG Sérsic fit error: $err"
 	return
     }
 
-    set catpanel(alldata) $result
-    set catpanel(lsbg,has_catalog) 1
-    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
+    ::ogf::cat::set alldata $result
+    ::ogf::cat::set lsbg,has_catalog 1
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
 
     CatalogPanelMarkAll
-    set catpanel(status) "LSBG: $nsrc sources — Sérsic fit done"
+    ::ogf::cat::set status "LSBG: $nsrc sources — Sérsic fit done"
 }
 
 proc CatalogPanelLSBGFilter {} {
-    global catpanel
 
-    if {![file exists $catpanel(lsbg,cleaned_file)]} {
-	set catpanel(status) "LSBG: No cleaned image — run Background Model first"
+    if {![file exists [::ogf::cat::get lsbg,cleaned_file]]} {
+	::ogf::cat::set status "LSBG: No cleaned image — run Background Model first"
 	return
     }
 
-    if {![file exists $catpanel(lsbg,segmap_file)]} {
-	set catpanel(status) "LSBG: No detections — run Detect first"
+    if {![file exists [::ogf::cat::get lsbg,segmap_file]]} {
+	::ogf::cat::set status "LSBG: No detections — run Detect first"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
+	::ogf::cat::set status "LSBG: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
-    set catpanel(status) "LSBG: Filtering + grading candidates..."
+    ::ogf::cat::set status "LSBG: Filtering + grading candidates..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode filter \
-	--cleaned $catpanel(lsbg,cleaned_file) \
-	--segmap $catpanel(lsbg,segmap_file) \
-	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
-	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
-	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
-	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
-	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
-	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
-	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
-	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
-	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
-	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
-	--min-snr $catpanel(lsbg,param,min-snr) \
-	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
-	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
-	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
-	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
-	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
-	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
-	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
-	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
-	--n-workers $catpanel(param,n-workers)]
-    if {$catpanel(lsbg,param,sersic-fit)} {
+	--cleaned [::ogf::cat::get lsbg,cleaned_file] \
+	--segmap [::ogf::cat::get lsbg,segmap_file] \
+	--detect-thresh [::ogf::cat::get lsbg,param,detect-thresh] \
+	--detect-minarea [::ogf::cat::get lsbg,param,detect-minarea] \
+	--detect-filter-kernel [::ogf::cat::get lsbg,param,detect-filter-kernel] \
+	--deblend-nthresh [::ogf::cat::get lsbg,param,deblend-nthresh] \
+	--deblend-mincont [::ogf::cat::get lsbg,param,deblend-mincont] \
+	--phot-apertures [::ogf::cat::get lsbg,param,phot-apertures] \
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--mu-eff-min [::ogf::cat::get lsbg,param,mu-eff-min] \
+	--mu-eff-max [::ogf::cat::get lsbg,param,mu-eff-max] \
+	--r-eff-min [::ogf::cat::get lsbg,param,r-eff-min] \
+	--r-eff-max [::ogf::cat::get lsbg,param,r-eff-max] \
+	--ellipticity-max [::ogf::cat::get lsbg,param,ellipticity-max] \
+	--min-snr [::ogf::cat::get lsbg,param,min-snr] \
+	--sersic-n-min [::ogf::cat::get lsbg,param,sersic-n-min] \
+	--sersic-n-max [::ogf::cat::get lsbg,param,sersic-n-max] \
+	--sersic-re-min [::ogf::cat::get lsbg,param,sersic-re-min] \
+	--sersic-cutout-scale [::ogf::cat::get lsbg,param,sersic-cutout-scale] \
+	--sersic-max-nfev [::ogf::cat::get lsbg,param,sersic-max-nfev] \
+	--sersic-n-filter-min [::ogf::cat::get lsbg,param,sersic-n-filter-min] \
+	--sersic-n-filter-max [::ogf::cat::get lsbg,param,sersic-n-filter-max] \
+	--sersic-chi2-max [::ogf::cat::get lsbg,param,sersic-chi2-max] \
+	--n-workers [::ogf::cat::get param,n-workers]]
+    if {[::ogf::cat::get lsbg,param,sersic-fit]} {
 	lappend args --sersic-fit
     } else {
 	lappend args --no-sersic-fit
@@ -436,66 +427,65 @@ proc CatalogPanelLSBGFilter {} {
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG filter error: $err"
+	::ogf::cat::set status "LSBG filter error: $err"
 	return
     }
 
-    set catpanel(alldata) $result
-    set catpanel(lsbg,has_catalog) 1
-    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
+    ::ogf::cat::set alldata $result
+    ::ogf::cat::set lsbg,has_catalog 1
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
 
     CatalogPanelMarkAll
-    set catpanel(status) "LSBG: $nsrc candidates passed filtering"
+    ::ogf::cat::set status "LSBG: $nsrc candidates passed filtering"
 }
 
 proc CatalogPanelLSBGSVMClassify {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "LSBG SVM: No catalog loaded"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "LSBG SVM: No catalog loaded"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG SVM: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG SVM: ds9_lsbg.py not found"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG SVM: No FITS file loaded"
+	::ogf::cat::set status "LSBG SVM: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
-    set catpanel(status) "LSBG SVM: Classifying candidates..."
+    ::ogf::cat::set status "LSBG SVM: Classifying candidates..."
     update idletasks
 
     # Save current catalog to temp file
     set tmpcat [file join [file normalize ~] .ds9 lsbg_svm_tmp.tsv]
     if {[catch {
 	set fd [open $tmpcat w]
-	puts $fd $catpanel(alldata)
+	puts $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "LSBG SVM: Cannot write temp catalog"
+	::ogf::cat::set status "LSBG SVM: Cannot write temp catalog"
 	return
     }
 
     set args [list [OGFPython] $script $fn --mode svm-classify \
 	--catalog $tmpcat \
-	--svm-threshold $catpanel(lsbg,param,svm-threshold)]
-    if {$catpanel(lsbg,param,svm-checkpoint) ne {}} {
-	lappend args --svm-checkpoint $catpanel(lsbg,param,svm-checkpoint)
+	--svm-threshold [::ogf::cat::get lsbg,param,svm-threshold]]
+    if {[::ogf::cat::get lsbg,param,svm-checkpoint] ne {}} {
+	lappend args --svm-checkpoint [::ogf::cat::get lsbg,param,svm-checkpoint]
     }
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG SVM error: $err"
+	::ogf::cat::set status "LSBG SVM error: $err"
 	catch {file delete $tmpcat}
 	return
     }
@@ -519,11 +509,10 @@ proc CatalogPanelLSBGSVMClassify {} {
 	    incr n_lsbg
 	}
     }
-    set catpanel(status) "LSBG SVM: $n_lsbg LSBG / $n_total total"
+    ::ogf::cat::set status "LSBG SVM: $n_lsbg LSBG / $n_total total"
 }
 
 proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
@@ -543,9 +532,9 @@ proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
     # Delete existing markers and recreate with SVM colors
     OGFMarkDelete $frame
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set alllines [split $catpanel(alldata) \n]
+    set alllines [split [::ogf::cat::tsv] \n]
     if {[llength $alllines] < 2} return
 
     set headers [split [lindex $alllines 0] "\t"]
@@ -656,116 +645,115 @@ proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
 }
 
 proc CatalogPanelLSBGRunAll {} {
-    global catpanel
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "LSBG: No FITS file loaded"
+	::ogf::cat::set status "LSBG: No FITS file loaded"
 	return
     }
     CatalogPanelLSBGUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
     OGFMaskEnsure lsbg
-    set catpanel(status) "LSBG: Running full pipeline..."
+    ::ogf::cat::set status "LSBG: Running full pipeline..."
     update idletasks
 
     # Reset cmdlog for new session
-    set catpanel(lsbg,cmdlog) {}
+    ::ogf::cat::set lsbg,cmdlog {}
 
     set args [list [OGFPython] $script $fn --mode run \
-	--mask-detect-thresh $catpanel(lsbg,param,mask-detect-thresh) \
-	--mask-detect-minarea $catpanel(lsbg,param,mask-detect-minarea) \
-	--mask-expand-factor $catpanel(lsbg,param,mask-expand-factor) \
-	--max-dilate-radius $catpanel(lsbg,param,max-dilate-radius) \
-	--bright-star-mag-limit $catpanel(lsbg,param,bright-star-mag-limit) \
-	--bright-star-radius-scale $catpanel(lsbg,param,bright-star-radius-scale) \
-	--mask-mag-threshold $catpanel(lsbg,param,mask-mag-threshold) \
-	--interp-method $catpanel(lsbg,param,interp-method) \
-	--lsb-mu-threshold $catpanel(lsbg,param,lsb-mu-threshold) \
-	--bkg-method $catpanel(lsbg,param,bkg-method) \
-	--bkg-mesh-size $catpanel(lsbg,param,bkg-mesh-size) \
-	--bkg-poly-order $catpanel(lsbg,param,bkg-poly-order) \
-	--bkg-sigma-clip $catpanel(lsbg,param,bkg-sigma-clip) \
-	--bkg-n-iterations $catpanel(lsbg,param,bkg-n-iterations) \
-	--bkg-refine-thresh $catpanel(lsbg,param,bkg-refine-thresh) \
-	--bkg-rms-quantile $catpanel(lsbg,param,bkg-rms-quantile) \
-	--bkg-convergence-tol $catpanel(lsbg,param,bkg-convergence-tol) \
-	--detect-thresh $catpanel(lsbg,param,detect-thresh) \
-	--detect-minarea $catpanel(lsbg,param,detect-minarea) \
-	--detect-filter-kernel $catpanel(lsbg,param,detect-filter-kernel) \
-	--deblend-nthresh $catpanel(lsbg,param,deblend-nthresh) \
-	--deblend-mincont $catpanel(lsbg,param,deblend-mincont) \
-	--multiscale-factors $catpanel(lsbg,param,multiscale-factors) \
-	--sersic-n-min $catpanel(lsbg,param,sersic-n-min) \
-	--sersic-n-max $catpanel(lsbg,param,sersic-n-max) \
-	--sersic-re-min $catpanel(lsbg,param,sersic-re-min) \
-	--sersic-cutout-scale $catpanel(lsbg,param,sersic-cutout-scale) \
-	--sersic-max-nfev $catpanel(lsbg,param,sersic-max-nfev) \
-	--phot-apertures $catpanel(lsbg,param,phot-apertures) \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--mu-eff-min $catpanel(lsbg,param,mu-eff-min) \
-	--mu-eff-max $catpanel(lsbg,param,mu-eff-max) \
-	--r-eff-min $catpanel(lsbg,param,r-eff-min) \
-	--r-eff-max $catpanel(lsbg,param,r-eff-max) \
-	--ellipticity-max $catpanel(lsbg,param,ellipticity-max) \
-	--min-snr $catpanel(lsbg,param,min-snr) \
-	--sersic-n-filter-min $catpanel(lsbg,param,sersic-n-filter-min) \
-	--sersic-n-filter-max $catpanel(lsbg,param,sersic-n-filter-max) \
-	--sersic-chi2-max $catpanel(lsbg,param,sersic-chi2-max) \
-	--mask-input $catpanel(lsbg,mask_file) \
+	--mask-detect-thresh [::ogf::cat::get lsbg,param,mask-detect-thresh] \
+	--mask-detect-minarea [::ogf::cat::get lsbg,param,mask-detect-minarea] \
+	--mask-expand-factor [::ogf::cat::get lsbg,param,mask-expand-factor] \
+	--max-dilate-radius [::ogf::cat::get lsbg,param,max-dilate-radius] \
+	--bright-star-mag-limit [::ogf::cat::get lsbg,param,bright-star-mag-limit] \
+	--bright-star-radius-scale [::ogf::cat::get lsbg,param,bright-star-radius-scale] \
+	--mask-mag-threshold [::ogf::cat::get lsbg,param,mask-mag-threshold] \
+	--interp-method [::ogf::cat::get lsbg,param,interp-method] \
+	--lsb-mu-threshold [::ogf::cat::get lsbg,param,lsb-mu-threshold] \
+	--bkg-method [::ogf::cat::get lsbg,param,bkg-method] \
+	--bkg-mesh-size [::ogf::cat::get lsbg,param,bkg-mesh-size] \
+	--bkg-poly-order [::ogf::cat::get lsbg,param,bkg-poly-order] \
+	--bkg-sigma-clip [::ogf::cat::get lsbg,param,bkg-sigma-clip] \
+	--bkg-n-iterations [::ogf::cat::get lsbg,param,bkg-n-iterations] \
+	--bkg-refine-thresh [::ogf::cat::get lsbg,param,bkg-refine-thresh] \
+	--bkg-rms-quantile [::ogf::cat::get lsbg,param,bkg-rms-quantile] \
+	--bkg-convergence-tol [::ogf::cat::get lsbg,param,bkg-convergence-tol] \
+	--detect-thresh [::ogf::cat::get lsbg,param,detect-thresh] \
+	--detect-minarea [::ogf::cat::get lsbg,param,detect-minarea] \
+	--detect-filter-kernel [::ogf::cat::get lsbg,param,detect-filter-kernel] \
+	--deblend-nthresh [::ogf::cat::get lsbg,param,deblend-nthresh] \
+	--deblend-mincont [::ogf::cat::get lsbg,param,deblend-mincont] \
+	--multiscale-factors [::ogf::cat::get lsbg,param,multiscale-factors] \
+	--sersic-n-min [::ogf::cat::get lsbg,param,sersic-n-min] \
+	--sersic-n-max [::ogf::cat::get lsbg,param,sersic-n-max] \
+	--sersic-re-min [::ogf::cat::get lsbg,param,sersic-re-min] \
+	--sersic-cutout-scale [::ogf::cat::get lsbg,param,sersic-cutout-scale] \
+	--sersic-max-nfev [::ogf::cat::get lsbg,param,sersic-max-nfev] \
+	--phot-apertures [::ogf::cat::get lsbg,param,phot-apertures] \
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--mu-eff-min [::ogf::cat::get lsbg,param,mu-eff-min] \
+	--mu-eff-max [::ogf::cat::get lsbg,param,mu-eff-max] \
+	--r-eff-min [::ogf::cat::get lsbg,param,r-eff-min] \
+	--r-eff-max [::ogf::cat::get lsbg,param,r-eff-max] \
+	--ellipticity-max [::ogf::cat::get lsbg,param,ellipticity-max] \
+	--min-snr [::ogf::cat::get lsbg,param,min-snr] \
+	--sersic-n-filter-min [::ogf::cat::get lsbg,param,sersic-n-filter-min] \
+	--sersic-n-filter-max [::ogf::cat::get lsbg,param,sersic-n-filter-max] \
+	--sersic-chi2-max [::ogf::cat::get lsbg,param,sersic-chi2-max] \
+	--mask-input [::ogf::cat::get lsbg,mask_file] \
 	--mask-output [OGFMaskRefinedPath lsbg] \
-	--masked-output $catpanel(lsbg,masked_file) \
-	--bkg-output $catpanel(lsbg,bkg_file) \
-	--cleaned-output $catpanel(lsbg,cleaned_file) \
-	--segmap-output $catpanel(lsbg,segmap_file) \
-	--catalog-output $catpanel(lsbg,catalog_file) \
-	--n-workers $catpanel(param,n-workers)]
-    if {$catpanel(lsbg,param,lsb-protect)} {
+	--masked-output [::ogf::cat::get lsbg,masked_file] \
+	--bkg-output [::ogf::cat::get lsbg,bkg_file] \
+	--cleaned-output [::ogf::cat::get lsbg,cleaned_file] \
+	--segmap-output [::ogf::cat::get lsbg,segmap_file] \
+	--catalog-output [::ogf::cat::get lsbg,catalog_file] \
+	--n-workers [::ogf::cat::get param,n-workers]]
+    if {[::ogf::cat::get lsbg,param,lsb-protect]} {
 	lappend args --lsb-protect
     } else {
 	lappend args --no-lsb-protect
     }
-    if {$catpanel(lsbg,param,multiscale)} {
+    if {[::ogf::cat::get lsbg,param,multiscale]} {
 	lappend args --multiscale
     } else {
 	lappend args --no-multiscale
     }
-    if {$catpanel(lsbg,param,sersic-fit)} {
+    if {[::ogf::cat::get lsbg,param,sersic-fit]} {
 	lappend args --sersic-fit
     } else {
 	lappend args --no-sersic-fit
     }
-    if {$catpanel(lsbg,param,svm-classify)} {
+    if {[::ogf::cat::get lsbg,param,svm-classify]} {
 	lappend args --svm-classify
-	lappend args --svm-threshold $catpanel(lsbg,param,svm-threshold)
-	if {$catpanel(lsbg,param,svm-checkpoint) ne {}} {
-	    lappend args --svm-checkpoint $catpanel(lsbg,param,svm-checkpoint)
+	lappend args --svm-threshold [::ogf::cat::get lsbg,param,svm-threshold]
+	if {[::ogf::cat::get lsbg,param,svm-checkpoint] ne {}} {
+	    lappend args --svm-checkpoint [::ogf::cat::get lsbg,param,svm-checkpoint]
 	}
     }
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG pipeline error: $err"
+	::ogf::cat::set status "LSBG pipeline error: $err"
 	return
     }
 
     # Update state
-    set catpanel(lsbg,has_mask) 1
-    set catpanel(lsbg,has_clean) 1
-    set catpanel(lsbg,has_detect) 1
-    set catpanel(lsbg,has_catalog) 1
+    ::ogf::cat::set lsbg,has_mask 1
+    ::ogf::cat::set lsbg,has_clean 1
+    ::ogf::cat::set lsbg,has_detect 1
+    ::ogf::cat::set lsbg,has_catalog 1
 
     # Load cleaned image in new frame
     CreateFrame
-    if {[catch {LoadFitsFile $catpanel(lsbg,cleaned_file) {} {}} err]} {
-	set catpanel(status) "LSBG: Warning — could not load cleaned image"
+    if {[catch {LoadFitsFile [::ogf::cat::get lsbg,cleaned_file] {} {}} err]} {
+	::ogf::cat::set status "LSBG: Warning — could not load cleaned image"
     } else {
 	global scale
 	set scale(mode) zscale
@@ -773,23 +761,23 @@ proc CatalogPanelLSBGRunAll {} {
     }
 
     # Load catalog
-    set catpanel(alldata) $result
-    CatalogPanelLoadTSV $catpanel(alldata) "lsbg"
+    ::ogf::cat::set alldata $result
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "lsbg"
 
     set nlines [llength [split $result \n]]
     set nsrc [expr {$nlines - 1}]
 
     # Mark all LSBG candidates
     CatalogPanelMarkAll
-    set catpanel(status) "LSBG: Pipeline complete — $nsrc candidates"
+    ::ogf::cat::set status "LSBG: Pipeline complete — $nsrc candidates"
 }
 
 proc CatalogPanelLSBGForcedPhot {} {
-    global catpanel current
+    global current ogflsbg
 
     # Check that we have a catalog
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "LSBG: No catalog — run pipeline first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "LSBG: No catalog — run pipeline first"
 	return
     }
 
@@ -810,48 +798,48 @@ proc CatalogPanelLSBGForcedPhot {} {
     wm geometry $w 300x100
     wm transient $w .
     ttk::label $w.l -text "Enter band name (e.g. F606W):"
-    ttk::entry $w.e -textvariable catpanel(lsbg,tmp_bandname)
-    set catpanel(lsbg,tmp_bandname) ""
+    ttk::entry $w.e -textvariable ogflsbg(bandname)
+    set ogflsbg(bandname) ""
     ttk::frame $w.btns
-    ttk::button $w.btns.ok -text "OK" -command [list set catpanel(lsbg,band_dialog_done) 1]
-    ttk::button $w.btns.cancel -text "Cancel" -command [list set catpanel(lsbg,band_dialog_done) 0]
+    ttk::button $w.btns.ok -text "OK" -command [list set ogflsbg(band_done) 1]
+    ttk::button $w.btns.cancel -text "Cancel" -command [list set ogflsbg(band_done) 0]
     pack $w.l -padx 10 -pady 5
     pack $w.e -padx 10 -fill x
     pack $w.btns -pady 5
     pack $w.btns.ok $w.btns.cancel -side left -padx 10
     focus $w.e
-    bind $w.e <Return> [list set catpanel(lsbg,band_dialog_done) 1]
-    tkwait variable catpanel(lsbg,band_dialog_done)
-    set band_name $catpanel(lsbg,tmp_bandname)
+    bind $w.e <Return> [list set ogflsbg(band_done) 1]
+    tkwait variable ogflsbg(band_done)
+    set band_name $ogflsbg(bandname)
     catch {destroy $w}
-    if {!$catpanel(lsbg,band_dialog_done) || $band_name eq {}} return
+    if {!$ogflsbg(band_done) || $band_name eq {}} return
 
     # Save current catalog to temp file
     set tmpcat [CatalogPanelSaveTempCatalog lsbg_forced]
     if {$tmpcat eq {}} {
-	set catpanel(status) "LSBG: Failed to save temp catalog"
+	::ogf::cat::set status "LSBG: Failed to save temp catalog"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_lsbg.py]
     if {![file exists $script]} {
-	set catpanel(status) "LSBG: ds9_lsbg.py not found"
+	::ogf::cat::set status "LSBG: ds9_lsbg.py not found"
 	return
     }
 
-    set catpanel(status) "LSBG: Forced photometry ($band_name)..."
+    ::ogf::cat::set status "LSBG: Forced photometry ($band_name)..."
     update idletasks
 
     set args [list [OGFPython] $script $band_fits --mode forced \
 	--catalog $tmpcat \
 	--band-name $band_name \
-	--mag-zeropoint $catpanel(lsbg,param,mag-zeropoint) \
-	--pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	--n-workers $catpanel(param,n-workers)]
+	--mag-zeropoint [::ogf::cat::get lsbg,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	--n-workers [::ogf::cat::get param,n-workers]]
 
     CatalogPanelCmdLog lsbg $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "LSBG forced phot error: $err"
+	::ogf::cat::set status "LSBG forced phot error: $err"
 	return
     }
 
@@ -862,13 +850,13 @@ proc CatalogPanelLSBGForcedPhot {} {
     # Load the other band image in a new frame
     CreateFrame
     if {[catch {LoadFitsFile $band_fits {} {}} err]} {
-	set catpanel(status) "LSBG: Forced phot done but could not display band image"
+	::ogf::cat::set status "LSBG: Forced phot done but could not display band image"
     } else {
 	global scale
 	set scale(mode) zscale
 	ChangeScaleMode
     }
 
-    set catpanel(status) "LSBG: Forced photometry ($band_name) complete — columns added"
+    ::ogf::cat::set status "LSBG: Forced photometry ($band_name) complete — columns added"
 }
 
