@@ -306,6 +306,28 @@ proc run {} {
     foreach f [list $catpanel(lsbg,cleaned_file) $catpanel(lsbg,segmap_file)] {set fd [open $f w]; puts $fd x; close $fd}
     feature lsbg_photometry {CatalogPanelLSBGPhotometry} {status lsbg,has_catalog lsbg,cmdlog alldata}
     feature lsbg_filter {CatalogPanelLSBGFilter} {status lsbg,cmdlog alldata}
+    # ---------------------------------------------------------------- CLI script export / import (cmdlog -> .sh -> replay)
+    proc script_roundtrip {pipeline} {
+	set f [file join $::HOME ${pipeline}_pipeline.sh]
+	file delete $f
+	set ::cli_file $f
+	foreach c {tk_getSaveFile tk_getOpenFile tk_messageBox} {rename $c ::cli_orig_$c}
+	proc tk_getSaveFile {args} {return $::cli_file}
+	proc tk_getOpenFile {args} {return $::cli_file}
+	proc tk_messageBox {args} {return no}
+	catch {CatalogPanelExportCLIScript $pipeline} e1
+	if {[file exists $f]} {
+	    set fd [open $f r]; set d [read $fd]; close $fd
+	    P "  script lines=[llength [split $d \n]] bytes=[string length $d]"
+	    foreach l [split $d \n] {if {[string match "python3 *" $l] || [regexp {^[A-Z_]+=} $l]} {P "    [norm $l]"}}
+	}
+	catch {CatalogPanelImportCLIScript $pipeline} e2
+	foreach c {tk_getSaveFile tk_getOpenFile tk_messageBox} {rename $c {}; rename ::cli_orig_$c $c}
+	if {$e1 ne {}} {P "  export error: [norm $e1]"}
+	if {$e2 ne {}} {P "  import error: [norm $e2]"}
+    }
+    feature cli_export_import_icl {script_roundtrip icl} {status icl,cmdlog alldata}
+    feature cli_export_import_lsbg {script_roundtrip lsbg} {status lsbg,cmdlog alldata}
     # ---------------------------------------------------------------- objects: merge / separate / delete / add / AI-merge / save+load
     set synth "NUMBER\tX_IMAGE\tY_IMAGE\tA_IMAGE\tB_IMAGE\tTHETA_IMAGE\tISO_RADIUS\tFLUX_AUTO\tMAG_AUTO\tNPIX_ISO\tFLAGS"
     for {set i 1} {$i <= 8} {incr i} {append synth "\n$i\t[expr {$i*10.0}]\t[expr {$i*10.0}]\t3.0\t2.0\t[expr {$i*5.0}]\t6.0\t[expr {1000.0*$i}]\t[format %.2f [expr {20.0-$i*0.1}]]\t[expr {20+$i}]\t0"}

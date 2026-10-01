@@ -445,6 +445,86 @@ MESSAGEBOX Unable to load fits  <HOME>/.ds9/lsbg_segmap.fits
   catpanel(status) = LSBG: 3 candidates passed filtering
   catpanel(lsbg,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode photometry --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode filter --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit}
   catpanel(alldata) = <tsv rows=3 cols=5>
+=== cli_export_import_icl
+  script lines=85 bytes=1968
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    ICL_PY="/workspace/OGFinder/ds9/library/ds9_icl.py"
+    FITS="${1:?Usage: bash icl_pipeline.sh <input.fits> [output_dir]}"
+    OUTDIR="${2:-./output}"
+    MODE=background
+    BKG_METHOD=median
+    BKG_ORDER=3
+    BKG_SIGMA_CLIP=3.0
+    BKG_SEP_MESH=256
+    CENTER=120.5,130.5
+    RMIN=3
+    RMAX=150
+    NSTEPS=80
+    SPACING=log
+    ELLIPTICITY=0.0
+    PA=0.0
+    MAG_ZEROPOINT=25.0
+    PIXEL_SCALE=0.06
+    MU_THRESHOLD=26.5
+    MU_LEVELS=26.0,27.0,28.0
+    python3 "$ICL_PY" "$FITS" \
+    python3 "$ICL_PY" "$FITS" \
+    python3 "$ICL_PY" "$FITS" \
+  export error: icl: Script exported → icl_pipeline.sh (3 steps)
+  import error: icl: Script imported — 3 steps executed
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output <HOME>/.ds9/icl_background_segout.fits --bgsub-output <HOME>/.ds9/icl_bgsub_segout.fits
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output <HOME>/.ds9/icl_profile_segout.tsv
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --profile-file <HOME>/.ds9/icl_profile_segout.tsv --mu-threshold 26.5 --mu-levels 26.0,27.0,28.0 --pixel-scale 0.06
+  STEP icl.background auto | @{PY} @{LIB}/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output @{WORK}/icl_background_segout.fits --bgsub-output @{WORK}/icl_bgsub_segout.fits | post= title=ICL background model requires=
+  STEP icl.background auto | @{PY} @{LIB}/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output @{WORK}/icl_profile_segout.tsv | post= title=ICL background model requires=extract_catalog
+  STEP icl.background auto | @{PY} @{LIB}/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --profile-file @{WORK}/icl_profile_segout.tsv --mu-threshold 26.5 --mu-levels 26.0,27.0,28.0 --pixel-scale 0.06 | post= title=ICL background model requires=
+  catpanel(status) = icl: Script imported — 3 steps executed
+  catpanel(icl,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output <HOME>/.ds9/icl_background_segout.fits --bgsub-output <HOME>/.ds9/icl_bgsub_segout.fits} {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output <HOME>/.ds9/icl_profile_segout.tsv} {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <FITS>/m51.fits bash icl_pipeline.sh <input.fits> \[output_dir\]\} --mode background --profile-file <HOME>/.ds9/icl_profile_segout.tsv --mu-threshold 26.5 --mu-levels 26.0,27.0,28.0 --pixel-scale 0.06}
+  catpanel(alldata) = <tsv rows=-1 cols=0>
+=== cli_export_import_lsbg
+  script lines=123 bytes=3435
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    LSBG_PY="/workspace/OGFinder/ds9/library/ds9_lsbg.py"
+    FITS="${1:?Usage: bash lsbg_pipeline.sh <input.fits> [output_dir]}"
+    OUTDIR="${2:-./output}"
+    MODE=detect
+    DETECT_THRESH=2.1
+    DETECT_MINAREA=50
+    DETECT_FILTER_KERNEL=gauss5x5
+    DEBLEND_NTHRESH=32
+    DEBLEND_MINCONT=0.005
+    MULTISCALE_FACTORS=1,2,4
+    MAG_ZEROPOINT=25.0
+    PIXEL_SCALE=0.2
+    N_WORKERS=2
+    PHOT_APERTURES=5,10,20,40
+    MU_EFF_MIN=24.0
+    MU_EFF_MAX=30.0
+    R_EFF_MIN=2.5
+    R_EFF_MAX=60.0
+    ELLIPTICITY_MAX=0.7
+    MIN_SNR=2.0
+    SERSIC_N_MIN=0.2
+    SERSIC_N_MAX=10.0
+    SERSIC_RE_MIN=0.5
+    SERSIC_CUTOUT_SCALE=5.0
+    SERSIC_MAX_NFEV=500
+    SERSIC_N_FILTER_MIN=0.3
+    SERSIC_N_FILTER_MAX=6.0
+    python3 "$LSBG_PY" "$FITS" \
+    python3 "$LSBG_PY" "$FITS" \
+    python3 "$LSBG_PY" "$FITS" \
+  export error: lsbg: Script exported → lsbg_pipeline.sh (3 steps)
+  import error: lsbg: Script imported — 3 steps executed
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit
+  STEP lsbg.detect auto | @{PY} @{LIB}/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned @{WORK}/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output @{WORK}/lsbg_segmap_segout.fits --n-workers 2 --multiscale | post=kind set force 1 title=LSBG detect requires=
+  STEP lsbg.detect auto | @{PY} @{LIB}/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned @{WORK}/lsbg_cleaned_m51.fits --segmap @{WORK}/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2 | post=kind set force 1 title=LSBG detect requires=
+  STEP lsbg.detect auto | @{PY} @{LIB}/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned @{WORK}/lsbg_cleaned_m51.fits --segmap @{WORK}/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit | post=kind set force 1 title=LSBG detect requires=
+  catpanel(status) = lsbg: Script imported — 3 steps executed
+  catpanel(lsbg,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits bash lsbg_pipeline.sh <input.fits> \[output_dir\]\} --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit}
+  catpanel(alldata) = <tsv rows=3 cols=5>
 === objects_selected_source
   row=4
   src=a 3.0 b 2.0 iso_radius 6.0 number 4 row 4 theta 20.0 x 40.0 y 40.0
@@ -545,4 +625,4 @@ MESSAGEBOX Unable to load fits  <HOME>/.ds9/lsbg_segmap.fits
   catpanel(visible_mode) = 0
 === moving_status
   catpanel(status) = Moving: linking 3 of 7
-SUMMARY-DONE steps=28 exec=25
+SUMMARY-DONE steps=34 exec=31
