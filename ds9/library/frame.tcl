@@ -877,7 +877,11 @@ proc Button1Frame {which x y} {
 		set ds9(none_press_y) $y
 		set ds9(none_hit) 0
 		set _marker_id [$which get marker catalog id $x $y]
-		if {$_marker_id != 0} {
+		# OGFinder: all rows under the click (chooser when several, nearest when one); falls back to the old paths
+		if {![catch {OGFPickClick $which $x $y} _pk] && $_pk} {
+		    set ds9(nonepan) 0
+		    set ds9(none_hit) 1
+		} elseif {$_marker_id != 0} {
 		    CatalogPanelMarkerClick $which $x $y
 		    set ds9(nonepan) 0
 		    set ds9(none_hit) 1

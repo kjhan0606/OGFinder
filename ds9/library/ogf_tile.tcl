@@ -87,6 +87,8 @@ proc OGFMapRegions {frame reg} {
 proc OGFTileClick {which x y} {
     global catpanel current
     if {![OGFTileIsOn] || ![info exists catpanel(tbl)]} {return 0}
+    # all rows under the click in this tile (chooser when several, the nearest row when one), see ogf_pick.tcl
+    if {![catch {OGFPickClick $which $x $y} _pk] && $_pk} {return 1}
     if {[catch {$which get marker catalog id $x $y} id] || $id == 0} {return 0}
     set tags [$which get marker catalog $id tag]
     set num [OGFTDKeyFromTags $tags]
