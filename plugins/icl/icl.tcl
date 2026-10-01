@@ -2,29 +2,27 @@
 # Loaded through the "tcl" field of plugins/icl/plugin.json.
 
 proc CatalogPanelICLUpdateFiles {fn} {
-    global catpanel
     if {$fn eq {}} return
     set base [CatalogPanelFitsBaseName $fn]
     if {$base eq {}} return
     # Skip if already set for this base
-    if {[info exists catpanel(icl,fits_base)] &&
-	$catpanel(icl,fits_base) eq $base} return
-    set catpanel(icl,fits_base) $base
+    if {[::ogf::cat::exists icl,fits_base] &&
+	[::ogf::cat::get icl,fits_base] eq $base} return
+    ::ogf::cat::set icl,fits_base $base
     set ds9dir [file join [file normalize ~] .ds9]
     # shared mask (ds9_mask.py): boolean view + on-demand interpolated image
-    set catpanel(icl,mask_file)    [file join $ds9dir "mask_${base}_bool.fits"]
-    set catpanel(icl,masked_file)  [file join $ds9dir "mask_${base}_masked.fits"]
-    set catpanel(icl,bkg_file)     [file join $ds9dir "icl_background_${base}.fits"]
-    set catpanel(icl,bgsub_file)   [file join $ds9dir "icl_bgsub_${base}.fits"]
-    set catpanel(icl,profile_file) [file join $ds9dir "icl_profile_${base}.tsv"]
+    ::ogf::cat::set icl,mask_file [file join $ds9dir "mask_${base}_bool.fits"]
+    ::ogf::cat::set icl,masked_file [file join $ds9dir "mask_${base}_masked.fits"]
+    ::ogf::cat::set icl,bkg_file [file join $ds9dir "icl_background_${base}.fits"]
+    ::ogf::cat::set icl,bgsub_file [file join $ds9dir "icl_bgsub_${base}.fits"]
+    ::ogf::cat::set icl,profile_file [file join $ds9dir "icl_profile_${base}.tsv"]
     # Detect if previous results exist for this FITS
-    set catpanel(icl,has_mask)    [file exists $catpanel(icl,mask_file)]
-    set catpanel(icl,has_bkg)     [file exists $catpanel(icl,bkg_file)]
-    set catpanel(icl,has_profile) [file exists $catpanel(icl,profile_file)]
+    ::ogf::cat::set icl,has_mask [file exists [::ogf::cat::get icl,mask_file]]
+    ::ogf::cat::set icl,has_bkg [file exists [::ogf::cat::get icl,bkg_file]]
+    ::ogf::cat::set icl,has_profile [file exists [::ogf::cat::get icl,profile_file]]
 }
 
 proc CatalogPanelICLParamLoad {} {
-    global catpanel
 
     set preffile [file join [file normalize ~] .ds9 icl.prf]
     if {![file exists $preffile]} return
@@ -36,8 +34,8 @@ proc CatalogPanelICLParamLoad {} {
 	if {[llength $parts] >= 2} {
 	    set key [lindex $parts 0]
 	    set val [lindex $parts 1]
-	    if {[info exists catpanel(icl,param,$key)]} {
-		set catpanel(icl,param,$key) $val
+	    if {[::ogf::cat::exists icl,param,$key]} {
+		::ogf::cat::set icl,param,$key $val
 	    }
 	}
     }
@@ -45,7 +43,6 @@ proc CatalogPanelICLParamLoad {} {
 }
 
 proc CatalogPanelICLParamSave {} {
-    global catpanel
 
     set prefdir [file join [file normalize ~] .ds9]
     if {![file isdirectory $prefdir]} {
@@ -61,7 +58,7 @@ proc CatalogPanelICLParamSave {} {
 		   rmin rmax nsteps spacing ellipticity pa \
 		   mag-zeropoint pixel-scale \
 		   mu-threshold mu-levels measure-radius} {
-	puts $fd "$pname $catpanel(icl,param,$pname)"
+	puts $fd "$pname [::ogf::cat::get icl,param,$pname]"
     }
     close $fd
 }
@@ -85,11 +82,10 @@ proc CatalogPanelICLImportMask {} {
 }
 
 proc CatalogPanelICLBackground {method} {
-    global catpanel
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "ICL: No FITS file loaded"
+	::ogf::cat::set status "ICL: No FITS file loaded"
 	return
     }
     CatalogPanelICLUpdateFiles $fn
@@ -102,50 +98,50 @@ proc CatalogPanelICLBackground {method} {
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: Fitting background ($method)..."
+    ::ogf::cat::set status "ICL: Fitting background ($method)..."
     update idletasks
 
     set args [list [OGFPython] $script $input --mode background \
 	--bkg-method $method \
-	--bkg-order $catpanel(icl,param,bkg-order) \
-	--bkg-sigma-clip $catpanel(icl,param,bkg-sigma-clip) \
-	--bkg-sep-mesh $catpanel(icl,param,bkg-sep-mesh) \
-	--bkg-output $catpanel(icl,bkg_file) \
-	--bgsub-output $catpanel(icl,bgsub_file)]
+	--bkg-order [::ogf::cat::get icl,param,bkg-order] \
+	--bkg-sigma-clip [::ogf::cat::get icl,param,bkg-sigma-clip] \
+	--bkg-sep-mesh [::ogf::cat::get icl,param,bkg-sep-mesh] \
+	--bkg-output [::ogf::cat::get icl,bkg_file] \
+	--bgsub-output [::ogf::cat::get icl,bgsub_file]]
 
     if {[OGFMaskExists]} {
 	lappend args --mask [OGFMaskBoolPath]
     }
 
     # Iterative background refinement
-    if {$catpanel(icl,param,bkg-iterative)} {
+    if {[::ogf::cat::get icl,param,bkg-iterative]} {
 	lappend args --iterative \
-	    --interp-method $catpanel(icl,param,interp-method) \
-	    --bkg-n-iterations $catpanel(icl,param,bkg-n-iterations) \
-	    --bkg-convergence-tol $catpanel(icl,param,bkg-convergence-tol) \
-	    --bkg-refine-thresh $catpanel(icl,param,bkg-refine-thresh) \
+	    --interp-method [::ogf::cat::get icl,param,interp-method] \
+	    --bkg-n-iterations [::ogf::cat::get icl,param,bkg-n-iterations] \
+	    --bkg-convergence-tol [::ogf::cat::get icl,param,bkg-convergence-tol] \
+	    --bkg-refine-thresh [::ogf::cat::get icl,param,bkg-refine-thresh] \
 	    --mask-output [OGFMaskRefinedPath icl]
     }
 
     CatalogPanelCmdLog icl $args
     if {[catch {set result [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL background error: $err"
+	::ogf::cat::set status "ICL background error: $err"
 	return
     }
 
-    set catpanel(icl,has_bkg) 1
-    if {$catpanel(icl,param,bkg-iterative) && [file exists [OGFMaskRefinedPath icl]]} {
+    ::ogf::cat::set icl,has_bkg 1
+    if {[::ogf::cat::get icl,param,bkg-iterative] && [file exists [OGFMaskRefinedPath icl]]} {
 	# iterative refinement result feeds the profile step; shared mask untouched
-	set catpanel(icl,mask_file) [OGFMaskRefinedPath icl]
+	::ogf::cat::set icl,mask_file [OGFMaskRefinedPath icl]
     }
 
     # Auto-display bgsub image in new frame.  (CreateFrame resets the
     # per-frame panel state, so grab the path first.)
-    set _bgsub $catpanel(icl,bgsub_file)
+    set _bgsub [::ogf::cat::get icl,bgsub_file]
     if {[file exists $_bgsub]} {
 	CreateFrame
 	if {![catch {LoadFitsFile $_bgsub {} {}}]} {
@@ -155,31 +151,30 @@ proc CatalogPanelICLBackground {method} {
 	}
     }
 
-    set catpanel(status) "ICL: Background model ($method) complete"
+    ::ogf::cat::set status "ICL: Background model ($method) complete"
 }
 
 proc CatalogPanelICLViewBkg {} {
-    global catpanel
 
-    if {![file exists $catpanel(icl,bgsub_file)]} {
-	set catpanel(status) "ICL: No background model — run Background Model first"
+    if {![file exists [::ogf::cat::get icl,bgsub_file]]} {
+	::ogf::cat::set status "ICL: No background model — run Background Model first"
 	return
     }
 
     CreateFrame
-    if {[catch {LoadFitsFile $catpanel(icl,bgsub_file) {} {}} err]} {
-	set catpanel(status) "ICL: Error loading background-subtracted image: $err"
+    if {[catch {LoadFitsFile [::ogf::cat::get icl,bgsub_file] {} {}} err]} {
+	::ogf::cat::set status "ICL: Error loading background-subtracted image: $err"
 	return
     }
     global scale
     set scale(mode) zscale
     ChangeScaleMode
-    set catpanel(icl,has_bkg) 1
-    set catpanel(status) "ICL: Background-subtracted image loaded in new frame"
+    ::ogf::cat::set icl,has_bkg 1
+    ::ogf::cat::set status "ICL: Background-subtracted image loaded in new frame"
 }
 
 proc CatalogPanelICLSetCenter {} {
-    global catpanel catpanel_fdata ds9 current
+    global catpanel_fdata ds9 current
 
     # Use the first frame's catalog (original image SExtractor result)
     set catalog_data {}
@@ -188,12 +183,12 @@ proc CatalogPanelICLSetCenter {} {
 	[info exists catpanel_fdata($first_frame,alldata)] &&
 	$catpanel_fdata($first_frame,alldata) ne {}} {
 	set catalog_data $catpanel_fdata($first_frame,alldata)
-    } elseif {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
-	set catalog_data $catpanel(alldata)
+    } elseif {[::ogf::cat::has]} {
+	set catalog_data [::ogf::cat::tsv]
     }
 
     if {$catalog_data eq {}} {
-	set catpanel(status) "ICL: No SExtractor catalog found — run SExtract first"
+	::ogf::cat::set status "ICL: No SExtractor catalog found — run SExtract first"
 	return
     }
 
@@ -212,7 +207,7 @@ proc CatalogPanelICLSetCenter {} {
 	if {$h eq "MAG_AUTO"} { set magcol $c }
     }
     if {$numcol < 0 || $xcol < 0 || $ycol < 0} {
-	set catpanel(status) "ICL: Catalog missing NUMBER/X_IMAGE/Y_IMAGE"
+	::ogf::cat::set status "ICL: Catalog missing NUMBER/X_IMAGE/Y_IMAGE"
 	return
     }
 
@@ -276,11 +271,11 @@ proc CatalogPanelICLSetCenter {} {
 }
 
 proc CatalogPanelICLSetCenterByID {w catalog_data numcol xcol ycol} {
-    global catpanel current
+    global current
 
     set src_id [string trim $::icl_bcg_entry_id]
     if {$src_id eq {} || ![string is integer $src_id]} {
-	set catpanel(status) "ICL: Enter a valid source NUMBER"
+	::ogf::cat::set status "ICL: Enter a valid source NUMBER"
 	return
     }
 
@@ -295,8 +290,8 @@ proc CatalogPanelICLSetCenterByID {w catalog_data numcol xcol ycol} {
 	    set iy [string trim [lindex $row $ycol]]
 
 	    # Store as 0-indexed
-	    set catpanel(icl,center_x) [expr {$ix - 1.0}]
-	    set catpanel(icl,center_y) [expr {$iy - 1.0}]
+	    ::ogf::cat::set icl,center_x [expr {$ix - 1.0}]
+	    ::ogf::cat::set icl,center_y [expr {$iy - 1.0}]
 
 	    # Draw cyan cross
 	    set frame $current(frame)
@@ -307,24 +302,22 @@ proc CatalogPanelICLSetCenterByID {w catalog_data numcol xcol ycol} {
 		catch {$frame marker catalog command ds9 var icl_bcg_reg}
 	    }
 
-	    set catpanel(status) "ICL: BCG center set to source #$src_id ([format %.1f $ix], [format %.1f $iy])"
+	    ::ogf::cat::set status "ICL: BCG center set to source #$src_id ([format %.1f $ix], [format %.1f $iy])"
 	    destroy $w
 	    return
 	}
     }
 
-    set catpanel(status) "ICL: Source #$src_id not found in catalog"
+    ::ogf::cat::set status "ICL: Source #$src_id not found in catalog"
 }
 
 proc CatalogPanelICLSetCenterClickMode {w} {
-    global catpanel
     destroy $w
-    set catpanel(icl,click_mode) 1
-    set catpanel(status) "ICL: Click on image to set BCG center..."
+    ::ogf::cat::set icl,click_mode 1
+    ::ogf::cat::set status "ICL: Click on image to set BCG center..."
 }
 
 proc CatalogPanelICLClickSetCenter {frame x y} {
-    global catpanel
 
     # Convert canvas coords to image coords (1-based)
     set imgc [$frame get coordinates $x $y image]
@@ -332,8 +325,8 @@ proc CatalogPanelICLClickSetCenter {frame x y} {
     set iy [lindex $imgc 1]
 
     # Store as 0-indexed (Python convention)
-    set catpanel(icl,center_x) [expr {$ix - 1.0}]
-    set catpanel(icl,center_y) [expr {$iy - 1.0}]
+    ::ogf::cat::set icl,center_x [expr {$ix - 1.0}]
+    ::ogf::cat::set icl,center_y [expr {$iy - 1.0}]
 
     # Draw a cyan cross at BCG center
     catch {$frame marker catalog icl_bcg delete}
@@ -342,59 +335,58 @@ proc CatalogPanelICLClickSetCenter {frame x y} {
     set icl_bcg_reg "image\ncross point([format %.1f $ix] [format %.1f $iy]) # color=cyan width=2 point=cross 20 tag={icl_bcg} select=0 edit=0 move=0 rotate=0 delete=1\n"
     catch {$frame marker catalog command ds9 var icl_bcg_reg}
 
-    set catpanel(icl,click_mode) 0
-    set catpanel(status) "ICL: BCG center set to ([format %.1f $ix], [format %.1f $iy])"
+    ::ogf::cat::set icl,click_mode 0
+    ::ogf::cat::set status "ICL: BCG center set to ([format %.1f $ix], [format %.1f $iy])"
 }
 
 proc CatalogPanelICLProfile {} {
-    global catpanel
 
-    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
-	set catpanel(status) "ICL: Set BCG center first"
+    if {[::ogf::cat::get icl,center_x] eq {} || [::ogf::cat::get icl,center_y] eq {}} {
+	::ogf::cat::set status "ICL: Set BCG center first"
 	return
     }
 
     # Use bgsub image if available, otherwise raw
     set fn [CatalogPanelGetFITS]
-    if {[file exists $catpanel(icl,bgsub_file)]} {
-	set fn $catpanel(icl,bgsub_file)
+    if {[file exists [::ogf::cat::get icl,bgsub_file]]} {
+	set fn [::ogf::cat::get icl,bgsub_file]
     }
     if {$fn eq {}} {
-	set catpanel(status) "ICL: No image available"
+	::ogf::cat::set status "ICL: No image available"
 	return
     }
     CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: Measuring SB profile..."
+    ::ogf::cat::set status "ICL: Measuring SB profile..."
     update idletasks
 
-    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+    set center "[::ogf::cat::get icl,center_x],[::ogf::cat::get icl,center_y]"
 
     set args [list [OGFPython] $script $fn --mode profile \
 	--center $center \
-	--rmin $catpanel(icl,param,rmin) \
-	--rmax $catpanel(icl,param,rmax) \
-	--nsteps $catpanel(icl,param,nsteps) \
-	--spacing $catpanel(icl,param,spacing) \
-	--ellipticity $catpanel(icl,param,ellipticity) \
-	--pa $catpanel(icl,param,pa) \
-	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
-	--pixel-scale $catpanel(icl,param,pixel-scale) \
-	--profile-output $catpanel(icl,profile_file)]
+	--rmin [::ogf::cat::get icl,param,rmin] \
+	--rmax [::ogf::cat::get icl,param,rmax] \
+	--nsteps [::ogf::cat::get icl,param,nsteps] \
+	--spacing [::ogf::cat::get icl,param,spacing] \
+	--ellipticity [::ogf::cat::get icl,param,ellipticity] \
+	--pa [::ogf::cat::get icl,param,pa] \
+	--mag-zeropoint [::ogf::cat::get icl,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale] \
+	--profile-output [::ogf::cat::get icl,profile_file]]
 
     CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL profile error: $err"
+	::ogf::cat::set status "ICL profile error: $err"
 	return
     }
 
-    set catpanel(icl,has_profile) 1
+    ::ogf::cat::set icl,has_profile 1
 
     # Display profile in catalog table
     CatalogPanelLoadTSV $data "icl_profile"
@@ -402,11 +394,11 @@ proc CatalogPanelICLProfile {} {
     # Draw annulus markers
     CatalogPanelICLDrawAnnuli
 
-    set catpanel(status) "ICL: SB profile measured"
+    ::ogf::cat::set status "ICL: SB profile measured"
 }
 
 proc CatalogPanelICLDrawAnnuli {} {
-    global catpanel current
+    global current
 
     set frame $current(frame)
     if {$frame eq {}} return
@@ -415,8 +407,8 @@ proc CatalogPanelICLDrawAnnuli {} {
     catch {$frame marker catalog icl_annulus delete}
 
     # BCG center (0-indexed → 1-indexed for ds9 markers)
-    set cx [expr {$catpanel(icl,center_x) + 1.0}]
-    set cy [expr {$catpanel(icl,center_y) + 1.0}]
+    set cx [expr {[::ogf::cat::get icl,center_x] + 1.0}]
+    set cy [expr {[::ogf::cat::get icl,center_y] + 1.0}]
 
     # Draw BCG center cross
     global icl_ann_reg
@@ -424,8 +416,8 @@ proc CatalogPanelICLDrawAnnuli {} {
     catch {$frame marker catalog command ds9 var icl_ann_reg}
 
     # Draw annulus rings at 25%, 50%, 75%, 100% of rmax
-    set rmin $catpanel(icl,param,rmin)
-    set rmax $catpanel(icl,param,rmax)
+    set rmin [::ogf::cat::get icl,param,rmin]
+    set rmax [::ogf::cat::get icl,param,rmax]
     foreach frac {0.25 0.50 0.75 1.00} {
 	set r [expr {$rmin + ($rmax - $rmin) * $frac}]
 	set ri [expr {int($r)}]
@@ -435,10 +427,10 @@ proc CatalogPanelICLDrawAnnuli {} {
 }
 
 proc CatalogPanelICLSectorProfile {} {
-    global catpanel ed
+    global ed
 
-    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
-	set catpanel(status) "ICL: Set BCG center first"
+    if {[::ogf::cat::get icl,center_x] eq {} || [::ogf::cat::get icl,center_y] eq {}} {
+	::ogf::cat::set status "ICL: Set BCG center first"
 	return
     }
 
@@ -480,58 +472,57 @@ proc CatalogPanelICLSectorProfile {} {
 }
 
 proc CatalogPanelICLSectorProfileRun {w} {
-    global catpanel ed
+    global ed
 
     set fn [CatalogPanelGetFITS]
-    if {[file exists $catpanel(icl,bgsub_file)]} {
-	set fn $catpanel(icl,bgsub_file)
+    if {[file exists [::ogf::cat::get icl,bgsub_file]]} {
+	set fn [::ogf::cat::get icl,bgsub_file]
     }
     if {$fn eq {}} {
-	set catpanel(status) "ICL: No image available"
+	::ogf::cat::set status "ICL: No image available"
 	return
     }
     CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: Measuring sector profile..."
+    ::ogf::cat::set status "ICL: Measuring sector profile..."
     update idletasks
 
-    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+    set center "[::ogf::cat::get icl,center_x],[::ogf::cat::get icl,center_y]"
 
     set args [list [OGFPython] $script $fn --mode profile \
 	--center $center \
-	--rmin $catpanel(icl,param,rmin) \
-	--rmax $catpanel(icl,param,rmax) \
-	--nsteps $catpanel(icl,param,nsteps) \
-	--spacing $catpanel(icl,param,spacing) \
-	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
-	--pixel-scale $catpanel(icl,param,pixel-scale) \
+	--rmin [::ogf::cat::get icl,param,rmin] \
+	--rmax [::ogf::cat::get icl,param,rmax] \
+	--nsteps [::ogf::cat::get icl,param,nsteps] \
+	--spacing [::ogf::cat::get icl,param,spacing] \
+	--mag-zeropoint [::ogf::cat::get icl,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale] \
 	--sector-pa $ed(icl,sector-pa) \
 	--sector-width $ed(icl,sector-width) \
-	--profile-output $catpanel(icl,profile_file)]
+	--profile-output [::ogf::cat::get icl,profile_file]]
 
     CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL sector profile error: $err"
+	::ogf::cat::set status "ICL sector profile error: $err"
 	return
     }
 
     destroy $w
-    set catpanel(icl,has_profile) 1
+    ::ogf::cat::set icl,has_profile 1
     CatalogPanelLoadTSV $data "icl_sector_profile"
-    set catpanel(status) "ICL: Sector profile measured (PA=$ed(icl,sector-pa), width=$ed(icl,sector-width))"
+    ::ogf::cat::set status "ICL: Sector profile measured (PA=$ed(icl,sector-pa), width=$ed(icl,sector-width))"
 }
 
 proc CatalogPanelICLMeasure {} {
-    global catpanel
 
-    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
-	set catpanel(status) "ICL: No profile available — run Measure Profile first"
+    if {![::ogf::cat::get icl,has_profile] || ![file exists [::ogf::cat::get icl,profile_file]]} {
+	::ogf::cat::set status "ICL: No profile available — run Measure Profile first"
 	return
     }
 
@@ -541,22 +532,22 @@ proc CatalogPanelICLMeasure {} {
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: Computing ICL measurements..."
+    ::ogf::cat::set status "ICL: Computing ICL measurements..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode measure \
-	--profile-file $catpanel(icl,profile_file) \
-	--mu-threshold $catpanel(icl,param,mu-threshold) \
-	--mu-levels $catpanel(icl,param,mu-levels) \
-	--pixel-scale $catpanel(icl,param,pixel-scale)]
+	--profile-file [::ogf::cat::get icl,profile_file] \
+	--mu-threshold [::ogf::cat::get icl,param,mu-threshold] \
+	--mu-levels [::ogf::cat::get icl,param,mu-levels] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale]]
 
     CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL measure error: $err"
+	::ogf::cat::set status "ICL measure error: $err"
 	return
     }
 
@@ -565,21 +556,21 @@ proc CatalogPanelICLMeasure {} {
     # Draw isophotal radius markers
     CatalogPanelICLDrawIsophotes $data
 
-    set catpanel(status) "ICL: Measurements complete"
+    ::ogf::cat::set status "ICL: Measurements complete"
 }
 
 proc CatalogPanelICLDrawIsophotes {data} {
-    global catpanel current
+    global current
 
     set frame $current(frame)
     if {$frame eq {}} return
-    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} return
+    if {[::ogf::cat::get icl,center_x] eq {} || [::ogf::cat::get icl,center_y] eq {}} return
 
     # Delete existing annulus markers
     catch {$frame marker catalog icl_annulus delete}
 
-    set cx [expr {$catpanel(icl,center_x) + 1.0}]
-    set cy [expr {$catpanel(icl,center_y) + 1.0}]
+    set cx [expr {[::ogf::cat::get icl,center_x] + 1.0}]
+    set cy [expr {[::ogf::cat::get icl,center_y] + 1.0}]
 
     # BCG center cross
     global icl_ann_reg
@@ -610,10 +601,9 @@ proc CatalogPanelICLDrawIsophotes {data} {
 }
 
 proc CatalogPanelICLMeasureMulti {} {
-    global catpanel
 
-    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
-	set catpanel(status) "ICL: No profile available — run Measure Profile first"
+    if {![::ogf::cat::get icl,has_profile] || ![file exists [::ogf::cat::get icl,profile_file]]} {
+	::ogf::cat::set status "ICL: No profile available — run Measure Profile first"
 	return
     }
 
@@ -623,32 +613,32 @@ proc CatalogPanelICLMeasureMulti {} {
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: Computing multi-threshold ICL..."
+    ::ogf::cat::set status "ICL: Computing multi-threshold ICL..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --mode measure-multi \
-	--profile-file $catpanel(icl,profile_file) \
-	--pixel-scale $catpanel(icl,param,pixel-scale)]
+	--profile-file [::ogf::cat::get icl,profile_file] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale]]
 
     CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL multi-threshold error: $err"
+	::ogf::cat::set status "ICL multi-threshold error: $err"
 	return
     }
 
     CatalogPanelLoadTSV $data "icl_multi_threshold"
-    set catpanel(status) "ICL: Multi-threshold measurements complete"
+    ::ogf::cat::set status "ICL: Multi-threshold measurements complete"
 }
 
 proc CatalogPanelICLDecompose {} {
-    global catpanel ds9 catpanel_fdata
+    global ds9 catpanel_fdata
 
-    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
-	set catpanel(status) "ICL: Set BCG center first"
+    if {[::ogf::cat::get icl,center_x] eq {} || [::ogf::cat::get icl,center_y] eq {}} {
+	::ogf::cat::set status "ICL: Set BCG center first"
 	return
     }
 
@@ -666,60 +656,60 @@ proc CatalogPanelICLDecompose {} {
 	set fn [CatalogPanelGetFITS]
     }
     if {$fn eq {}} {
-	set catpanel(status) "ICL: No FITS image available"
+	::ogf::cat::set status "ICL: No FITS image available"
 	return
     }
     CatalogPanelICLUpdateFiles $fn
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: BCG+ICL decomposition (original image)..."
+    ::ogf::cat::set status "ICL: BCG+ICL decomposition (original image)..."
     update idletasks
 
     # Measure profile on original image and decompose in one step
-    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+    set center "[::ogf::cat::get icl,center_x],[::ogf::cat::get icl,center_y]"
 
     # First: measure profile on original (unmasked) image
     set prof_args [list [OGFPython] $script $fn --mode profile \
 	--center $center \
-	--rmin $catpanel(icl,param,rmin) \
-	--rmax $catpanel(icl,param,rmax) \
-	--nsteps $catpanel(icl,param,nsteps) \
-	--spacing $catpanel(icl,param,spacing) \
-	--ellipticity $catpanel(icl,param,ellipticity) \
-	--pa $catpanel(icl,param,pa) \
-	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
-	--pixel-scale $catpanel(icl,param,pixel-scale) \
-	--profile-output $catpanel(icl,profile_file)]
+	--rmin [::ogf::cat::get icl,param,rmin] \
+	--rmax [::ogf::cat::get icl,param,rmax] \
+	--nsteps [::ogf::cat::get icl,param,nsteps] \
+	--spacing [::ogf::cat::get icl,param,spacing] \
+	--ellipticity [::ogf::cat::get icl,param,ellipticity] \
+	--pa [::ogf::cat::get icl,param,pa] \
+	--mag-zeropoint [::ogf::cat::get icl,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale] \
+	--profile-output [::ogf::cat::get icl,profile_file]]
 
     CatalogPanelCmdLog icl $prof_args
     if {[catch {exec {*}$prof_args 2>@stderr} err]} {
-	set catpanel(status) "ICL decompose: profile error: $err"
+	::ogf::cat::set status "ICL decompose: profile error: $err"
 	return
     }
 
     # Then: decompose using that profile
     set args [list [OGFPython] $script $fn --mode decompose \
-	--profile-file $catpanel(icl,profile_file) \
-	--pixel-scale $catpanel(icl,param,pixel-scale) \
-	--mag-zeropoint $catpanel(icl,param,mag-zeropoint)]
+	--profile-file [::ogf::cat::get icl,profile_file] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale] \
+	--mag-zeropoint [::ogf::cat::get icl,param,mag-zeropoint]]
 
     CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL decompose error: $err"
+	::ogf::cat::set status "ICL decompose error: $err"
 	return
     }
 
     CatalogPanelLoadTSV $data "icl_decomposition"
-    set catpanel(status) "ICL: BCG+ICL decomposition complete"
+    ::ogf::cat::set status "ICL: BCG+ICL decomposition complete"
 }
 
 proc CatalogPanelICLColorProfile {} {
-    global catpanel ed
+    global ed
 
     set w .iclcolor
     if {[winfo exists $w]} {
@@ -772,10 +762,10 @@ proc CatalogPanelICLColorBrowse {idx} {
 }
 
 proc CatalogPanelICLColorProfileRun {w} {
-    global catpanel ed
+    global ed
 
-    if {$catpanel(icl,center_x) eq {} || $catpanel(icl,center_y) eq {}} {
-	set catpanel(status) "ICL: Set BCG center first"
+    if {[::ogf::cat::get icl,center_x] eq {} || [::ogf::cat::get icl,center_y] eq {}} {
+	::ogf::cat::set status "ICL: Set BCG center first"
 	return
     }
 
@@ -791,7 +781,7 @@ proc CatalogPanelICLColorProfileRun {w} {
     }
 
     if {$bands eq {}} {
-	set catpanel(status) "ICL: Need at least 2 bands with name and file"
+	::ogf::cat::set status "ICL: Need at least 2 bands with name and file"
 	return
     }
 
@@ -801,80 +791,78 @@ proc CatalogPanelICLColorProfileRun {w} {
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
-	set catpanel(status) "ICL: ds9_icl.py not found"
+	::ogf::cat::set status "ICL: ds9_icl.py not found"
 	return
     }
 
-    set catpanel(status) "ICL: Measuring color profile..."
+    ::ogf::cat::set status "ICL: Measuring color profile..."
     update idletasks
 
-    set center "$catpanel(icl,center_x),$catpanel(icl,center_y)"
+    set center "[::ogf::cat::get icl,center_x],[::ogf::cat::get icl,center_y]"
 
     set args [list [OGFPython] $script $fn --mode color \
 	--center $center \
 	--bands $bands \
-	--rmin $catpanel(icl,param,rmin) \
-	--rmax $catpanel(icl,param,rmax) \
-	--nsteps $catpanel(icl,param,nsteps) \
-	--spacing $catpanel(icl,param,spacing) \
-	--mag-zeropoint $catpanel(icl,param,mag-zeropoint) \
-	--pixel-scale $catpanel(icl,param,pixel-scale)]
+	--rmin [::ogf::cat::get icl,param,rmin] \
+	--rmax [::ogf::cat::get icl,param,rmax] \
+	--nsteps [::ogf::cat::get icl,param,nsteps] \
+	--spacing [::ogf::cat::get icl,param,spacing] \
+	--mag-zeropoint [::ogf::cat::get icl,param,mag-zeropoint] \
+	--pixel-scale [::ogf::cat::get icl,param,pixel-scale]]
 
-    if {$catpanel(icl,has_mask) && [file exists $catpanel(icl,mask_file)]} {
-	lappend args --mask $catpanel(icl,mask_file)
+    if {[::ogf::cat::get icl,has_mask] && [file exists [::ogf::cat::get icl,mask_file]]} {
+	lappend args --mask [::ogf::cat::get icl,mask_file]
     }
 
     catch {OGFSessFromCmdLog icl $args}
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "ICL color profile error: $err"
+	::ogf::cat::set status "ICL color profile error: $err"
 	return
     }
 
     destroy $w
     CatalogPanelLoadTSV $data "icl_color_profile"
-    set catpanel(status) "ICL: Color profile complete"
+    ::ogf::cat::set status "ICL: Color profile complete"
 }
 
 proc CatalogPanelICLSaveProfile {} {
-    global catpanel
 
-    if {!$catpanel(icl,has_profile) || ![file exists $catpanel(icl,profile_file)]} {
-	set catpanel(status) "ICL: No profile available"
+    if {![::ogf::cat::get icl,has_profile] || ![file exists [::ogf::cat::get icl,profile_file]]} {
+	::ogf::cat::set status "ICL: No profile available"
 	return
     }
 
     set fname [tk_getSaveFile -defaultextension .tsv \
 	-filetypes {{{TSV} {.tsv}} {{All} *}} \
-	-initialfile [file tail $catpanel(icl,profile_file)]]
+	-initialfile [file tail [::ogf::cat::get icl,profile_file]]]
     if {$fname eq {}} return
 
-    if {[catch {file copy -force $catpanel(icl,profile_file) $fname} err]} {
-	set catpanel(status) "ICL: Save error: $err"
+    if {[catch {file copy -force [::ogf::cat::get icl,profile_file] $fname} err]} {
+	::ogf::cat::set status "ICL: Save error: $err"
 	return
     }
-    set catpanel(status) "ICL: Profile saved to $fname"
+    ::ogf::cat::set status "ICL: Profile saved to $fname"
 }
 
 proc CatalogPanelICLLoadProfile {} {
-    global catpanel
 
     set fname [tk_getOpenFile -filetypes {{{TSV} {.tsv}} {{All} *}}]
     if {$fname eq {} || ![file exists $fname]} return
 
     if {[catch {set fd [open $fname r]} err]} {
-	set catpanel(status) "ICL: Load error: $err"
+	::ogf::cat::set status "ICL: Load error: $err"
 	return
     }
     set data [read $fd]
     close $fd
 
     # Copy to standard location
-    if {[catch {file copy -force $fname $catpanel(icl,profile_file)} err]} {
+    if {[catch {file copy -force $fname [::ogf::cat::get icl,profile_file]} err]} {
 	# Non-fatal
     }
 
-    set catpanel(icl,has_profile) 1
+    ::ogf::cat::set icl,has_profile 1
     CatalogPanelLoadTSV [string trim $data] "icl_profile"
-    set catpanel(status) "ICL: Profile loaded from $fname"
+    ::ogf::cat::set status "ICL: Profile loaded from $fname"
 }
 
