@@ -161,17 +161,17 @@ proc CatalogPanelBandsRegisterFrame {frame name zp fwhm {file {}}} {
 }
 
 proc CatalogPanelBandsRegister {} {
-    global current catpanel ogfband
+    global current ogfband
     set frame $current(frame)
     if {$frame eq {} || ![$frame has fits]} {
-	set catpanel(status) "Bands: no image in the current frame"
+	::ogf::cat::set status "Bands: no image in the current frame"
 	return
     }
     set file [CatalogPanelGetFITS]
     set info [OGFImageInfo $file]
     set dname [file rootname [file tail $file]]
     if {[dict exists $info FILTER] && [dict get $info FILTER] ne {}} {set dname [dict get $info FILTER]}
-    set dzp $catpanel(param,mag-zeropoint)
+    set dzp [::ogf::cat::get param,mag-zeropoint]
     if {[dict exists $info ZP_AB]} {set dzp [dict get $info ZP_AB]}
     set dps {}
     if {[dict exists $info PIXSCALE]} {set dps [dict get $info PIXSCALE]}
@@ -185,13 +185,12 @@ proc CatalogPanelBandsRegister {} {
     set name [regsub -all {[^A-Za-z0-9_]} [dict get $d name] _]
     if {$name eq {}} return
     set zp [dict get $d zp]
-    if {![string is double -strict $zp]} {set catpanel(status) "Bands: bad zeropoint"; return}
+    if {![string is double -strict $zp]} {::ogf::cat::set status "Bands: bad zeropoint"; return}
     CatalogPanelBandsRegisterFrame $frame $name $zp [dict get $d fwhm] $file
-    set catpanel(status) "Band $name registered ($frame, ZP=$zp); [llength $ogfband(names)] band(s), detection band = $ogfband(detect)"
+    ::ogf::cat::set status "Band $name registered ($frame, ZP=$zp); [llength $ogfband(names)] band(s), detection band = $ogfband(detect)"
 }
 
 proc CatalogPanelBandsLoad {} {
-    global catpanel
     set fn [tk_getOpenFile -title "Load Band (FITS)..." \
 	-filetypes {{{FITS files} {.fits .fit .fits.gz}} {{All files} *}}]
     if {$fn eq {}} return
@@ -199,11 +198,11 @@ proc CatalogPanelBandsLoad {} {
 }
 
 proc CatalogPanelBandsLoadFile {fn {name {}} {zp {}}} {
-    global catpanel current
+    global current
     set had [expr {$current(frame) ne {} && [$current(frame) has fits]}]
     if {$had} {CreateFrame}
     if {[catch {LoadFitsFile $fn {} {}} err]} {
-	set catpanel(status) "Bands: cannot load $fn: $err"
+	::ogf::cat::set status "Bands: cannot load $fn: $err"
 	return
     }
     if {$name eq {}} {
@@ -211,22 +210,22 @@ proc CatalogPanelBandsLoadFile {fn {name {}} {zp {}}} {
     } else {
 	set info [OGFImageInfo $fn]
 	if {$zp eq {} && [dict exists $info ZP_AB]} {set zp [dict get $info ZP_AB]}
-	if {$zp eq {}} {set zp $catpanel(param,mag-zeropoint)}
+	if {$zp eq {}} {set zp [::ogf::cat::get param,mag-zeropoint]}
 	CatalogPanelBandsRegisterFrame $current(frame) $name $zp {} $fn
     }
 }
 
 proc CatalogPanelBandsSetDetect {name} {
-    global ogfband catpanel
+    global ogfband
     set ogfband(detect) $name
     catch {OGFSessLog bands.detect config {} -tool native -title "Detection band = $name" \
 	-payload [dict create name $name]}
     OGFBandsRecomputeGrid
-    set catpanel(status) "Detection band = $name"
+    ::ogf::cat::set status "Detection band = $name"
 }
 
 proc CatalogPanelBandsRemove {name} {
-    global ogfband catpanel
+    global ogfband
     set i [lsearch -exact $ogfband(names) $name]
     if {$i < 0} return
     set ogfband(names) [lreplace $ogfband(names) $i $i]
@@ -237,7 +236,7 @@ proc CatalogPanelBandsRemove {name} {
 	set ogfband(detect) [lindex $ogfband(names) 0]
     }
     OGFBandsRecomputeGrid
-    set catpanel(status) "Band $name removed ([llength $ogfband(names)] left)"
+    ::ogf::cat::set status "Band $name removed ([llength $ogfband(names)] left)"
 }
 
 proc OGFBandFrameDeleted {frame} {
@@ -283,19 +282,19 @@ proc OGFBandsPostRemove {m} {
 
 # ------------------------------------------------------------ detection
 proc CatalogPanelBandsDetect {} {
-    global ogfband catpanel
+    global ogfband
     if {$ogfband(detect) eq {}} {
-	set catpanel(status) "Bands: register a band first"
+	::ogf::cat::set status "Bands: register a band first"
 	return
     }
     set b $ogfband(detect)
     set fr $ogfband($b,frame)
     CatalogPanelGotoBandFrame $fr
-    set catpanel(param,mag-zeropoint) $ogfband($b,zp)
-    if {$ogfband($b,pscale) ne {}} {set catpanel(param,pixel-scale) $ogfband($b,pscale)}
+    ::ogf::cat::set param,mag-zeropoint $ogfband($b,zp)
+    if {$ogfband($b,pscale) ne {}} {::ogf::cat::set param,pixel-scale $ogfband($b,pscale)}
     CatalogPanelExtract
-    set n [expr {[llength [split $catpanel(alldata) \n]] - 1}]
-    set catpanel(status) "Detected $n sources in $b (ZP=$ogfband($b,zp)); use Bands > Measure in All Bands"
+    set n [expr {[llength [split [::ogf::cat::tsv] \n]] - 1}]
+    ::ogf::cat::set status "Detected $n sources in $b (ZP=$ogfband($b,zp)); use Bands > Measure in All Bands"
 }
 
 proc CatalogPanelGotoBandFrame {fr} {
@@ -318,13 +317,13 @@ proc OGFBandsSorted {} {
 }
 
 proc CatalogPanelBandsMeasure {{snr {}}} {
-    global ogfband catpanel
+    global ogfband
     if {$ogfband(detect) eq {}} {
-	set catpanel(status) "Bands: register bands and detect first"
+	::ogf::cat::set status "Bands: register bands and detect first"
 	return
     }
-    if {$catpanel(alldata) eq {}} {
-	set catpanel(status) "Bands: no catalog - run Detect first"
+    if {[::ogf::cat::tsv] eq {}} {
+	::ogf::cat::set status "Bands: no catalog - run Detect first"
 	return
     }
     if {$snr eq {}} {
@@ -337,7 +336,7 @@ proc CatalogPanelBandsMeasure {{snr {}}} {
     if {![string is double -strict $snr]} return
     set ogfband(snrmin) $snr
     set sbin [OGFSextractBin]
-    if {![file executable $sbin]} {set catpanel(status) "ds9_sextract not found"; return}
+    if {![file executable $sbin]} {::ogf::cat::set status "ds9_sextract not found"; return}
     OGFPrepareLibPath
     set det $ogfband(detect)
     set detfile $ogfband($det,file)
@@ -349,13 +348,13 @@ proc CatalogPanelBandsMeasure {{snr {}}} {
     set t0 [clock milliseconds]
     set summary {}
     foreach b [OGFBandsSorted] {
-	set catpanel(status) "Measuring in $b ..."
+	::ogf::cat::set status "Measuring in $b ..."
 	update idletasks
 	set args [list $sbin $detfile --forced-catalog $catfile \
 	    --measure-image $ogfband($b,file) --band $b \
 	    --mag-zeropoint $ogfband($b,zp) --snr-min $snr]
 	if {[catch {set out [exec {*}$args 2>@stderr]} err]} {
-	    set catpanel(status) "Measure error ($b): $err"
+	    ::ogf::cat::set status "Measure error ($b): $err"
 	    return
 	}
 	set rename [OGFBandsRenameCols $out $b]
@@ -364,10 +363,10 @@ proc CatalogPanelBandsMeasure {{snr {}}} {
     }
     OGFBandsAddColors
     set dt [expr {[clock milliseconds] - $t0}]
-    set n [expr {[llength [split $catpanel(alldata) \n]] - 1}]
-    set catpanel(status) "Measured $n sources in [llength $ogfband(names)] bands ([expr {$dt/1000.0}] s); detected: [join $summary {  }]"
+    set n [expr {[llength [split [::ogf::cat::tsv] \n]] - 1}]
+    ::ogf::cat::set status "Measured $n sources in [llength $ogfband(names)] bands ([expr {$dt/1000.0}] s); detected: [join $summary {  }]"
     # keep the current selection visible
-    if {[llength $catpanel(sel,nums)]} {catch {OGFApplySelection 0}}
+    if {[llength [::ogf::cat::selection]]} {catch {OGFApplySelection 0}}
 }
 
 # ds9_sextract forced output -> TSV with NUMBER, MAG_<b>, MAGERR_<b>
@@ -387,8 +386,7 @@ proc OGFBandsRenameCols {tsv b} {
 }
 
 proc OGFBandsCountDet {b} {
-    global catpanel
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set h [split [lindex $lines 0] "\t"]
     set ci [lsearch -exact $h MAG_$b]
     if {$ci < 0} {return 0}
@@ -404,10 +402,10 @@ proc OGFBandsCountDet {b} {
 
 # adjacent-band colour columns (wavelength order); 99 = undefined
 proc OGFBandsAddColors {} {
-    global catpanel ogfband
+    global ogfband
     set order [OGFBandsSorted]
     if {[llength $order] < 2} return
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set h [split [lindex $lines 0] "\t"]
     set pairs {}
     for {set i 0} {$i < [llength $order]-1} {incr i} {
@@ -439,10 +437,10 @@ proc OGFBandsAddColors {} {
 
 # ----------------------------------------------------------------- view
 proc CatalogPanelBandsTile {} {
-    global ogfband catpanel current ds9 tile panzoom crosshair scale
+    global ogfband current ds9 tile panzoom crosshair scale
     set frs [OGFBandFrames]
     if {[llength $frs] < 2} {
-	set catpanel(status) "Bands: register at least two bands to tile"
+	::ogf::cat::set status "Bands: register at least two bands to tile"
 	return
     }
     # hide non-band frames from the tile, show bands
@@ -464,8 +462,8 @@ proc CatalogPanelBandsTile {} {
     set crosshair(lock) wcs
     LockCrosshairCurrent
     ZoomToFit
-    if {[llength $catpanel(sel,nums)]} {catch {OGFApplySelection 1}}
-    set catpanel(status) "Tiled [llength $frs] bands (WCS-locked pan/zoom and crosshair)"
+    if {[llength [::ogf::cat::selection]]} {catch {OGFApplySelection 1}}
+    ::ogf::cat::set status "Tiled [llength $frs] bands (WCS-locked pan/zoom and crosshair)"
 }
 
 proc CatalogPanelBandsSingleView {} {
