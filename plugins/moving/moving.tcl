@@ -34,9 +34,9 @@ proc OGFMovScript {} {
 }
 
 proc OGFMovStatus {msg} {
-    global ogfmov catpanel
+    global ogfmov
     set ogfmov(status) $msg
-    catch {set catpanel(status) "Moving: $msg"}
+    catch {::ogf::cat::set status "Moving: $msg"}
     catch {$::ogfmov(detwin).st configure -text $msg}
     update idletasks
 }
