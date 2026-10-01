@@ -56,9 +56,40 @@ def _fallback_psf(chip, bkg, rms, size, min_fwhm_arcsec=0.085):
     return I.gaussian_psf(f, size), f
 
 
+def _template_chip(target, tplf, tpl_nan):
+    """A Chip-like view of the template on the target grid (for PSF measurement from the template's own stars)."""
+    import copy
+    c = copy.copy(target)
+    c.data = tplf.astype(np.float32); c.bad = np.asarray(tpl_nan) | target.bad
+    c.cr = np.zeros(target.shape, bool); c.name = target.name + "[template]"; c.path = target.path + "#template"
+    return c
+
+
+def _astrom_sigma_pix(chip, nin=None, others=None):
+    """Registration uncertainty per axis in pixels of a chip from its alignment sidecar (rms of the fit in mas; 0 for the anchor)."""
+    a = getattr(chip, "align", None) or {}
+    rms = a.get("rms_mas")
+    if rms is None or not np.isfinite(rms):
+        return None
+    return float(rms) / 1000.0 / chip.pixscale
+
+
 def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_size=25,
-                    min_pix=3, extra_mask=None, psf_t=None, fw_t=None, n_t=0, psf_r=None, fw_r=None, n_r=0):
-    """Returns dict(alpha=..., S=..., sigma_alpha=..., score=..., mask=..., dets=[...], info=...)."""
+                    min_pix=3, extra_mask=None, psf_t=None, fw_t=None, n_t=0, psf_r=None, fw_r=None, n_r=0,
+                    source_noise=False, astrom_sigma=None, psf_field_t=None, psf_field_r=None, template_psf="target",
+                    tile=(512, 512), tile_margin=32, astrom_template_sigma=None):
+    """Returns dict(alpha=..., S=..., sigma_alpha=..., score=..., mask=..., dets=[...], info=...).
+
+    Optional noise model / PSF extensions (all off by default: the defaults reproduce the previous behaviour exactly):
+      source_noise    include the Poisson noise of the sources in N and R in the score variance (zogy `Vn`, `Vr`; image units are e-/s so
+                      V = max(smoothed counts, 0) / t_exp; template: / (t_exp * n_inputs)).
+      astrom_sigma    registration uncertainty of the target in pixels (float or (sx, sy)); True = take it from the chip's alignment sidecar
+                      (`chip.align['rms_mas']`).  The template term (`astrom_template_sigma`, default: the same value / sqrt(n_inputs)) is added
+                      too.  Enables the astrometric-error terms of ZOGY.
+      psf_field_t / psf_field_r   `imaging.PSFField` (spatially varying PSF of the target / template); runs `zogy_tiled`.
+      template_psf    "target" (default, as before) or "measure": measure the template PSF from the template's own stars (constant per chip,
+                      or a PSFField if `psf_field_r` is given).
+    """
     ny, nx = target.shape
     tpl = template.copy()
     valid = np.isfinite(tpl) & ~target.bad
@@ -74,6 +105,18 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
         psf_t, fw_t = _fallback_psf(target, bkg_t, rms_t, psf_size); info["psf_target"] = "gaussian(2*r50)"
     else:
         info["psf_target"] = "empirical"
+    if psf_r is None and template_psf == "measure" and psf_field_r is None:
+        tc = _template_chip(target, tplf, ~np.isfinite(tpl))
+        pr_ = None; fr_ = np.nan; nr_ = 0
+        try:
+            st_ = I.collect_star_cutouts([tc], psf_size, 200, 6.0, confirm=False)[0]
+            if len(st_) >= 6:
+                pr_, fr_ = I._combine_cutouts(st_, psf_size); nr_ = len(st_)
+        except Exception:
+            pr_ = None
+        if pr_ is not None:
+            psf_r, fw_r, n_r = pr_, fr_, nr_
+            info["n_psf_stars_template"] = nr_
     if psf_r is None:
         # template = median of cubic-spline-resampled exposures: its PSF is the target PSF broadened by the
         # (small) spline/median smoothing; we reuse the target PSF (documented approximation)
@@ -93,14 +136,52 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
     tpl_sig = ndi.gaussian_filter(np.where(valid, tplf - bkg_r, 0.0), _k) / (sr / (2.0 * np.sqrt(np.pi) * _k))
     info["template_smooth_sigma"] = float(_k)
     if method == "zogy":
-        out = Z.zogy(N, R, psf_t, psf_r, sn, sr, Fn=Fr_ratio, Fr=1.0)
-        S = out["S"]; alpha = out["alpha_new"]; sig_alpha = out["sigma_alpha_new"]       # flux in the scale of the target exposure
-        info["PD_sum2"] = out["sumP2"]
-        # empirical score normalisation (robust) -- guards against non-white noise
-        s_emp = Z.robust_sigma(S, ~valid)
-        score = S / s_emp
-        info["score_sigma_emp"] = float(s_emp)
-        info["sigma_alpha_theory"] = float(sig_alpha)
+        zkw = {}
+        if source_noise:
+            nin_mean = float(np.mean(nin[valid])) if nin is not None and valid.any() else 3.0
+            Vn = ndi.gaussian_filter(np.clip(N, 0, None), 1.0) / max(target.texp, 1e-3)
+            Vr = ndi.gaussian_filter(np.clip(R, 0, None), 1.0) / (max(target.texp, 1e-3) * max(nin_mean, 1.0))
+            zkw.update(Vn=Vn, Vr=Vr)
+            info["source_noise"] = True
+        if astrom_sigma is not None and astrom_sigma is not False:
+            if astrom_sigma is True:
+                sg = _astrom_sigma_pix(target)
+            else:
+                sg = astrom_sigma
+            if sg is not None:
+                sgx, sgy = (sg, sg) if np.isscalar(sg) else sg
+                nin_mean = float(np.mean(nin[valid])) if nin is not None and valid.any() else 3.0
+                st_ = astrom_template_sigma if astrom_template_sigma is not None else max(sgx, sgy) / np.sqrt(max(nin_mean, 1.0))
+                zkw.update(astrom_n=(sgx, sgy), astrom_r=(st_, st_))
+                info["astrom_sigma_pix"] = [float(sgx), float(sgy)]; info["astrom_sigma_template_pix"] = float(st_)
+        if psf_field_t is not None or psf_field_r is not None:
+            out = Z.zogy_tiled(N, R, psf_field_t if psf_field_t is not None else psf_t, psf_field_r if psf_field_r is not None else psf_r, sn, sr,
+                               Fn=Fr_ratio, Fr=1.0, tile=tile, margin=tile_margin, **zkw)
+            info["psf_variation"] = (psf_field_t.summary() if psf_field_t is not None else "constant")
+        else:
+            out = Z.zogy(N, R, psf_t, psf_r, sn, sr, Fn=Fr_ratio, Fr=1.0, **zkw)
+        if "S_corr" in out:
+            # corrected score: unit-variance map including source noise / astrometric terms; flux maps consistent with it
+            S = out["S"]; alpha = out["alpha_new"]
+            sig_map = out["sigma_alpha_new_map"] if "sigma_alpha_new_map" in out else out["sigma_alpha_new"]
+            sig_alpha = float(np.median(sig_map)) if np.ndim(sig_map) else float(sig_map)
+            info["PD_sum2"] = out["sumP2"]
+            score_raw = out["S_corr"]
+            s_emp = Z.robust_sigma(score_raw, ~valid)
+            score = score_raw / s_emp
+            info["score_sigma_emp"] = float(s_emp); info["sigma_alpha_theory"] = float(sig_alpha)
+            info["sigma_alpha_map_p5_p95"] = [float(np.percentile(sig_map[valid], 5)), float(np.percentile(sig_map[valid], 95))] if np.ndim(sig_map) else None
+            S = score_raw
+        else:
+            S = out["S"]; alpha = out["alpha_new"]; sig_alpha = out["sigma_alpha_new"]       # flux in the scale of the target exposure
+            if np.ndim(sig_alpha):
+                sig_alpha = float(np.median(sig_alpha))
+            info["PD_sum2"] = out["sumP2"]
+            # empirical score normalisation (robust) -- guards against non-white noise
+            s_emp = Z.robust_sigma(S, ~valid)
+            score = S / s_emp
+            info["score_sigma_emp"] = float(s_emp)
+            info["sigma_alpha_theory"] = float(sig_alpha)
         PD = out["PD"]
     else:
         D = Z.scaled_subtraction(N, R, psf_t, psf_r, Fn=Fr_ratio, Fr=1.0)
