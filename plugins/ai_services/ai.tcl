@@ -147,10 +147,9 @@ proc OGFAIConfirm {info what} {
 }
 
 proc OGFAIRowCount {} {
-    global catpanel
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {return 0}
+    if {![::ogf::cat::has]} {return 0}
     set n 0
-    foreach l [lrange [split $catpanel(alldata) \n] 1 end] {if {[string trim $l] ne {}} {incr n}}
+    foreach l [lrange [split [::ogf::cat::tsv] \n] 1 end] {if {[string trim $l] ne {}} {incr n}}
     return $n
 }
 
@@ -180,30 +179,30 @@ proc OGFAIImages {} {
 #                              -title T -params {k=v ...} -numbers {..}?
 # Returns 1 when columns were added (or a dry run completed), 0 otherwise.
 proc OGFAIRunTask {task service args} {
-    global catpanel ogfai ogfsess
+    global ogfai ogfsess
     OGFAIInit
     set seq 0
     array set o {-rows all -dry 0 -size {} -unit pix -norm {} -fmt {} -rename {} -title {} -params {} -numbers {}}
     array set o $args
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "AI Services: no catalog - extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "AI Services: no catalog - extract sources first"
 	return 0
     }
-    if {$service eq {}} {set catpanel(status) "AI Services: no service chosen"; return 0}
+    if {$service eq {}} {::ogf::cat::set status "AI Services: no service chosen"; return 0}
     set script [OGFAIScript]
-    if {![file exists $script]} {set catpanel(status) "AI Services: ds9_ai_bridge.py not found"; return 0}
+    if {![file exists $script]} {::ogf::cat::set status "AI Services: ds9_ai_bridge.py not found"; return 0}
     set info [OGFAIServiceInfo $service]
-    if {$info eq {}} {set catpanel(status) "AI Services: service '$service' not found in the registry"; return 0}
+    if {$info eq {}} {::ogf::cat::set status "AI Services: service '$service' not found in the registry"; return 0}
     set numbers $o(-numbers)
     if {$o(-rows) eq "selected"} {
-	set numbers $catpanel(sel,nums)
-	if {[llength $numbers] == 0} {set catpanel(status) "AI Services: no rows selected in the table"; return 0}
+	set numbers [::ogf::cat::selection]
+	if {[llength $numbers] == 0} {::ogf::cat::set status "AI Services: no rows selected in the table"; return 0}
     }
     set nrows [expr {[llength $numbers] ? [llength $numbers] : [OGFAIRowCount]}]
     set net [OGFAIIsNetwork $info]
     lassign [OGFAIImages] bands files
     set catfile [CatalogPanelSaveTempCatalog ai]
-    if {$catfile eq {}} {set catpanel(status) "AI Services: cannot write the temporary catalog"; return 0}
+    if {$catfile eq {}} {::ogf::cat::set status "AI Services: cannot write the temporary catalog"; return 0}
     set dry [string is true -strict $o(-dry)]
     set argv [OGFAIArgv [expr {$dry ? "dry-run" : "run"}]]
     lappend argv --service $service --task $task --catalog $catfile
@@ -222,11 +221,11 @@ proc OGFAIRunTask {task service args} {
     }
     set what "$nrows object(s) of the catalog (positions, magnitudes, catalog row text[expr {[llength $files] ? {, image cutouts} : {}}] as the profile's request template specifies) will be sent."
     if {!$dry && ![OGFAIConfirm $info $what]} {
-	set catpanel(status) "AI Services: cancelled"
+	::ogf::cat::set status "AI Services: cancelled"
 	return 0
     }
     set title [expr {$o(-title) ne {} ? $o(-title) : "AI service $service / $task ($nrows objects)"}]
-    set catpanel(status) "AI Services: $service / $task on $nrows object(s) ..."
+    ::ogf::cat::set status "AI Services: $service / $task on $nrows object(s) ..."
     update idletasks
     if {!$dry} {
 	# session recorder: whole catalog = AUTO (replayed by the pipeline), a row subset = MANUAL (replay only)
@@ -249,32 +248,32 @@ proc OGFAIRunTask {task service args} {
     if {!$dry} {append log "\nprovenance: [file join [OGFSessWorkDir] ai_last_run.provenance.json]\n"}
     OGFAIAppendLog $log
     if {$dry} {
-	set catpanel(status) "AI Services: dry run done (nothing was sent) - see Show Last Run Log"
+	::ogf::cat::set status "AI Services: dry run done (nothing was sent) - see Show Last Run Log"
 	OGFAIShowLog
 	return [expr {!$rc}]
     }
     if {$rc} {
 	set last [lindex [split [string trim $err] \n] end]
-	set catpanel(status) "AI Services: failed - $last"
+	::ogf::cat::set status "AI Services: failed - $last"
 	return 0
     }
     set hdr [split [lindex [split $data \n] 0] \t]
     set cols [lrange $hdr 1 end]
     if {[lindex $hdr 0] ne "NUMBER" || [llength $cols] == 0} {
-	set catpanel(status) "AI Services: service returned no columns"
+	::ogf::cat::set status "AI Services: service returned no columns"
 	return 0
     }
     # CatalogPanelAddColumnsFromTSV updates in place when ANY requested column already exists (and then silently
     # skips the new ones), so new and existing columns are merged in two calls (new first).  The recorded post
     # step "ai" repeats exactly this split in the exported script.
-    set have [split [lindex [split $catpanel(alldata) \n] 0] \t]
+    set have [split [lindex [split [::ogf::cat::tsv] \n] 0] \t]
     set newc {}; set oldc {}
     foreach c $cols {if {$c in $have} {lappend oldc $c} else {lappend newc $c}}
     if {[llength $newc]} {CatalogPanelAddColumnsFromTSV $data $newc}
     if {[llength $oldc]} {CatalogPanelAddColumnsFromTSV $data $oldc}
     if {$seq ne {} && $seq ne 0} {OGFSessSet $seq post [dict create kind ai cols_list $cols]}
     set summary [lindex [split [string trim $err] \n] end]
-    set catpanel(status) "AI Services: [llength $cols] column(s) added (service $service) - $summary"
+    ::ogf::cat::set status "AI Services: [llength $cols] column(s) added (service $service) - $summary"
     return 1
 }
 
@@ -444,10 +443,10 @@ proc OGFAIRegTest {} {
 
 # ------------------------------------------------------------------ Run Task dialog
 proc OGFAIRunDialog {} {
-    global ogfai catpanel OGFAI_TASKS
+    global ogfai OGFAI_TASKS
     OGFAIInit
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "AI Services: extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "AI Services: extract sources first"
 	return
     }
     set w .ogfai_run
@@ -466,7 +465,7 @@ proc OGFAIRunDialog {} {
     set ogfai(run,norm) $ogfai(last,norm)
     set ogfai(run,fmt) $ogfai(last,fmt)
     set ogfai(run,done) {}
-    set nsel [llength $catpanel(sel,nums)]
+    set nsel [llength [::ogf::cat::selection]]
     set nall [OGFAIRowCount]
     set r 0
     ttk::label $w.lt -text "Task"
@@ -515,7 +514,7 @@ proc OGFAIRunDialog {} {
     foreach k {size unit norm fmt} {set ogfai(last,$k) $ogfai(run,$k)}
     destroy $w
     if {!$go} return
-    if {$svc eq {}} {set catpanel(status) "AI Services: no enabled service for task $task (see Service Registry)"; return}
+    if {$svc eq {}} {::ogf::cat::set status "AI Services: no enabled service for task $task (see Service Registry)"; return}
     OGFAIRunTask $task $svc -rows $which -dry $dry -size [string trim $ogfai(last,size)] -unit $ogfai(last,unit) \
 	-norm $ogfai(last,norm) -fmt $ogfai(last,fmt)
 }
