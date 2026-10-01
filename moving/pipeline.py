@@ -70,16 +70,86 @@ def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, s
     return dets, infos
 
 
+VETO_DEFAULTS = dict(stationary_arcsec=0.2, stationary_min_other=None, tpl_snr=4.0, tpl_min_a_pix=1.5, edge_pix=10)
+
+
+def _fl(v):
+    try:
+        v = float(v)
+        return v if np.isfinite(v) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def detection_veto(dets, chip_shapes=None, stationary_arcsec=0.2, stationary_min_other=None, tpl_snr=4.0, tpl_min_a_pix=1.5, edge_pix=10,
+                   snr_min=8.0):
+    """Detection-level veto masks applied BEFORE the per-exposure cap of the linker input pool (so that vetoed detections no longer
+    take the pool slots of real movers).  Returns (veto: bool array over `dets`, counts: dict rule -> n vetoed).
+
+    rules (a detection is vetoed when any applies; trail-channel detections are exempt from the residual rules because a mover's
+    own trail legitimately overlaps nothing in the template):
+      stationary  the same sky position (within `stationary_arcsec`) has a positive detection in all the other exposures
+                  (`stationary_min_other` of them; default: every other exposure, at most 3) -> a static source / persistent
+                  residual cannot be a mover whose displacement between exposures is >= ~0.3 arcsec;
+      template    non-trail detection on a template source (S/N of the smoothed template > `tpl_snr`) that is extended
+                  (a_pix > `tpl_min_a_pix`): residual halo/core of a static star or bright-galaxy core (the stricter template S/N > 8
+                  case is already class `artefact_static`);
+      edge        within `edge_pix` of the chip border (needs `chip_shapes`: {chip name: (ny, nx)} and `x_chip`, `y_chip`).
+    Rules were tuned on inj1..inj8: they remove 0.6-2 % of the false pool detections and 0.0-0.5 % of the injected ones (see docs)."""
+    from scipy.spatial import cKDTree
+    n = len(dets); veto = np.zeros(n, bool); cnt = {"stationary": 0, "template": 0, "edge": 0}
+    if n == 0:
+        return veto, cnt
+    pos = np.array([float(d["sign"]) > 0 and float(d["snr"]) >= snr_min for d in dets])
+    exs = np.array([d["ex"] for d in dets]); nex = len(set(exs[pos])) if pos.any() else 0
+    ra = np.array([d["ra"] for d in dets]); de = np.array([d["dec"] for d in dets])
+    xy = np.c_[(ra - ra.mean()) * np.cos(np.radians(de.mean())) * 3600.0, (de - de.mean()) * 3600.0]
+    need = stationary_min_other if stationary_min_other is not None else min(max(nex - 1, 2), 3)
+    if nex >= 3 and stationary_arcsec:
+        idx = np.nonzero(pos)[0]; tree = cKDTree(xy[idx])
+        for q, nb in zip(idx, tree.query_ball_point(xy[idx], stationary_arcsec)):
+            if len({exs[idx[j]] for j in nb if exs[idx[j]] != exs[q]}) >= need:
+                veto[q] = True; cnt["stationary"] += 1
+    for i, d in enumerate(dets):
+        if not pos[i] or d.get("channel") == "trail":
+            continue
+        try:
+            tp = float(d.get("tpl_snr")); a = float(d.get("a_pix"))
+        except (TypeError, ValueError):
+            tp = a = np.nan
+        if tpl_snr and np.isfinite(tp) and tp > tpl_snr and np.isfinite(a) and a > tpl_min_a_pix:
+            if not veto[i]:
+                cnt["template"] += 1
+            veto[i] = True
+        if edge_pix and chip_shapes and d.get("chip") in chip_shapes and _fl(d.get("x_chip")) is not None and _fl(d.get("y_chip")) is not None:
+            ny, nx = chip_shapes[d["chip"]]
+            if min(_fl(d["x_chip"]), nx - 1 - _fl(d["x_chip"]), _fl(d["y_chip"]), ny - 1 - _fl(d["y_chip"])) < edge_pix:
+                if not veto[i]:
+                    cnt["edge"] += 1
+                veto[i] = True
+    return veto, cnt
+
+
 def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_exposures=3,
-                    classes=("trail", "point", "artefact_cr", "artefact_edge"), max_per_exposure=400, **kw):
+                    classes=("trail", "point", "artefact_cr", "artefact_edge"), max_per_exposure=400, veto=True, chip_shapes=None,
+                    veto_stats=None, **kw):
     """Select detections and link them across exposures (see tracklet.link_exposures).
 
+    `veto` (default True; or a dict of `detection_veto` options) removes stationary / template-residual / chip-edge detections from the pool
+    before the per-exposure cap; `veto_stats` (dict) receives the counts.  `chip_shapes` {chip name: (ny, nx)} enables the edge rule.
     The single-exposure class is only a soft veto here (sharpness test instead): in data with a dense archive cosmic-ray flag a real mover is often
     labelled `artefact_cr`/`artefact_edge` in one or two exposures, whereas random CR hits never line up on a constant-motion
     track.  Instead the brightest `max_per_exposure` positive detections of the allowed classes enter the linker, and the
     class of each member is reported with the tracklet (a tracklet needs >= min_exposures members, so a single mislabelled
     epoch is tolerated)."""
     sel = []
+
+    def _f(v):
+        try:
+            v = float(v)
+            return v if np.isfinite(v) else None
+        except (TypeError, ValueError):
+            return None
     # cosmic-ray / hot-pixel rejection that does not depend on the archive CR flag: a detection is "sharp" when the peak holds
     # a larger fraction of the 7x7 flux than a PSF-shaped source (trail-channel detections are always kept)
     def _ok(d):
@@ -87,7 +157,12 @@ def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_
             return True
         sh = d.get("sharp", np.nan)
         return (not np.isfinite(sh)) or sh < max(0.30, 1.35 * d.get("sharp_psf", 0.3))
-    pool = [(i, d) for i, d in enumerate(dets) if d["sign"] > 0 and d["snr"] >= snr_min and _ok(d)
+    vmask = np.zeros(len(dets), bool)
+    if veto:
+        vmask, vc = detection_veto(dets, chip_shapes, snr_min=snr_min, **(veto if isinstance(veto, dict) else {}))
+        if veto_stats is not None:
+            veto_stats.update(vc)
+    pool = [(i, d) for i, d in enumerate(dets) if d["sign"] > 0 and d["snr"] >= snr_min and _ok(d) and not vmask[i]
             and d["cls"] in classes + ("artefact_dipole", "faint")]
     keep = set()
     for ex in {d["ex"] for _, d in pool}:
@@ -98,7 +173,10 @@ def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_
             sel.append(dict(ex=d["ex"], t=d["t"], ra=d["ra"], dec=d["dec"], sig=max(d.get("sig_pos_arcsec", 0.05), 0.05),
                             id=i, flux=d["flux_e_s"], cls=d["cls"], snr=d["snr"], texp=d.get("texp"), channel=d.get("channel", "point"),
                             trail_pa=d.get("pa_deg") if d["channel"] == "trail" else None,
-                            trail_len=d.get("trail_len_arcsec") if d["channel"] == "trail" else None))
+                            trail_len=d.get("trail_len_arcsec") if d["channel"] == "trail" else None,
+                            on_cr=d.get("on_cr") in (True, 1, "True", "1"), sharp=_f(d.get("sharp")), tpl_snr=_f(d.get("tpl_snr")),
+                            x_chip=_f(d.get("x_chip")), y_chip=_f(d.get("y_chip")), chip=d.get("chip"), neg_frac=_f(d.get("neg_frac")),
+                            a_pix=_f(d.get("a_pix")), elong=_f(d.get("elong"))))
     trs = T.link_exposures(sel, tol_arcsec=tol_arcsec, min_exposures=min_exposures, obs_off_au=chips_by_ex_offsets, **kw)
     return trs
 

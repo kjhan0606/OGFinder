@@ -37,7 +37,7 @@ unchanged.
 | Align | Gaia DR3 (TAP) matching when stars exist, else relative chain with a polynomial/shift+rotation model between exposures | in the test field no Gaia stars matched; result is relative only (4–19 mas rms), the anchor exposure has no absolute tie |
 | Difference | ZOGY (Zackay, Ofek & Gal-Yam 2016) in Fourier space; template = median of the other aligned exposures. `zogy.zogy` also returns `alpha_new`/`sigma_alpha_new` = flux in the *target exposure's* flux scale (alpha * Fn / Fr), which `difference_chip` uses | sky-noise-only normalisation (no source-noise term, no astrometric-error terms); one PSF per chip (empirical from field stars, Gaussian fallback with FWHM floor 0.085 arcsec), **no spatial PSF variation**; template PSF = target PSF. A PSF 20% too narrow gives ~22% low flux (`moving/tests/test_zogy.py`) |
 | Detect | thresholding on the S/N image, trail (elongated) channel, classes `point trail artefact_cr artefact_edge artefact_static artefact_dipole negative faint` | the archive CR mask is dense and mislabels real detections as `artefact_cr`; `artefact_static` = non-trail detection with template S/N > 8 |
-| Link | triplet seeds (first / middle / last exposure) with an analytic parallax factor k from the middle exposure (k grid when the baseline is degenerate), KD-tree extension to the other exposures, vectorised 5-parameter weighted least squares (position, rate, k), rate and k gates, score = chi2 + missing-exposure penalty + weak k / rate priors, de-duplication (a candidate sharing >= 2 detections with a better one is dropped); handles >= 3 detections and missing exposures. The previous pair-based linker is kept as `tracklet.link_exposures_legacy`. **Still no heliocentric clustering** | see the injection benchmark below |
+| Link | triplet seeds (first / middle / last exposure) with an analytic parallax factor k from the middle exposure (k grid when the baseline is degenerate), KD-tree extension to the other exposures, vectorised 5-parameter weighted least squares (position, rate, k), rate and k gates, chi2-like score (stage 1). **Precision stage (2026-10):** detection veto masks before the pool cap (`pipeline.detection_veto`: stationary in all other exposures, template residual, chip edge), a tracklet-level logistic score (`tracklet.LLR_MODEL`: log rate, members, archive-CR fraction, sharpness, trail members, min S/N, chi2) that becomes `score` (= minus logit) with `prob`, a Sun-bound-orbit cut (`bound_orbit_ratio`), and clustering of near-identical (position, apparent velocity) candidates; a candidate sharing >= 2 detections with a better one is still dropped. The previous pair-based linker is kept as `tracklet.link_exposures_legacy`; `rescore=False` reproduces the stage-1 ranking. **Still no multi-night heliocentric clustering** (`helio_linc` exists but is not wired into the linker) | see the injection benchmark below |
 | Identify | SkyBoT candidates re-checked with Horizons using the true HST observer (`500@-48`) | |
 | Orbit | statistical ranging over the admissible region (Granvik et al. 2009 / Muinonen et al. 2010 style, simplified), 2-body polish, then ASSIST/REBOUND differential correction (DE440 + 16 massive asteroids + GR) with Carpino et al. (2003) outlier rejection, Eggl et al. (2020) star-catalogue debiasing, default station sigmas | no classical Gauss IOD (not implemented); station weights are defaults, not the Veres et al. (2017) table; solar light deflection and stellar aberration neglected; `mcmc_posterior` (emcee) exists but is untested; arcs shorter than ~1 day are flagged `determined=False`: elements are blanked, only class probabilities and ranging quantiles are shown; **classification is arc-aware** (below) |
 | Transients | static grouping across ≥2 files (CRs cannot repeat), host association with any OGFinder/SExtractor TSV (separation, in R_e, z), heuristic labels | heuristic only, not a classifier; TNS crossmatch is optional via an environment variable and not tested (the site returned 403) |
@@ -112,6 +112,70 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
   (top 50: new 2/14/4/5/8/8 vs legacy 1/3/1/7/5/7); 3-member candidates cannot be validated because the parallax factor is free.
   Unit tests: `moving/tests/test_tracklet.py` (3 detections, missing exposure, no duplicates, unphysical rate, ranking, a 10-mover
   mini-injection with >= 8 recovered).
+* **Precision / ranking improvement (item 1, 2026-10-01).** Same six sets, tolerance 1.0 arcsec, `max_tracklets=400`, same box.  "Stage 1" =
+  the previous linker (`link_bench.py ... --no-rescore --no-veto`, identical to the table above), "new" = defaults of this commit.
+  `top-N` = distinct injected objects recovered among the first N returned tracklets; `P>=0.5` = tracklets with logistic probability >= 0.5.
+
+  | set | injected | ceiling | recovered stage1 -> new | top-10 | top-25 | top-50 | top-100 | tracklets with P>=0.5 (true/returned) | time stage1 / new |
+  |---|---|---|---|---|---|---|---|---|---|
+  | inj1 | 10 | 7 | 4 -> 5 | 1 -> 4 | 2 -> 4 | 2 -> 5 | 2 -> 5 | 1/2 | 9.1 / 10.0 s |
+  | inj2 | 30 | 24 | 15 -> 19 | 8 -> 9 | 14 -> 15 | 14 -> 16 | 14 -> 17 | 15/21 | 3.5 / 4.3 s |
+  | inj3 | 30 | 15 | 6 -> 7 | 3 -> 3 | 4 -> 7 | 4 -> 7 | 6 -> 7 | 2/4 | 10.7 / 12.3 s |
+  | inj4 | 30 | 20 | 8 -> 8 | 3 -> 4 | 4 -> 8 | 5 -> 8 | 7 -> 8 | 4/5 | 10.0 / 11.4 s |
+  | inj5 | 30 | 21 | 10 -> 15 | 4 -> 6 | 7 -> 12 | 8 -> 13 | 9 -> 14 | 8/16 | 10.1 / 10.8 s |
+  | inj6 | 30 | 18 | 10 -> 12 | 7 -> 9 | 8 -> 10 | 8 -> 11 | 8 -> 11 | 9/10 | 10.0 / 10.7 s |
+  | **total 1-6** | 160 | 105 | **53 -> 66** | 26 -> 35 | 39 -> 56 | 41 -> 60 | 46 -> 62 | 39/58 (precision 0.67) | 53 / 60 s |
+  | inj7 (held out) | 30 | 20 | 11 -> 10 | 7 -> 5 | 8 -> 7 | 8 -> 8 | 9 -> 8 | 6/13 | 10.7 / 11.0 s |
+  | inj8 (held out) | 30 | 18 | 7 -> 10 | 6 -> 7 | 7 -> 8 | 7 -> 9 | 7 -> 9 | 6/6 | 9.9 / 11.5 s |
+
+  Held-out sets inj7/inj8 (new injections with other random seeds, **not** used to fit the logistic score; sets 1-6 were) give 18 -> 20 of 60: the
+  gain on sets 1-6 (53 -> 66) is partly in-sample.  The leave-one-set-out estimate of the fitted model on candidate lists is in
+  `validation/fit_link_score.py` output (sets 1-6: 7/7, 18/22, 9/11, 11/18, 15/19, 11/15 reachable objects in the top 400).  Honest summary of the
+  generalisation: top-50 on the held-out sets 8 -> 8 and 7 -> 9, i.e. about +10 % there, not the +25 % seen in-sample.
+  **Precision (true / returned) over all 400 returned tracklets is still 1.5-4.8 %** (390 of 400 false) because 400 tracklets are always returned and
+  the crowded pool of ~2100 detections per exposure contains thousands of chance 4-point alignments (95320 candidates survive the gates in inj4 with a
+  400-cap).  What improved is the *ranking*: at `prob >= 0.5` the list is 58 tracklets with 39 true (precision 0.67; per set 0.5-1.0, 0.46 on inj7),
+  recovering 39 of 66 recovered objects; at `prob >= 0.2` and 0.05 precision is 0.2-0.4 and 0.05-0.14 (`validation/` sweep, the numbers are
+  a calibration of this instrument/field type only).  The pipeline returns the same `max_tracklets` as before (CLI argv unchanged); the `prob`
+  column is in `tracklets.json`.
+  Ingredients and what each was measured to do (all numbers on sets 1-8, `moving/validation/`):
+  * **Veto masks** (`pipeline.detection_veto`): *stationary* (same sky position <= 0.2 arcsec, S/N >= 8, in all other exposures) removes
+    37 false and 1 injected pool detections of 62052; *template residual* (non-trail, template S/N > 4, a > 1.5 px) removes 386 false and 5 injected
+    of 62052 (0.6 % of false pool, 0.3 % of true); *edge* (< 10 px from the chip border; in the CLI only, benchmark pickles have no chip
+    shapes) removes 1807 false / 3 injected on sets 1-6.  Bright-galaxy cores are covered by the template rule; the `neg_frac` dipole test was
+    not added (217 false vs 10 true detections hit by neg_frac > 0.03, no net gain).  The effect of vetoes alone on recovery is nil on this benchmark
+    (66 -> 66 with `--no-veto`), they mostly cut the 600-per-exposure pool wasted on static residuals and help real crowded data; the "ceiling" is
+    unchanged because the injected objects are rarely vetoed.
+  * **Bound-orbit hypothesis**: the Sun-relative speed of a candidate at k = 1/Delta (k within +-2 sigma) must not exceed 1.25 x the local escape
+    speed (only the sky-plane velocity is known, so this is the *minimum* possible speed).  On 4-exposure HST tracklets k is only known to +-1 /AU, so this
+    cut is weak: it removes 434 of the 50000 rescored candidates in inj4, and keeps 90-97 % of the true candidates and 76-83 % of the false ones (a
+    test with a plain threshold on the best-fit k).  It is physically right but costs one benchmark object: inj4 object 23 (mag 21.5, 32.8 arcsec/h at
+    Delta 4.4 AU) was *injected* unbound (ratio 2.3); the linker finds it at rank 20 without the cut and drops it with the cut.  Without the cut
+    inj4 recovers 9 and the total is 67 instead of 66 (`link_bench.py --no-bound`).  The injection generator draws rate and Delta independently, so 6 of the 30
+    objects of inj4 are unbound by construction; real small bodies are not.  Not a clustering by heliocentric distance: with one HST orbit (0.025 d) there is
+    no baseline for that (`helio_linc` needs >= 2 nights and is not wired into the linker).
+  * **Tracklet-level logistic score**: features and coefficients in `tracklet.LLR_MODEL`; the dominant terms are the fraction of members on
+    archive-CR-flagged pixels (-10.2 per unit; 91 % of all S/N >= 8 detections are CR-flagged, but only 0.4 % of injected-object candidates have all
+    members CR-flagged and no trail), the number of members (+4.8; 4 vs 3), a negative log-rate term (-0.83; slow objects are rarer to align by chance) and
+    mean sharpness (-5.0).  Linearity (rms) and flux scatter did **not** improve it in cross-validation (tested, removed).  Cross-validated recovery with the
+    chi2-like score alone was 55 (no dedupe, candidate list) vs 70-73 with the logistic features.
+  * **Clustering in (position, apparent velocity)**: candidates within 1 arcsec and 3 arcsec/h of a better one are merged.  On the leave-one-out
+    candidate lists: 71 -> 74 recovered, top-50 of the *kept* list 138 -> 125 true entries (duplicates removed); this is a small effect.
+  * Dropped idea: de-duplication by "no shared detection" (instead of "no shared pair") loses objects (57 vs 71).
+  * **inj4 (30 injected, ceiling 20): still 8 recovered (9 with `--no-bound`).**  The per-object diagnosis (`link_bench` + truth fits): of the 12 objects below the ceiling's
+    reach, 5 have <= 2 detections in the linker pool; of the 20 within reach, 8 are found.  The others have true tracklets that rank 5000-31000 among 95k
+    candidates: their detections are partly CR-flagged or have single-exposure sizes/centroids that disagree with the track by 0.7-0.9 arcsec (5 of the 20
+    have a member 0.7-0.95 arcsec off the true position: trail centroids of the first/third exposure, or mis-centred CR-contaminated point detections), so they fail the
+    rms gate or lose against thousands of chance alignments with a better chi2; `inj4` contains the mag 25-26 objects and 6 unbound fast objects.
+    The top-100 count on inj4 is 8 both before and after: the logistic score reorders (top-10 3 -> 4, top-25 4 -> 8) but cannot recover the objects whose
+    detections are missing or off.  Only detection-side work (a better trail centroid, CR handling for faint movers) would help; that was out of scope of this item.
+  * Real data: with `max_per_exposure=900`, tol 1.0, the true 2015 BB89 tracklet is rank 0 of 400 both with the stage-1 ranking and with the new
+    score (prob 0.24); the earlier docs value (rank 20 with other settings) was not reproduced here, so no improvement is claimed on the real field.
+  * Runtime: +0.5-1.7 s per set (the logistic features are vectorised over all gated candidates; the Sun-bound check runs on at most 50000).
+  * Tests: `moving/tests/test_tracklet.py` (stage-1 reproducibility with `rescore=False`, probability monotone along the list, CR-flagged vs clean
+    track, bound-orbit ratio and cut, cluster merge, veto rules and counts).  `test_chance_alignments_rank_below_a_real_mover` now asserts the strict
+    first rank only for `rescore=False`; with the log-rate prior the mover must be within the top 3 in that uniform-clutter toy.
+
 * Alignment: relative rms 19.4 / 4.4 / 3.7 mas (exposures 2–4 w.r.t. the anchor), no Gaia stars matched.
 * Orbit fit pipeline check on an asteroid with a long observed arc (25153, public MPC astrometry, ASSIST force model, Eggl debiasing):
   * 90-day arc, 277 obs (100 used), rms 0.51 arcsec, χ²_red 1.15. Elements vs JPL SBDB, (fit − JPL)/σ_fit: a −1.4, e −0.9, i +0.5,

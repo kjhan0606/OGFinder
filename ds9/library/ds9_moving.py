@@ -199,8 +199,13 @@ def m_link(a):
         d["ex"] = int(d["ex"])
     obs_off = offs if offs else None
     # exposures index in detections.tsv follows the sorted file order used by detect_in_region
-    trs = P.link_detections(dets, obs_off, snr_min=a.snr, tol_arcsec=a.tol, min_exposures=a.min_exposures, max_per_exposure=a.max_per_exposure)
+    shapes = {c.name: tuple(c.shape) for c in chips}
+    vst = {}
+    trs = P.link_detections(dets, obs_off, snr_min=a.snr, tol_arcsec=a.tol, min_exposures=a.min_exposures, max_per_exposure=a.max_per_exposure,
+                            chip_shapes=shapes, veto_stats=vst)
     trs = trs[:a.max_tracklets]
+    if vst:
+        util.log("veto: " + ", ".join("%s=%d" % kv for kv in sorted(vst.items())))
     for k, t in enumerate(trs):
         t["id"] = k
     util.write_json(os.path.join(wd, "tracklets.json"), trs)

@@ -147,12 +147,66 @@ def _spread_triplets(nex):
     return sorted(out)
 
 
+# ---- tracklet-level logistic score (precision stage of link_exposures) ---------------------------------------------------
+# Features (all vectorised in link_exposures): log geocentric rate [arcsec/h], number of members, mean `on_cr` flag of the members
+# (archive cosmic-ray mask), mean point sharpness (trail members count 0), number of trail-channel members, log10 of the smallest
+# member S/N and the chi2-like score of the first stage.  Coefficients: `validation/fit_link_score.py` (L2-regularised logistic regression
+# on the HST ACS/WFC BB89 injection sets inj1..inj6; leave-one-set-out recovery is reported in docs/moving_objects.md).  This is a
+# calibration for that instrument/field type: probabilities are NOT transferable to other data without refitting.
+LLR_FEATURES = ("log_rate", "n", "oncr", "sharp", "ntrail", "log_minsnr", "chi2score")
+LLR_MODEL = dict(coef=(-0.828, 4.829, -10.173, -4.984, -1.728, 1.554, -0.116), intercept=-14.19)
+RESCORE_POOL = 50000
+
+
+def llr_logit(F, model=None):
+    """Logit of the tracklet-level logistic model for a feature matrix F (n x len(LLR_FEATURES))."""
+    m = model or LLR_MODEL
+    return np.asarray(F, float) @ np.asarray(m["coef"], float) + m["intercept"]
+
+
+_EARTH_CACHE = {}
+
+
+def earth_helio_state(mjd_utc):
+    """Heliocentric position (AU) and velocity (AU/day) of the Earth-Moon barycentre at a UTC MJD (astropy built-in ephemeris, ~1000 km)."""
+    key = round(float(mjd_utc), 3)
+    if key not in _EARTH_CACHE:
+        from astropy.time import Time
+        from astropy.coordinates import get_body_barycentric_posvel, solar_system_ephemeris
+        t = Time(float(mjd_utc), format="mjd", scale="utc")
+        with solar_system_ephemeris.set("builtin"):
+            pe, ve = get_body_barycentric_posvel("earth", t); ps, vs = get_body_barycentric_posvel("sun", t)
+        _EARTH_CACHE[key] = ((pe - ps).xyz.to("au").value, (ve - vs).xyz.to("au/day").value)
+    return _EARTH_CACHE[key]
+
+
+GM_SUN = 2.9591220828559e-4          # AU^3 / day^2
+
+
+def bound_orbit_ratio(vx_asd, vy_asd, k, ra_deg, dec_deg, mjd_utc):
+    """Smallest possible Sun-relative speed / escape speed for an object seen at (ra, dec) with geocentric angular velocity
+    (vx east, vy north, arcsec/day) at distance Delta = 1/k [AU].  Only the sky-plane velocity is measured; the unknown
+    radial velocity can only increase the speed, so a ratio > 1 means the motion is incompatible with any Sun-bound orbit."""
+    re_, ve_ = earth_helio_state(mjd_utc)
+    a, d = np.radians(ra_deg), np.radians(dec_deg)
+    los = np.array([np.cos(d) * np.cos(a), np.cos(d) * np.sin(a), np.sin(d)])
+    ex = np.array([-np.sin(a), np.cos(a), 0.0]); ey = np.array([-np.sin(d) * np.cos(a), -np.sin(d) * np.sin(a), np.cos(d)])
+    D = 1.0 / np.maximum(np.asarray(k, float), 0.05)
+    rr = re_[None, :] + D[:, None] * los[None, :]
+    arc = np.pi / 180.0 / 3600.0
+    vv = ve_[None, :] + D[:, None] * (np.asarray(vx_asd)[:, None] * ex + np.asarray(vy_asd)[:, None] * ey) * arc
+    vv = vv - (vv @ los)[:, None] * los
+    return np.sqrt((vv ** 2).sum(1)) / np.sqrt(2.0 * GM_SUN / np.linalg.norm(rr, axis=1))
+
+
 def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate_max_ash=600.0,
                    sig_floor=0.01, max_tracklets=500, obs_off_au=None, inv_delta_grid=None,
                    max_cand_per_exposure=3000, min_disp_arcsec=1.5, flux_tol_dex=None,
                    k_max=3.5, rate_per_k_ash=300.0, rate_slack_ash=4.0, ext_tol_factor=2.0, rms_max_arcsec=None,
                    sigma_eff_arcsec=0.35, cr_penalty=3.0, missing_penalty=8.0, k_prior_weight=1.0, k_prior_center=0.3,
-                   rate_prior_weight=1.0, rate_prior_start_ash=30.0, max_seeds=4_000_000, dedupe=True, stats=None):
+                   rate_prior_weight=1.0, rate_prior_start_ash=30.0, max_seeds=4_000_000, dedupe=True, stats=None,
+                   rescore=True, rescore_pool=RESCORE_POOL, min_prob=None, bound_orbit=True, bound_slack=1.25, cluster_dedupe=True,
+                   cluster_pos_arcsec=1.0, cluster_vel_ash=3.0):
     """Link detections of >= 3 exposures into tracklets (constant geocentric velocity + orbital parallax of the observer).
 
     dets: list of dict(ex=int exposure index, t=MJD, ra, dec [deg], sig [arcsec], id, flux; optional cls, channel ('point'|'trail'),
@@ -176,7 +230,22 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
       4. candidates are ranked by (score) with the missing-exposure penalty included, de-duplicated (a candidate sharing >= 2
          detections with a better one is the same object seen through the other channel / with a wrong member and is
          dropped; subsets are dropped) and the best `max_tracklets` are returned with the final fit_tracklet() solution.
-    `stats` (dict) receives counters (seeds, candidates, gated, kept).  Returns list of tracklet dicts as before."""
+
+    Precision stage (new; `rescore=False` reproduces the previous ranking exactly):
+      5. the best `rescore_pool` candidates by the chi2-like score above get a calibrated *logistic* score from tracklet-level
+         features (see `LLR_FEATURES`): log geocentric rate, number of members, fraction of non-trail members on archive
+         cosmic-ray-flagged pixels, mean point sharpness, number of trail-channel members, minimum S/N, linearity (rms),
+         brightness consistency (flux scatter in dex) and the chi2-like score itself.  `score` becomes minus the logit (lower =
+         better, same sense as before) and `prob` the logistic probability; the chi2-like value stays in `score_chi2`.
+         The coefficients (`LLR_MODEL`) were fitted on the HST BB89 injection sets (`validation/fit_link_score.py`, leave-one-set-out
+         validated) -- they are a field-specific calibration, not universal probabilities.
+      6. quality cuts: a candidate whose motion cannot belong to a Sun-bound object (the minimum |v_perp| of the Sun-relative
+         velocity over k within +-2 sigma exceeds `bound_slack` x escape velocity at the implied heliocentric distance; needs
+         `obs_off_au`, i.e. a known 1/Delta scale) is dropped (`bound_orbit`), as is `prob < min_prob` if given.
+      7. clustering: candidates that fall within `cluster_pos_arcsec` and `cluster_vel_ash` (arcsec/h, apparent) of a better ranked one
+         are the same object seen through a wrong member / other channel and are merged into it (`cluster_dedupe`); this runs
+         in addition to the shared-detection test.  Ranking and de-duplication now act on the logistic score.
+    `stats` (dict) receives counters (seeds, candidates, gated, rescored, bound_dropped, kept).  Returns list of tracklet dicts as before."""
     if not dets:
         return []
     min_exposures = max(int(min_exposures), 3)
@@ -373,17 +442,68 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
         sd = np.sqrt(np.nansum((L - mu[:, None]) ** 2, 1) / np.maximum(c - 1, 1))
         score += np.where(c >= 2, (sd / 0.25) ** 2 * (c - 1), 0.0)
     score = np.where(gate, score, np.inf)
-
-    order = np.argsort(score, kind="stable")
-    order = order[np.isfinite(score[order])]
-    # ---- de-duplicate: pairs of member detections already claimed by a better tracklet
-    kept = []; claimed = set()
+    score_chi2 = score.copy()
+    # ---- precision stage: logistic tracklet score, bound-orbit cut, clustering
+    prob = None; bound = None
+    if rescore:
+        okq = np.nonzero(np.isfinite(score))[0]
+        ONCR = gather(lambda d: 1.0 if d.get("on_cr") else 0.0, 0.0)
+        SHP = gather(lambda d: d.get("sharp") if d.get("sharp") is not None and np.isfinite(d.get("sharp")) else 0.4, 0.4)
+        SNR = gather(lambda d: d.get("snr") or np.nan)
+        nmem = np.maximum(nm, 1)
+        Fm = np.zeros((n, len(LLR_FEATURES)))
+        Fm[:, 0] = np.log(np.maximum(rate, 0.5)); Fm[:, 1] = nm
+        Fm[:, 2] = (ONCR * has).sum(1) / nmem; Fm[:, 3] = (SHP * has).sum(1) / nmem
+        Fm[:, 4] = (TR * has).sum(1)
+        with np.errstate(all="ignore"):
+            Fm[:, 5] = np.log10(np.nanmin(np.where(has & (SNR > 0), SNR, np.inf), axis=1))
+        Fm[~np.isfinite(Fm[:, 5]), 5] = 2.0
+        Fm[:, 6] = score_chi2
+        logit = np.where(np.isfinite(score), llr_logit(np.where(np.isfinite(Fm), Fm, 0.0)), -np.inf)
+        order0 = np.argsort(-logit, kind="stable")
+        order0 = order0[np.isfinite(logit[order0])][:max(int(rescore_pool), max_tracklets)]
+        if stats is not None:
+            stats["rescored"] = int(len(order0))
+        if bound_orbit and obs_off_au is not None:
+            ph = np.clip(sk, 0.0, 2.0)
+            bmin = np.full(len(order0), np.inf)
+            tmid = float(np.mean(Tt))
+            for kk in (-2.0, -1.0, 0.0, 1.0, 2.0):
+                kq = np.clip(kfit_raw[order0] + kk * ph[order0], 0.05, k_max)
+                bmin = np.minimum(bmin, bound_orbit_ratio(vx[order0], vy[order0], kq, ra_c, de_c, tmid))
+            bound = np.full(n, np.nan); bound[order0] = bmin
+            drop = bmin > bound_slack
+            if stats is not None:
+                stats["bound_dropped"] = int(drop.sum())
+            order0 = order0[~drop]
+        prob_all = 1.0 / (1.0 + np.exp(-np.clip(logit, -50, 50)))
+        if min_prob is not None:
+            order0 = order0[prob_all[order0] >= min_prob]
+        order = order0
+        prob = prob_all
+        rank_score = -logit
+    else:
+        order = np.argsort(score, kind="stable")
+        order = order[np.isfinite(score[order])]
+        rank_score = score
+    # ---- de-duplicate: pairs of member detections already claimed by a better tracklet, and (rescore) the same object seen with a
+    # different member: tracklets whose position at the common epoch and apparent velocity agree with a better one
+    kept = []; claimed = set(); cz = []
+    zpos = np.c_[sol[:, 0] / cluster_pos_arcsec, sol[:, 1] / cluster_pos_arcsec]
+    zvel = np.c_[vx / 24.0 / cluster_vel_ash, vy / 24.0 / cluster_vel_ash]
+    Zc = np.c_[zpos, zvel]
+    CZ = np.zeros((max_tracklets + 1, 4))
     for q in order:
         mem = [(i, int(M[q, i])) for i in range(nex) if M[q, i] >= 0]
         pairs = [(mem[a_], mem[b_]) for a_ in range(len(mem)) for b_ in range(a_ + 1, len(mem))]
         if dedupe and any(p in claimed for p in pairs):
             continue
+        if rescore and cluster_dedupe and dedupe and kept:
+            dz = CZ[:len(kept)] - Zc[q]
+            if (np.einsum("ij,ij->i", dz, dz) < 1.0).any():
+                continue
         claimed.update(pairs)
+        CZ[len(kept)] = Zc[q]
         kept.append(q)
         if len(kept) >= max_tracklets:
             break
@@ -404,7 +524,13 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
         _trail_consistency(f, m)
         f["link_chi2"] = float(chi2[q]); f["link_rms_arcsec"] = float(rms[q]); f["n_missing"] = int(nex - nm[q])
         f["score_legacy"] = f["score"]
-        f["score"] = float(score[q])
+        f["score_chi2"] = float(score_chi2[q])
+        f["score"] = float(rank_score[q])
+        if prob is not None:
+            f["prob"] = float(prob[q])
+            f["features"] = {k_: float(Fm[q, j]) for j, k_ in enumerate(LLR_FEATURES)}
+            if bound is not None and np.isfinite(bound[q]):
+                f["bound_ratio"] = float(bound[q])
         out.append(f)
     return out
 
