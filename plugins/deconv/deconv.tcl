@@ -2,23 +2,22 @@
 # Loaded through the "tcl" field of plugins/deconv/plugin.json.
 
 proc CatalogPanelDeconvolve {algorithm} {
-    global catpanel
     global current
 
-    if {!$catpanel(psf,has_psf) || ![file exists $catpanel(psf,file)]} {
-	set catpanel(status) "No PSF available — build or load PSF first"
+    if {![::ogf::cat::get psf,has_psf] || ![file exists [::ogf::cat::get psf,file]]} {
+	::ogf::cat::set status "No PSF available — build or load PSF first"
 	return
     }
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
@@ -26,37 +25,37 @@ proc CatalogPanelDeconvolve {algorithm} {
 
     set paramargs {}
     lappend paramargs "--mode" "deconvolve"
-    lappend paramargs "--psf" $catpanel(psf,file)
+    lappend paramargs "--psf" [::ogf::cat::get psf,file]
     lappend paramargs "--algorithm" $algorithm
     lappend paramargs "--output" $outfile
 
     # Algorithm-specific parameters
     switch $algorithm {
 	rl - rl_accelerated {
-	    lappend paramargs "--iterations" $catpanel(psf,param,rl-iterations)
+	    lappend paramargs "--iterations" [::ogf::cat::get psf,param,rl-iterations]
 	}
 	rl_tv {
-	    lappend paramargs "--iterations" $catpanel(psf,param,rl-iterations)
-	    lappend paramargs "--tv-lambda" $catpanel(psf,param,tv-lambda)
+	    lappend paramargs "--iterations" [::ogf::cat::get psf,param,rl-iterations]
+	    lappend paramargs "--tv-lambda" [::ogf::cat::get psf,param,tv-lambda]
 	}
 	wiener {
-	    lappend paramargs "--wiener-nsr" $catpanel(psf,param,wiener-nsr)
+	    lappend paramargs "--wiener-nsr" [::ogf::cat::get psf,param,wiener-nsr]
 	}
 	tikhonov {
-	    lappend paramargs "--tikhonov-lambda" $catpanel(psf,param,tikhonov-lambda)
+	    lappend paramargs "--tikhonov-lambda" [::ogf::cat::get psf,param,tikhonov-lambda]
 	}
 	clean {
-	    lappend paramargs "--clean-gain" $catpanel(psf,param,clean-gain)
-	    lappend paramargs "--clean-niter" $catpanel(psf,param,clean-niter)
-	    lappend paramargs "--clean-threshold" $catpanel(psf,param,clean-threshold)
+	    lappend paramargs "--clean-gain" [::ogf::cat::get psf,param,clean-gain]
+	    lappend paramargs "--clean-niter" [::ogf::cat::get psf,param,clean-niter]
+	    lappend paramargs "--clean-threshold" [::ogf::cat::get psf,param,clean-threshold]
 	}
 	mem {
-	    lappend paramargs "--mem-lambda" $catpanel(psf,param,mem-lambda)
-	    lappend paramargs "--mem-niter" $catpanel(psf,param,mem-niter)
+	    lappend paramargs "--mem-lambda" [::ogf::cat::get psf,param,mem-lambda]
+	    lappend paramargs "--mem-niter" [::ogf::cat::get psf,param,mem-niter]
 	}
     }
 
-    set catpanel(status) "Deconvolving ($algorithm) ..."
+    ::ogf::cat::set status "Deconvolving ($algorithm) ..."
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
@@ -71,10 +70,10 @@ proc CatalogPanelDeconvolve {algorithm} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Deconvolution error: $last_err"
+	    ::ogf::cat::set status "Deconvolution error: $last_err"
 	    puts "Deconvolution stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "Deconvolution error: $err"
+	    ::ogf::cat::set status "Deconvolution error: $err"
 	}
 	return
     }
@@ -84,57 +83,56 @@ proc CatalogPanelDeconvolve {algorithm} {
     if {[file exists $outfile]} {
 	CreateFrame
 	if {[catch {LoadFitsFile $outfile {} {}} loaderr]} {
-	    set catpanel(status) "Deconvolution error: cannot load result: $loaderr"
+	    ::ogf::cat::set status "Deconvolution error: cannot load result: $loaderr"
 	    return
 	}
 	# Apply zscale via DS9's standard scale API
 	global scale
 	set scale(mode) zscale
 	ChangeScaleMode
-	set catpanel(status) "Deconvolution complete ($algorithm) — result in new frame"
+	::ogf::cat::set status "Deconvolution complete ($algorithm) — result in new frame"
     } else {
-	set catpanel(status) "Deconvolution complete but output file not found"
+	::ogf::cat::set status "Deconvolution complete but output file not found"
     }
 }
 
 proc CatalogPanelQuickDeconvolve {} {
-    global catpanel
     global current
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
-    set catpanel(status) "Quick Deconvolve: Step 1/3 — Finding stars ..."
+    ::ogf::cat::set status "Quick Deconvolve: Step 1/3 — Finding stars ..."
     update idletasks
 
     # Step 1: Find stars
     CatalogPanelFindStars combined
 
-    if {![info exists catpanel(psf,star_indices)] || $catpanel(psf,star_indices) eq {}} {
-	set catpanel(status) "Quick Deconvolve failed: no stars found"
+    if {![::ogf::cat::exists psf,star_indices] || [::ogf::cat::get psf,star_indices] eq {}} {
+	::ogf::cat::set status "Quick Deconvolve failed: no stars found"
 	return
     }
 
-    set catpanel(status) "Quick Deconvolve: Step 2/3 — Building PSF ..."
+    ::ogf::cat::set status "Quick Deconvolve: Step 2/3 — Building PSF ..."
     update idletasks
 
     # Step 2: Build PSF
     CatalogPanelBuildPSF median
 
-    if {!$catpanel(psf,has_psf)} {
-	set catpanel(status) "Quick Deconvolve failed: PSF build failed"
+    if {![::ogf::cat::get psf,has_psf]} {
+	::ogf::cat::set status "Quick Deconvolve failed: PSF build failed"
 	return
     }
 
-    set catpanel(status) "Quick Deconvolve: Step 3/3 — Richardson-Lucy deconvolution ..."
+    ::ogf::cat::set status "Quick Deconvolve: Step 3/3 — Richardson-Lucy deconvolution ..."
     update idletasks
 
     # Step 3: Deconvolve
