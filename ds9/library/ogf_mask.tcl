@@ -13,6 +13,7 @@ proc OGFMaskInit {} {
     set ogfmask(transparency) 50
     set ogfmask(stats) {}
     set ogfmask(frame) {}
+    catch {OGFSessInitMasks}
     # shared Auto Mask parameters.  Defaults = the ICL values; LSBG-specific
     # values are offered as a preset in the Auto Mask dialog.
     set ogfmask(p,detect-thresh) $catpanel(icl,param,detect-thresh)
@@ -57,7 +58,11 @@ proc OGFMaskRun {mode fn extra} {
     }
     set args [list [OGFPython] $script [dict get $p fits] --mode $mode \
 	--mask [dict get $p mask] {*}$extra]
-    if {[info exists catpanel(icl,cmdlog)]} {catch {CatalogPanelCmdLog icl $args}}
+    # Mask operations used to leak into the ICL cmdlog (only when it existed, and with
+    # edit payloads missing).  They now go to the session recorder (OGFMaskSessLog) and,
+    # unchanged for the "Export Script" menus, still into the ICL cmdlog.
+    if {[info exists catpanel(icl,cmdlog)]} {lappend catpanel(icl,cmdlog) $args}
+    catch {OGFMaskSessLog $mode $args $extra}
     if {[catch {set out [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Mask $mode error: [string range $err 0 160]"
 	return {}
@@ -69,6 +74,63 @@ proc OGFMaskRun {mode fn extra} {
 	}
     }
     return $out
+}
+
+# Session record for one ds9_mask.py call.
+#   auto / grow / shrink / invert / clear / masked / export : parametric -> AUTO
+#   add / erase  : hand-drawn region geometry (image coordinates) -> MANUAL, geometry stored
+#                  as data (payload regions_text + shapes list)
+#   undo / redo / import : depend on GUI history / external files -> MANUAL
+#   stats / reproject-for-bands : stats is read-only (not recorded)
+proc OGFMaskSessLog {mode args extra} {
+    global ogfsess
+    if {$mode eq "stats"} return
+    set class auto
+    set payload {}
+    set title "Mask: $mode"
+    set requires {}
+    set useroutputs {}
+    set mpath [lindex $args [expr {[lsearch -exact $args --mask]+1}]]
+    set mfile [file normalize $mpath]
+    if {$mode in {add erase}} {
+	set class manual
+	set rf [lindex $args [expr {[lsearch -exact $args --regions]+1}]]
+	set fd [open $rf r]; set txt [read $fd]; close $fd
+	set shapes {}
+	foreach line [split $txt \n] {
+	    if {[regexp {^-?(circle|ellipse|box|polygon|annulus)\(} $line]} {lappend shapes $line}
+	}
+	set payload [dict create regions_text $txt shapes_list $shapes]
+	set title "Mask: [expr {$mode eq {add} ? {add} : {erase}}] [llength $shapes] hand-drawn region(s)"
+	lappend requires mask
+    } elseif {$mode in {undo redo import}} {
+	set class manual
+	lappend requires mask
+	if {$mode eq "import"} {
+	    set f [lindex $args [expr {[lsearch -exact $args --file]+1}]]
+	    set payload [dict create file [file normalize $f]]
+	    set title "Mask: import [file tail $f]"
+	}
+    } elseif {$mode in {grow shrink invert clear masked export}} {
+	if {$mode ne "clear"} {lappend requires mask}
+	if {$mode eq "export"} {
+	    set f [lindex $args [expr {[lsearch -exact $args --file]+1}]]
+	    set useroutputs [list $f]
+	    set title "Mask: export [file tail $f]"
+	}
+    } elseif {$mode eq "auto"} {
+	set title "Auto Mask"
+    }
+    set note {}
+    # state that was not created inside this session: replay/pipeline start from an empty mask
+    if {$mode ne "import" && [file exists $mfile] && [lsearch -exact $ogfsess(maskfiles) $mfile] < 0 \
+	    && !($mode eq "auto" && [lsearch -exact $args --fresh] >= 0)} {
+	set note "a mask file from an earlier session existed ([file tail $mfile]) and was used/updated here; the script starts from an empty mask, so the result may differ"
+	if {$mode in {auto clear}} {append note " (manual bits of the old mask were kept by Auto Mask)"}
+    }
+    lappend ogfsess(maskfiles) $mfile
+    OGFSessLog mask.$mode $class $args -title $title -payload $payload -requires $requires \
+	-note $note -useroutputs $useroutputs
 }
 
 proc OGFMaskParseStats {line} {
@@ -398,6 +460,8 @@ proc CatalogPanelMaskCopyToBands {} {
     }
     set script [CatalogPanelGetScript ds9_mask.py]
     set n 0
+    catch {OGFSessLog mask.copy_to_bands auto {} -tool native -title "Copy mask of $det to the other bands" \
+	-payload [dict create detect $det] -requires {mask bands>=2}}
     foreach b $ogfband(names) {
 	if {$b eq $det} continue
 	set bp [OGFMaskPaths $ogfband($b,file)]

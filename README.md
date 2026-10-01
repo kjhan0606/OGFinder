@@ -12,3 +12,7 @@ DS9 supports advanced features such as 2-D, 3-D and RGB frame buffers, mosaic im
 The GUI for DS9 is user configurable. GUI elements such as the coordinate display, panner, magnifier, horizontal and vertical graphs, button bar, and color bar can be configured via menus or the command line.
 
 SAOImageDS9 is fully funded by the Chandra X-ray Science Center (CXC) and is licensed in part under the GNU General Public License, version 3. 
+
+## Session recorder / Python pipeline export (OGFinder)
+
+The catalog panel records the analysis steps of a GUI session. *Analysis > Save Session as Python Script...* writes a stand-alone script that re-runs the automatic steps on new FITS files (`--mode pipeline`, batch, `--jobs`, `--resume`) or replays the whole session on the original data (`--mode replay`). See [docs/session_python_script.md](docs/session_python_script.md).

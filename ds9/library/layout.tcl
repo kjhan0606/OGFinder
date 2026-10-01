@@ -634,6 +634,16 @@ proc CreateCatalogPanel {} {
     $f.menubar.analysis.m add command \
 	-label "Analysis Viewer..." \
 	-command CatalogPanelAnalysisViewer
+    $f.menubar.analysis.m add separator
+    $f.menubar.analysis.m add command \
+	-label "Save Session as Python Script..." \
+	-command CatalogPanelSessionSave
+    $f.menubar.analysis.m add command \
+	-label "Show Session Log" \
+	-command CatalogPanelSessionShow
+    $f.menubar.analysis.m add command \
+	-label "Reset Session Log" \
+	-command CatalogPanelSessionReset
 
     pack $f.menubar.sextract -side left
     pack $f.menubar.display -side left
@@ -1004,6 +1014,7 @@ proc CreateCatalogPanel {} {
     OGFBandsInit
     OGFMaskInit
     OGFLinkInit
+    OGFSessInit
 
     # Force ttk widgets to redraw on resize (X11 compositing conflict)
     bind $f <Configure> [list CatalogPanelRedrawTtk $f]
@@ -1130,6 +1141,8 @@ proc CatalogPanelExtract {} {
     }
     # Windows: DLLs found via PATH automatically
 
+    OGFSessLog extract auto [list $sextract $fn {*}$paramargs] -title "Extract sources (ds9_sextract)" \
+	-tool sextract -post [dict create kind set]
     # Run extraction (cross-platform exec)
     if {[catch {set data [exec $sextract $fn {*}$paramargs 2>@stderr]} err]} {
 	set catpanel(status) "Extraction error: $err"
@@ -1163,6 +1176,7 @@ proc CatalogPanelLoadTSV {data source_name} {
     # Store for filtering
     set catpanel(alldata) $data
     set catpanel(delim) "\t"
+    catch {OGFSessOnCatalogLoad $source_name}
 
     # Parse header
     set headers [split [lindex $lines 0] "\t"]
@@ -1206,6 +1220,7 @@ proc CatalogPanelClear {} {
 	catch {$current(frame) marker catalog sextract_merge delete}
     }
 
+    catch {OGFSessLog catalog.clear manual {} -tool native -title "Clear catalog"}
     global $catpanel(tbldb)
     $catpanel(tbl) configure -variable {}
     unset -nocomplain $catpanel(tbldb)
@@ -1262,7 +1277,18 @@ proc CatalogPanelSaveCatalog {} {
 		    {{All Files} {*}}
 		}]
     if {$fn eq {}} return
+    CatalogPanelSaveCatalogTo $fn
+}
 
+# Write the catalog to FN (.tsv or .csv).  Also what the session recorder replays.
+proc CatalogPanelSaveCatalogTo {fn} {
+    global catpanel
+    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+	set catpanel(status) "No catalog to save"
+	return
+    }
+    OGFSessLog catalog.save auto {} -tool native -title "Save catalog as [file tail $fn]" \
+	-payload [dict create name [file tail $fn]] -requires catalog
     set ext [string tolower [file extension $fn]]
 
     if {$ext eq ".csv"} {
@@ -1374,6 +1400,8 @@ proc CatalogPanelLoadCatalog {} {
 	set data $rawdata
     }
 
+    OGFSessLog catalog.load manual {} -tool native -title "Load catalog [file tail $fn]" \
+	-payload [dict create file [file normalize $fn]]
     CatalogPanelLoadTSV $data [file tail $fn]
 }
 
@@ -2653,6 +2681,9 @@ proc CatalogPanelMergeSources {} {
     }
     set new_line [join $new_fields "\t"]
 
+    OGFSessLog catalog.merge manual {} -tool native -requires catalog \
+	-title "Merge sources [join $catpanel(merge,list) ,]" \
+	-payload [dict create nums_list $catpanel(merge,list) mag_zp $mag_zp]
     # Rebuild alldata: header + other rows + merged row
     set newdata $header
     foreach row $other_rows {
@@ -3214,6 +3245,8 @@ proc CatalogPanelSort {colname direction} {
     }
     if {$colidx < 0} return
 
+    OGFSessLog catalog.sort auto {} -tool native -title "Sort catalog by $colname $direction" \
+	-payload [dict create col $colname dir $direction] -requires catalog
     # Collect data rows (skip header and empty lines)
     set datarows {}
     for {set i 1} {$i < [llength $lines]} {incr i} {
@@ -3513,6 +3546,17 @@ proc CatalogPanelTrimApply {} {
 	}
     }
 
+    set jc {}
+    foreach cond $conditions {
+	lassign $cond cidx hmin minv hmax maxv
+	set one "\"col\": [OGFJStr [string trim [lindex $headers $cidx]]]"
+	if {$hmin} {append one ", \"min\": [OGFJStr $minv]"}
+	if {$hmax} {append one ", \"max\": [OGFJStr $maxv]"}
+	lappend jc "\{$one\}"
+    }
+    OGFSessLog catalog.trim auto {} -tool native -requires catalog \
+	-title "Trim catalog: [llength $conditions] condition(s)" \
+	-payload [dict create conditions_json "\[[join $jc {, }]\]"]
     set catpanel(trim,active) 1
     CatalogPanelLoadTSV $filtered "trimmed"
 
@@ -4745,6 +4789,7 @@ proc CatalogPanelGalaxyMorphology {} {
 
     # Run classification
     set errfile [file join [file normalize ~] .ds9 morph_stderr.txt]
+    OGFSessLog galaxy.morphology auto [list [OGFPython] $script $fn {*}$paramargs] -title {Galaxy morphology (CNN)} -post [dict create kind morph]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -5090,6 +5135,7 @@ proc CatalogPanelStarFinder {} {
 
     # Run classification
     set errfile [file join [file normalize ~] .ds9 star_finder_stderr.txt]
+    OGFSessLog stars.classify auto [list [OGFPython] $script $fn {*}$paramargs] -title {AI star classification} -post [dict create kind star]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -5413,6 +5459,7 @@ proc CatalogPanelFindStars {method} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog psf.find_stars auto [list [OGFPython] $script $fn {*}$paramargs] -title {Find PSF stars ($method)} -post [dict create kind stars]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -5590,6 +5637,7 @@ proc CatalogPanelBuildPSF {method} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog psf.build auto [list [OGFPython] $script $fn {*}$paramargs] -title {Build PSF ($method)} -post [dict create kind psfbuilt] -requires [list stars]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -5790,6 +5838,7 @@ proc CatalogPanelBuildExtendedPSFExec {w} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog psf.build_extended auto [list [OGFPython] $script $fn {*}$paramargs] -title {Build extended PSF} -post [dict create kind psfbuilt]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -6008,6 +6057,7 @@ proc CatalogPanelSimPSFWebbPSFExec {w} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog psf.webbpsf auto [list [OGFPython] $script $fn {*}$paramargs] -title {WebbPSF (JWST) PSF} -post [dict create kind psfbuilt]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -6177,6 +6227,7 @@ proc CatalogPanelSimPSFTinyTimExec {w} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog psf.tinytim auto [list [OGFPython] $script $fn {*}$paramargs] -title {TinyTim (HST) PSF} -post [dict create kind psfbuilt]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -6525,6 +6576,7 @@ proc CatalogPanelDeconvolve {algorithm} {
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog deconv.run auto [list [OGFPython] $script $fn {*}$paramargs] -title {Deconvolution ($algorithm)} -requires [list psf]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
 	catch {
@@ -7114,6 +7166,8 @@ proc CatalogPanelDeleteSelected {} {
 	return
     }
 
+    OGFSessLog catalog.delete manual {} -tool native -requires catalog \
+	-title "Delete source $src_num" -payload [dict create number $src_num]
     set catpanel(alldata) [join $new_lines \n]
 
     # Delete the source marker
@@ -7186,6 +7240,8 @@ proc CatalogPanelSeparateSelected {} {
     lappend paramargs "--radius-factor" $catpanel(param,sep-radius-factor)
     lappend paramargs "--back-size" $catpanel(param,sep-back-size)
 
+    OGFSessLog catalog.separate manual {} -tool native -title "Separate source $src_num (manual deblend)" \
+	-note "hand-picked source; result is merged into the catalog by GUI code that is not replayable from the shell"
     set errfile [file join [file normalize ~] .ds9 separate_stderr.txt]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
@@ -7563,6 +7619,8 @@ proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
     lappend paramargs "--mag-zeropoint" $catpanel(param,mag-zeropoint)
     lappend paramargs "--phot-aperture" $catpanel(param,phot-aperture)
 
+    OGFSessLog catalog.add_object manual {} -tool native -title "Add object at ($imgx, $imgy) by hand" \
+	-note "hand-picked position; not replayable from the shell"
     set errfile [file join [file normalize ~] .ds9 add_source_stderr.txt]
     if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
 	set stderr_msg ""
@@ -7755,6 +7813,7 @@ proc CatalogPanelSaveTempCatalog {suffix} {
 
 proc CatalogPanelAddColumnsFromTSV {result_data col_names} {
     global catpanel
+    catch {OGFSessOnAddColumns $result_data $col_names}
 
     # Parse result
     set rlines [split $result_data \n]
@@ -7988,6 +8047,7 @@ proc CatalogPanelExportFITS {} {
     set catpanel(status) "Exporting FITS table..."
     update idletasks
 
+    OGFSessLog catalog.export_fits auto [list [OGFPython] $script --input $tmpfile --output $fn] -title "Export FITS table [file tail $fn]" -useroutputs [list $fn]
     if {[catch {
 	set data [exec [OGFPython] $script --input $tmpfile --output $fn 2>@stderr]
     } err]} {
@@ -8026,6 +8086,7 @@ proc CatalogPanelSegmentationMap {} {
 	lappend args --detect-minarea $catpanel(param,detect-minarea)
     }
 
+    OGFSessLog analysis.segmap auto $args -title {Segmentation map} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Segmentation map error: $err"
 	return
@@ -8084,6 +8145,7 @@ proc CatalogPanelMorphometry {} {
     set catpanel(status) "Measuring morphometry (CAS/Gini/M20)..."
     update idletasks
 
+    OGFSessLog analysis.morphometry auto [list [OGFPython] $script $fn --catalog $tmpcat --n-workers $catpanel(param,n-workers)] -title {Non-parametric morphology (CAS/Gini/M20)} -post [dict create kind add cols_list {CONC ASYM GINI M20 R_PETRO}]
     if {[catch {
 	set data [exec [OGFPython] $script $fn --catalog $tmpcat \
 	    --n-workers $catpanel(param,n-workers) 2>@stderr]
@@ -8139,6 +8201,7 @@ proc CatalogPanelSersicFit {} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.sersic auto $args -title {Sersic fitting} -post [dict create kind add cols_list {SERSIC_N SERSIC_RE SERSIC_IE SERSIC_ELLIP SERSIC_THETA SERSIC_CHI2}]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Sérsic fit error: $err"
 	return
@@ -8192,6 +8255,7 @@ proc CatalogPanelPSFPhotometry {} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.psf_phot auto $args -title {PSF photometry} -post [dict create kind add cols_list {FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF}] -requires [list psf]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "PSF photometry error: $err"
 	return
@@ -8293,6 +8357,7 @@ proc CatalogPanelMultiBand {} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.multiband auto $args -title {Multi-band photometry (dialog, ds9_multiband.py)} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Multi-band error: $err"
 	return
@@ -8346,6 +8411,7 @@ proc CatalogPanelCrowdedPhot {} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.crowded_phot auto $args -title {Crowded field photometry} -post [dict create kind add cols_list {FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS}] -requires [list psf]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Crowded phot error: $err"
 	return
@@ -8420,6 +8486,7 @@ proc CatalogPanelCrossMatch {} {
     set catpanel(status) "Cross-matching with $vizcat (r=${matchrad}\")..."
     update idletasks
 
+    OGFSessLog analysis.crossmatch auto [list [OGFPython] $script --catalog $tmpcat --vizier-cat $vizcat --radius $matchrad] -network 1 -title "Cross-match with $vizcat" -post [dict create kind add cols_list {MATCH_DIST MATCH_ID}]
     if {[catch {
 	set data [exec [OGFPython] $script --catalog $tmpcat \
 	    --vizier-cat $vizcat --radius $matchrad 2>@stderr]
@@ -8520,6 +8587,7 @@ proc CatalogPanelDualExtract {} {
 	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
     }
 
+    OGFSessLog analysis.dual_extract auto $args -title {Dual-image extract} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Dual extract error: $err"
 	return
@@ -8604,6 +8672,7 @@ proc CatalogPanelCompleteness {} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.completeness auto $args -title {Completeness simulation (seed 42)} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Completeness error: $err"
 	return
@@ -8668,6 +8737,8 @@ proc CatalogPanelICLParamSave {} {
 proc CatalogPanelCmdLog {pipeline args_list} {
     global catpanel
     lappend catpanel($pipeline,cmdlog) $args_list
+    # session recorder (python script export); the ICL/LSBG .sh export above is unchanged
+    catch {OGFSessFromCmdLog $pipeline $args_list}
 }
 
 proc ShellQuote {s} {
@@ -10293,6 +10364,7 @@ proc CatalogPanelICLColorProfileRun {w} {
 	lappend args --mask $catpanel(icl,mask_file)
     }
 
+    catch {OGFSessFromCmdLog icl $args}
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "ICL color profile error: $err"
 	return
@@ -12494,6 +12566,7 @@ proc CatalogPanelPhotoZRun {dlg} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.photo_z auto $args -title {Photo-z} -post [dict create kind add cols_list {PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER}]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Photo-z error: $err"
 	return
@@ -12677,6 +12750,7 @@ proc CatalogPanelSEDFitRun {dlg} {
     }
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.sed_fit auto $args -title {SED fitting} -post [dict create kind add cols_list {LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR}]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "SED fit error: $err"
 	return
@@ -12811,6 +12885,7 @@ proc CatalogPanelBulgeDisk {} {
 
     lappend args --n-workers $catpanel(param,n-workers)
 
+    OGFSessLog analysis.bulge_disk auto $args -title {Bulge+Disk decomposition} -post [dict create kind add cols_list {BT_RATIO BULGE_RE BULGE_MAG DISK_RS DISK_MAG BD_CHI2 BD_FLAG}]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
 	set catpanel(status) "Bulge+Disk error: $err"
 	return

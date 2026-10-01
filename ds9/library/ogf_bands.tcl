@@ -153,6 +153,8 @@ proc CatalogPanelBandsRegisterFrame {frame name zp fwhm {file {}}} {
     set ogfband($name,pscale) $pix
     set ogfband($name,info) $info
     set ogfband($name,pivot) [expr {[dict exists $info PIVOT] ? [dict get $info PIVOT] : {}}]
+    catch {OGFSessLog bands.register config {} -tool native -title "Register band $name (ZP $zp)" \
+	-payload [dict create name $name zp $zp fwhm $fwhm file [file normalize $file] key $name]}
     if {$ogfband(detect) eq {}} {set ogfband(detect) $name}
     OGFBandsRecomputeGrid
     return $name
@@ -217,6 +219,8 @@ proc CatalogPanelBandsLoadFile {fn {name {}} {zp {}}} {
 proc CatalogPanelBandsSetDetect {name} {
     global ogfband catpanel
     set ogfband(detect) $name
+    catch {OGFSessLog bands.detect config {} -tool native -title "Detection band = $name" \
+	-payload [dict create name $name]}
     OGFBandsRecomputeGrid
     set catpanel(status) "Detection band = $name"
 }
@@ -226,6 +230,8 @@ proc CatalogPanelBandsRemove {name} {
     set i [lsearch -exact $ogfband(names) $name]
     if {$i < 0} return
     set ogfband(names) [lreplace $ogfband(names) $i $i]
+    catch {OGFSessLog bands.remove config {} -tool native -title "Remove band $name" \
+	-payload [dict create name $name]}
     foreach k [array names ogfband "$name,*"] {unset ogfband($k)}
     if {$ogfband(detect) eq $name} {
 	set ogfband(detect) [lindex $ogfband(names) 0]
@@ -336,6 +342,10 @@ proc CatalogPanelBandsMeasure {{snr {}}} {
     set det $ogfband(detect)
     set detfile $ogfband($det,file)
     set catfile [CatalogPanelSaveTempCatalog bands]
+    catch {OGFSessLog bands.measure auto {} -tool native -requires {catalog bands>=2} \
+	-title "Forced photometry in [llength $ogfband(names)] bands (S/N < $snr -> 99)" \
+	-payload [dict create snr $snr bands_list [OGFBandsSorted] detect $det \
+	    zps_json "\{[join [lmap b [OGFBandsSorted] {format {"%s": "%s"} $b $ogfband($b,zp)}] {, }]\}"]}
     set t0 [clock milliseconds]
     set summary {}
     foreach b [OGFBandsSorted] {

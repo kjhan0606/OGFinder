@@ -111,3 +111,5 @@ has a new `--mask-input FILE` option to reuse it instead of regenerating.
     ds9_mask.py IMAGE --mode masked --mask M --masked-output OUT.fits [--interp-method linear]
 
 Every mode prints one `#MASK_STATS N_MASKED=.. FRACTION=.. N_SRC=.. N_STAR=.. N_ADD=.. N_ERASE=.. UNDO=.. REDO=..` line.
+
+Mask and band steps are also recorded by the session recorder; see `docs/session_python_script.md` (hand-drawn add/erase regions are *manual* steps and are skipped in pipeline mode).
