@@ -2,43 +2,40 @@
 # Loaded through the "tcl" field of plugins/galaxy_model/plugin.json.
 
 proc CatalogPanelGalaxyFit {model} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No sources — run Extract first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No sources — run Extract first"
 	return
     }
 
-    set catpanel(status) "Galaxy $model fitting — not yet implemented"
+    ::ogf::cat::set status "Galaxy $model fitting — not yet implemented"
 }
 
 proc CatalogPanelGalaxyParams {} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No sources — run Extract first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No sources — run Extract first"
 	return
     }
 
-    set catpanel(status) "Galaxy parameter extraction — not yet implemented"
+    ::ogf::cat::set status "Galaxy parameter extraction — not yet implemented"
 }
 
 proc CatalogPanelGalaxyMorphology {} {
-    global catpanel
     global current
     global ds9
     if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook morphology]} return  ;# ogf_ai.tcl: backend local|external
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No sources — run Extract first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No sources — run Extract first"
 	return
     }
 
@@ -50,7 +47,7 @@ proc CatalogPanelGalaxyMorphology {} {
     set fn [string trim $fn "{}"]
     regsub {\[.*\]$} $fn {} fn
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
@@ -62,7 +59,7 @@ proc CatalogPanelGalaxyMorphology {} {
 	set script [file join $libdir ds9_galaxy_morph.py]
     }
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_galaxy_morph.py not found"
+	::ogf::cat::set status "ERROR: ds9_galaxy_morph.py not found"
 	return
     }
 
@@ -71,10 +68,10 @@ proc CatalogPanelGalaxyMorphology {} {
     catch {file mkdir [file dirname $catfile]}
     if {[catch {
 	set fd [open $catfile w]
-	puts $fd $catpanel(alldata)
+	puts $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "Morphology error: cannot write catalog: $err"
+	::ogf::cat::set status "Morphology error: cannot write catalog: $err"
 	return
     }
 
@@ -88,7 +85,7 @@ proc CatalogPanelGalaxyMorphology {} {
 	lappend paramargs "--checkpoint" $ckpt
     }
 
-    set catpanel(status) "Morphology: classifying sources on [file tail $fn] ..."
+    ::ogf::cat::set status "Morphology: classifying sources on [file tail $fn] ..."
     update idletasks
 
     # Run classification
@@ -105,10 +102,10 @@ proc CatalogPanelGalaxyMorphology {} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Morphology error: $last_err"
+	    ::ogf::cat::set status "Morphology error: $last_err"
 	    puts "Morphology full stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "Morphology error: $err"
+	    ::ogf::cat::set status "Morphology error: $err"
 	}
 	return
     }
@@ -120,7 +117,6 @@ proc CatalogPanelGalaxyMorphology {} {
 }
 
 proc CatalogPanelMorphParseResults {data} {
-    global catpanel
     global current
 
     set lines [split $data \n]
@@ -139,8 +135,8 @@ proc CatalogPanelMorphParseResults {data} {
     }
 
     # Build morph_map: NUMBER -> {morph_type morph_conf color}
-    array unset catpanel morph,*
-    set catpanel(morph,map) {}
+    ::ogf::cat::unset_glob morph,*
+    ::ogf::cat::set morph,map {}
 
     foreach line $lines {
 	if {[string match "#*" $line]} continue
@@ -157,12 +153,12 @@ proc CatalogPanelMorphParseResults {data} {
 	set morph_conf [lindex $fields 3]
 	set color [lindex $fields 10]
 
-	set catpanel(morph,$src_num) [list $morph_type $morph_desc $morph_conf $color]
-	lappend catpanel(morph,map) $src_num
+	::ogf::cat::set morph,$src_num [list $morph_type $morph_desc $morph_conf $color]
+	::ogf::cat::lappend morph,map $src_num
     }
 
-    if {[llength $catpanel(morph,map)] == 0} {
-	set catpanel(status) "Morphology: no galaxies classified"
+    if {[llength [::ogf::cat::get morph,map]] == 0} {
+	::ogf::cat::set status "Morphology: no galaxies classified"
 	return
     }
 
@@ -172,15 +168,14 @@ proc CatalogPanelMorphParseResults {data} {
     # Recolor markers by morphology
     CatalogPanelMorphColorMarkers
 
-    set catpanel(status) "Morphology: $n_classified galaxies classified"
+    ::ogf::cat::set status "Morphology: $n_classified galaxies classified"
 }
 
 proc CatalogPanelMorphAddColumns {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     if {[llength $lines] < 2} return
 
     # Parse header
@@ -229,8 +224,8 @@ proc CatalogPanelMorphAddColumns {} {
 	    set fields [split $line "\t"]
 	    set src_num [string trim [lindex $fields $col_num]]
 
-	    if {[info exists catpanel(morph,$src_num)]} {
-		set info $catpanel(morph,$src_num)
+	    if {[::ogf::cat::exists morph,$src_num]} {
+		set info [::ogf::cat::get morph,$src_num]
 		if {$col_mt >= 0} {
 		    lset fields $col_mt [lindex $info 0]
 		}
@@ -255,8 +250,8 @@ proc CatalogPanelMorphAddColumns {} {
 	    set mt ""
 	    set md ""
 	    set mc ""
-	    if {[info exists catpanel(morph,$src_num)]} {
-		set info $catpanel(morph,$src_num)
+	    if {[::ogf::cat::exists morph,$src_num]} {
+		set info [::ogf::cat::get morph,$src_num]
 		set mt [lindex $info 0]
 		set md [lindex $info 1]
 		set mc [lindex $info 2]
@@ -265,12 +260,11 @@ proc CatalogPanelMorphAddColumns {} {
 	}
     }
 
-    set catpanel(alldata) $newdata
-    CatalogPanelLoadTSV $catpanel(alldata) "morphology"
+    ::ogf::cat::set alldata $newdata
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "morphology"
 }
 
 proc CatalogPanelMorphColorMarkers {} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
@@ -279,9 +273,9 @@ proc CatalogPanelMorphColorMarkers {} {
     # Delete previous sextract_all markers and recreate with morph colors
     OGFMarkDelete $frame
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     if {[llength $lines] < 2} return
 
     set headers [split [lindex $lines 0] "\t"]
@@ -364,8 +358,8 @@ proc CatalogPanelMorphColorMarkers {} {
 
 	# Color: use morph color if classified, else yellow
 	set color yellow
-	if {[info exists catpanel(morph,$src_num)]} {
-	    set color [lindex $catpanel(morph,$src_num) 3]
+	if {[::ogf::cat::exists morph,$src_num]} {
+	    set color [lindex [::ogf::cat::get morph,$src_num] 3]
 	}
 
 	append reg "ellipse($x $y ${semi_a}i ${semi_b}i $theta) # color=$color width=1 tag={sextract_all} tag={sextract_src.$src_num} select=0 edit=0 move=0 rotate=0 delete=1 highlite=1 callback=highlite CatalogPanelMarkerCB {$src_num} callback=unhighlite CatalogPanelMarkerUnCB {$src_num}\n"
@@ -385,6 +379,6 @@ proc CatalogPanelMorphColorMarkers {} {
 	OGFMarkSend $frame
     }
 
-    set catpanel(markall,on) 1
+    ::ogf::cat::set markall,on 1
 }
 
