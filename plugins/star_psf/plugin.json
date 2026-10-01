@@ -207,5 +207,7 @@
  ],
  "short": "Stars/PSF",
  "primary": "ai_star",
- "settings": "CatalogPanelStarPSFSettings"
+ "settings": "CatalogPanelStarPSFSettings",
+ "tcl": "star_psf.tcl",
+ "tcl_always": 1
 }

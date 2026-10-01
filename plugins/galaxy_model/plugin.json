@@ -63,5 +63,7 @@
   }
  ],
  "short": "Galaxies",
- "primary": "ai_morph"
+ "primary": "ai_morph",
+ "tcl": "galaxy_model.tcl",
+ "tcl_always": 1
 }

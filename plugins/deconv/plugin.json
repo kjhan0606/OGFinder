@@ -193,5 +193,7 @@
  ],
  "short": "Deconvolve",
  "primary": "quick",
- "settings": "params"
+ "settings": "params",
+ "tcl": "deconv.tcl",
+ "tcl_always": 1
 }
