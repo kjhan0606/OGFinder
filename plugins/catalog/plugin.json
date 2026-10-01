@@ -95,5 +95,7 @@
   }
  ],
  "short": "Catalog",
- "primary": "save"
+ "primary": "save",
+ "tcl": "plot_viewer.tcl",
+ "tcl_always": 1
 }

@@ -517,14 +517,19 @@ proc ::ogf::reg::load_all {} {
 proc ::ogf::reg::load_tcl {id} {
     set m [get $id]
     if {[dict get $m _loaded]} return
-    set tf [::ogf::json::get $m tcl]
-    if {$tf ne {} && [dict get $m _enabled]} {
-	set path [file join [dict get $m _dir] $tf]
-	if {[catch {uplevel #0 [list source $path]} err]} {
-	    ::ogf::log ERROR "plugin $id: cannot source $tf: $err"
-	    catch {puts stderr "OGF: plugin $id: cannot source $tf: $err"}
-	    dict set ::ogf::plugins $id _enabled 0
-	    return
+    # "tcl": "a.tcl" or ["a.tcl","b.tcl"].  "tcl_always": 1 = also source when the plugin is disabled: the file holds
+    # procs that core code (layout.tcl, frame.tcl, the recorder, other plugins) calls by name; disabling the plugin then
+    # only hides its workflow entries.
+    set tfs [::ogf::json::get $m tcl]
+    if {$tfs ne {} && ([dict get $m _enabled] || [::ogf::json::get $m tcl_always 0])} {
+	foreach tf $tfs {
+	    set path [file join [dict get $m _dir] $tf]
+	    if {[catch {uplevel #0 [list source -encoding utf-8 $path]} err]} {
+		::ogf::log ERROR "plugin $id: cannot source $tf: $err"
+		catch {puts stderr "OGF: plugin $id: cannot source $tf: $err"}
+		dict set ::ogf::plugins $id _enabled 0
+		return
+	    }
 	}
     }
     dict set ::ogf::plugins $id _loaded 1

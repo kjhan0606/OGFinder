@@ -105,5 +105,10 @@
  ],
  "short": "Structure",
  "primary": "sersic",
- "settings": "params"
+ "settings": "params",
+ "tcl": [
+  "bulge_disk.tcl",
+  "morphology.tcl"
+ ],
+ "tcl_always": 1
 }

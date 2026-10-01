@@ -106,5 +106,7 @@
   }
  ],
  "short": "Photometry",
- "primary": "psf_phot"
+ "primary": "psf_phot",
+ "tcl": "photometry.tcl",
+ "tcl_always": 1
 }

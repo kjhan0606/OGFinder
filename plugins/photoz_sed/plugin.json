@@ -42,5 +42,7 @@
   }
  ],
  "short": "Photo-z/SED",
- "primary": "photoz"
+ "primary": "photoz",
+ "tcl": "photoz_sed.tcl",
+ "tcl_always": 1
 }
