@@ -58,6 +58,16 @@ proc canned {py a} {
 	    foreach n [lrange [cat_numbers $a] 0 2] {lappend lines [join [list $n E elliptical 0.9 x 1 x 1 x 1 green] \t]}
 	    return [join $lines \n]
 	}
+	ds9_icl.py {
+	    set m [lindex $a [expr {[lsearch -exact $a --mode]+1}]]
+	    if {$m eq "background"} {return "OK"}
+	    if {$m eq "profile"} {return "R_PIX\tSB\tSB_ERR\n1.0\t22.5\t0.1\n2.0\t23.5\t0.1"}
+	    return "QUANTITY\tVALUE\nR_ISO\t12.5"
+	}
+	ds9_lsbg.py {
+	    set m [lindex $a [expr {[lsearch -exact $a --mode]+1}]]
+	    return "NUMBER\tX_IMAGE\tY_IMAGE\tMAG\tMODE\n1\t100\t100\t24.5\t$m\n2\t200\t150\t25.5\t$m\n3\t300\t90\t26.1\t$m"
+	}
 	ds9_completeness.py {return "MAG\tFRAC\n20.0\t0.99\n21.0\t0.9"}
 	ds9_multiband.py {return "NUMBER\tMAG_G\tMAG_R\n1\t20.1\t19.8"}
 	default {return ""}
@@ -262,6 +272,31 @@ proc run {} {
 	P "  AI row count=[OGFAIRowCount] selection=$catpanel(sel,nums)"
 	set catpanel(sel,nums) {}
     } {}
+    # ---------------------------------------------------------------- ICL / LSBG (parameter files, derived file keys, exec args, state keys)
+    set catpanel(icl,param,rmin) 3; set catpanel(icl,param,rmax) 150
+    feature icl_params_save {CatalogPanelICLParamSave} {}
+    prf icl.prf
+    feature icl_params_load {set catpanel(icl,param,rmax) 1; set catpanel(icl,param,bkg-order) 9; CatalogPanelICLParamLoad} {icl,param,rmax icl,param,bkg-order icl,param,rmin}
+    feature icl_update_files {set catpanel(icl,fits_base) {}; CatalogPanelICLUpdateFiles [CatalogPanelGetFITS]} {icl,fits_base icl,mask_file icl,masked_file icl,bkg_file icl,bgsub_file icl,profile_file icl,has_mask icl,has_bkg icl,has_profile}
+    feature icl_background {CatalogPanelICLBackground median} {status icl,has_bkg icl,cmdlog icl,bkg_file icl,bgsub_file}
+    feature icl_profile {set catpanel(icl,center_x) 120.5; set catpanel(icl,center_y) 130.5; CatalogPanelICLProfile} {status icl,has_profile icl,center_x icl,center_y icl,cmdlog}
+    set fd [open $catpanel(icl,profile_file) w]; puts $fd x; close $fd; set catpanel(icl,has_profile) 1
+    feature icl_measure {CatalogPanelICLMeasure} {status icl,cmdlog}
+    feature icl_annuli {CatalogPanelICLDrawAnnuli} {}
+    set catpanel(lsbg,param,detect-thresh) 2.1; set catpanel(lsbg,param,pixel-scale) 0.2
+    feature lsbg_params_save {CatalogPanelLSBGParamSave} {}
+    prf lsbg.prf
+    feature lsbg_params_load {set catpanel(lsbg,param,detect-thresh) 1; CatalogPanelLSBGParamLoad} {lsbg,param,detect-thresh lsbg,param,pixel-scale}
+    feature lsbg_update_files {set catpanel(lsbg,fits_base) {}; CatalogPanelLSBGUpdateFiles [CatalogPanelGetFITS]} {lsbg,fits_base lsbg,mask_file lsbg,masked_file lsbg,bkg_file lsbg,cleaned_file lsbg,segmap_file lsbg,catalog_file lsbg,has_*}
+    # create the intermediate files the later LSBG steps require
+    foreach f [list $catpanel(lsbg,cleaned_file) $catpanel(lsbg,segmap_file) $catpanel(lsbg,mask_file)] {set fd [open $f w]; puts $fd x; close $fd}
+    feature lsbg_detect {CatalogPanelLSBGDetect} {status lsbg,has_detect lsbg,detect_data lsbg,cmdlog alldata}
+    # Detect opened a new frame (CreateFrame resets the per-frame panel state): go back to the image frame and rebuild the file keys
+    GotoFrame [lindex $ds9(frames) 0]; wait_idle 300
+    set catpanel(lsbg,fits_base) {}; CatalogPanelLSBGUpdateFiles [CatalogPanelGetFITS]
+    foreach f [list $catpanel(lsbg,cleaned_file) $catpanel(lsbg,segmap_file)] {set fd [open $f w]; puts $fd x; close $fd}
+    feature lsbg_photometry {CatalogPanelLSBGPhotometry} {status lsbg,has_catalog lsbg,cmdlog alldata}
+    feature lsbg_filter {CatalogPanelLSBGFilter} {status lsbg,cmdlog alldata}
     feature moving_status {OGFMovStatus "linking 3 of 7"} {status}
     P "SUMMARY-DONE steps=[llength $ogfsess(steps)] exec=[llength $::EXEC]"
     close $::fh

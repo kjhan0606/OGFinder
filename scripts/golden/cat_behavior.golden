@@ -297,6 +297,154 @@ HOME-scratch yes
   catpanel(param,detect-thresh) = 3.0
 === selection_reads
   AI row count=0 selection=3 5 8
+=== icl_params_save
+  PRF icl.prf:
+    expand-factor 1.7
+    max-dilate-radius 40
+    bright-star-mag-limit 17
+    bright-star-radius-scale 2.5
+    interp-method linear
+    detect-thresh 2.2
+    bkg-method polynomial
+    bkg-order 3
+    bkg-sigma-clip 3.0
+    bkg-sep-mesh 256
+    bkg-iterative 0
+    bkg-n-iterations 3
+    bkg-convergence-tol 0.01
+    bkg-refine-thresh 2.0
+    rmin 3
+    rmax 150
+    nsteps 80
+    spacing log
+    ellipticity 0.0
+    pa 0.0
+    mag-zeropoint 25.0
+    pixel-scale 0.06
+    mu-threshold 26.5
+    mu-levels 26.0,27.0,28.0
+    measure-radius 500.0
+=== icl_params_load
+  catpanel(icl,param,rmax) = 150
+  catpanel(icl,param,bkg-order) = 3
+  catpanel(icl,param,rmin) = 3
+=== icl_update_files
+  catpanel(icl,fits_base) = segout
+  catpanel(icl,mask_file) = <HOME>/.ds9/mask_segout_bool.fits
+  catpanel(icl,masked_file) = <HOME>/.ds9/mask_segout_masked.fits
+  catpanel(icl,bkg_file) = <HOME>/.ds9/icl_background_segout.fits
+  catpanel(icl,bgsub_file) = <HOME>/.ds9/icl_bgsub_segout.fits
+  catpanel(icl,profile_file) = <HOME>/.ds9/icl_profile_segout.tsv
+  catpanel(icl,has_mask) = 0
+  catpanel(icl,has_bkg) = 0
+  catpanel(icl,has_profile) = 0
+=== icl_background
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output <HOME>/.ds9/icl_background_segout.fits --bgsub-output <HOME>/.ds9/icl_bgsub_segout.fits
+  STEP icl.background auto | @{PY} @{LIB}/ds9_icl.py <HOME>/segout.fits --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output @{WORK}/icl_background_segout.fits --bgsub-output @{WORK}/icl_bgsub_segout.fits | post= title=ICL background model requires=
+  catpanel(status) = ICL: Background model (median) complete
+  catpanel(icl,has_bkg) = 1
+  catpanel(icl,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output <HOME>/.ds9/icl_background_segout.fits --bgsub-output <HOME>/.ds9/icl_bgsub_segout.fits}
+  catpanel(icl,bkg_file) = <HOME>/.ds9/icl_background_segout.fits
+  catpanel(icl,bgsub_file) = <HOME>/.ds9/icl_bgsub_segout.fits
+=== icl_profile
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode profile --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output <HOME>/.ds9/icl_profile_segout.tsv
+  STEP icl.profile auto | @{PY} @{LIB}/ds9_icl.py <HOME>/segout.fits --mode profile --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output @{WORK}/icl_profile_segout.tsv | post= title=ICL surface-brightness profile requires=extract_catalog
+  catpanel(status) = ICL: SB profile measured
+  catpanel(icl,has_profile) = 1
+  catpanel(icl,center_x) = 120.5
+  catpanel(icl,center_y) = 130.5
+  catpanel(icl,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output <HOME>/.ds9/icl_background_segout.fits --bgsub-output <HOME>/.ds9/icl_bgsub_segout.fits} {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode profile --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output <HOME>/.ds9/icl_profile_segout.tsv}
+=== icl_measure
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode measure --profile-file <HOME>/.ds9/icl_profile_segout.tsv --mu-threshold 26.5 --mu-levels 26.0,27.0,28.0 --pixel-scale 0.06
+  STEP icl.measure auto | @{PY} @{LIB}/ds9_icl.py <HOME>/segout.fits --mode measure --profile-file @{WORK}/icl_profile_segout.tsv --mu-threshold 26.5 --mu-levels 26.0,27.0,28.0 --pixel-scale 0.06 | post= title=ICL measurements requires=
+  catpanel(status) = ICL: Measurements complete
+  catpanel(icl,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode background --bkg-method median --bkg-order 3 --bkg-sigma-clip 3.0 --bkg-sep-mesh 256 --bkg-output <HOME>/.ds9/icl_background_segout.fits --bgsub-output <HOME>/.ds9/icl_bgsub_segout.fits} {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode profile --center 120.5,130.5 --rmin 3 --rmax 150 --nsteps 80 --spacing log --ellipticity 0.0 --pa 0.0 --mag-zeropoint 25.0 --pixel-scale 0.06 --profile-output <HOME>/.ds9/icl_profile_segout.tsv} {python3 /workspace/OGFinder/ds9/library/ds9_icl.py <HOME>/segout.fits --mode measure --profile-file <HOME>/.ds9/icl_profile_segout.tsv --mu-threshold 26.5 --mu-levels 26.0,27.0,28.0 --pixel-scale 0.06}
+=== icl_annuli
+=== lsbg_params_save
+  PRF lsbg.prf:
+    mask-detect-thresh 1.1
+    mask-detect-minarea 7
+    mask-expand-factor 1.3
+    max-dilate-radius 33
+    bright-star-mag-limit 16
+    bright-star-radius-scale 2.1
+    mask-mag-threshold 21
+    interp-method linear
+    lsb-protect 1
+    lsb-mu-threshold 26.5
+    bkg-method sep_large
+    bkg-mesh-size 256
+    bkg-poly-order 3
+    bkg-sigma-clip 3.0
+    bkg-n-iterations 3
+    bkg-refine-thresh 2.0
+    bkg-rms-quantile 0.25
+    bkg-convergence-tol 0.01
+    detect-thresh 2.1
+    detect-minarea 50
+    detect-filter-kernel gauss5x5
+    deblend-nthresh 32
+    deblend-mincont 0.005
+    multiscale 1
+    multiscale-factors 1,2,4
+    sersic-fit 1
+    sersic-n-min 0.2
+    sersic-n-max 10.0
+    sersic-re-min 0.5
+    sersic-cutout-scale 5.0
+    sersic-max-nfev 500
+    phot-apertures 5,10,20,40
+    mag-zeropoint 25.0
+    pixel-scale 0.2
+    mu-eff-min 24.0
+    mu-eff-max 30.0
+    r-eff-min 2.5
+    r-eff-max 60.0
+    ellipticity-max 0.7
+    min-snr 2.0
+    sersic-n-filter-min 0.3
+    sersic-n-filter-max 6.0
+    sersic-chi2-max 10.0
+    svm-classify 0
+    svm-threshold 0.3
+    svm-checkpoint
+=== lsbg_params_load
+  catpanel(lsbg,param,detect-thresh) = 2.1
+  catpanel(lsbg,param,pixel-scale) = 0.2
+=== lsbg_update_files
+  catpanel(lsbg,fits_base) = segout
+  catpanel(lsbg,mask_file) = <HOME>/.ds9/mask_segout_bool.fits
+  catpanel(lsbg,masked_file) = <HOME>/.ds9/mask_segout_masked.fits
+  catpanel(lsbg,bkg_file) = <HOME>/.ds9/lsbg_background_segout.fits
+  catpanel(lsbg,cleaned_file) = <HOME>/.ds9/lsbg_cleaned_segout.fits
+  catpanel(lsbg,segmap_file) = <HOME>/.ds9/lsbg_segmap_segout.fits
+  catpanel(lsbg,catalog_file) = <HOME>/.ds9/lsbg_catalog_segout.tsv
+  catpanel(lsbg,has_catalog) = 0
+  catpanel(lsbg,has_clean) = 0
+  catpanel(lsbg,has_detect) = 0
+  catpanel(lsbg,has_mask) = 0
+=== lsbg_detect
+MESSAGEBOX Unable to load fits  <HOME>/.ds9/lsbg_segmap.fits
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale
+  STEP lsbg.detect auto | @{PY} @{LIB}/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned @{WORK}/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output @{WORK}/lsbg_segmap_segout.fits --n-workers 2 --multiscale | post=kind set force 1 title=LSBG detect requires=
+  catpanel(status) = LSBG: 3 candidates detected (segmap in new frame)
+  catpanel(lsbg,has_detect) = 0
+  catpanel(lsbg,detect_data) = 
+  catpanel(lsbg,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale}
+  catpanel(alldata) = <tsv rows=3 cols=5>
+=== lsbg_photometry
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode photometry --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2
+  STEP lsbg.photometry auto | @{PY} @{LIB}/ds9_lsbg.py <FITS>/m51.fits --mode photometry --cleaned @{WORK}/lsbg_cleaned_m51.fits --segmap @{WORK}/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2 | post=kind set force 1 title=LSBG photometry requires=
+  catpanel(status) = LSBG: 3 sources — photometry done
+  catpanel(lsbg,has_catalog) = 1
+  catpanel(lsbg,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode photometry --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2}
+  catpanel(alldata) = <tsv rows=3 cols=5>
+=== lsbg_filter
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode filter --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit
+  STEP lsbg.filter auto | @{PY} @{LIB}/ds9_lsbg.py <FITS>/m51.fits --mode filter --cleaned @{WORK}/lsbg_cleaned_m51.fits --segmap @{WORK}/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit | post=kind set force 1 title=LSBG filter requires=
+  catpanel(status) = LSBG: 3 candidates passed filtering
+  catpanel(lsbg,cmdlog) = {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <HOME>/segout.fits --mode detect --cleaned <HOME>/.ds9/lsbg_cleaned_segout.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --multiscale-factors 1,2,4 --mag-zeropoint 25.0 --pixel-scale 0.2 --segmap-output <HOME>/.ds9/lsbg_segmap_segout.fits --n-workers 2 --multiscale} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode photometry --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --n-workers 2} {python3 /workspace/OGFinder/ds9/library/ds9_lsbg.py <FITS>/m51.fits --mode filter --cleaned <HOME>/.ds9/lsbg_cleaned_m51.fits --segmap <HOME>/.ds9/lsbg_segmap_m51.fits --detect-thresh 2.1 --detect-minarea 50 --detect-filter-kernel gauss5x5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-apertures 5,10,20,40 --mag-zeropoint 25.0 --pixel-scale 0.2 --mu-eff-min 24.0 --mu-eff-max 30.0 --r-eff-min 2.5 --r-eff-max 60.0 --ellipticity-max 0.7 --min-snr 2.0 --sersic-n-min 0.2 --sersic-n-max 10.0 --sersic-re-min 0.5 --sersic-cutout-scale 5.0 --sersic-max-nfev 500 --sersic-n-filter-min 0.3 --sersic-n-filter-max 6.0 --sersic-chi2-max 10.0 --n-workers 2 --sersic-fit}
+  catpanel(alldata) = <tsv rows=3 cols=5>
 === moving_status
   catpanel(status) = Moving: linking 3 of 7
-SUMMARY-DONE steps=17 exec=16
+SUMMARY-DONE steps=23 exec=22
