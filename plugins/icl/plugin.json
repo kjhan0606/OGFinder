@@ -1,0 +1,225 @@
+{
+ "schema": 1,
+ "id": "icl",
+ "name": "Intracluster light (ICL)",
+ "tab": "Low-SB",
+ "order": 20,
+ "description": "ICL pipeline: masking, background model, BCG centre, profiles, measurements, decomposition.",
+ "steps": [
+  {
+   "id": "mask",
+   "label": "1. Source Masking (shared mask)",
+   "proc": "CatalogPanelICLMask",
+   "legacy": [
+    "ICL > 1. Source Masking (shared mask)"
+   ],
+   "session": "AUTO",
+   "records": [
+    "mask.auto"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "view_mask",
+   "label": "Show Mask Overlay",
+   "proc": "CatalogPanelICLViewMask",
+   "legacy": [
+    "ICL >    Show Mask Overlay"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "save_mask",
+   "label": "Save Mask As...",
+   "proc": "CatalogPanelICLSaveMask",
+   "legacy": [
+    "ICL >    Save Mask As..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "import_mask",
+   "label": "Import Mask...",
+   "proc": "CatalogPanelICLImportMask",
+   "legacy": [
+    "ICL >    Import Mask..."
+   ],
+   "session": "MANUAL"
+  },
+  {
+   "id": "background",
+   "label": "2. Background Model",
+   "session": "AUTO",
+   "records": [
+    "icl.background"
+   ],
+   "needs": [
+    "image"
+   ],
+   "variants": [
+    {
+     "id": "polynomial",
+     "label": "Polynomial Fit",
+     "proc": "CatalogPanelICLBackground polynomial",
+     "legacy": [
+      "ICL > 2. Background Model > Polynomial Fit"
+     ]
+    },
+    {
+     "id": "chebyshev",
+     "label": "Chebyshev Fit",
+     "proc": "CatalogPanelICLBackground chebyshev",
+     "legacy": [
+      "ICL > 2. Background Model > Chebyshev Fit"
+     ]
+    },
+    {
+     "id": "sep_large",
+     "label": "SEP Large Mesh",
+     "proc": "CatalogPanelICLBackground sep_large",
+     "legacy": [
+      "ICL > 2. Background Model > SEP Large Mesh"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "view_bkg",
+   "label": "View Background",
+   "proc": "CatalogPanelICLViewBkg",
+   "legacy": [
+    "ICL >    View Background"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "center",
+   "label": "3. Set BCG Center",
+   "proc": "CatalogPanelICLSetCenter",
+   "legacy": [
+    "ICL > 3. Set BCG Center"
+   ],
+   "session": "MANUAL"
+  },
+  {
+   "id": "profile",
+   "label": "Measure Profile",
+   "proc": "CatalogPanelICLProfile",
+   "legacy": [
+    "ICL >    Measure Profile"
+   ],
+   "session": "AUTO",
+   "records": [
+    "icl.profile"
+   ]
+  },
+  {
+   "id": "sector",
+   "label": "Sector Profile...",
+   "proc": "CatalogPanelICLSectorProfile",
+   "legacy": [
+    "ICL >    Sector Profile..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "measure",
+   "label": "4. ICL Measurements",
+   "proc": "CatalogPanelICLMeasure",
+   "legacy": [
+    "ICL > 4. ICL Measurements"
+   ],
+   "session": "AUTO",
+   "records": [
+    "icl.measure"
+   ]
+  },
+  {
+   "id": "measure_multi",
+   "label": "Multi-Threshold ICL",
+   "proc": "CatalogPanelICLMeasureMulti",
+   "legacy": [
+    "ICL >    Multi-Threshold ICL"
+   ],
+   "session": "AUTO",
+   "records": [
+    "icl.measure-multi"
+   ]
+  },
+  {
+   "id": "decompose",
+   "label": "5. BCG+ICL Decomposition",
+   "proc": "CatalogPanelICLDecompose",
+   "legacy": [
+    "ICL > 5. BCG+ICL Decomposition"
+   ],
+   "session": "AUTO",
+   "records": [
+    "icl.decompose"
+   ]
+  },
+  {
+   "id": "color",
+   "label": "Color Profile...",
+   "proc": "CatalogPanelICLColorProfile",
+   "legacy": [
+    "ICL > Color Profile..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "icl.color"
+   ]
+  },
+  {
+   "id": "save_profile",
+   "label": "Save Profile...",
+   "proc": "CatalogPanelICLSaveProfile",
+   "legacy": [
+    "ICL > Save Profile..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "load_profile",
+   "label": "Load Profile...",
+   "proc": "CatalogPanelICLLoadProfile",
+   "legacy": [
+    "ICL > Load Profile..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "export_script",
+   "label": "Export Script...",
+   "proc": "CatalogPanelICLExportScript",
+   "legacy": [
+    "ICL > Export Script..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "import_script",
+   "label": "Import Script...",
+   "proc": "CatalogPanelICLImportScript",
+   "legacy": [
+    "ICL > Import Script..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "icl_settings",
+   "label": "ICL Settings...",
+   "proc": "CatalogPanelICLSettings",
+   "legacy": [
+    "ICL > Settings..."
+   ],
+   "session": "NONE",
+   "settings_only": 1
+  }
+ ],
+ "short": "ICL",
+ "primary": "measure",
+ "settings": "CatalogPanelICLSettings"
+}

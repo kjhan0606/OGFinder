@@ -1,0 +1,40 @@
+{
+ "schema": 1,
+ "id": "session",
+ "name": "Session recorder",
+ "tab": "Results",
+ "order": 30,
+ "description": "Export the GUI session as an input-agnostic Python pipeline script.",
+ "steps": [
+  {
+   "id": "save",
+   "label": "Save Session as Python Script...",
+   "proc": "CatalogPanelSessionSave",
+   "legacy": [
+    "Analysis > Save Session as Python Script..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "show",
+   "label": "Show Session Log",
+   "proc": "CatalogPanelSessionShow",
+   "legacy": [
+    "Analysis > Show Session Log"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "reset",
+   "label": "Reset Session Log",
+   "proc": "CatalogPanelSessionReset",
+   "legacy": [
+    "Analysis > Reset Session Log"
+   ],
+   "session": "NONE"
+  }
+ ],
+ "short": "Session",
+ "primary": "save",
+ "menu": "Workflow"
+}

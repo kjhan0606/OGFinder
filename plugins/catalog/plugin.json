@@ -1,0 +1,99 @@
+{
+ "schema": 1,
+ "id": "catalog",
+ "name": "Catalog",
+ "tab": "Results",
+ "order": 10,
+ "description": "Catalog input/output and interactive plots.",
+ "steps": [
+  {
+   "id": "save",
+   "label": "Save Catalog",
+   "proc": "CatalogPanelSaveCatalog",
+   "legacy": [
+    "SExtractor > Save Catalog"
+   ],
+   "session": "AUTO",
+   "records": [
+    "catalog.save"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "export_reg",
+   "label": "Export Regions (.reg)",
+   "proc": "CatalogPanelExportRegions",
+   "legacy": [
+    "SExtractor > Export Regions (.reg)"
+   ],
+   "session": "NONE",
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "export_fits",
+   "label": "Export FITS Table",
+   "proc": "CatalogPanelExportFITS",
+   "legacy": [
+    "SExtractor > Export FITS Table"
+   ],
+   "session": "AUTO",
+   "records": [
+    "catalog.export_fits"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "load",
+   "label": "Load Catalog",
+   "proc": "CatalogPanelLoadCatalog",
+   "legacy": [
+    "SExtractor > Load Catalog"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.load"
+   ]
+  },
+  {
+   "id": "clear",
+   "label": "Clear",
+   "proc": "CatalogPanelClear",
+   "legacy": [
+    "SExtractor > Clear"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.clear"
+   ]
+  },
+  {
+   "id": "plot",
+   "label": "Interactive Plot...",
+   "proc": "CatalogPanelPlotDialog",
+   "legacy": [
+    "Analysis > Interactive Plot..."
+   ],
+   "session": "NONE",
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "viewer",
+   "label": "Analysis Viewer...",
+   "proc": "CatalogPanelAnalysisViewer",
+   "legacy": [
+    "Analysis > Analysis Viewer..."
+   ],
+   "session": "NONE"
+  }
+ ],
+ "short": "Catalog",
+ "primary": "save"
+}

@@ -1,0 +1,110 @@
+{
+ "schema": 1,
+ "id": "photometry",
+ "name": "Photometry",
+ "tab": "Measure",
+ "order": 20,
+ "description": "PSF, multi-band and crowded-field photometry, cross-match, segmentation map, completeness.",
+ "steps": [
+  {
+   "id": "psf_phot",
+   "label": "PSF Photometry",
+   "proc": "CatalogPanelPSFPhotometry",
+   "legacy": [
+    "Analysis > PSF Photometry"
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.psf_phot"
+   ],
+   "needs": [
+    "catalog",
+    "image"
+   ]
+  },
+  {
+   "id": "multiband",
+   "label": "Multi-Band Photometry...",
+   "proc": "CatalogPanelMultiBand",
+   "legacy": [
+    "Analysis > Multi-Band Photometry..."
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.multiband"
+   ],
+   "needs": [
+    "catalog",
+    "image"
+   ]
+  },
+  {
+   "id": "crowded",
+   "label": "Crowded Field Photometry",
+   "proc": "CatalogPanelCrowdedPhot",
+   "legacy": [
+    "Analysis > Crowded Field Photometry"
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.crowded_phot"
+   ],
+   "needs": [
+    "catalog",
+    "image"
+   ]
+  },
+  {
+   "id": "crossmatch",
+   "label": "Cross-Match (VizieR)...",
+   "proc": "CatalogPanelCrossMatch",
+   "legacy": [
+    "Analysis > Cross-Match (VizieR)..."
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.crossmatch"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "network": 1
+  },
+  {
+   "id": "segmap",
+   "label": "Segmentation Map",
+   "proc": "CatalogPanelSegmentationMap",
+   "legacy": [
+    "Analysis > Segmentation Map"
+   ],
+   "session": "AUTO",
+   "records": [
+    "analysis.segmap"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "completeness",
+   "label": "Completeness Simulation...",
+   "proc": "CatalogPanelCompleteness",
+   "legacy": [
+    "Analysis > Completeness Simulation..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "analysis.completeness"
+   ],
+   "needs": [
+    "image"
+   ]
+  }
+ ],
+ "short": "Photometry",
+ "primary": "psf_phot"
+}

@@ -1,0 +1,133 @@
+{
+ "schema": 1,
+ "id": "objects",
+ "name": "Objects / catalog editing",
+ "tab": "Detect",
+ "order": 20,
+ "description": "Markers on the image, visible-only filter, interactive add/delete/separate, AI merge.",
+ "steps": [
+  {
+   "id": "mark_all",
+   "label": "Mark All",
+   "proc": "CatalogPanelMarkAll",
+   "legacy": [
+    "Objects > Mark All"
+   ],
+   "session": "NONE",
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "clear_markers",
+   "label": "Clear Markers",
+   "proc": "CatalogPanelClearMarkers",
+   "legacy": [
+    "Objects > Clear Markers"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "visible_only",
+   "label": "Show Visible Only",
+   "proc": "CatalogPanelShowVisible",
+   "legacy": [
+    "Objects > Show Visible Only"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.unrecorded"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "toggle": "catpanel(visible_mode)"
+  },
+  {
+   "id": "add_objects",
+   "label": "Add Objects (Click + A)",
+   "legacy": [
+    "Objects > Add Objects (Click + A)"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.add_object"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "toggle": "catpanel(add_objects_mode)",
+   "toggle_only": 1
+  },
+  {
+   "id": "delete_selected",
+   "label": "Delete Selected (Click + D)",
+   "proc": "CatalogPanelDeleteSelected",
+   "legacy": [
+    "Objects > Delete Selected (Click + D)"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.delete"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "separate_selected",
+   "label": "Separate Selected (Click + S)",
+   "proc": "CatalogPanelSeparateSelected",
+   "legacy": [
+    "Objects > Separate Selected (Click + S)"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.separate"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "settings": "CatalogPanelSeparateSettings",
+   "legacy_settings": [
+    "Objects > Separate Settings..."
+   ]
+  },
+  {
+   "id": "save_separated",
+   "label": "Save Separated Catalog...",
+   "proc": "CatalogPanelSeparateSave",
+   "legacy": [
+    "Objects > Save Separated Catalog..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "load_separated",
+   "label": "Load Separated Catalog...",
+   "proc": "CatalogPanelSeparateLoad",
+   "legacy": [
+    "Objects > Load Separated Catalog..."
+   ],
+   "session": "MANUAL"
+  },
+  {
+   "id": "ai_merge",
+   "label": "AI Merge...",
+   "proc": "CatalogPanelAIMerge",
+   "legacy": [
+    "Objects > AI Merge..."
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.merge"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  }
+ ],
+ "short": "Objects",
+ "primary": "mark_all",
+ "settings": "CatalogPanelSeparateSettings"
+}

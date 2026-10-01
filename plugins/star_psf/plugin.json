@@ -1,0 +1,211 @@
+{
+ "schema": 1,
+ "id": "star_psf",
+ "name": "Stars and PSF",
+ "tab": "Classify",
+ "order": 10,
+ "description": "PSF star finding, AI star/galaxy classification, PSF building (empirical, extended, simulated), PSF I/O.",
+ "steps": [
+  {
+   "id": "find_stars",
+   "label": "Find Stars",
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "psf.find_stars"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "variants": [
+    {
+     "id": "combined",
+     "label": "Combined",
+     "proc": "CatalogPanelFindStars combined",
+     "legacy": [
+      "Star(PSF) > Find Stars > Combined"
+     ]
+    },
+    {
+     "id": "class_star",
+     "label": "CLASS_STAR",
+     "proc": "CatalogPanelFindStars class_star",
+     "legacy": [
+      "Star(PSF) > Find Stars > CLASS_STAR"
+     ]
+    },
+    {
+     "id": "fwhm",
+     "label": "FWHM",
+     "proc": "CatalogPanelFindStars fwhm",
+     "legacy": [
+      "Star(PSF) > Find Stars > FWHM"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ai_star",
+   "label": "AI Star Classification",
+   "proc": "CatalogPanelStarFinder",
+   "legacy": [
+    "Star(PSF) > AI Star Classification"
+   ],
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "stars.classify",
+    "ai.run"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "show_stars",
+   "label": "Show Stars",
+   "proc": "CatalogPanelShowStars",
+   "legacy": [
+    "Star(PSF) > Show Stars"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "clear_stars",
+   "label": "Clear Stars",
+   "proc": "CatalogPanelClearStars",
+   "legacy": [
+    "Star(PSF) > Clear Stars"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "build_psf",
+   "label": "Build PSF",
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "psf.build"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "variants": [
+    {
+     "id": "median",
+     "label": "Median Stack",
+     "proc": "CatalogPanelBuildPSF median",
+     "legacy": [
+      "Star(PSF) > Build PSF > Median Stack"
+     ]
+    },
+    {
+     "id": "moffat",
+     "label": "Moffat Fit",
+     "proc": "CatalogPanelBuildPSF moffat",
+     "legacy": [
+      "Star(PSF) > Build PSF > Moffat Fit"
+     ]
+    },
+    {
+     "id": "gaussian",
+     "label": "Gaussian Fit",
+     "proc": "CatalogPanelBuildPSF gaussian",
+     "legacy": [
+      "Star(PSF) > Build PSF > Gaussian Fit"
+     ]
+    },
+    {
+     "id": "epsf",
+     "label": "ePSF",
+     "proc": "CatalogPanelBuildPSF epsf",
+     "legacy": [
+      "Star(PSF) > Build PSF > ePSF"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ext_psf",
+   "label": "Extended PSF...",
+   "proc": "CatalogPanelBuildExtendedPSF",
+   "legacy": [
+    "Star(PSF) > Build PSF > Extended PSF..."
+   ],
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "psf.build_extended"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "webbpsf",
+   "label": "WebbPSF (JWST)...",
+   "proc": "CatalogPanelSimPSFWebbPSF",
+   "legacy": [
+    "Star(PSF) > Build PSF > WebbPSF (JWST)..."
+   ],
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "psf.webbpsf"
+   ]
+  },
+  {
+   "id": "tinytim",
+   "label": "TinyTim (HST)...",
+   "proc": "CatalogPanelSimPSFTinyTim",
+   "legacy": [
+    "Star(PSF) > Build PSF > TinyTim (HST)..."
+   ],
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "psf.tinytim"
+   ]
+  },
+  {
+   "id": "view_psf",
+   "label": "View PSF",
+   "proc": "CatalogPanelViewPSF",
+   "legacy": [
+    "Star(PSF) > View PSF"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "save_psf",
+   "label": "Save PSF...",
+   "proc": "CatalogPanelSavePSF",
+   "legacy": [
+    "Star(PSF) > Save PSF..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "load_psf",
+   "label": "Load PSF...",
+   "proc": "CatalogPanelLoadPSF",
+   "legacy": [
+    "Star(PSF) > Load PSF..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "psf_settings",
+   "label": "PSF / Star Settings...",
+   "proc": "CatalogPanelStarPSFSettings",
+   "legacy": [
+    "Star(PSF) > Settings..."
+   ],
+   "session": "NONE",
+   "settings_only": 1
+  }
+ ],
+ "short": "Stars/PSF",
+ "primary": "ai_star",
+ "settings": "CatalogPanelStarPSFSettings"
+}

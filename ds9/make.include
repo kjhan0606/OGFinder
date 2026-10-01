@@ -30,6 +30,18 @@ $(LIBDIR)/library : $(SRCP:.tac=.tcl) $(SRCP:.tac=.tab.tcl) $(SRCL:.fcl=.tcl) $(
 	echo "pkg_mkIndex . *.tcl; exit" | tclsh
 	touch "$@"
 
+#--------------------------plugins
+# OGFinder plugins: <prefix>/plugins/<id>/plugin.json (+ .tcl); embedded in ds9.zip like the library.
+# (Python drivers of a plugin are found on disk: <root>/plugins/<id>/ next to bin/, see docs/plugins.md)
+
+PREQS += $(LIBDIR)/plugins
+
+$(LIBDIR)/plugins : $(wildcard $(prefix)/plugins/*/*)
+	rm -rf "$@"
+	mkdir -p "$@"
+	cp -prf $(prefix)/plugins/. "$@"/
+	touch "$@"
+
 #--------------------------support
 
 $(LIBDIR)/msgs : $(prefix)/ds9/msgs

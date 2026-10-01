@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "id": "example_hello",
+  "name": "Hello (example plugin)",
+  "short": "Hello",
+  "tab": "Measure",
+  "order": 900,
+  "example": true,
+  "description": "Example plugin: a parameter dialog, one CLI step that adds a column to the catalog, and one Tcl step. Disabled by default; enable with OGFINDER_PLUGINS=example_hello (see docs/plugins.md).",
+  "requires": {"python": []},
+  "primary": "greet",
+  "settings": "params",
+  "steps": [
+    {
+      "id": "greet",
+      "label": "Add greeting column",
+      "title": "Hello example: add a column to the catalog",
+      "cli": [
+        "{python}", "{plugin_dir}/hello.py",
+        "--catalog", "{catalog}",
+        "--greeting", "{greeting}",
+        "--min-mag", "{min-mag}",
+        {"if": "shout", "argv": ["--shout"]}
+      ],
+      "session": "AUTO",
+      "stage": "measure",
+      "needs": ["catalog"],
+      "output": {"mode": "add_columns", "columns": ["HELLO"]}
+    },
+    {
+      "id": "about",
+      "label": "Say hello (status line)",
+      "proc": "OGFHelloAbout",
+      "session": "NONE"
+    }
+  ],
+  "tcl": "hello.tcl",
+  "params": [
+    {"name": "greeting", "label": "Greeting", "type": "string", "default": "hello", "group": "Text", "help": "Text written to the new HELLO column."},
+    {"name": "min-mag", "label": "Faint limit (MAG_AUTO)", "type": "float", "default": 99, "group": "Selection", "help": "Only rows brighter than this get the greeting.", "min": 0, "max": 99, "unit": "mag"},
+    {"name": "shout", "label": "UPPERCASE", "type": "bool", "default": false, "group": "Text", "help": "Write the greeting in capitals.", "expert": true}
+  ]
+}

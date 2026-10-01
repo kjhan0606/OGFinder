@@ -1,0 +1,197 @@
+{
+ "schema": 1,
+ "id": "deconv",
+ "name": "Deconvolution",
+ "tab": "Measure",
+ "order": 40,
+ "description": "PSF deconvolution of the current image (Richardson-Lucy, Wiener, Tikhonov, CLEAN, MEM).",
+ "store": {
+  "array": "catpanel",
+  "key": "psf,param,%s",
+  "save": "CatalogPanelPSFParamSave"
+ },
+ "steps": [
+  {
+   "id": "deconvolve",
+   "label": "Deconvolve",
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "deconv.run"
+   ],
+   "needs": [
+    "image"
+   ],
+   "settings": "params",
+   "variants": [
+    {
+     "id": "rl",
+     "label": "Richardson-Lucy",
+     "proc": "CatalogPanelDeconvolve rl",
+     "legacy": [
+      "Deconvolution > Richardson-Lucy"
+     ]
+    },
+    {
+     "id": "rl_accelerated",
+     "label": "Richardson-Lucy (Accelerated)",
+     "proc": "CatalogPanelDeconvolve rl_accelerated",
+     "legacy": [
+      "Deconvolution > Richardson-Lucy (Accelerated)"
+     ]
+    },
+    {
+     "id": "rl_tv",
+     "label": "Richardson-Lucy (Regularized)",
+     "proc": "CatalogPanelDeconvolve rl_tv",
+     "legacy": [
+      "Deconvolution > Richardson-Lucy (Regularized)"
+     ]
+    },
+    {
+     "id": "wiener",
+     "label": "Wiener",
+     "proc": "CatalogPanelDeconvolve wiener",
+     "legacy": [
+      "Deconvolution > Wiener"
+     ]
+    },
+    {
+     "id": "tikhonov",
+     "label": "Tikhonov",
+     "proc": "CatalogPanelDeconvolve tikhonov",
+     "legacy": [
+      "Deconvolution > Tikhonov"
+     ]
+    },
+    {
+     "id": "clean",
+     "label": "CLEAN",
+     "proc": "CatalogPanelDeconvolve clean",
+     "legacy": [
+      "Deconvolution > CLEAN"
+     ]
+    },
+    {
+     "id": "mem",
+     "label": "Maximum Entropy (MEM)",
+     "proc": "CatalogPanelDeconvolve mem",
+     "legacy": [
+      "Deconvolution > Maximum Entropy (MEM)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "quick",
+   "label": "Quick Deconvolve (RL)",
+   "proc": "CatalogPanelQuickDeconvolve",
+   "legacy": [
+    "Deconvolution > Quick Deconvolve (RL)"
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "deconv.run"
+   ],
+   "needs": [
+    "image"
+   ]
+  }
+ ],
+ "params": [
+  {
+   "name": "rl-iterations",
+   "label": "Iterations",
+   "type": "int",
+   "default": 30,
+   "group": "Richardson-Lucy",
+   "help": "Number of Richardson-Lucy iterations.",
+   "min": 1,
+   "max": 10000
+  },
+  {
+   "name": "tv-lambda",
+   "label": "TV lambda",
+   "type": "float",
+   "default": 0.001,
+   "group": "Richardson-Lucy",
+   "help": "Total-variation regularisation weight (regularized RL).",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "name": "wiener-nsr",
+   "label": "NSR",
+   "type": "float",
+   "default": 0.01,
+   "group": "Wiener",
+   "help": "Noise-to-signal ratio of the Wiener filter.",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "name": "tikhonov-lambda",
+   "label": "Lambda",
+   "type": "float",
+   "default": 0.001,
+   "group": "Tikhonov",
+   "help": "Tikhonov regularisation weight.",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "name": "clean-gain",
+   "label": "Gain",
+   "type": "float",
+   "default": 0.1,
+   "group": "CLEAN",
+   "help": "CLEAN loop gain.",
+   "min": 0.001,
+   "max": 1
+  },
+  {
+   "name": "clean-niter",
+   "label": "Iterations",
+   "type": "int",
+   "default": 1000,
+   "group": "CLEAN",
+   "help": "Maximum number of CLEAN components.",
+   "min": 1,
+   "max": 1000000
+  },
+  {
+   "name": "clean-threshold",
+   "label": "Threshold",
+   "type": "float",
+   "default": 0.0,
+   "group": "CLEAN",
+   "help": "Stop when the residual peak is below this value (0 = off).",
+   "min": 0,
+   "expert": 1
+  },
+  {
+   "name": "mem-lambda",
+   "label": "Lambda",
+   "type": "float",
+   "default": 0.1,
+   "group": "MEM",
+   "help": "Entropy weight.",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "name": "mem-niter",
+   "label": "Iterations",
+   "type": "int",
+   "default": 100,
+   "group": "MEM",
+   "help": "Number of MEM iterations.",
+   "min": 1,
+   "max": 100000
+  }
+ ],
+ "short": "Deconvolve",
+ "primary": "quick",
+ "settings": "params"
+}

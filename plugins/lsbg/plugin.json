@@ -1,0 +1,240 @@
+{
+ "schema": 1,
+ "id": "lsbg",
+ "name": "Low-surface-brightness galaxies (LSBG)",
+ "tab": "Low-SB",
+ "order": 30,
+ "description": "LSBG pipeline: masking, background cleaning, detection, photometry, Sersic fit, filtering, SVM classification.",
+ "steps": [
+  {
+   "id": "mask",
+   "label": "1. Mask Bright Sources (shared mask)",
+   "proc": "CatalogPanelLSBGMask",
+   "legacy": [
+    "LSBG > 1. Mask Bright Sources (shared mask)"
+   ],
+   "session": "AUTO",
+   "records": [
+    "mask.auto"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "view_mask",
+   "label": "Show Masked Image",
+   "proc": "CatalogPanelLSBGViewMask",
+   "legacy": [
+    "LSBG >    Show Masked Image"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "save_mask",
+   "label": "Save Mask As...",
+   "proc": "CatalogPanelLSBGSaveMask",
+   "legacy": [
+    "LSBG >    Save Mask As..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "import_mask",
+   "label": "Import Mask...",
+   "proc": "CatalogPanelLSBGImportMask",
+   "legacy": [
+    "LSBG >    Import Mask..."
+   ],
+   "session": "MANUAL"
+  },
+  {
+   "id": "clean",
+   "label": "2. Background Model",
+   "session": "AUTO",
+   "records": [
+    "lsbg.clean"
+   ],
+   "needs": [
+    "image"
+   ],
+   "variants": [
+    {
+     "id": "sep_large",
+     "label": "SEP Large Mesh",
+     "proc": "CatalogPanelLSBGClean sep_large",
+     "legacy": [
+      "LSBG > 2. Background Model > SEP Large Mesh"
+     ]
+    },
+    {
+     "id": "polynomial",
+     "label": "Polynomial Fit",
+     "proc": "CatalogPanelLSBGClean polynomial",
+     "legacy": [
+      "LSBG > 2. Background Model > Polynomial Fit"
+     ]
+    },
+    {
+     "id": "chebyshev",
+     "label": "Chebyshev Fit",
+     "proc": "CatalogPanelLSBGClean chebyshev",
+     "legacy": [
+      "LSBG > 2. Background Model > Chebyshev Fit"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "view_clean",
+   "label": "View Cleaned Image",
+   "proc": "CatalogPanelLSBGViewClean",
+   "legacy": [
+    "LSBG >    View Cleaned Image"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "detect",
+   "label": "3. Detect LSBG Candidates",
+   "proc": "CatalogPanelLSBGDetect",
+   "legacy": [
+    "LSBG > 3. Detect LSBG Candidates"
+   ],
+   "session": "AUTO",
+   "records": [
+    "lsbg.detect"
+   ]
+  },
+  {
+   "id": "photometry",
+   "label": "4. Photometry",
+   "proc": "CatalogPanelLSBGPhotometry",
+   "legacy": [
+    "LSBG > 4. Photometry"
+   ],
+   "session": "AUTO",
+   "records": [
+    "lsbg.photometry"
+   ]
+  },
+  {
+   "id": "sersic",
+   "label": "5. Sersic Profile Fit",
+   "proc": "CatalogPanelLSBGSersic",
+   "legacy": [
+    "LSBG > 5. Sérsic Profile Fit"
+   ],
+   "session": "AUTO",
+   "records": [
+    "lsbg.sersic"
+   ]
+  },
+  {
+   "id": "filter",
+   "label": "6. Filter + Grade",
+   "proc": "CatalogPanelLSBGFilter",
+   "legacy": [
+    "LSBG > 6. Filter + Grade"
+   ],
+   "session": "AUTO",
+   "records": [
+    "lsbg.filter"
+   ]
+  },
+  {
+   "id": "svm",
+   "label": "7. SVM Classify",
+   "proc": "CatalogPanelLSBGSVMClassify",
+   "legacy": [
+    "LSBG > 7. SVM Classify"
+   ],
+   "session": "AUTO",
+   "records": [
+    "lsbg.svm-classify"
+   ]
+  },
+  {
+   "id": "save_cat",
+   "label": "Save Catalog...",
+   "proc": "CatalogPanelSaveCatalog",
+   "legacy": [
+    "LSBG > Save Catalog..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "catalog.save"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "load_cat",
+   "label": "Load Catalog...",
+   "proc": "CatalogPanelLoadCatalog",
+   "legacy": [
+    "LSBG > Load Catalog..."
+   ],
+   "session": "MANUAL",
+   "records": [
+    "catalog.load"
+   ]
+  },
+  {
+   "id": "forced",
+   "label": "8. Forced Photometry (Multi-Band)",
+   "proc": "CatalogPanelLSBGForcedPhot",
+   "legacy": [
+    "LSBG > 8. Forced Photometry (Multi-Band)"
+   ],
+   "session": "MANUAL",
+   "records": [
+    "lsbg.forced"
+   ]
+  },
+  {
+   "id": "run_all",
+   "label": "Run Full Pipeline",
+   "proc": "CatalogPanelLSBGRunAll",
+   "legacy": [
+    "LSBG > Run Full Pipeline"
+   ],
+   "session": "AUTO",
+   "records": [
+    "lsbg.run"
+   ]
+  },
+  {
+   "id": "export_script",
+   "label": "Export Script...",
+   "proc": "CatalogPanelLSBGExportScript",
+   "legacy": [
+    "LSBG > Export Script..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "import_script",
+   "label": "Import Script...",
+   "proc": "CatalogPanelLSBGImportScript",
+   "legacy": [
+    "LSBG > Import Script..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "lsbg_settings",
+   "label": "LSBG Settings...",
+   "proc": "CatalogPanelLSBGSettings",
+   "legacy": [
+    "LSBG > Settings..."
+   ],
+   "session": "NONE",
+   "settings_only": 1
+  }
+ ],
+ "short": "LSBG",
+ "primary": "run_all",
+ "settings": "CatalogPanelLSBGSettings"
+}

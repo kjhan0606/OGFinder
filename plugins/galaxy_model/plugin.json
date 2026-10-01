@@ -1,0 +1,67 @@
+{
+ "schema": 1,
+ "id": "galaxy_model",
+ "name": "Galaxy classification",
+ "tab": "Classify",
+ "order": 20,
+ "description": "AI morphology classification and galaxy model fits.",
+ "steps": [
+  {
+   "id": "ai_morph",
+   "label": "AI Morphology Classification",
+   "proc": "CatalogPanelGalaxyMorphology",
+   "legacy": [
+    "Galaxy Model > AI Morphology Classification"
+   ],
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "galaxy.morphology",
+    "ai.run"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "fit",
+   "label": "Fit Galaxy Model",
+   "session": "NONE",
+   "needs": [
+    "catalog"
+   ],
+   "variants": [
+    {
+     "id": "elliptical",
+     "label": "Elliptical",
+     "proc": "CatalogPanelGalaxyFit elliptical",
+     "legacy": [
+      "Galaxy Model > Fit Elliptical Model"
+     ]
+    },
+    {
+     "id": "spiral",
+     "label": "Spiral",
+     "proc": "CatalogPanelGalaxyFit spiral",
+     "legacy": [
+      "Galaxy Model > Fit Spiral Model"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "params",
+   "label": "Extract Parameters",
+   "proc": "CatalogPanelGalaxyParams",
+   "legacy": [
+    "Galaxy Model > Extract Parameters"
+   ],
+   "session": "NONE",
+   "needs": [
+    "catalog"
+   ]
+  }
+ ],
+ "short": "Galaxies",
+ "primary": "ai_morph"
+}

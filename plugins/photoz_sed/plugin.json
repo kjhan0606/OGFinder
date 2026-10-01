@@ -1,0 +1,46 @@
+{
+ "schema": 1,
+ "id": "photoz_sed",
+ "name": "Photo-z and SED",
+ "tab": "Measure",
+ "order": 30,
+ "description": "Photometric redshift and SED fitting (local models or external AI services).",
+ "steps": [
+  {
+   "id": "photoz",
+   "label": "Photo-z (AI)...",
+   "proc": "CatalogPanelPhotoZ",
+   "legacy": [
+    "Analysis > Photo-z (AI)..."
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.photo_z",
+    "ai.run"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "sed",
+   "label": "SED Fitting (AI)...",
+   "proc": "CatalogPanelSEDFit",
+   "legacy": [
+    "Analysis > SED Fitting (AI)..."
+   ],
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.sed_fit",
+    "ai.run"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  }
+ ],
+ "short": "Photo-z/SED",
+ "primary": "photoz"
+}

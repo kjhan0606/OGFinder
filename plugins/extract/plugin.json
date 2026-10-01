@@ -1,0 +1,249 @@
+{
+ "schema": 1,
+ "id": "extract",
+ "name": "Source extraction",
+ "tab": "Detect",
+ "order": 10,
+ "description": "SExtractor-compatible detection (ds9_sextract), dual-image mode, catalog trimming.",
+ "requires": {
+  "binaries": [
+   "ds9_sextract"
+  ]
+ },
+ "store": {
+  "array": "catpanel",
+  "key": "param,%s",
+  "save": "CatalogPanelParamSave"
+ },
+ "steps": [
+  {
+   "id": "extract",
+   "label": "Extract",
+   "proc": "CatalogPanelExtract",
+   "legacy": [
+    "SExtractor > Extract"
+   ],
+   "session": "AUTO",
+   "stage": "detect",
+   "records": [
+    "extract"
+   ],
+   "needs": [
+    "image"
+   ],
+   "settings": "params"
+  },
+  {
+   "id": "dual",
+   "label": "Dual-Image Extract...",
+   "proc": "CatalogPanelDualExtract",
+   "legacy": [
+    "SExtractor > Dual-Image Extract..."
+   ],
+   "session": "AUTO",
+   "stage": "detect",
+   "records": [
+    "analysis.dual_extract"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "trim",
+   "label": "Trim catalog...",
+   "proc": "CatalogPanelTrimDialog",
+   "legacy": [
+    "SExtractor > Trim..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "catalog.trim"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  }
+ ],
+ "params": [
+  {
+   "name": "detect-thresh",
+   "label": "Detect Threshold",
+   "type": "float",
+   "default": 1.5,
+   "group": "Detection",
+   "help": "Detection threshold in sigma above the local background.",
+   "min": 0.1,
+   "max": 100,
+   "unit": "sigma"
+  },
+  {
+   "name": "detect-minarea",
+   "label": "Detect Min Area",
+   "type": "int",
+   "default": 5,
+   "group": "Detection",
+   "help": "Minimum number of connected pixels above threshold.",
+   "min": 1,
+   "max": 100000,
+   "unit": "pix"
+  },
+  {
+   "name": "deblend-nthresh",
+   "label": "Deblend NThresh",
+   "type": "int",
+   "default": 32,
+   "group": "Detection",
+   "help": "Number of deblending sub-thresholds.",
+   "min": 1,
+   "max": 64
+  },
+  {
+   "name": "deblend-mincont",
+   "label": "Deblend MinCont",
+   "type": "float",
+   "default": 0.005,
+   "group": "Detection",
+   "help": "Minimum contrast parameter for deblending.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "conv-filter",
+   "label": "Conv Filter",
+   "type": "choice",
+   "default": "default",
+   "group": "Detection",
+   "help": "Convolution filter applied before detection.",
+   "choices": [
+    "default",
+    "gauss5x5",
+    "mexhat",
+    "tophat"
+   ]
+  },
+  {
+   "name": "phot-aperture",
+   "label": "Phot Aperture (diam)",
+   "type": "float",
+   "default": 5.0,
+   "group": "Photometry",
+   "help": "Diameter of the first fixed aperture.",
+   "min": 0.1,
+   "max": 1000,
+   "unit": "pix"
+  },
+  {
+   "name": "phot-aperture-2",
+   "label": "Phot Aperture 2",
+   "type": "float",
+   "default": 4.0,
+   "group": "Photometry",
+   "help": "Second aperture diameter.",
+   "min": 0.1,
+   "max": 1000,
+   "unit": "pix",
+   "expert": 1
+  },
+  {
+   "name": "phot-aperture-3",
+   "label": "Phot Aperture 3",
+   "type": "float",
+   "default": 6.0,
+   "group": "Photometry",
+   "help": "Third aperture diameter.",
+   "min": 0.1,
+   "max": 1000,
+   "unit": "pix",
+   "expert": 1
+  },
+  {
+   "name": "phot-aperture-5",
+   "label": "Phot Aperture 5",
+   "type": "float",
+   "default": 10.0,
+   "group": "Photometry",
+   "help": "Fifth aperture diameter.",
+   "min": 0.1,
+   "max": 1000,
+   "unit": "pix",
+   "expert": 1
+  },
+  {
+   "name": "mag-zeropoint",
+   "label": "Mag Zeropoint",
+   "type": "float",
+   "default": 25.0,
+   "group": "Image",
+   "help": "Magnitude zeropoint of the image."
+  },
+  {
+   "name": "gain",
+   "label": "Gain",
+   "type": "float",
+   "default": 0.0,
+   "group": "Image",
+   "help": "Detector gain (0 = ignore).",
+   "min": 0
+  },
+  {
+   "name": "pixel-scale",
+   "label": "Pixel Scale",
+   "type": "float",
+   "default": 1.0,
+   "group": "Image",
+   "help": "Pixel scale in arcsec/pixel.",
+   "min": 0.0001,
+   "max": 100,
+   "unit": "arcsec/pix"
+  },
+  {
+   "name": "seeing-fwhm",
+   "label": "Seeing FWHM",
+   "type": "float",
+   "default": 3.0,
+   "group": "Image",
+   "help": "Seeing FWHM in pixels (used for CLASS_STAR).",
+   "min": 0.1,
+   "max": 100,
+   "unit": "pix"
+  },
+  {
+   "name": "back-size",
+   "label": "Back Size",
+   "type": "int",
+   "default": 64,
+   "group": "Background",
+   "help": "Background mesh size.",
+   "min": 8,
+   "max": 4096,
+   "unit": "pix",
+   "expert": 1
+  },
+  {
+   "name": "back-filtersize",
+   "label": "Back Filter Size",
+   "type": "int",
+   "default": 3,
+   "group": "Background",
+   "help": "Median filter size on the background mesh.",
+   "min": 1,
+   "max": 15,
+   "expert": 1
+  },
+  {
+   "name": "n-workers",
+   "label": "Parallel Workers (0=auto)",
+   "type": "int",
+   "default": 0,
+   "group": "Performance",
+   "help": "Worker threads for the Python steps (0 = automatic).",
+   "min": 0,
+   "max": 256,
+   "expert": 1
+  }
+ ],
+ "short": "Extract",
+ "primary": "extract",
+ "settings": "params"
+}
