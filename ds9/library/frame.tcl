@@ -901,7 +901,13 @@ proc Button1Frame {which x y} {
 		set imarker(motion) none
 		set imarker(handle) -1
 
-		GotoFrame $which
+		# OGFinder: a click on a catalog marker in another tile selects its table row
+		if {[catch {OGFTileClick $which $x $y} _tc] || !$_tc} {
+		    GotoFrame $which
+		} else {
+		    set ds9(nonepan) 0
+		    set ds9(none_hit) 1
+		}
 	    }
 	}
 	pointer -

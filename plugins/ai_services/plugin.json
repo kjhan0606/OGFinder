@@ -1,0 +1,49 @@
+{
+ "schema": 1,
+ "id": "ai_services",
+ "name": "AI services",
+ "tab": "Results",
+ "order": 20,
+ "description": "Provider-agnostic bridge to external AI services (docs/ai_services.md).",
+ "network": 1,
+ "steps": [
+  {
+   "id": "registry",
+   "label": "Service Registry...",
+   "proc": "OGFAIRegistry",
+   "legacy": [
+    "Analysis > AI Services > Service Registry..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "run",
+   "label": "Run Task on Catalog...",
+   "proc": "OGFAIRunDialog",
+   "legacy": [
+    "Analysis > AI Services > Run Task on Catalog..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "ai.run"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "network": 1
+  },
+  {
+   "id": "log",
+   "label": "Show Last Run Log",
+   "proc": "OGFAIShowLog",
+   "legacy": [
+    "Analysis > AI Services > Show Last Run Log"
+   ],
+   "session": "NONE"
+  }
+ ],
+ "short": "AI Services",
+ "primary": "run",
+ "settings": "OGFAIRegistry",
+ "tcl": "ai.tcl"
+}

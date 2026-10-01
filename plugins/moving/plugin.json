@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "id": "moving",
+  "name": "Moving objects and transients",
+  "tab": "Time-domain",
+  "order": 10,
+  "description": "Multi-epoch asteroid / transient pipeline (reference fetch, alignment, ZOGY differencing, tracklets, orbit fit).",
+  "network": 0,
+  "steps": [
+    {
+      "id": "fetch",
+      "label": "Fetch Reference...",
+      "proc": "OGFMovFetchDialog",
+      "legacy": [
+        "Moving Objects > Fetch Reference..."
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.fetch"
+      ]
+    },
+    {
+      "id": "align",
+      "label": "Align",
+      "proc": "OGFMovAlign",
+      "legacy": [
+        "Moving Objects > Align"
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.align"
+      ]
+    },
+    {
+      "id": "difference",
+      "label": "Difference",
+      "proc": "OGFMovDifference",
+      "legacy": [
+        "Moving Objects > Difference"
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.difference"
+      ]
+    },
+    {
+      "id": "detect",
+      "label": "Detect",
+      "proc": "OGFMovDetect",
+      "legacy": [
+        "Moving Objects > Detect"
+      ],
+      "session": "NONE"
+    },
+    {
+      "id": "link",
+      "label": "Link Tracklets",
+      "proc": "OGFMovLink",
+      "legacy": [
+        "Moving Objects > Link Tracklets"
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.link"
+      ]
+    },
+    {
+      "id": "identify",
+      "label": "Identify Known Objects",
+      "proc": "OGFMovIdentify",
+      "legacy": [
+        "Moving Objects > Identify Known Objects"
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.identify"
+      ],
+      "network": 1
+    },
+    {
+      "id": "orbit",
+      "label": "Orbit Fit...",
+      "proc": "OGFMovOrbitDialog",
+      "legacy": [
+        "Moving Objects > Orbit Fit..."
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.orbit"
+      ]
+    },
+    {
+      "id": "transients",
+      "label": "Transient Candidates...",
+      "proc": "OGFMovTransients",
+      "legacy": [
+        "Moving Objects > Transient Candidates..."
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.transients"
+      ]
+    },
+    {
+      "id": "lightcurve",
+      "label": "Light Curve",
+      "proc": "OGFMovLightCurve",
+      "legacy": [
+        "Moving Objects > Light Curve"
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.lightcurve"
+      ]
+    },
+    {
+      "id": "export",
+      "label": "Export...",
+      "proc": "OGFMovExport",
+      "legacy": [
+        "Moving Objects > Export..."
+      ],
+      "session": "AUTO",
+      "records": [
+        "moving.export"
+      ]
+    },
+    {
+      "id": "select",
+      "label": "Select Exposures...",
+      "proc": "OGFMovSelectFiles",
+      "legacy": [
+        "Moving Objects > Select Exposures..."
+      ],
+      "session": "NONE"
+    },
+    {
+      "id": "workdir",
+      "label": "Work Directory...",
+      "proc": "OGFMovWorkdir",
+      "legacy": [
+        "Moving Objects > Work Directory..."
+      ],
+      "session": "NONE"
+    },
+    {
+      "id": "details",
+      "label": "Time-domain details...",
+      "proc": "OGFMovDetails",
+      "legacy": [
+        "Moving Objects > Show Results Table (replaced: table is the main table; orbit / light curve in one details window)"
+      ],
+      "session": "NONE"
+    }
+  ],
+  "short": "Moving",
+  "primary": "link",
+  "tcl": "moving.tcl",
+  "init": "OGFMovingInit"
+}

@@ -25,11 +25,13 @@ proc ai_session {} {
     set n0 [nrows]; set c0 [ncols]
     vlog "extract: $n0 rows, $c0 cols"
     # ---- menu structure
-    set am $ds9(catalog_frame).menubar.analysis.m
-    set idx [$am index "AI Services"]
-    set sub [$am entrycget $idx -menu]
+    # AI Services plugin menu (workflow UI: Results tab, chip "AI Services")
+    set sub [OGFUIPluginMenu ai_services]
     set labels {}
-    for {set i 0} {$i <= [$sub index end]} {incr i} {lappend labels [$sub entrycget $i -label]}
+    for {set i 0} {$i <= [$sub index end]} {incr i} {
+	if {[$sub type $i] in {separator tearoff}} continue
+	lappend labels [$sub entrycget $i -label]
+    }
     vlog "menu AI Services entries: $labels"
     # ---- registry dialog
     OGFAIRegistry

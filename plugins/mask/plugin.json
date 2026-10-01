@@ -1,0 +1,178 @@
+{
+ "schema": 1,
+ "id": "mask",
+ "name": "Mask",
+ "tab": "Low-SB",
+ "order": 10,
+ "description": "One shared bit-flag mask per image: automatic masking, region editing, overlay, import/export.",
+ "steps": [
+  {
+   "id": "auto",
+   "label": "Auto Mask...",
+   "proc": "CatalogPanelMaskAuto",
+   "legacy": [
+    "Mask > Auto Mask..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "mask.auto"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "overlay",
+   "label": "Show Mask Overlay",
+   "proc": "CatalogPanelMaskToggleOverlay",
+   "legacy": [
+    "Mask > Show Mask Overlay"
+   ],
+   "session": "NONE",
+   "toggle": "ogfmask(overlay)"
+  },
+  {
+   "id": "overlay_style",
+   "label": "Overlay Colour/Transparency...",
+   "proc": "CatalogPanelMaskOverlaySettings",
+   "legacy": [
+    "Mask > Overlay Colour/Transparency..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "edit",
+   "label": "Edit Mask",
+   "session": "MANUAL",
+   "records": [
+    "mask.add",
+    "mask.erase",
+    "mask.grow",
+    "mask.shrink",
+    "mask.invert",
+    "mask.clear",
+    "mask.undo",
+    "mask.redo"
+   ],
+   "needs": [
+    "image"
+   ],
+   "variants": [
+    {
+     "id": "add",
+     "label": "Add Regions to Mask",
+     "proc": "CatalogPanelMaskRegions 0",
+     "legacy": [
+      "Mask > Add Regions to Mask"
+     ]
+    },
+    {
+     "id": "erase",
+     "label": "Erase Regions from Mask",
+     "proc": "CatalogPanelMaskRegions 1",
+     "legacy": [
+      "Mask > Erase Regions from Mask"
+     ]
+    },
+    {
+     "id": "grow",
+     "label": "Grow...",
+     "proc": "CatalogPanelMaskGrow 0",
+     "legacy": [
+      "Mask > Grow..."
+     ]
+    },
+    {
+     "id": "shrink",
+     "label": "Shrink...",
+     "proc": "CatalogPanelMaskGrow 1",
+     "legacy": [
+      "Mask > Shrink..."
+     ]
+    },
+    {
+     "id": "invert",
+     "label": "Invert",
+     "proc": "CatalogPanelMaskSimple invert",
+     "legacy": [
+      "Mask > Invert"
+     ]
+    },
+    {
+     "id": "clear",
+     "label": "Clear Mask",
+     "proc": "CatalogPanelMaskSimple clear",
+     "legacy": [
+      "Mask > Clear Mask"
+     ]
+    },
+    {
+     "id": "undo",
+     "label": "Undo",
+     "proc": "CatalogPanelMaskSimple undo",
+     "legacy": [
+      "Mask > Undo"
+     ]
+    },
+    {
+     "id": "redo",
+     "label": "Redo",
+     "proc": "CatalogPanelMaskSimple redo",
+     "legacy": [
+      "Mask > Redo"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "save_as",
+   "label": "Save Mask As...",
+   "proc": "CatalogPanelMaskSaveAs",
+   "legacy": [
+    "Mask > Save As..."
+   ],
+   "session": "AUTO",
+   "records": [
+    "mask.export"
+   ]
+  },
+  {
+   "id": "import",
+   "label": "Import Mask...",
+   "proc": "CatalogPanelMaskImport",
+   "legacy": [
+    "Mask > Import..."
+   ],
+   "session": "MANUAL",
+   "records": [
+    "mask.import"
+   ]
+  },
+  {
+   "id": "masked",
+   "label": "Show Masked Image",
+   "proc": "CatalogPanelMaskShowMasked",
+   "legacy": [
+    "Mask > Show Masked Image"
+   ],
+   "session": "AUTO",
+   "records": [
+    "mask.masked"
+   ]
+  },
+  {
+   "id": "stats",
+   "label": "Mask Statistics",
+   "proc": "CatalogPanelMaskStats",
+   "legacy": [
+    "Mask > Statistics"
+   ],
+   "session": "NONE"
+  }
+ ],
+ "short": "Mask",
+ "primary": "auto",
+ "settings": "CatalogPanelMaskOverlaySettings",
+ "tcl": "mask.tcl",
+ "required": 1
+}

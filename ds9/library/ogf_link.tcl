@@ -32,8 +32,9 @@ proc OGFCacheBuild {} {
     set catpanel(cache,dirty) 0
     foreach k {num x y sa sb th mag} {set catcache($k) {}}
     set catcache(n) 0
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
-    set lines [split $catpanel(alldata) \n]
+    set _tsv [OGFViewTSV]
+    if {$_tsv eq {}} return
+    set lines [split $_tsv \n]
     set headers [split [lindex $lines 0] "\t"]
     set cx -1; set cy -1; set ca -1; set cb -1; set ct -1; set ci -1
     set cn -1; set cm -1
@@ -289,6 +290,7 @@ proc CatalogPanelClearSelection {} {
 	catch {$fr marker catalog sextract_sel delete}
 	catch {$fr marker catalog sextract_msel delete}
     }
+    catch {OGFTDClearSel}
     OGFSetSelBase {No source selected}
 }
 
@@ -376,7 +378,7 @@ proc CatalogPanelStepKey {dir {require_sel 0}} {
     global catpanel
     if {![info exists catpanel(tbl)]} {return 0}
     if {[info exists catpanel(ai,active)] && $catpanel(ai,active)} {return 0}
-    if {$catpanel(alldata) eq {}} {return 0}
+    if {[OGFViewTSV] eq {}} {return 0}
     if {$require_sel && [llength $catpanel(sel,nums)] == 0} {return 0}
     set nr [expr {[$catpanel(tbl) cget -rows] - 1}]
     if {$nr < 1} {return 0}

@@ -1,8 +1,10 @@
-#  OGFinder: "Moving Objects" menu (asteroids / moving objects / static transients in multi-epoch imaging).
-#  All computation is done by ds9_moving.py (package <root>/moving); this file only provides the menu, dialogs,
-#  the result table, region markers and the orbit-fit window.  Every computational step is ONE argv list with explicit
-#  inputs/outputs, recorded through OGFSessLog when the session recorder exists.
-#  See docs/moving_objects.md
+#  OGFinder plugin "moving": asteroids / moving objects / static transients in multi-epoch imaging.
+#  All computation is done by ds9_moving.py (package <root>/moving); this file provides the step procs, the
+#  Fetch Reference dialog, the feed of the shared time-domain table (kinds moving / transient / detection, see
+#  ogf_td.tcl) and the single "Time-domain details" window (Orbit and Light curve tabs).  Every computational step
+#  is ONE argv list with explicit inputs/outputs, recorded through OGFSessLog when the session recorder exists
+#  (unchanged by the move into the plugin system).
+#  See docs/moving_objects.md and docs/plugins.md
 
 package provide DS9 1.0
 
@@ -11,32 +13,20 @@ proc OGFMovingInit {} {
     array set ogfmov {
 	workdir {} files {} ra {} dec {} radius 1.0 provider mast collections HST,JWST,PS1
 	download 0 filter {} localdir {} snr 8.0 tol 1.0 halfpix 700 status {} busy 0 catalog {}
-	tracklet 0 designation {} mjdmin {} mjdmax {} minep 2
+	tracklet 0 designation {} mjdmin {} mjdmax {} minep 2 shownegative 0 lcmode mag lc {} orbitlabel {} candcols {} candrows {} detwin .ogftd selkind {} selected {}
     }
     set ogfmov(workdir) [file join [file normalize ~] .ds9 moving_work]
-}
-
-# ---------------------------------------------------------------- menu
-# Single top-level menu "Moving Objects", entries in workflow order.
-proc OGFMovingMenu {bar} {
-    set mb $bar.moving
-    ttk::menubutton $mb -text "Moving Objects" -menu $mb.m -style CatMenu.TMenubutton
-    menu $mb.m -tearoff 0
-    $mb.m add command -label "Fetch Reference..." -command OGFMovFetchDialog
-    $mb.m add command -label "Align" -command OGFMovAlign
-    $mb.m add command -label "Difference" -command OGFMovDifference
-    $mb.m add command -label "Detect" -command OGFMovDetect
-    $mb.m add command -label "Link Tracklets" -command OGFMovLink
-    $mb.m add command -label "Identify Known Objects" -command OGFMovIdentify
-    $mb.m add command -label "Orbit Fit..." -command OGFMovOrbitDialog
-    $mb.m add command -label "Transient Candidates..." -command OGFMovTransients
-    $mb.m add command -label "Light Curve" -command OGFMovLightCurve
-    $mb.m add command -label "Export..." -command OGFMovExport
-    $mb.m add separator
-    $mb.m add command -label "Select Exposures..." -command OGFMovSelectFiles
-    $mb.m add command -label "Show Results Table" -command OGFMovTable
-    $mb.m add command -label "Work Directory..." -command OGFMovWorkdir
-    return $mb
+    # the three row kinds of the time-domain table
+    ::ogf::td::register_kind moving -label Moving -prefix M -color magenta -order 10 \
+	-columns {n rate_arcsec_h pa_deg rms_arcsec score status overlap overlap_id} -decorate OGFMovDecorateMovers \
+	-point {point=circle 7}
+    ::ogf::td::register_kind transient -label Transients -prefix T -color red -order 20 \
+	-columns {n_det files snr_max host_id host_sep host_z offset_re heuristic} -decorate OGFMovDecorateTransients \
+	-point {point=cross 12}
+    ::ogf::td::register_kind detection -label Detections -prefix D -color white -order 30 -show_in_all 0 \
+	-columns {ex chip cls snr sign flux_e_s elong a_pix} -point {point=boxcircle 8}
+    ::ogf::td::on_select OGFMovOnSelect
+    # results that exist in the work directory from an earlier session are shown on request (no auto-load)
 }
 
 proc OGFMovScript {} {
@@ -47,7 +37,7 @@ proc OGFMovStatus {msg} {
     global ogfmov catpanel
     set ogfmov(status) $msg
     catch {set catpanel(status) "Moving: $msg"}
-    catch {.ogfmovtbl.st configure -text $msg}
+    catch {$::ogfmov(detwin).st configure -text $msg}
     update idletasks
 }
 
@@ -142,7 +132,7 @@ proc OGFMovFetchDialog {} {
     global ogfmov
     OGFMovDefaultPos
     set w .ogfmovfetch
-    catch {destroy $w}
+    if {[winfo exists $w]} {raise $w; return}
     toplevel $w
     wm title $w "Moving Objects: Fetch Reference"
     wm transient $w .
@@ -172,7 +162,12 @@ proc OGFMovFetchDialog {} {
     ttk::button $w.bb.ok -text Fetch -command {OGFMovFetchRun}
     ttk::button $w.bb.c -text Close -command {destroy .ogfmovfetch}
     pack $w.bb.ok $w.bb.c -side left -padx 4
-    grid $w.bb -row $r -column 0 -columnspan 2 -pady 6
+    grid $w.bb -row $r -column 0 -columnspan 2 -pady 6; incr r
+    # reference candidates found by the fetch are listed in this dialog (they are observations, not sky objects)
+    ttk::treeview $w.cand -show headings -height 6 -selectmode browse
+    grid $w.cand -row $r -column 0 -columnspan 2 -sticky we -padx 8 -pady {0 8}
+    grid columnconfigure $w 1 -weight 1
+    if {$ogfmov(candrows) ne {}} {OGFMovFillCandidates}
 }
 
 proc OGFMovFetchRun {} {
@@ -212,38 +207,8 @@ proc OGFMovReadTSV {fn} {
     return [list $cols $rows]
 }
 
-# ---------------------------------------------------------------- results table (own window)
-proc OGFMovTable {} {
-    set w .ogfmovtbl
-    if {![winfo exists $w]} {
-	toplevel $w
-	wm title $w "Moving Objects: results"
-	wm geometry $w 760x340
-	ttk::label $w.st -text {} -anchor w
-	ttk::treeview $w.t -show headings -selectmode browse -yscrollcommand [list $w.sb set]
-	ttk::scrollbar $w.sb -command [list $w.t yview]
-	pack $w.st -side bottom -fill x
-	pack $w.sb -side right -fill y
-	pack $w.t -side left -fill both -expand 1
-	bind $w.t <<TreeviewSelect>> OGFMovRowSelected
-	bind $w.t <Double-Button-1> OGFMovRowSelected
-    }
-    raise $w
-    return $w
-}
-
-proc OGFMovFillTable {kind cols rows} {
-    global ogfmov
-    set w [OGFMovTable]
-    set ogfmov(tblkind) $kind
-    $w.t delete [$w.t children {}]
-    $w.t configure -columns $cols
-    foreach c $cols {$w.t heading $c -text $c; $w.t column $c -width 80 -anchor w}
-    foreach r $rows {$w.t insert {} end -values $r}
-    wm title $w "Moving Objects: $kind ([llength $rows])"
-}
-
 proc OGFMovShowCandidates {fn} {
+    global ogfmov
     lassign [OGFMovReadTSV $fn] cols rows
     set keep {provider obs_id instrument filter texp mjd epoch pixscale depth proposal kind}
     set idx {}
@@ -251,93 +216,161 @@ proc OGFMovShowCandidates {fn} {
     set rr {}
     foreach r $rows {set x {}; foreach i $idx {lappend x [lindex $r $i]}; lappend rr $x}
     set cc {}; foreach i $idx {lappend cc [lindex $cols $i]}
-    OGFMovFillTable "reference candidates" $cc $rr
+    set ogfmov(candcols) $cc; set ogfmov(candrows) $rr
+    OGFMovFillCandidates
+    OGFMovStatus "[llength $rr] reference candidates"
+}
+
+proc OGFMovFillCandidates {} {
+    global ogfmov
+    set w .ogfmovfetch
+    if {![winfo exists $w]} {OGFMovFetchDialog; return}
+    set t $w.cand
+    $t delete [$t children {}]
+    $t configure -columns $ogfmov(candcols)
+    foreach c $ogfmov(candcols) {$t heading $c -text $c; $t column $c -width 70 -anchor w}
+    foreach r $ogfmov(candrows) {$t insert {} end -values $r}
+}
+
+# ---------------------------------------------------------------- results -> the shared time-domain table
+proc OGFMovFmt {cols i v} {
+    if {[string is double -strict $v] && [lindex $cols $i] ni {id n ex sign n_det files}} {return [format %.5g $v]}
+    return $v
+}
+
+# {ra dec ra dec ...} per mover id from movers.reg ("# vector(...) text={M<id> ...}" followed by the circles)
+proc OGFMovTracks {fn} {
+    set tr [dict create]
+    if {![file exists $fn]} {return $tr}
+    set fd [open $fn r]; set txt [read $fd]; close $fd
+    set id {}
+    foreach l [split $txt \n] {
+	if {[regexp {text=\{M(\d+) } $l -> id]} continue
+	if {$id ne {} && [regexp {^circle\(([-0-9.]+),([-0-9.]+),} $l -> ra de]} {dict lappend tr $id $ra $de}
+    }
+    return $tr
 }
 
 proc OGFMovShowMovers {} {
-    set fn [file join [OGFMovWork] movers.tsv]
-    lassign [OGFMovReadTSV $fn] cols rows
-    set keep {id status n rate_arcsec_h pa_deg rms_arcsec score ra dec}
-    set idx {}
-    foreach k $keep {set i [lsearch $cols $k]; if {$i >= 0} {lappend idx $i}}
+    set wd [OGFMovWork]
+    lassign [OGFMovReadTSV [file join $wd movers.tsv]] cols rows
+    set tr [OGFMovTracks [file join $wd movers.reg]]
     set rr {}
     foreach r $rows {
 	set x {}
-	foreach i $idx {
-	    set v [lindex $r $i]
-	    if {[string is double -strict $v] && [lindex $cols $i] ni {id n}} {set v [format %.4g $v]}
-	    lappend x $v
-	}
+	set i 0
+	foreach v $r {lappend x [OGFMovFmt $cols $i $v]; incr i}
+	set id [lindex $r [lsearch $cols id]]
+	lappend x [expr {[dict exists $tr $id] ? [dict get $tr $id] : {}}]
 	lappend rr $x
     }
-    set cc {}; foreach i $idx {lappend cc [lindex $cols $i]}
-    OGFMovFillTable movers $cc $rr
-    OGFMovLoadRegions [file join [OGFMovWork] movers.reg]
+    ::ogf::td::set_rows moving [concat $cols _pos] $rr 1
+    OGFMovStatus "[llength $rr] moving-object tracklets"
 }
 
 proc OGFMovShowTransients {} {
-    set fn [file join [OGFMovWork] transients.tsv]
-    lassign [OGFMovReadTSV $fn] cols rows
-    set keep {id ra dec n_det files snr_max host_sep_arcsec offset_re host_z heuristic}
-    set idx {}
-    foreach k $keep {set i [lsearch $cols $k]; if {$i >= 0} {lappend idx $i}}
+    lassign [OGFMovReadTSV [file join [OGFMovWork] transients.tsv]] cols rows
     set rr {}
     foreach r $rows {
 	set x {}
-	foreach i $idx {set v [lindex $r $i]; if {[string is double -strict $v] && [lindex $cols $i] ni {id n_det files}} {set v [format %.5g $v]}; lappend x $v}
+	set i 0
+	foreach v $r {lappend x [OGFMovFmt $cols $i $v]; incr i}
 	lappend rr $x
     }
-    set cc {}; foreach i $idx {lappend cc [lindex $cols $i]}
-    OGFMovFillTable transients $cc $rr
-    OGFMovLoadRegions [file join [OGFMovWork] transients.reg]
+    ::ogf::td::set_rows transient $cols $rr 1
+    OGFMovStatus "[llength $rr] transient candidates"
 }
 
 proc OGFMovShowDetections {} {
     global ogfmov
-    set fn [file join [OGFMovWork] detections.tsv]
-    lassign [OGFMovReadTSV $fn] cols rows
+    lassign [OGFMovReadTSV [file join [OGFMovWork] detections.tsv]] cols rows
+    set ci [lsearch $cols snr]; set sg [lsearch $cols sign]; set fi [lsearch $cols flux_e_s]; set zi [lsearch $cols zp_ab]
     set keep {id ex chip cls snr sign flux_e_s elong a_pix ra dec}
     set idx {}
     foreach k $keep {set i [lsearch $cols $k]; if {$i >= 0} {lappend idx $i}}
-    set ci [lsearch $cols snr]; set cl [lsearch $cols cls]; set sg [lsearch $cols sign]
     set rr {}
     foreach r $rows {
 	if {[lindex $r $sg] < 0 && !$ogfmov(shownegative)} continue
 	if {[lindex $r $ci] < $ogfmov(snr)} continue
 	set x {}
-	foreach i $idx {set v [lindex $r $i]; if {[string is double -strict $v] && [lindex $cols $i] ni {id ex sign}} {set v [format %.4g $v]}; lappend x $v}
+	foreach i $idx {lappend x [OGFMovFmt $cols $i [lindex $r $i]]}
+	set mag {}
+	set f [lindex $r $fi]; set z [lindex $r $zi]
+	if {[string is double -strict $f] && $f > 0 && [string is double -strict $z]} {set mag [format %.3f [expr {$z - 2.5*log10($f)}]]}
+	lappend x $mag
 	lappend rr $x
     }
     set cc {}; foreach i $idx {lappend cc [lindex $cols $i]}
-    OGFMovFillTable detections $cc $rr
+    lappend cc mag
+    ::ogf::td::set_rows detection $cc $rr 1
     return [llength $rr]
 }
 
-proc OGFMovRowSelected {} {
-    global ogfmov current
-    set w .ogfmovtbl
-    set sel [$w.t selection]
-    if {$sel eq {}} return
-    set cols [$w.t cget -columns]
-    set vals [$w.t item [lindex $sel 0] -values]
-    set ra {}; set dec {}
-    foreach c $cols v $vals {
-	if {$c eq "ra"} {set ra $v}; if {$c eq "dec"} {set dec $v}
-	if {$c eq "id"} {set id $v}
+# computed columns -----------------------------------------------------------
+# transients: nearest galaxy of the CURRENT galaxy catalog within 5 arcsec (empty without a catalog)
+proc OGFMovDecorateTransients {cols rows} {
+    global ogftd
+    set ir [lsearch $cols ra]; set id [lsearch $cols dec]
+    set drop {host_id host_sep host_sep_arcsec}
+    set keepi {}
+    set ncols {}
+    foreach c $cols i [lsearch -all -not -exact $cols __none] {
+	if {$c in $drop} continue
+	lappend keepi $i; lappend ncols $c
     }
-    set info [join [lmap c $cols v $vals {string cat $c = $v}] "   "]
-    OGFMovStatus [string range $info 0 220]
-    set ogfmov(selected) [expr {[info exists id] ? $id : {}}]
-    if {$ogfmov(tblkind) eq "movers" && [info exists id]} {set ogfmov(tracklet) $id}
-    if {[string is double -strict $ra] && [string is double -strict $dec] && $current(frame) ne {}} {
-	catch {$current(frame) pan to wcs fk5 degrees $ra $dec}
+    lappend ncols host_id host_sep
+    set have [::ogf::td::have_galaxies]
+    set out {}
+    foreach r $rows {
+	set x {}
+	foreach i $keepi {lappend x [lindex $r $i]}
+	set hid {}; set hs {}
+	if {$have} {
+	    set near [::ogf::td::galaxy_near [lindex $r $ir] [lindex $r $id] $ogftd(hostradius)]
+	    if {[llength $near]} {lassign [lindex $near 0] hid hs; set hs [format %.2f $hs]}
+	}
+	lappend x $hid $hs
+	lappend out $x
     }
+    return [list $ncols $out]
 }
 
-proc OGFMovLoadRegions {fn} {
-    global current
-    if {![file exists $fn] || $current(frame) eq {}} return
-    if {[catch {MarkerLoadFile $fn $current(frame) ds9 wcs fk5} err]} {OGFMovStatus "region load failed: $err"}
+# moving objects: overlap flag when any epoch position lies inside a galaxy of the catalog (ISO radius, >= 1 arcsec)
+proc OGFMovDecorateMovers {cols rows} {
+    set ip [lsearch $cols _pos]
+    set ir [lsearch $cols ra]; set id [lsearch $cols dec]
+    set have [::ogf::td::have_galaxies]
+    set mx [expr {$have ? [::ogf::td::galaxy_max_extent] : 0.0}]
+    set ncols [concat $cols overlap overlap_id]
+    set out {}
+    foreach r $rows {
+	set flag {}; set gid {}
+	if {$have} {
+	    set flag no
+	    set pos [expr {$ip >= 0 && [lindex $r $ip] ne {} ? [lindex $r $ip] : [list [lindex $r $ir] [lindex $r $id]]}]
+	    foreach {ra de} $pos {
+		foreach g [::ogf::td::galaxy_near $ra $de [expr {max($mx,1.0)}]] {
+		    lassign $g gn gs ge
+		    if {$gs <= max($ge,1.0)} {set flag yes; set gid $gn; break}
+		}
+		if {$flag eq "yes"} break
+	    }
+	}
+	lappend out [concat $r [list $flag $gid]]
+    }
+    return [list $ncols $out]
+}
+
+# a row of a Moving / Transients / Detections view was selected (called by the table layer)
+proc OGFMovOnSelect {key raw} {
+    global ogfmov
+    set kind [dict get $raw kind]
+    set info [join [lmap {c v} [dict remove $raw kind _pos host_sep_arcsec NUMBER] {string cat $c = $v}] "   "]
+    OGFMovStatus [string range $info 0 220]
+    set ogfmov(selected) [dict get $raw id]
+    set ogfmov(selkind) $kind
+    if {$kind eq "moving"} {set ogfmov(tracklet) [dict get $raw id]}
+    if {[winfo exists $ogfmov(detwin)]} {OGFMovDetailsUpdate}
 }
 
 # ---------------------------------------------------------------- pipeline steps
@@ -437,14 +470,18 @@ proc OGFMovLightCurve {} {
 }
 
 proc OGFMovLCDone {ok out} {
+    global ogfmov
     if {!$ok} return
-    set w .ogfmovlc
-    catch {destroy $w}
-    toplevel $w
-    wm title $w "Moving Objects: light curves"
-    text $w.t -width 90 -height 18 -font TkFixedFont
-    pack $w.t -fill both -expand 1
-    foreach l [split $out \n] {if {[string match "T*:*" $l]} {$w.t insert end "$l\n"}}
+    set ogfmov(lctext) {}
+    foreach l [split $out \n] {if {[string match "T*:*" $l]} {append ogfmov(lctext) "$l\n"}}
+    set ogfmov(lc) [dict create]
+    set fn [file join [OGFMovWork] lightcurves.json]
+    if {[file exists $fn]} {
+	if {![catch {set fd [open $fn r]; set txt [read $fd]; close $fd; set lcs [::ogf::json::parse $txt]}]} {
+	    foreach e $lcs {dict set ogfmov(lc) [dict get $e id] $e}
+	}
+    }
+    OGFMovDetails lightcurve
 }
 
 proc OGFMovExport {} {
@@ -466,36 +503,137 @@ proc OGFMovExportDone {ok out} {
 
 proc OGFMovDone {ok out} {}
 
-# ---------------------------------------------------------------- Orbit fit dialog
-proc OGFMovOrbitDialog {} {
+# ---------------------------------------------------------------- Time-domain details (ONE window, two tabs)
+# Orbit fit for the selected moving object / designation, light curve for the selected transient.  The window is
+# created once and reused (raised / updated); it is an ordinary toplevel, i.e. it can be moved off the main window.
+proc OGFMovDetails {{tab {}}} {
     global ogfmov
-    set w .ogfmovorb
-    catch {destroy $w}
-    toplevel $w
-    wm title $w "Moving Objects: Orbit Fit"
-    ttk::frame $w.top
-    ttk::label $w.top.l1 -text "Tracklet id"
-    ttk::entry $w.top.e1 -textvariable ogfmov(tracklet) -width 6
-    ttk::label $w.top.l2 -text "or MPC designation / number"
-    ttk::entry $w.top.e2 -textvariable ogfmov(designation) -width 12
-    ttk::label $w.top.l3 -text "MJD range"
-    ttk::entry $w.top.e3 -textvariable ogfmov(mjdmin) -width 9
-    ttk::entry $w.top.e4 -textvariable ogfmov(mjdmax) -width 9
-    ttk::button $w.top.go -text "Fit" -command OGFMovOrbitRun
-    pack $w.top.l1 $w.top.e1 $w.top.l2 $w.top.e2 $w.top.l3 $w.top.e3 $w.top.e4 $w.top.go -side left -padx 3
-    pack $w.top -side top -fill x -pady 4
-    ttk::label $w.note -wraplength 640 -justify left -text \
+    set w $ogfmov(detwin)
+    if {![winfo exists $w]} {
+	toplevel $w
+	wm title $w "Time-domain details"
+	wm geometry $w 700x620
+	wm protocol $w WM_DELETE_WINDOW [list wm withdraw $w]
+	ttk::notebook $w.nb
+	ttk::frame $w.nb.orbit
+	ttk::frame $w.nb.lc
+	$w.nb add $w.nb.orbit -text Orbit
+	$w.nb add $w.nb.lc -text "Light curve"
+	OGFMovBuildOrbitTab $w.nb.orbit
+	OGFMovBuildLCTab $w.nb.lc
+	ttk::label $w.st -text {} -anchor w
+	pack $w.st -side bottom -fill x
+	pack $w.nb -side top -fill both -expand 1
+    }
+    wm deiconify $w
+    raise $w
+    if {$tab eq "orbit"} {$w.nb select $w.nb.orbit} elseif {$tab eq "lightcurve"} {$w.nb select $w.nb.lc}
+    OGFMovDetailsUpdate
+    return $w
+}
+
+# follow the selected row: moving -> Orbit tab fields, transient -> Light curve plot
+proc OGFMovDetailsUpdate {} {
+    global ogfmov
+    set w $ogfmov(detwin)
+    if {![winfo exists $w]} return
+    switch -- $ogfmov(selkind) {
+	moving {$w.nb select $w.nb.orbit}
+	transient {$w.nb select $w.nb.lc}
+    }
+    OGFMovPlotLC
+}
+
+proc OGFMovBuildOrbitTab {f} {
+    global ogfmov
+    ttk::frame $f.top
+    ttk::label $f.top.l1 -text "Tracklet id"
+    ttk::entry $f.top.e1 -textvariable ogfmov(tracklet) -width 6
+    ttk::label $f.top.l2 -text "or MPC designation / number"
+    ttk::entry $f.top.e2 -textvariable ogfmov(designation) -width 12
+    ttk::label $f.top.l3 -text "MJD range"
+    ttk::entry $f.top.e3 -textvariable ogfmov(mjdmin) -width 9
+    ttk::entry $f.top.e4 -textvariable ogfmov(mjdmax) -width 9
+    ttk::button $f.top.go -text "Fit" -command OGFMovOrbitRun
+    pack $f.top.l1 $f.top.e1 $f.top.l2 $f.top.e2 $f.top.l3 $f.top.e3 $f.top.e4 $f.top.go -side left -padx 3
+    pack $f.top -side top -fill x -pady 4
+    ttk::label $f.note -wraplength 640 -justify left -text \
 	"Tracklet fit: ASSIST (DE440 + 16 massive asteroids + GR) differential correction seeded by statistical ranging; HST parallax from Horizons. A designation downloads the public MPC observations (debiased, default station weights) and fits them."
-    pack $w.note -side top -fill x -padx 6
-    text $w.res -width 84 -height 11 -font TkFixedFont
-    pack $w.res -side top -fill x -padx 6 -pady 4
-    canvas $w.plot -width 640 -height 220 -background white
-    pack $w.plot -side top -padx 6 -pady 4
-    ttk::frame $w.bb
-    ttk::button $w.bb.ex -text "Export (MPC 80-col + JSON)" -command OGFMovExport
-    ttk::button $w.bb.cl -text Close -command [list destroy $w]
-    pack $w.bb.ex $w.bb.cl -side left -padx 4
-    pack $w.bb -side top -pady 4
+    pack $f.note -side top -fill x -padx 6
+    text $f.res -width 84 -height 11 -font TkFixedFont
+    pack $f.res -side top -fill x -padx 6 -pady 4
+    canvas $f.plot -width 640 -height 220 -background white
+    pack $f.plot -side top -padx 6 -pady 4
+    ttk::frame $f.bb
+    ttk::button $f.bb.ex -text "Export (MPC 80-col + JSON)" -command OGFMovExport
+    pack $f.bb.ex -side left -padx 4
+    pack $f.bb -side top -pady 4
+}
+
+proc OGFMovBuildLCTab {f} {
+    global ogfmov
+    ttk::label $f.hdr -textvariable ogfmov(lchdr) -anchor w
+    pack $f.hdr -side top -fill x -padx 6 -pady 4
+    canvas $f.plot -width 640 -height 260 -background white
+    pack $f.plot -side top -padx 6 -pady 4
+    text $f.t -width 90 -height 10 -font TkFixedFont
+    pack $f.t -side top -fill both -expand 1 -padx 6 -pady 4
+    ttk::label $f.hint -text "Select a transient row in the table (Time-domain > Transients), then run Light Curve." -anchor w
+    pack $f.hint -side bottom -fill x -padx 6
+}
+
+# light curve of the selected transient (mag vs MJD; epochs without a detection are upper limits -> flux plot)
+proc OGFMovPlotLC {} {
+    global ogfmov
+    set f $ogfmov(detwin).nb.lc
+    if {![winfo exists $f]} return
+    $f.plot delete all
+    $f.t delete 1.0 end
+    if {[info exists ogfmov(lctext)]} {$f.t insert end $ogfmov(lctext)}
+    set id $ogfmov(selected)
+    set ogfmov(lchdr) "No transient selected"
+    if {$ogfmov(selkind) ne "transient" || ![info exists ogfmov(lc)] || ![dict exists $ogfmov(lc) $id]} {
+	if {$ogfmov(selkind) eq "transient"} {set ogfmov(lchdr) "T$id: no light curve yet (run Light Curve)"}
+	return
+    }
+    set e [dict get $ogfmov(lc) $id]
+    set t [dict get $e t]; set fl [dict get $e flux]; set er [dict get $e err]
+    set ogfmov(lchdr) "T$id: [llength $t] epochs, forced photometry on the difference images (flux, e-/s)"
+    set c $f.plot
+    set W [$c cget -width]; set H [$c cget -height]
+    set l 56; set r 12; set tp 14; set b 30
+    set tmin [tcl::mathfunc::min {*}$t]; set tmax [tcl::mathfunc::max {*}$t]
+    if {$tmax <= $tmin} {set tmax [expr {$tmin + 1e-3}]}
+    set ymin 1e99; set ymax -1e99
+    foreach y $fl s $er {
+	if {![string is double -strict $y] || $y in {nan inf -inf}} continue
+	set ymin [expr {min($ymin, $y-abs($s))}]; set ymax [expr {max($ymax, $y+abs($s))}]
+    }
+    if {$ymax <= $ymin} {set ymax [expr {$ymin + 1}]}
+    set pad [expr {0.1*($ymax-$ymin)}]; set ymin [expr {$ymin-$pad}]; set ymax [expr {$ymax+$pad}]
+    set x0 $l; set x1 [expr {$W-$r}]; set y0 [expr {$H-$b}]; set y1 $tp
+    $c create rectangle $x0 $y1 $x1 $y0 -outline gray50
+    $c create text [expr {$l-4}] $y1 -anchor e -text [format %.3g $ymax] -font TkSmallCaptionFont
+    $c create text [expr {$l-4}] $y0 -anchor e -text [format %.3g $ymin] -font TkSmallCaptionFont
+    $c create text [expr {($x0+$x1)/2}] [expr {$H-4}] -anchor s -font TkSmallCaptionFont -text [format "MJD %.4f .. %.4f" $tmin $tmax]
+    if {$ymin < 0 && $ymax > 0} {
+	set yz [expr {$y0 - (0-$ymin)/($ymax-$ymin)*($y0-$y1)}]
+	$c create line $x0 $yz $x1 $yz -fill gray70 -dash {2 2}
+    }
+    foreach tt $t y $fl s $er {
+	if {![string is double -strict $y] || $y in {nan inf -inf}} continue
+	set x [expr {$x0 + ($tt-$tmin)/($tmax-$tmin)*($x1-$x0)}]
+	set ya [expr {$y0 - ($y-$ymin)/($ymax-$ymin)*($y0-$y1)}]
+	set yl [expr {$y0 - ($y-abs($s)-$ymin)/($ymax-$ymin)*($y0-$y1)}]
+	set yh [expr {$y0 - ($y+abs($s)-$ymin)/($ymax-$ymin)*($y0-$y1)}]
+	$c create line $x $yl $x $yh -fill "#c0392b"
+	$c create oval [expr {$x-3}] [expr {$ya-3}] [expr {$x+3}] [expr {$ya+3}] -outline "#1f4e9c" -fill white
+    }
+}
+
+# Orbit Fit... step: open the details window on the Orbit tab (tracklet of the selected row, or a designation)
+proc OGFMovOrbitDialog {} {
+    OGFMovDetails orbit
 }
 
 proc OGFMovOrbitRun {} {
@@ -519,8 +657,8 @@ proc OGFMovOrbitRun {} {
 proc OGFMovOrbitDone {ok out} {
     global ogfmov
     if {!$ok} return
-    set w .ogfmovorb
-    if {![winfo exists $w]} {OGFMovOrbitDialog}
+    OGFMovDetails orbit
+    set w $ogfmov(detwin).nb.orbit
     set fn [file join [OGFMovWork] orbit_$ogfmov(orbitlabel).kv]
     if {![file exists $fn]} return
     set fd [open $fn r]; set txt [read $fd]; close $fd

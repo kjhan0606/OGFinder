@@ -1,0 +1,136 @@
+{
+ "schema": 1,
+ "id": "bands",
+ "name": "Multi-band",
+ "tab": "Detect",
+ "order": 30,
+ "description": "Band registry, detection band, forced photometry in all bands, tiled view.",
+ "steps": [
+  {
+   "id": "register",
+   "label": "Register Current Frame as Band...",
+   "proc": "CatalogPanelBandsRegister",
+   "legacy": [
+    "Bands > Register Current Frame as Band..."
+   ],
+   "session": "CONFIG",
+   "records": [
+    "bands.register"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "load",
+   "label": "Load Band...",
+   "proc": "CatalogPanelBandsLoad",
+   "legacy": [
+    "Bands > Load Band..."
+   ],
+   "session": "CONFIG",
+   "records": [
+    "bands.register"
+   ]
+  },
+  {
+   "id": "set_detect",
+   "label": "Detection Band...",
+   "proc": "OGFUIBandMenu detect",
+   "legacy": [
+    "Bands > Detection Band"
+   ],
+   "session": "CONFIG",
+   "records": [
+    "bands.detect"
+   ]
+  },
+  {
+   "id": "remove",
+   "label": "Remove Band...",
+   "proc": "OGFUIBandMenu remove",
+   "legacy": [
+    "Bands > Remove Band"
+   ],
+   "session": "CONFIG",
+   "records": [
+    "bands.remove"
+   ]
+  },
+  {
+   "id": "list",
+   "label": "List Bands...",
+   "proc": "CatalogPanelBandsList",
+   "legacy": [
+    "Bands > List Bands..."
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "detect",
+   "label": "Detect in Detection Band",
+   "proc": "CatalogPanelBandsDetect",
+   "legacy": [
+    "Bands > Detect in Detection Band"
+   ],
+   "session": "AUTO",
+   "stage": "detect",
+   "records": [
+    "extract"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "measure",
+   "label": "Measure in All Bands...",
+   "proc": "CatalogPanelBandsMeasure",
+   "legacy": [
+    "Bands > Measure in All Bands..."
+   ],
+   "session": "AUTO",
+   "stage": "detect",
+   "records": [
+    "bands.measure"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "tile",
+   "label": "Tile Bands",
+   "proc": "CatalogPanelBandsTile",
+   "legacy": [
+    "Bands > Tile Bands"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "single",
+   "label": "Single Frame View",
+   "proc": "CatalogPanelBandsSingleView",
+   "legacy": [
+    "Bands > Single Frame View"
+   ],
+   "session": "NONE"
+  },
+  {
+   "id": "copy_mask",
+   "label": "Copy Mask to Other Bands",
+   "proc": "CatalogPanelMaskCopyToBands",
+   "legacy": [
+    "Bands > Copy Mask to Other Bands"
+   ],
+   "session": "AUTO",
+   "records": [
+    "mask.copy_to_bands"
+   ]
+  }
+ ],
+ "short": "Bands",
+ "primary": "measure",
+ "tcl": "bands.tcl",
+ "required": 1
+}

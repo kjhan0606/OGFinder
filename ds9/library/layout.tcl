@@ -139,6 +139,8 @@ proc CreateCanvas {} {
     grid rowconfigure $ds9(image) 0 -weight 1
     grid columnconfigure $ds9(image) 0 -weight 1
     grid $ds9(canvas) -row 0 -column 0 -sticky news
+    # the image tab strip (ogf_tile.tcl, 24 px) is carved out of the canvas request: default window size unchanged
+    $ds9(canvas) configure -height [expr {$canvas(height)-24}]
 
     # extra space for window tab
     set ds9(canvas,bottom) {}
@@ -150,6 +152,10 @@ proc CreateCanvas {} {
 				   ]
 	grid $ds9(canvas,bottom) -row 1 -column 0 -sticky ew
     }
+
+    # image tab strip (frames as tabs + Single / Tile), takes its height from the canvas so the window
+    # size does not change (ogf_tile.tcl)
+    catch {OGFTileBuildStrip $ds9(image)}
 
     # needed to realize window so Layout routines will work
     grid $ds9(image)
@@ -167,504 +173,15 @@ proc CreateCatalogPanel {} {
 
     set f $ds9(catalog_frame)
 
-    # Menubar with dropdown menus
-    set catpanel(menubar) [ttk::frame $f.menubar]
-
-    # Flat menubuttons: no border, no indicator arrow
-    ttk::style layout CatMenu.TMenubutton {
-	Menubutton.focus -sticky nswe -children {
-	    Menubutton.padding -sticky we -children {
-		Menubutton.label -side left -sticky {}
-	    }
-	}
-    }
-    ttk::style configure CatMenu.TMenubutton -relief flat -padding {2 3}
-    ttk::style map CatMenu.TMenubutton -relief {
-	pressed flat
-	active  flat
-    }
-
-    # SExtractor menu
-    ttk::menubutton $f.menubar.sextract -text "SExtractor" \
-	-menu $f.menubar.sextract.m -style CatMenu.TMenubutton
-    menu $f.menubar.sextract.m -tearoff 0
-    $f.menubar.sextract.m add checkbutton -label "Detach Catalog Panel" \
-	-variable catpanel(detached) -command CatalogPanelToggleDetach
-    $f.menubar.sextract.m add separator
-    $f.menubar.sextract.m add command -label "Extract" \
-	-command CatalogPanelExtract
-    $f.menubar.sextract.m add command -label "Dual-Image Extract..." \
-	-command CatalogPanelDualExtract
-    $f.menubar.sextract.m add command -label "Settings..." \
-	-command CatalogPanelSettingsDialog
-    $f.menubar.sextract.m add separator
-    $f.menubar.sextract.m add command -label "Trim..." \
-	-command CatalogPanelTrimDialog
-    $f.menubar.sextract.m add separator
-    $f.menubar.sextract.m add command -label "Save Catalog" \
-	-command CatalogPanelSaveCatalog
-    $f.menubar.sextract.m add command -label "Export Regions (.reg)" \
-	-command CatalogPanelExportRegions
-    $f.menubar.sextract.m add command -label "Export FITS Table" \
-	-command CatalogPanelExportFITS
-    $f.menubar.sextract.m add command -label "Load Catalog" \
-	-command CatalogPanelLoadCatalog
-    $f.menubar.sextract.m add separator
-    $f.menubar.sextract.m add command -label "Clear" \
-	-command CatalogPanelClear
-
-    # Display menu
-    ttk::menubutton $f.menubar.display -text "Objects" \
-	-menu $f.menubar.display.m -style CatMenu.TMenubutton
-    menu $f.menubar.display.m -tearoff 0
-    $f.menubar.display.m add command -label "Mark All" \
-	-command CatalogPanelMarkAll
-    $f.menubar.display.m add command -label "Clear Markers" \
-	-command CatalogPanelClearMarkers
-    $f.menubar.display.m add separator
-    $f.menubar.display.m add checkbutton -label "Show Visible Only" \
-	-variable catpanel(visible_mode) -command CatalogPanelShowVisible
-    $f.menubar.display.m add separator
-    $f.menubar.display.m add checkbutton -label "Add Objects (Click + A)" \
-	-variable catpanel(add_objects_mode)
-    $f.menubar.display.m add command -label "Delete Selected (Click + D)" \
-	-command CatalogPanelDeleteSelected
-    $f.menubar.display.m add separator
-    $f.menubar.display.m add command \
-	-label "Separate Selected (Click + S)" \
-	-command CatalogPanelSeparateSelected
-    $f.menubar.display.m add command \
-	-label "Separate Settings..." \
-	-command CatalogPanelSeparateSettings
-    $f.menubar.display.m add command \
-	-label "Save Separated Catalog..." \
-	-command CatalogPanelSeparateSave
-    $f.menubar.display.m add command \
-	-label "Load Separated Catalog..." \
-	-command CatalogPanelSeparateLoad
-    $f.menubar.display.m add separator
-    $f.menubar.display.m add command -label "AI Merge..." \
-	-command CatalogPanelAIMerge
-
-    # Galaxy Model menu
-    ttk::menubutton $f.menubar.galaxy -text "Galaxy Model" \
-	-menu $f.menubar.galaxy.m -style CatMenu.TMenubutton
-    menu $f.menubar.galaxy.m -tearoff 0
-    $f.menubar.galaxy.m add command -label "AI Morphology Classification" \
-	-command CatalogPanelGalaxyMorphology
-    $f.menubar.galaxy.m add separator
-    $f.menubar.galaxy.m add command -label "Fit Elliptical Model" \
-	-command [list CatalogPanelGalaxyFit elliptical]
-    $f.menubar.galaxy.m add command -label "Fit Spiral Model" \
-	-command [list CatalogPanelGalaxyFit spiral]
-    $f.menubar.galaxy.m add separator
-    $f.menubar.galaxy.m add command -label "Extract Parameters" \
-	-command CatalogPanelGalaxyParams
-
-    # Star(PSF) menu
-    ttk::menubutton $f.menubar.starpsf -text "Star(PSF)" \
-	-menu $f.menubar.starpsf.m -style CatMenu.TMenubutton
-    menu $f.menubar.starpsf.m -tearoff 0
-
-    # Star Finding
-    menu $f.menubar.starpsf.m.find -tearoff 0
-    $f.menubar.starpsf.m add cascade -label "Find Stars" \
-	-menu $f.menubar.starpsf.m.find
-    $f.menubar.starpsf.m.find add command \
-	-label "Combined" \
-	-command [list CatalogPanelFindStars combined]
-    $f.menubar.starpsf.m.find add command \
-	-label "CLASS_STAR" \
-	-command [list CatalogPanelFindStars class_star]
-    $f.menubar.starpsf.m.find add command \
-	-label "FWHM" \
-	-command [list CatalogPanelFindStars fwhm]
-    $f.menubar.starpsf.m add separator
-    $f.menubar.starpsf.m add command \
-	-label "Show Stars" -command CatalogPanelShowStars
-    $f.menubar.starpsf.m add command \
-	-label "Clear Stars" -command CatalogPanelClearStars
-    $f.menubar.starpsf.m add separator
-
-    # PSF Generation
-    menu $f.menubar.starpsf.m.psf -tearoff 0
-    $f.menubar.starpsf.m add cascade -label "Build PSF" \
-	-menu $f.menubar.starpsf.m.psf
-    $f.menubar.starpsf.m.psf add command \
-	-label "Median Stack" \
-	-command [list CatalogPanelBuildPSF median]
-    $f.menubar.starpsf.m.psf add command \
-	-label "Moffat Fit" \
-	-command [list CatalogPanelBuildPSF moffat]
-    $f.menubar.starpsf.m.psf add command \
-	-label "Gaussian Fit" \
-	-command [list CatalogPanelBuildPSF gaussian]
-    $f.menubar.starpsf.m.psf add command \
-	-label "ePSF" \
-	-command [list CatalogPanelBuildPSF epsf]
-    $f.menubar.starpsf.m.psf add separator
-    $f.menubar.starpsf.m.psf add command \
-	-label "Extended PSF..." \
-	-command CatalogPanelBuildExtendedPSF
-    $f.menubar.starpsf.m.psf add separator
-    $f.menubar.starpsf.m.psf add command \
-	-label "WebbPSF (JWST)..." \
-	-command CatalogPanelSimPSFWebbPSF
-    $f.menubar.starpsf.m.psf add command \
-	-label "TinyTim (HST)..." \
-	-command CatalogPanelSimPSFTinyTim
-    $f.menubar.starpsf.m add separator
-    $f.menubar.starpsf.m add command \
-	-label "View PSF" -command CatalogPanelViewPSF
-    $f.menubar.starpsf.m add command \
-	-label "Save PSF..." -command CatalogPanelSavePSF
-    $f.menubar.starpsf.m add command \
-	-label "Load PSF..." -command CatalogPanelLoadPSF
-    $f.menubar.starpsf.m add command \
-	-label "AI Star Classification" -command CatalogPanelStarFinder
-    $f.menubar.starpsf.m add separator
-    $f.menubar.starpsf.m add command -label "Settings..." \
-	-command CatalogPanelStarPSFSettings
-
-    # Deconvolution menu
-    ttk::menubutton $f.menubar.deconv -text "Deconvolution" \
-	-menu $f.menubar.deconv.m -style CatMenu.TMenubutton
-    menu $f.menubar.deconv.m -tearoff 0
-    $f.menubar.deconv.m add command \
-	-label "Richardson-Lucy" \
-	-command [list CatalogPanelDeconvolve rl]
-    $f.menubar.deconv.m add command \
-	-label "Richardson-Lucy (Accelerated)" \
-	-command [list CatalogPanelDeconvolve rl_accelerated]
-    $f.menubar.deconv.m add command \
-	-label "Richardson-Lucy (Regularized)" \
-	-command [list CatalogPanelDeconvolve rl_tv]
-    $f.menubar.deconv.m add separator
-    $f.menubar.deconv.m add command \
-	-label "Wiener" \
-	-command [list CatalogPanelDeconvolve wiener]
-    $f.menubar.deconv.m add command \
-	-label "Tikhonov" \
-	-command [list CatalogPanelDeconvolve tikhonov]
-    $f.menubar.deconv.m add separator
-    $f.menubar.deconv.m add command \
-	-label "CLEAN" \
-	-command [list CatalogPanelDeconvolve clean]
-    $f.menubar.deconv.m add command \
-	-label "Maximum Entropy (MEM)" \
-	-command [list CatalogPanelDeconvolve mem]
-    $f.menubar.deconv.m add separator
-    $f.menubar.deconv.m add command -label "Settings..." \
-	-command CatalogPanelDeconvSettings
-    $f.menubar.deconv.m add command -label "Quick Deconvolve (RL)" \
-	-command CatalogPanelQuickDeconvolve
-
-    # Separate items moved into Display menu above
-
-    # Bands menu (multi-band simultaneous processing)
-    ttk::menubutton $f.menubar.bands -text "Bands" \
-	-menu $f.menubar.bands.m -style CatMenu.TMenubutton
-    menu $f.menubar.bands.m -tearoff 0
-    $f.menubar.bands.m add command -label "Register Current Frame as Band..." \
-	-command CatalogPanelBandsRegister
-    $f.menubar.bands.m add command -label "Load Band..." \
-	-command CatalogPanelBandsLoad
-    menu $f.menubar.bands.m.det -tearoff 0 \
-	-postcommand [list OGFBandsPostDetect $f.menubar.bands.m.det]
-    $f.menubar.bands.m add cascade -label "Detection Band" \
-	-menu $f.menubar.bands.m.det
-    menu $f.menubar.bands.m.rm -tearoff 0 \
-	-postcommand [list OGFBandsPostRemove $f.menubar.bands.m.rm]
-    $f.menubar.bands.m add cascade -label "Remove Band" \
-	-menu $f.menubar.bands.m.rm
-    $f.menubar.bands.m add command -label "List Bands..." \
-	-command CatalogPanelBandsList
-    $f.menubar.bands.m add separator
-    $f.menubar.bands.m add command -label "Detect in Detection Band" \
-	-command CatalogPanelBandsDetect
-    $f.menubar.bands.m add command -label "Measure in All Bands..." \
-	-command CatalogPanelBandsMeasure
-    $f.menubar.bands.m add separator
-    $f.menubar.bands.m add command -label "Tile Bands" \
-	-command CatalogPanelBandsTile
-    $f.menubar.bands.m add command -label "Single Frame View" \
-	-command CatalogPanelBandsSingleView
-    $f.menubar.bands.m add separator
-    $f.menubar.bands.m add command -label "Copy Mask to Other Bands" \
-	-command CatalogPanelMaskCopyToBands
-
-    # Mask menu (one shared mask per image)
-    ttk::menubutton $f.menubar.mask -text "Mask" \
-	-menu $f.menubar.mask.m -style CatMenu.TMenubutton
-    menu $f.menubar.mask.m -tearoff 0
-    $f.menubar.mask.m add command -label "Auto Mask..." \
-	-command CatalogPanelMaskAuto
-    $f.menubar.mask.m add checkbutton -label "Show Mask Overlay" \
-	-variable ogfmask(overlay) -command CatalogPanelMaskToggleOverlay
-    $f.menubar.mask.m add command -label "Overlay Colour/Transparency..." \
-	-command CatalogPanelMaskOverlaySettings
-    $f.menubar.mask.m add separator
-    $f.menubar.mask.m add command -label "Add Regions to Mask" \
-	-command [list CatalogPanelMaskRegions 0]
-    $f.menubar.mask.m add command -label "Erase Regions from Mask" \
-	-command [list CatalogPanelMaskRegions 1]
-    $f.menubar.mask.m add command -label "Grow..." \
-	-command [list CatalogPanelMaskGrow 0]
-    $f.menubar.mask.m add command -label "Shrink..." \
-	-command [list CatalogPanelMaskGrow 1]
-    $f.menubar.mask.m add command -label "Invert" \
-	-command [list CatalogPanelMaskSimple invert]
-    $f.menubar.mask.m add command -label "Clear Mask" \
-	-command [list CatalogPanelMaskSimple clear]
-    $f.menubar.mask.m add separator
-    $f.menubar.mask.m add command -label "Undo" \
-	-command [list CatalogPanelMaskSimple undo]
-    $f.menubar.mask.m add command -label "Redo" \
-	-command [list CatalogPanelMaskSimple redo]
-    $f.menubar.mask.m add separator
-    $f.menubar.mask.m add command -label "Save As..." \
-	-command CatalogPanelMaskSaveAs
-    $f.menubar.mask.m add command -label "Import..." \
-	-command CatalogPanelMaskImport
-    $f.menubar.mask.m add command -label "Show Masked Image" \
-	-command CatalogPanelMaskShowMasked
-    $f.menubar.mask.m add command -label "Statistics" \
-	-command CatalogPanelMaskStats
-
-    # ICL menu
-    ttk::menubutton $f.menubar.icl -text "ICL" \
-	-menu $f.menubar.icl.m -style CatMenu.TMenubutton
-    menu $f.menubar.icl.m -tearoff 0
-    $f.menubar.icl.m add command \
-	-label "1. Source Masking (shared mask)" \
-	-command CatalogPanelICLMask
-    $f.menubar.icl.m add command \
-	-label "   Show Mask Overlay" \
-	-command CatalogPanelICLViewMask
-    $f.menubar.icl.m add command \
-	-label "   Save Mask As..." \
-	-command CatalogPanelICLSaveMask
-    $f.menubar.icl.m add command \
-	-label "   Import Mask..." \
-	-command CatalogPanelICLImportMask
-    $f.menubar.icl.m add separator
-    menu $f.menubar.icl.m.bkg -tearoff 0
-    $f.menubar.icl.m add cascade -label "2. Background Model" \
-	-menu $f.menubar.icl.m.bkg
-    $f.menubar.icl.m.bkg add command \
-	-label "Polynomial Fit" \
-	-command [list CatalogPanelICLBackground polynomial]
-    $f.menubar.icl.m.bkg add command \
-	-label "Chebyshev Fit" \
-	-command [list CatalogPanelICLBackground chebyshev]
-    $f.menubar.icl.m.bkg add command \
-	-label "SEP Large Mesh" \
-	-command [list CatalogPanelICLBackground sep_large]
-    $f.menubar.icl.m add command \
-	-label "   View Background" \
-	-command CatalogPanelICLViewBkg
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "3. Set BCG Center" \
-	-command CatalogPanelICLSetCenter
-    $f.menubar.icl.m add command \
-	-label "   Measure Profile" \
-	-command CatalogPanelICLProfile
-    $f.menubar.icl.m add command \
-	-label "   Sector Profile..." \
-	-command CatalogPanelICLSectorProfile
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "4. ICL Measurements" \
-	-command CatalogPanelICLMeasure
-    $f.menubar.icl.m add command \
-	-label "   Multi-Threshold ICL" \
-	-command CatalogPanelICLMeasureMulti
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "5. BCG+ICL Decomposition" \
-	-command CatalogPanelICLDecompose
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "Color Profile..." \
-	-command CatalogPanelICLColorProfile
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "Save Profile..." \
-	-command CatalogPanelICLSaveProfile
-    $f.menubar.icl.m add command \
-	-label "Load Profile..." \
-	-command CatalogPanelICLLoadProfile
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "Export Script..." \
-	-command CatalogPanelICLExportScript
-    $f.menubar.icl.m add command \
-	-label "Import Script..." \
-	-command CatalogPanelICLImportScript
-    $f.menubar.icl.m add separator
-    $f.menubar.icl.m add command \
-	-label "Settings..." \
-	-command CatalogPanelICLSettings
-
-    # LSBG menu
-    ttk::menubutton $f.menubar.lsbg -text "LSBG" \
-	-menu $f.menubar.lsbg.m -style CatMenu.TMenubutton
-    menu $f.menubar.lsbg.m -tearoff 0
-    $f.menubar.lsbg.m add command \
-	-label "1. Mask Bright Sources (shared mask)" \
-	-command CatalogPanelLSBGMask
-    $f.menubar.lsbg.m add command \
-	-label "   Show Masked Image" \
-	-command CatalogPanelLSBGViewMask
-    $f.menubar.lsbg.m add command \
-	-label "   Save Mask As..." \
-	-command CatalogPanelLSBGSaveMask
-    $f.menubar.lsbg.m add command \
-	-label "   Import Mask..." \
-	-command CatalogPanelLSBGImportMask
-    $f.menubar.lsbg.m add separator
-    menu $f.menubar.lsbg.m.bkg -tearoff 0
-    $f.menubar.lsbg.m add cascade -label "2. Background Model" \
-	-menu $f.menubar.lsbg.m.bkg
-    $f.menubar.lsbg.m.bkg add command \
-	-label "SEP Large Mesh" \
-	-command [list CatalogPanelLSBGClean sep_large]
-    $f.menubar.lsbg.m.bkg add command \
-	-label "Polynomial Fit" \
-	-command [list CatalogPanelLSBGClean polynomial]
-    $f.menubar.lsbg.m.bkg add command \
-	-label "Chebyshev Fit" \
-	-command [list CatalogPanelLSBGClean chebyshev]
-    $f.menubar.lsbg.m add command \
-	-label "   View Cleaned Image" \
-	-command CatalogPanelLSBGViewClean
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "3. Detect LSBG Candidates" \
-	-command CatalogPanelLSBGDetect
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "4. Photometry" \
-	-command CatalogPanelLSBGPhotometry
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "5. Sérsic Profile Fit" \
-	-command CatalogPanelLSBGSersic
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "6. Filter + Grade" \
-	-command CatalogPanelLSBGFilter
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "7. SVM Classify" \
-	-command CatalogPanelLSBGSVMClassify
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "Save Catalog..." \
-	-command CatalogPanelSaveCatalog
-    $f.menubar.lsbg.m add command \
-	-label "Load Catalog..." \
-	-command CatalogPanelLoadCatalog
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "8. Forced Photometry (Multi-Band)" \
-	-command CatalogPanelLSBGForcedPhot
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "Run Full Pipeline" \
-	-command CatalogPanelLSBGRunAll
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "Export Script..." \
-	-command CatalogPanelLSBGExportScript
-    $f.menubar.lsbg.m add command \
-	-label "Import Script..." \
-	-command CatalogPanelLSBGImportScript
-    $f.menubar.lsbg.m add separator
-    $f.menubar.lsbg.m add command \
-	-label "Settings..." \
-	-command CatalogPanelLSBGSettings
-
-    # Analysis menu
-    ttk::menubutton $f.menubar.analysis -text "Analysis" \
-	-menu $f.menubar.analysis.m -style CatMenu.TMenubutton
-    menu $f.menubar.analysis.m -tearoff 0
-    $f.menubar.analysis.m add command \
-	-label "Non-Parametric Morphology (CAS/Gini/M20)" \
-	-command CatalogPanelMorphometry
-    $f.menubar.analysis.m add command \
-	-label "Sérsic Fitting" \
-	-command CatalogPanelSersicFit
-    $f.menubar.analysis.m add separator
-    $f.menubar.analysis.m add command \
-	-label "PSF Photometry" \
-	-command CatalogPanelPSFPhotometry
-    $f.menubar.analysis.m add command \
-	-label "Multi-Band Photometry..." \
-	-command CatalogPanelMultiBand
-    $f.menubar.analysis.m add command \
-	-label "Crowded Field Photometry" \
-	-command CatalogPanelCrowdedPhot
-    $f.menubar.analysis.m add separator
-    $f.menubar.analysis.m add command \
-	-label "Cross-Match (VizieR)..." \
-	-command CatalogPanelCrossMatch
-    $f.menubar.analysis.m add separator
-    $f.menubar.analysis.m add command \
-	-label "Segmentation Map" \
-	-command CatalogPanelSegmentationMap
-    $f.menubar.analysis.m add command \
-	-label "Completeness Simulation..." \
-	-command CatalogPanelCompleteness
-    $f.menubar.analysis.m add separator
-    $f.menubar.analysis.m add command \
-	-label "Interactive Plot..." \
-	-command CatalogPanelPlotDialog
-    $f.menubar.analysis.m add command \
-	-label "Photo-z (AI)..." \
-	-command CatalogPanelPhotoZ
-    $f.menubar.analysis.m add command \
-	-label "SED Fitting (AI)..." \
-	-command CatalogPanelSEDFit
-    $f.menubar.analysis.m add command \
-	-label "Bulge+Disk Decomp..." \
-	-command CatalogPanelBulgeDisk
-    $f.menubar.analysis.m add separator
-    $f.menubar.analysis.m add command \
-	-label "Analysis Viewer..." \
-	-command CatalogPanelAnalysisViewer
-    $f.menubar.analysis.m add cascade -label "AI Services" \
-	-menu [OGFAIBuildMenu $f.menubar.analysis.m.ai]
-    $f.menubar.analysis.m add separator
-    $f.menubar.analysis.m add command \
-	-label "Save Session as Python Script..." \
-	-command CatalogPanelSessionSave
-    $f.menubar.analysis.m add command \
-	-label "Show Session Log" \
-	-command CatalogPanelSessionShow
-    $f.menubar.analysis.m add command \
-	-label "Reset Session Log" \
-	-command CatalogPanelSessionReset
-
-    pack $f.menubar.sextract -side left
-    pack $f.menubar.display -side left
-    pack $f.menubar.galaxy -side left
-    pack $f.menubar.starpsf -side left
-    pack $f.menubar.deconv -side left
-    pack $f.menubar.bands -side left
-    pack $f.menubar.mask -side left
-    pack $f.menubar.icl -side left
-    pack $f.menubar.lsbg -side left
-    pack $f.menubar.analysis -side left
-    # Moving Objects menu (ogf_moving.tcl)
-    pack [OGFMovingMenu $f.menubar] -side left
+    # OGFinder core: plugin registry (plugins/*/plugin.json) and the workflow UI built from it
+    OGFCoreStart
 
     # Info area: same height as the left pane header so the catalog
     # table lines up with the image display
     set catpanel(detached) 0
     set catpanel(infoarea) [ttk::frame $f.info -height 154]
     pack propagate $f.info 0
+    OGFUIBuild $f
     ttk::separator $f.infosep -orient horizontal
     set catpanel(hdrw) [expr {[info exists ds9(header)] ? $ds9(header) : {}}]
 
@@ -738,27 +255,17 @@ proc CreateCatalogPanel {} {
     pack $f.statusbar.lbl -fill x -expand true -padx 2 -pady 0
 
     # Pack all into catalog frame
-    # Quick actions and selected source summary
+    # Selected source summary (Extract / Mark All / Clear moved to the workflow tabs)
     set catpanel(sel,text) {No source selected}
-    ttk::style configure CatQuick.TButton -padding {4 0}
-    set qb [ttk::frame $f.quick]
-    ttk::button $qb.extract -text "Extract" -style CatQuick.TButton \
-	-command CatalogPanelExtract
-    ttk::button $qb.mark -text "Mark All" -style CatQuick.TButton \
-	-command CatalogPanelMarkAll
-    ttk::button $qb.unmark -text "Clear Marks" -style CatQuick.TButton \
-	-command CatalogPanelClearMarkers
-    ttk::button $qb.clear -text "Clear" -style CatQuick.TButton \
-	-command CatalogPanelClear
-    pack $qb.extract $qb.mark $qb.unmark $qb.clear -side left -padx 2
     ttk::label $f.selinfo -textvariable catpanel(sel,text) \
 	-anchor nw -justify left -relief groove -padding 4
 
     pack $f.menubar -fill x -side top
     pack $f.info -fill x -side top
     pack $f.infosep -fill x -side top
+    pack $f.info.tabs -in $f.info -fill x -side top
+    pack $f.info.content -in $f.info -fill x -side top -pady 1
     pack $f.searchbar -in $f.info -fill x -side top -pady 2
-    pack $f.quick -in $f.info -fill x -side top -pady 2
     pack $f.statusbar -in $f.info -fill x -side top
     pack $f.selinfo -in $f.info -fill both -expand true -side top \
 	-padx 2 -pady 2
@@ -1018,8 +525,9 @@ proc CreateCatalogPanel {} {
     OGFBandsInit
     OGFMaskInit
     OGFLinkInit
+    OGFTDInit
     OGFSessInit
-    OGFMovingInit
+    OGFCoreReady
 
     # Force ttk widgets to redraw on resize (X11 compositing conflict)
     bind $f <Configure> [list CatalogPanelRedrawTtk $f]
@@ -1212,6 +720,8 @@ proc CatalogPanelLoadTSV {data source_name} {
 
     set nobj [expr {$row - 1}]
     set catpanel(status) "$source_name: $nobj sources extracted"
+    catch {OGFTDGalaxyLoaded}
+    catch {OGFTDAppendKindColumn $ncols $row}
 }
 
 proc CatalogPanelClear {} {
@@ -1237,6 +747,7 @@ proc CatalogPanelClear {} {
     set catpanel(sel,text) {No source selected}
     set catpanel(filename) {}
     set catpanel(alldata) {}
+    catch {OGFTDGalaxyLoaded}
 
     # Reset merge state
     set catpanel(merge,list) {}
@@ -1268,7 +779,8 @@ proc CatalogPanelClear {} {
 proc CatalogPanelSaveCatalog {} {
     global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
+    if {[catch {::ogf::td::active} _tda]} {set _tda 0}
+    if {!$_tda && (![info exists catpanel(alldata)] || $catpanel(alldata) eq {})} {
 	set catpanel(status) "No catalog to save"
 	return
     }
@@ -1288,6 +800,8 @@ proc CatalogPanelSaveCatalog {} {
 # Write the catalog to FN (.tsv or .csv).  Also what the session recorder replays.
 proc CatalogPanelSaveCatalogTo {fn} {
     global catpanel
+    if {[catch {::ogf::td::active} _tda]} {set _tda 0}
+    if {$_tda} {::ogf::td::save $fn; return}
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
 	set catpanel(status) "No catalog to save"
 	return
@@ -1413,6 +927,9 @@ proc CatalogPanelLoadCatalog {} {
 proc CatalogPanelFilter {} {
     global catpanel
 
+    # time-domain views filter their own rows
+    if {[catch {::ogf::td::active} _tda]} {set _tda 0}
+    if {$_tda} {::ogf::td::fill; return}
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
 
     set pattern $catpanel(search_var)
@@ -1453,6 +970,7 @@ proc CatalogPanelFilter {} {
     $catpanel(tbl) configure -variable $catpanel(tbldb) \
 	-cols $ncols -rows $row
 
+    catch {OGFTDAppendKindColumn $ncols $row}
     set ndata [expr {$row - 1}]
     if {$pattern eq {}} {
 	set catpanel(status) "Showing all $ndata sources"
@@ -1527,6 +1045,7 @@ proc CatalogPanelSyncInfoHeight {} {
 # Show key columns of the selected catalog row in the info area
 proc CatalogPanelUpdateSelInfo {row} {
     global catpanel
+    if {![catch {::ogf::td::selinfo $row} _tds] && $_tds} return
     global $catpanel(tbldb)
 
     set want {NUMBER X_IMAGE Y_IMAGE ALPHA_J2000 DELTA_J2000 MAG_AUTO
@@ -1584,6 +1103,8 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     global catpanel
     global current
     global ds9
+
+    if {![catch {::ogf::td::goto $row $pan} _tdg] && $_tdg} return
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
@@ -1801,103 +1322,6 @@ proc CatalogPanelParamDefaults {} {
     set ed(n-workers) 0
 }
 
-proc CatalogPanelSettingsDialog {} {
-    global catpanel
-    global ed
-
-    set w {.sextractparam}
-
-    set ed(ok) 0
-
-    # Copy current params to ed()
-    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
-		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		   back-size back-filtersize \
-		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
-		   n-workers} {
-	set ed($pname) $catpanel(param,$pname)
-    }
-
-    DialogCreate $w {Source Extractor Settings} ed(ok)
-
-    # Param frame
-    set f [ttk::frame $w.param]
-    set row 0
-    foreach {pname plabel} {
-	detect-thresh {Detect Threshold}
-	detect-minarea {Detect Min Area}
-	deblend-nthresh {Deblend NThresh}
-	deblend-mincont {Deblend MinCont}
-	phot-aperture {Phot Aperture (diam)}
-	phot-aperture-2 {Phot Aperture 2}
-	phot-aperture-3 {Phot Aperture 3}
-	phot-aperture-5 {Phot Aperture 5}
-	mag-zeropoint {Mag Zeropoint}
-	gain {Gain}
-	pixel-scale {Pixel Scale}
-	seeing-fwhm {Seeing FWHM}
-	back-size {Back Size}
-	back-filtersize {Back Filter Size}
-    } {
-	ttk::label $f.l$row -text "$plabel:" -anchor w
-	ttk::entry $f.e$row -textvariable ed($pname) -width 12
-	grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
-	incr row
-    }
-    # Convolution filter dropdown
-    ttk::label $f.l$row -text "Conv Filter:" -anchor w
-    ttk::combobox $f.e$row -textvariable ed(conv-filter) -width 12 \
-	-values {default gauss5x5 mexhat tophat} -state readonly
-    grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
-    incr row
-    # Parallel workers
-    ttk::label $f.l$row -text "Parallel Workers (0=auto):" -anchor w
-    ttk::entry $f.e$row -textvariable ed(n-workers) -width 12
-    grid $f.l$row $f.e$row -padx 4 -pady 2 -sticky w
-    incr row
-
-    # Buttons
-    set bf [ttk::frame $w.buttons]
-    ttk::button $bf.ok -text {OK} -command {set ed(ok) 1} -default active
-    ttk::button $bf.cancel -text {Cancel} -command {set ed(ok) 0}
-    ttk::button $bf.defaults -text {Defaults} -command CatalogPanelParamDefaults
-    ttk::button $bf.save -text {Save} -command {
-	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
-		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		       back-size back-filtersize \
-		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
-		       n-workers} {
-	    set catpanel(param,$pname) $ed($pname)
-	}
-	CatalogPanelParamSave
-    }
-    pack $bf.ok $bf.cancel $bf.defaults $bf.save \
-	-side left -expand true -padx 2 -pady 4
-
-    bind $w <Return> {set ed(ok) 1}
-
-    # Fini
-    ttk::separator $w.sep -orient horizontal
-    pack $w.buttons $w.sep -side bottom -fill x
-    pack $w.param -side top -fill both -expand true
-
-    DialogWait $w ed(ok) $w.param.e0
-    destroy $w
-
-    if {$ed(ok)} {
-	foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
-		       phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
-		       back-size back-filtersize \
-		       phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter \
-		       n-workers} {
-	    set catpanel(param,$pname) $ed($pname)
-	}
-	CatalogPanelParamSave
-    }
-
-    unset ed
-}
-
 # --- Mark All Sources ---
 
 # Build region string and create sextract_all markers from catpanel(alldata).
@@ -1914,7 +1338,7 @@ proc CatalogPanelCreateAllMarkers {} {
     set frame $current(frame)
 
     # Delete previous sextract_all markers
-    catch {$frame marker catalog sextract_all delete}
+    OGFMarkDelete $frame
 
     # Parse directly from alldata (authoritative data source)
     set lines [split $catpanel(alldata) \n]
@@ -2007,7 +1431,7 @@ proc CatalogPanelCreateAllMarkers {} {
 	# Flush batch when limit reached
 	if {$batch_count >= $batch_size} {
 	    set sextract_all_reg $reg
-	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    OGFMarkSend $frame
 	    set reg "image\n"
 	    set batch_count 0
 	}
@@ -2016,7 +1440,7 @@ proc CatalogPanelCreateAllMarkers {} {
     # Flush remaining markers
     if {$batch_count > 0} {
 	set sextract_all_reg $reg
-	catch {$frame marker catalog command ds9 var sextract_all_reg}
+	OGFMarkSend $frame
     }
 
     if {$count == 0} return
@@ -2036,7 +1460,7 @@ proc CatalogPanelMarkAll {} {
     set frame $current(frame)
 
     # If already marked, clear first then re-mark
-    catch {$frame marker catalog sextract_all delete}
+    OGFMarkDelete $frame
     CatalogPanelCreateAllMarkers
 }
 
@@ -2047,7 +1471,7 @@ proc CatalogPanelClearMarkers {} {
     if {$current(frame) == {}} return
 
     set frame $current(frame)
-    catch {$frame marker catalog sextract_all delete}
+    OGFMarkDelete $frame
     set catpanel(markall,on) 0
     set catpanel(status) "Markers cleared"
 }
@@ -2210,6 +1634,11 @@ proc CatalogPanelMarkerClick {which x y} {
     global catpanel
 
     if {![info exists catpanel(tbl)]} return
+    # time-domain markers (moving / transient / detection): select the table row of that object
+    if {![catch {$which get marker catalog id $x $y} _mid] && $_mid != 0} {
+	set _tdk [OGFTDKeyFromTags [$which get marker catalog $_mid tag]]
+	if {$_tdk ne {}} {CatalogPanelLinkSelect $_tdk replace 1; return}
+    }
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
     if {![$which has fits]} return
 
@@ -3234,6 +2663,8 @@ proc CatalogPanelTableClick {x y} {
 proc CatalogPanelSort {colname direction} {
     global catpanel
 
+    if {[catch {::ogf::td::active} _tda]} {set _tda 0}
+    if {$_tda} {::ogf::td::sort $colname $direction; return}
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
 
     set lines [split $catpanel(alldata) \n]
@@ -4979,7 +4410,7 @@ proc CatalogPanelMorphColorMarkers {} {
     set frame $current(frame)
 
     # Delete previous sextract_all markers and recreate with morph colors
-    catch {$frame marker catalog sextract_all delete}
+    OGFMarkDelete $frame
 
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
 
@@ -5076,7 +4507,7 @@ proc CatalogPanelMorphColorMarkers {} {
 
 	if {$batch_count >= $batch_size} {
 	    set sextract_all_reg $reg
-	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    OGFMarkSend $frame
 	    set reg "image\n"
 	    set batch_count 0
 	}
@@ -5084,7 +4515,7 @@ proc CatalogPanelMorphColorMarkers {} {
 
     if {$batch_count > 0} {
 	set sextract_all_reg $reg
-	catch {$frame marker catalog command ds9 var sextract_all_reg}
+	OGFMarkSend $frame
     }
 
     set catpanel(markall,on) 1
@@ -5237,7 +4668,7 @@ proc CatalogPanelStarFinderColorMarkers {result_lines} {
     }
 
     # Delete existing markers and recreate with star/galaxy colors
-    catch {$frame marker catalog sextract_all delete}
+    OGFMarkDelete $frame
 
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
 
@@ -5334,7 +4765,7 @@ proc CatalogPanelStarFinderColorMarkers {result_lines} {
 
 	if {$batch_count >= $batch_size} {
 	    set sextract_all_reg $reg
-	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    OGFMarkSend $frame
 	    set reg "image\n"
 	    set batch_count 0
 	}
@@ -5342,7 +4773,7 @@ proc CatalogPanelStarFinderColorMarkers {result_lines} {
 
     if {$batch_count > 0} {
 	set sextract_all_reg $reg
-	catch {$frame marker catalog command ds9 var sextract_all_reg}
+	OGFMarkSend $frame
     }
 
     set catpanel(markall,on) 1
@@ -6886,152 +6317,6 @@ proc CatalogPanelStarPSFSettingsDefaults {} {
     set ed(psf,sim-oversample) 1
     set ed(psf,sim-jitter-sigma) 0.007
     set ed(psf,sim-focus-offset) 0.0
-}
-
-proc CatalogPanelDeconvSettings {} {
-    global catpanel
-    global ed
-
-    set w .deconvsettings
-    if {[winfo exists $w]} {
-	raise $w
-	return
-    }
-
-    toplevel $w
-    wm title $w "Deconvolution Settings"
-    wm geometry $w 380x480
-
-    # Copy current values to edit vars
-    foreach pname {rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
-		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
-	set ed(psf,$pname) $catpanel(psf,param,$pname)
-    }
-
-    set f [ttk::frame $w.content]
-    pack $f -fill both -expand true -padx 8 -pady 8
-
-    set r 0
-    ttk::label $f.h1 -text "Richardson-Lucy:" -font TkHeadingFont
-    grid $f.h1 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $f.liter -text "  Iterations:"
-    ttk::entry $f.eiter -textvariable ed(psf,rl-iterations) -width 10
-    grid $f.liter -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.eiter -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.ltv -text "  TV lambda:"
-    ttk::entry $f.etv -textvariable ed(psf,tv-lambda) -width 10
-    grid $f.ltv -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.etv -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.h2 -text "Wiener:" -font TkHeadingFont
-    grid $f.h2 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $f.lnsr -text "  NSR:"
-    ttk::entry $f.ensr -textvariable ed(psf,wiener-nsr) -width 10
-    grid $f.lnsr -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.ensr -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.h3 -text "Tikhonov:" -font TkHeadingFont
-    grid $f.h3 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $f.ltik -text "  Lambda:"
-    ttk::entry $f.etik -textvariable ed(psf,tikhonov-lambda) -width 10
-    grid $f.ltik -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.etik -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.h4 -text "CLEAN:" -font TkHeadingFont
-    grid $f.h4 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $f.lcg -text "  Gain:"
-    ttk::entry $f.ecg -textvariable ed(psf,clean-gain) -width 10
-    grid $f.lcg -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.ecg -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.lcn -text "  Iterations:"
-    ttk::entry $f.ecn -textvariable ed(psf,clean-niter) -width 10
-    grid $f.lcn -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.ecn -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.lct -text "  Threshold:"
-    ttk::entry $f.ect -textvariable ed(psf,clean-threshold) -width 10
-    grid $f.lct -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.ect -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.h5 -text "MEM:" -font TkHeadingFont
-    grid $f.h5 -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
-    incr r
-
-    ttk::label $f.lml -text "  Lambda:"
-    ttk::entry $f.eml -textvariable ed(psf,mem-lambda) -width 10
-    grid $f.lml -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.eml -row $r -column 1 -sticky w -padx 4 -pady 2
-    incr r
-
-    ttk::label $f.lmn -text "  Iterations:"
-    ttk::entry $f.emn -textvariable ed(psf,mem-niter) -width 10
-    grid $f.lmn -row $r -column 0 -sticky w -padx 8 -pady 2
-    grid $f.emn -row $r -column 1 -sticky w -padx 4 -pady 2
-
-    # Buttons
-    set bf [ttk::frame $w.buttons]
-    pack $bf -fill x -padx 8 -pady 8
-
-    ttk::button $bf.apply -text "Apply" -command [list CatalogPanelDeconvSettingsApply $w]
-    ttk::button $bf.defaults -text "Defaults" -command CatalogPanelDeconvSettingsDefaults
-    ttk::button $bf.close -text "Close" -command [list destroy $w]
-    pack $bf.close -side right -padx 4
-    pack $bf.defaults -side right -padx 4
-    pack $bf.apply -side right -padx 4
-}
-
-proc CatalogPanelDeconvSettingsApply {w} {
-    global catpanel
-    global ed
-
-    foreach pname {rl-iterations wiener-nsr tikhonov-lambda tv-lambda \
-		   clean-gain clean-niter clean-threshold mem-lambda mem-niter} {
-	set catpanel(psf,param,$pname) $ed(psf,$pname)
-    }
-    CatalogPanelPSFParamSave
-    set catpanel(status) "Deconvolution settings applied and saved"
-}
-
-proc CatalogPanelDeconvSettingsDefaults {} {
-    global ed
-
-    set ed(psf,rl-iterations) 30
-    set ed(psf,wiener-nsr) 0.01
-    set ed(psf,tikhonov-lambda) 0.001
-    set ed(psf,tv-lambda) 0.001
-    set ed(psf,clean-gain) 0.1
-    set ed(psf,clean-niter) 1000
-    set ed(psf,clean-threshold) 0.0
-    set ed(psf,mem-lambda) 0.1
-    set ed(psf,mem-niter) 100
-}
-
-# Keep backward compatibility — old proc name routes to star/PSF settings
-proc CatalogPanelPSFDeconvSettings {} {
-    CatalogPanelStarPSFSettings
-}
-proc CatalogPanelPSFSettingsApply {w} {
-    CatalogPanelStarPSFSettingsApply $w
-}
-proc CatalogPanelPSFSettingsDefaults {} {
-    CatalogPanelStarPSFSettingsDefaults
 }
 
 # ============================================================================
@@ -11219,7 +10504,7 @@ proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
     }
 
     # Delete existing markers and recreate with SVM colors
-    catch {$frame marker catalog sextract_all delete}
+    OGFMarkDelete $frame
 
     if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
 
@@ -11319,7 +10604,7 @@ proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
 	incr count
 	if {$count >= $batch_size} {
 	    set sextract_all_reg $reg
-	    catch {$frame marker catalog command ds9 var sextract_all_reg}
+	    OGFMarkSend $frame
 	    set reg "image\n"
 	    set count 0
 	    incr batch_count
@@ -11329,7 +10614,7 @@ proc CatalogPanelLSBGSVMColorMarkers {result_tsv} {
     # Flush remaining
     if {$count > 0} {
 	set sextract_all_reg $reg
-	catch {$frame marker catalog command ds9 var sextract_all_reg}
+	OGFMarkSend $frame
     }
 }
 
@@ -12110,10 +11395,12 @@ proc CatalogPanelFrameChanged {old_frame new_frame} {
     if {$old_frame ne {} && [OGFBandsShareCatalog $old_frame $new_frame]} {
 	return
     }
+    set _tdk [OGFTDKeep]
     if {$old_frame ne {} && $old_frame ne $new_frame} {
 	CatalogPanelSaveFrameState $old_frame
     }
     CatalogPanelRestoreFrameState $new_frame
+    catch {OGFTDRestoreKind $_tdk}
 }
 
 proc CatalogPanelDeleteFrameState {frame} {
@@ -12908,51 +12195,4 @@ proc CatalogPanelBulgeDisk {} {
     CatalogPanelAddColumnsFromTSV $data \
 	{BT_RATIO BULGE_RE BULGE_MAG DISK_RS DISK_MAG BD_CHI2 BD_FLAG}
     set catpanel(status) "Bulge+Disk decomposition complete"
-}
-
-proc CatalogPanelBulgeDiskSettings {} {
-    global catpanel
-
-    set w .catbdsettings
-    if {[winfo exists $w]} { raise $w; return }
-    toplevel $w
-    wm title $w "Bulge+Disk Settings"
-    wm geometry $w 300x220
-
-    ttk::label $w.lmax -text "Max sources:"
-    ttk::spinbox $w.maxsrc -from 10 -to 1000 -increment 10 -width 8
-    $w.maxsrc set $catpanel(bd,param,max-sources)
-
-    ttk::label $w.lzp -text "Mag zeropoint:"
-    ttk::entry $w.zp -width 10
-    $w.zp insert 0 $catpanel(bd,param,mag-zeropoint)
-
-    ttk::label $w.lps -text "Pixel scale (\"/px):"
-    ttk::entry $w.ps -width 10
-    $w.ps insert 0 $catpanel(bd,param,pixel-scale)
-
-    set catpanel(bd,dlg,free_n) $catpanel(bd,param,free-bulge-n)
-    ttk::checkbutton $w.freen -text "Free bulge Sérsic n" \
-	-variable catpanel(bd,dlg,free_n)
-
-    ttk::frame $w.btns
-    ttk::button $w.btns.ok -text "OK" -command [list CatalogPanelBDSettingsApply $w]
-    ttk::button $w.btns.cancel -text "Cancel" -command [list destroy $w]
-    pack $w.btns.ok $w.btns.cancel -side left -padx 5
-
-    grid $w.lmax  $w.maxsrc -padx 5 -pady 4 -sticky w
-    grid $w.lzp   $w.zp     -padx 5 -pady 4 -sticky w
-    grid $w.lps   $w.ps     -padx 5 -pady 4 -sticky w
-    grid $w.freen -         -padx 5 -pady 4 -sticky w
-    grid $w.btns  -         -padx 5 -pady 10
-}
-
-proc CatalogPanelBDSettingsApply {w} {
-    global catpanel
-    set catpanel(bd,param,max-sources) [$w.maxsrc get]
-    set catpanel(bd,param,mag-zeropoint) [$w.zp get]
-    set catpanel(bd,param,pixel-scale) [$w.ps get]
-    set catpanel(bd,param,free-bulge-n) $catpanel(bd,dlg,free_n)
-    CatalogPanelBDParamSave
-    destroy $w
 }
