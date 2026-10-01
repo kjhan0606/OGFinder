@@ -131,10 +131,290 @@ def _trail_consistency(f, m):
     f["score"] = float(f["rms_resid_arcsec"] / 0.1 + pen)
 
 
+def _spread_triplets(nex):
+    """Exposure triplets (indices into the time-sorted exposure list) used to seed tracklets: all C(n,3) for n <= 6, else
+    (first, j, last), (first, j, last-1) and (1, j, last) -- every real track of >= 3 detections contains one of them."""
+    import itertools
+    if nex <= 6:
+        return list(itertools.combinations(range(nex), 3))
+    L = nex - 1; out = set()
+    for j in range(1, L):
+        out.add((0, j, L))
+        if j != L - 1:
+            out.add((0, j, L - 1))
+        if j != 1:
+            out.add((1, j, L))
+    return sorted(out)
+
+
 def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate_max_ash=600.0,
+                   sig_floor=0.01, max_tracklets=500, obs_off_au=None, inv_delta_grid=None,
+                   max_cand_per_exposure=3000, min_disp_arcsec=1.5, flux_tol_dex=None,
+                   k_max=3.5, rate_per_k_ash=300.0, rate_slack_ash=4.0, ext_tol_factor=2.0, rms_max_arcsec=None,
+                   sigma_eff_arcsec=0.35, cr_penalty=3.0, missing_penalty=8.0, k_prior_weight=1.0, k_prior_center=0.3,
+                   rate_prior_weight=1.0, rate_prior_start_ash=30.0, max_seeds=4_000_000, dedupe=True, stats=None):
+    """Link detections of >= 3 exposures into tracklets (constant geocentric velocity + orbital parallax of the observer).
+
+    dets: list of dict(ex=int exposure index, t=MJD, ra, dec [deg], sig [arcsec], id, flux; optional cls, channel ('point'|'trail'),
+    trail_pa, trail_len [arcsec], texp [s]).  obs_off_au: dict ex -> geocentric observer offset (AU, equatorial; HST); without
+    it the observer is taken as fixed (k = 0).
+
+    Algorithm (pairwise-then-extend, velocity-space consistency; replaces the first/last-pair linker kept as
+    `link_exposures_legacy`):
+      1. seeds: for every exposure triplet (a, b, c) all detection pairs (a, c) with a displacement >= min_disp; the middle
+         exposure b is searched by a sorted 1-D lookup *along the parallax direction*: the observer offset makes the apparent
+         position of b move linearly with k = 1/Delta [1/AU], so the b detection fixes k analytically (no k grid), and only
+         the perpendicular distance has to be < tol.  Seeds are gated physically: 0 <= k <= k_max and the geocentric rate
+         <= rate_per_k * k + slack (an object bound to the Sun moves at most ~ 60 km/s / Delta = 300 arcsec/h * k).
+      2. extension: the seed's constant-velocity+parallax prediction is looked up in every other exposure (KD-tree, radius
+         ext_tol_factor * tol); identical member sets are merged.
+      3. every candidate gets a weighted least-squares fit of (x0, y0, vx, vy, k) (k fixed to the seed value if it has only 3
+         members: 3 points are always fit by a free k, so they cannot be validated), a gate on the rms residual, and a
+         score (lower = better, chi2-like): positional chi2 + class penalty (members the single-exposure classifier flagged as
+         cosmic ray / edge / faint) + trail consistency (orientation, length) + brightness consistency within a detection
+         channel + `missing_penalty` per exposure without a member.
+      4. candidates are ranked by (score) with the missing-exposure penalty included, de-duplicated (a candidate sharing >= 2
+         detections with a better one is the same object seen through the other channel / with a wrong member and is
+         dropped; subsets are dropped) and the best `max_tracklets` are returned with the final fit_tracklet() solution.
+    `stats` (dict) receives counters (seeds, candidates, gated, kept).  Returns list of tracklet dicts as before."""
+    if not dets:
+        return []
+    min_exposures = max(int(min_exposures), 3)
+    byex = {}
+    for d in dets:
+        byex.setdefault(d["ex"], []).append(d)
+    exs = sorted(byex, key=lambda e: byex[e][0]["t"])
+    nex = len(exs)
+    if nex < min_exposures:
+        return []
+    for e in exs:                                                   # bound the work per exposure: brightest first
+        if len(byex[e]) > max_cand_per_exposure:
+            byex[e] = sorted(byex[e], key=lambda d: -(d.get("snr") or 0))[:max_cand_per_exposure]
+    ra_c = float(np.mean([d["ra"] for d in dets])); de_c = float(np.mean([d["dec"] for d in dets]))
+    a0, d0 = np.radians(ra_c), np.radians(de_c)
+    ex_v = np.array([-np.sin(a0), np.cos(a0), 0.0]); ey_v = np.array([-np.sin(d0) * np.cos(a0), -np.sin(d0) * np.sin(a0), np.cos(d0)])
+    X = []; Tt = []; Ob = []
+    for e in exs:
+        x, y = tangent_offsets(np.array([d["ra"] for d in byex[e]]), np.array([d["dec"] for d in byex[e]]), ra_c, de_c)
+        X.append(np.c_[x, y]); Tt.append(float(byex[e][0]["t"]))
+        o = np.asarray(obs_off_au[e], float) * 206264.806 if obs_off_au is not None else np.zeros(3)
+        Ob.append(np.array([o @ ex_v, o @ ey_v]))
+    Tt = np.array(Tt); Ob = np.array(Ob)
+    from scipy.spatial import cKDTree
+    trees = [cKDTree(x) for x in X]
+
+    rows = []; K0 = []; nseed = 0
+    for (ia_, ib_, ic_) in _spread_triplets(nex):
+        Xa, Xb, Xc = X[ia_], X[ib_], X[ic_]
+        if len(Xa) == 0 or len(Xb) == 0 or len(Xc) == 0:
+            continue
+        ta, tb, tc = Tt[ia_], Tt[ib_], Tt[ic_]
+        if tc <= ta:
+            continue
+        g = (tb - ta) / (tc - ta)
+        D = (Ob[ia_] - Ob[ib_]) + g * (Ob[ic_] - Ob[ia_])
+        nD = float(np.hypot(*D))
+        raw = np.hypot(Xc[None, :, 0] - Xa[:, None, 0], Xc[None, :, 1] - Xa[:, None, 1])
+        ja, jc = np.nonzero(raw >= min_disp_arcsec)
+        if len(ja) == 0:
+            continue
+        S0 = Xa[ja] + g * (Xc[jc] - Xa[ja])
+        if nD > 0.3:
+            Dh = D / nD; nh = np.array([-Dh[1], Dh[0]])
+            pb = Xb @ nh; order = np.argsort(pb); pbs = pb[order]
+            tp = S0 @ nh
+            lo = np.searchsorted(pbs, tp - tol_arcsec); hi = np.searchsorted(pbs, tp + tol_arcsec)
+            cnt = hi - lo; m = cnt > 0
+            ja, jc, lo, cnt, S0 = ja[m], jc[m], lo[m], cnt[m], S0[m]
+            if cnt.sum() == 0:
+                continue
+            rep = np.repeat(np.arange(len(ja)), cnt)
+            off = np.arange(cnt.sum()) - np.repeat(np.cumsum(cnt) - cnt, cnt)
+            jb = order[lo[rep] + off]
+            R = Xb[jb] - S0[rep]
+            k = (R @ Dh) / nD
+            kslack = tol_arcsec / nD            # the middle detection fixes k only to +-tol/|D| (small HST baseline: |D| ~ 0.1-0.3")
+            ok = (k >= -0.05 - kslack) & (k <= k_max + kslack) & (np.abs(R @ nh) < tol_arcsec)
+            ja, jb, jc, k = ja[rep][ok], jb[ok], jc[rep][ok], np.clip(k[ok], 0.0, k_max)
+        else:
+            # (nearly) linear observer motion over the triplet: k is not constrained by the middle exposure alone (parallax is
+            # degenerate with the velocity), so scan a short k grid (only taken for a fixed observer or a straight-line orbit arc)
+            kgrid = np.array([0.0]) if obs_off_au is None else np.arange(0.0, k_max + 1e-9, 0.1)
+            JA = []; JB = []; JC = []; KK = []
+            for kg in kgrid:
+                pa_k = Xa[ja] + kg * Ob[ia_]; pc_k = Xc[jc] + kg * Ob[ic_]
+                P = pa_k + g * (pc_k - pa_k) - kg * Ob[ib_]
+                r = trees[ib_].query_ball_point(P, tol_arcsec)
+                cnt = np.array([len(x) for x in r])
+                if cnt.sum() == 0:
+                    continue
+                rep = np.repeat(np.arange(len(ja)), cnt)
+                JB.append(np.concatenate([np.array(x, int) for x in r if len(x)])); JA.append(ja[rep]); JC.append(jc[rep]); KK.append(np.full(len(rep), kg))
+            if not JA:
+                continue
+            ja, jb, jc, k = np.concatenate(JA), np.concatenate(JB), np.concatenate(JC), np.concatenate(KK)
+        if len(ja) == 0:
+            continue
+        # physical gate on the geocentric rate implied by (a, c) and k
+        va = (Xc[jc] + k[:, None] * Ob[ic_]) - (Xa[ja] + k[:, None] * Ob[ia_])
+        rate = np.hypot(va[:, 0], va[:, 1]) / ((tc - ta) * 24.0)
+        okr = (rate >= rate_min_ash) & (rate <= min(rate_max_ash, 1e9)) & (rate <= rate_per_k_ash * k + rate_slack_ash)
+        ja, jb, jc, k = ja[okr], jb[okr], jc[okr], k[okr]
+        nseed += len(ja)
+        if nseed > max_seeds:
+            from .util import log
+            log("link_exposures: seed limit %d reached (raise max_seeds or tighten snr / tol)" % max_seeds)
+            break
+        if len(ja) == 0:
+            continue
+        mem = -np.ones((len(ja), nex), int)
+        mem[:, ia_] = ja; mem[:, ib_] = jb; mem[:, ic_] = jc
+        # extension to the other exposures with the constant-velocity + parallax prediction
+        pa_ = Xa[ja] + k[:, None] * Ob[ia_]; pc_ = Xc[jc] + k[:, None] * Ob[ic_]
+        vel = (pc_ - pa_) / (tc - ta)
+        for q in range(nex):
+            if q in (ia_, ib_, ic_) or len(X[q]) == 0:
+                continue
+            P = pa_ + vel * (Tt[q] - ta) - k[:, None] * Ob[q]
+            dd, jj = trees[q].query(P, distance_upper_bound=tol_arcsec * ext_tol_factor)
+            okq = np.isfinite(dd)
+            mem[okq, q] = jj[okq]
+        rows.append(mem); K0.append(k)
+    if not rows:
+        return []
+    M = np.vstack(rows); K0 = np.concatenate(K0)
+    M, u = np.unique(M, axis=0, return_index=True); K0 = K0[u]
+    nm = (M >= 0).sum(1)
+    keep = nm >= min_exposures
+    M, K0, nm = M[keep], K0[keep], nm[keep]
+    n = len(M)
+    if stats is not None:
+        stats.update(seeds=nseed, candidates=n)
+    if n == 0:
+        return []
+    has = M >= 0
+
+    def gather(fn, default=np.nan):
+        out = np.full((n, nex), default, float)
+        for i, e in enumerate(exs):
+            a = np.array([fn(d) for d in byex[e]], float)
+            h = has[:, i]; out[h, i] = a[M[h, i]]
+        return out
+    px = np.zeros((n, nex)); py = np.zeros((n, nex))
+    for i in range(nex):
+        h = has[:, i]; px[h, i] = X[i][M[h, i], 0]; py[h, i] = X[i][M[h, i], 1]
+    tref = float(Tt.mean()); dt = (Tt - tref)[None, :] * np.ones((n, 1))
+    sg = gather(lambda d: max(d.get("sig", 0.05) or 0.05, sig_floor), 1.0)
+    sg = np.sqrt(sg ** 2 + sigma_eff_arcsec ** 2)
+    W = has / sg ** 2
+    A = np.zeros((n, nex, 2, 5))
+    A[:, :, 0, 0] = 1; A[:, :, 1, 1] = 1; A[:, :, 0, 2] = dt; A[:, :, 1, 3] = dt
+    A[:, :, 0, 4] = -Ob[None, :, 0]; A[:, :, 1, 4] = -Ob[None, :, 1]
+    y = np.stack([px, py], 2); w = W[:, :, None] * np.ones((1, 1, 2))
+    N = np.einsum("nepi,nep,nepj->nij", A, w, A)
+    rhs = np.einsum("nepi,nep,nep->ni", A, w, y)
+    free_k = (nm >= 4) & (obs_off_au is not None)
+    prior = np.where(free_k, 1e-6, 1e9)
+    N[:, 4, 4] += prior; rhs[:, 4] += prior * K0 * (~free_k)
+    if obs_off_au is None:                                          # no parallax column at all
+        N[:, 4, 4] = 1.0; rhs[:, 4] = 0.0
+    sol = np.linalg.solve(N, rhs[:, :, None])[:, :, 0]
+    res = (y - np.einsum("nepi,ni->nep", A, sol)) * has[:, :, None]
+    chi2 = (res ** 2 * w).sum((1, 2))
+    rms = np.sqrt((res ** 2).sum((1, 2)) / (2.0 * nm))
+    kfit = sol[:, 4]; vx, vy = sol[:, 2], sol[:, 3]
+    # formal uncertainty of the free k: with the small HST baseline (~0.1-0.4 arcsec of parallax per unit k) k is often only
+    # known to +-1, so the physical gate 0 <= k <= k_max is applied to k within 2 sigma, and the score uses k clipped into range
+    with np.errstate(all="ignore"):
+        sk = np.sqrt(np.maximum(np.linalg.inv(N)[:, 4, 4], 0.0))
+    sk = np.where(free_k, np.nan_to_num(sk, nan=0.0, posinf=0.0), 0.0)
+    kfit_raw = kfit.copy(); kfit = np.clip(kfit, 0.0, k_max)
+    rate = np.hypot(vx, vy) / 24.0
+    rms_max = rms_max_arcsec if rms_max_arcsec is not None else max(0.5 * tol_arcsec, 0.3)
+    gate = (rms <= rms_max) & (kfit_raw >= -0.05 - 2 * sk) & (kfit_raw <= k_max + 2 * sk) & (rate >= rate_min_ash * 0.5) & (rate <= rate_per_k_ash * np.clip(kfit_raw + 2 * sk, 0.0, k_max) + 1.5 * rate_slack_ash + 1e-9) \
+        & (rate <= rate_max_ash)
+    if stats is not None:
+        stats["gated"] = int(gate.sum())
+    if not gate.any():
+        return []
+    # ---- score (lower = better)
+    TR = gather(lambda d: 1.0 if d.get("channel", "point") == "trail" else 0.0, 0.0)
+    FL = gather(lambda d: d.get("flux", np.nan) or np.nan)
+    PA = gather(lambda d: d["trail_pa"] if d.get("trail_pa") is not None else np.nan)
+    LN = gather(lambda d: d["trail_len"] if d.get("trail_len") is not None else np.nan)
+    TX = gather(lambda d: d.get("texp") or 0.0, 0.0)
+    BAD = gather(lambda d: 1.0 if d.get("cls") in ("artefact_cr", "artefact_edge", "artefact_dipole", "faint") else 0.0, 0.0)
+    score = chi2.copy()
+    score += cr_penalty * (BAD * has).sum(1)
+    score += missing_penalty * (nex - nm)
+    # weak population priors (tuned on the HST injection tests; set the weights to 0 for NEO/close-approach searches):
+    # log-normal prior on k = 1/Delta around k_prior_center (main belt, Delta ~ 3 AU) and a penalty on geocentric rates
+    # above rate_prior_start_ash (most small bodies in a deep field are slow)
+    score += k_prior_weight * np.log(np.maximum(kfit, 0.05) / k_prior_center) ** 2
+    score += rate_prior_weight * np.maximum(rate - rate_prior_start_ash, 0.0) / 10.0
+    # apparent (topocentric) velocity at every exposure: v - k dO/dt
+    if nex >= 2:
+        dO = np.gradient(Ob, Tt, axis=0) if nex > 2 else np.tile((Ob[1] - Ob[0]) / (Tt[1] - Tt[0]), (2, 1))
+    else:
+        dO = np.zeros_like(Ob)
+    tvx = vx[:, None] - kfit[:, None] * dO[None, :, 0]; tvy = vy[:, None] - kfit[:, None] * dO[None, :, 1]
+    pa_e = np.degrees(np.arctan2(tvx, tvy)) % 360.0
+    dpa = np.abs(((PA - pa_e + 90.0) % 180.0) - 90.0)
+    pred = np.hypot(tvx, tvy) / 24.0 * TX / 3600.0
+    with np.errstate(invalid="ignore", divide="ignore"):
+        lr = np.log(np.clip(LN / np.maximum(pred, 1e-3), 1e-3, 1e3))
+    ist = (TR > 0) & has
+    score += np.where(ist & np.isfinite(dpa), np.minimum((dpa / 25.0) ** 2, 9.0), 0.0).sum(1)
+    score += np.where(ist & np.isfinite(lr), np.minimum((lr / 0.7) ** 2, 9.0), 0.0).sum(1)
+    for chv in (0.0, 1.0):
+        m = (TR == chv) & has & (FL > 0)
+        L = np.where(m, np.log10(np.where(FL > 0, FL, 1.0)), np.nan); c = m.sum(1)
+        mu = np.nansum(L, 1) / np.maximum(c, 1)
+        sd = np.sqrt(np.nansum((L - mu[:, None]) ** 2, 1) / np.maximum(c - 1, 1))
+        score += np.where(c >= 2, (sd / 0.25) ** 2 * (c - 1), 0.0)
+    score = np.where(gate, score, np.inf)
+
+    order = np.argsort(score, kind="stable")
+    order = order[np.isfinite(score[order])]
+    # ---- de-duplicate: pairs of member detections already claimed by a better tracklet
+    kept = []; claimed = set()
+    for q in order:
+        mem = [(i, int(M[q, i])) for i in range(nex) if M[q, i] >= 0]
+        pairs = [(mem[a_], mem[b_]) for a_ in range(len(mem)) for b_ in range(a_ + 1, len(mem))]
+        if dedupe and any(p in claimed for p in pairs):
+            continue
+        claimed.update(pairs)
+        kept.append(q)
+        if len(kept) >= max_tracklets:
+            break
+    if stats is not None:
+        stats["kept"] = len(kept)
+    out = []
+    for q in kept:
+        mem = [(i, int(M[q, i])) for i in range(nex) if M[q, i] >= 0]
+        m = [byex[exs[i]][j] for i, j in mem]
+        t = np.array([x["t"] for x in m]); ra = np.array([x["ra"] for x in m]); de = np.array([x["dec"] for x in m])
+        sgm = np.array([max(x.get("sig", 0.05), sig_floor) for x in m])
+        off = np.array([obs_off_au[x["ex"]] for x in m]) if obs_off_au is not None else None
+        f = fit_tracklet(t, ra, de, sgm, obs_off_au=off, fit_parallax=(off is not None and len(m) >= 4),
+                         inv_delta=float(kfit[q]) if len(m) < 4 else float(K0[q]))
+        f["members"] = [x["id"] for x in m]; f["ex"] = [x["ex"] for x in m]; f["t"] = t.tolist()
+        f["ra"] = ra.tolist(); f["dec"] = de.tolist(); f["sig"] = sgm.tolist()
+        f["flux"] = [x.get("flux", np.nan) for x in m]
+        _trail_consistency(f, m)
+        f["link_chi2"] = float(chi2[q]); f["link_rms_arcsec"] = float(rms[q]); f["n_missing"] = int(nex - nm[q])
+        f["score_legacy"] = f["score"]
+        f["score"] = float(score[q])
+        out.append(f)
+    return out
+
+
+def link_exposures_legacy(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate_max_ash=600.0,
                    sig_floor=0.01, max_tracklets=500, obs_off_au=None, inv_delta_grid=tuple(np.r_[0.0, np.arange(0.08, 1.2, 0.04), np.arange(1.3, 3.01, 0.2)]),
                    max_cand_per_exposure=3000, min_disp_arcsec=1.5, flux_tol_dex=0.35):
-    """dets: list of dict(ex=int exposure index, t=MJD, ra, dec, sig [arcsec], id, flux).
+    """[Legacy linker (pre-2026-10): per-parallax-hypothesis first/last pairing, kept for the before/after benchmark in
+    moving/validation/link_bench.py and for regression comparison.]
+    dets: list of dict(ex=int exposure index, t=MJD, ra, dec, sig [arcsec], id, flux).
     obs_off_au: dict ex -> geocentric observer offset (3-vector, AU); with it, for each hypothesised 1/Delta in
     `inv_delta_grid` the detections are first corrected for orbital parallax, then linked with a constant-velocity
     model (this is what makes HST arcs linkable).  Returns list of tracklets (dicts with members, fit)."""
