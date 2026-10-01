@@ -129,5 +129,11 @@
  ],
  "short": "Objects",
  "primary": "mark_all",
- "settings": "CatalogPanelSeparateSettings"
+ "settings": "CatalogPanelSeparateSettings",
+ "tcl": [
+  "separate.tcl",
+  "merge.tcl",
+  "ai_merge.tcl"
+ ],
+ "tcl_always": 1
 }

@@ -245,5 +245,10 @@
  ],
  "short": "Extract",
  "primary": "extract",
- "settings": "params"
+ "settings": "params",
+ "tcl": [
+  "extract.tcl",
+  "trim.tcl"
+ ],
+ "tcl_always": 1
 }
