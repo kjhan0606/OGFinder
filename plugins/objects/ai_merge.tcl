@@ -2,13 +2,12 @@
 # Loaded through the "tcl" field of plugins/objects/plugin.json.
 
 proc CatalogPanelAIMerge {} {
-    global catpanel
     global current
     global ds9
 
     # Need extracted catalog first
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first before AI Merge"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first before AI Merge"
 	return
     }
 
@@ -20,7 +19,7 @@ proc CatalogPanelAIMerge {} {
     set fn [string trim $fn "{}"]
     regsub {\[.*\]$} $fn {} fn
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
@@ -33,7 +32,7 @@ proc CatalogPanelAIMerge {} {
 	set script [file join $libdir ds9_ai_merge.py]
     }
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_ai_merge.py not found"
+	::ogf::cat::set status "ERROR: ds9_ai_merge.py not found"
 	return
     }
 
@@ -42,23 +41,23 @@ proc CatalogPanelAIMerge {} {
     catch {file mkdir [file dirname $catfile]}
     if {[catch {
 	set fd [open $catfile w]
-	puts $fd $catpanel(alldata)
+	puts $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "AI Merge error: cannot write catalog: $err"
+	::ogf::cat::set status "AI Merge error: cannot write catalog: $err"
 	return
     }
 
     # Build parameter arguments — use params from Extract time, not current settings
     set paramargs {}
-    lappend paramargs "--threshold" $catpanel(ai,threshold)
+    lappend paramargs "--threshold" [::ogf::cat::get ai,threshold]
     lappend paramargs "--catalog" $catfile
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   mag-zeropoint back-size back-filtersize} {
-	if {[info exists catpanel(extract_param,$pname)]} {
-	    lappend paramargs "--$pname" $catpanel(extract_param,$pname)
-	} elseif {[info exists catpanel(param,$pname)]} {
-	    lappend paramargs "--$pname" $catpanel(param,$pname)
+	if {[::ogf::cat::exists extract_param,$pname]} {
+	    lappend paramargs "--$pname" [::ogf::cat::get extract_param,$pname]
+	} elseif {[::ogf::cat::exists param,$pname]} {
+	    lappend paramargs "--$pname" [::ogf::cat::get param,$pname]
 	}
     }
 
@@ -68,7 +67,7 @@ proc CatalogPanelAIMerge {} {
 	lappend paramargs "--checkpoint" $ckpt
     }
 
-    set catpanel(status) "AI Merge: running prediction on [file tail $fn] ..."
+    ::ogf::cat::set status "AI Merge: running prediction on [file tail $fn] ..."
     update idletasks
 
     # Run prediction — capture stderr for error diagnostics
@@ -85,10 +84,10 @@ proc CatalogPanelAIMerge {} {
 	    # Show last line of stderr (most relevant error)
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "AI Merge error: $last_err"
+	    ::ogf::cat::set status "AI Merge error: $last_err"
 	    puts "AI Merge full stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "AI Merge error: $err"
+	    ::ogf::cat::set status "AI Merge error: $err"
 	}
 	return
     }
@@ -133,15 +132,15 @@ proc CatalogPanelAIMerge {} {
     }
 
     if {[llength $groups] == 0} {
-	set catpanel(status) "AI Merge: no merge groups found (threshold=$threshold)"
+	::ogf::cat::set status "AI Merge: no merge groups found (threshold=$threshold)"
 	return
     }
 
     # Store state
-    set catpanel(ai,groups) $groups
-    set catpanel(ai,total) [llength $groups]
-    set catpanel(ai,current) 0
-    set catpanel(ai,active) 1
+    ::ogf::cat::set ai,groups $groups
+    ::ogf::cat::set ai,total [llength $groups]
+    ::ogf::cat::set ai,current 0
+    ::ogf::cat::set ai,active 1
 
     # Bind navigation keys
     CatalogPanelAIBindKeys
@@ -181,7 +180,6 @@ proc CatalogPanelAIUnbindKeys {} {
 }
 
 proc CatalogPanelAIShowGroup {idx} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
@@ -190,10 +188,10 @@ proc CatalogPanelAIShowGroup {idx} {
     # Delete previous ai_merge markers
     catch {$frame marker catalog ai_merge delete}
 
-    set groups $catpanel(ai,groups)
+    set groups [::ogf::cat::get ai,groups]
     if {$idx < 0 || $idx >= [llength $groups]} return
 
-    set catpanel(ai,current) $idx
+    ::ogf::cat::set ai,current $idx
     set group [lindex $groups $idx]
 
     # Parse group: {g_idx n_mem conf mem_x mem_y mem_num}
@@ -263,9 +261,9 @@ proc CatalogPanelAIShowGroup {idx} {
 
     # Status bar
     set g_num [expr {$idx + 1}]
-    set total $catpanel(ai,total)
+    set total [::ogf::cat::get ai,total]
     set num_str [join $matched_nums ","]
-    set catpanel(status) "AI Group $g_num/$total (conf=[format %.2f $conf], ${n_mem} sources: $num_str) \[n:Next p:Prev a:Accept r:Reject Esc:Done\]"
+    ::ogf::cat::set status "AI Group $g_num/$total (conf=[format %.2f $conf], ${n_mem} sources: $num_str) \[n:Next p:Prev a:Accept r:Reject Esc:Done\]"
 
     # Ensure canvas has focus so keys work
     global ds9
@@ -273,34 +271,31 @@ proc CatalogPanelAIShowGroup {idx} {
 }
 
 proc CatalogPanelAINext {} {
-    global catpanel
-    if {!$catpanel(ai,active)} return
-    set next [expr {$catpanel(ai,current) + 1}]
-    if {$next >= $catpanel(ai,total)} {
-	set catpanel(status) "AI Merge: last group reached. Press Esc to finish."
+    if {![::ogf::cat::get ai,active]} return
+    set next [expr {[::ogf::cat::get ai,current] + 1}]
+    if {$next >= [::ogf::cat::get ai,total]} {
+	::ogf::cat::set status "AI Merge: last group reached. Press Esc to finish."
 	return
     }
     CatalogPanelAIShowGroup $next
 }
 
 proc CatalogPanelAIPrev {} {
-    global catpanel
-    if {!$catpanel(ai,active)} return
-    set prev [expr {$catpanel(ai,current) - 1}]
+    if {![::ogf::cat::get ai,active]} return
+    set prev [expr {[::ogf::cat::get ai,current] - 1}]
     if {$prev < 0} {
-	set catpanel(status) "AI Merge: already at first group."
+	::ogf::cat::set status "AI Merge: already at first group."
 	return
     }
     CatalogPanelAIShowGroup $prev
 }
 
 proc CatalogPanelAIAccept {} {
-    global catpanel
     global current
-    if {!$catpanel(ai,active)} return
+    if {![::ogf::cat::get ai,active]} return
 
-    set idx $catpanel(ai,current)
-    set groups $catpanel(ai,groups)
+    set idx [::ogf::cat::get ai,current]
+    set groups [::ogf::cat::get ai,groups]
     set group [lindex $groups $idx]
 
     # Get member NUMBERs directly from MEMBERS_NUM field
@@ -308,7 +303,7 @@ proc CatalogPanelAIAccept {} {
     set merge_nums [split $nums_str ","]
 
     if {[llength $merge_nums] < 2} {
-	set catpanel(status) "AI Accept: could not match enough sources"
+	::ogf::cat::set status "AI Accept: could not match enough sources"
 	return
     }
 
@@ -316,46 +311,44 @@ proc CatalogPanelAIAccept {} {
     catch {$current(frame) marker catalog ai_merge delete}
 
     # Set up merge and execute
-    set catpanel(merge,list) $merge_nums
-    set catpanel(merge,active) 1
+    ::ogf::cat::set merge,list $merge_nums
+    ::ogf::cat::set merge,active 1
     CatalogPanelMergeSources
 
     # Remove accepted group from list
-    set catpanel(ai,groups) [lreplace $groups $idx $idx]
-    set catpanel(ai,total) [llength $catpanel(ai,groups)]
+    ::ogf::cat::set ai,groups [lreplace $groups $idx $idx]
+    ::ogf::cat::set ai,total [llength [::ogf::cat::get ai,groups]]
 
     # Advance to next (or stay at end)
-    if {$catpanel(ai,total) == 0} {
+    if {[::ogf::cat::get ai,total] == 0} {
 	CatalogPanelAIDone
 	return
     }
-    if {$idx >= $catpanel(ai,total)} {
-	set idx [expr {$catpanel(ai,total) - 1}]
+    if {$idx >= [::ogf::cat::get ai,total]} {
+	set idx [expr {[::ogf::cat::get ai,total] - 1}]
     }
     CatalogPanelAIShowGroup $idx
 }
 
 proc CatalogPanelAIReject {} {
-    global catpanel
-    if {!$catpanel(ai,active)} return
+    if {![::ogf::cat::get ai,active]} return
 
-    set idx $catpanel(ai,current)
+    set idx [::ogf::cat::get ai,current]
     # Remove rejected group from list
-    set catpanel(ai,groups) [lreplace $catpanel(ai,groups) $idx $idx]
-    set catpanel(ai,total) [llength $catpanel(ai,groups)]
+    ::ogf::cat::set ai,groups [lreplace [::ogf::cat::get ai,groups] $idx $idx]
+    ::ogf::cat::set ai,total [llength [::ogf::cat::get ai,groups]]
 
-    if {$catpanel(ai,total) == 0} {
+    if {[::ogf::cat::get ai,total] == 0} {
 	CatalogPanelAIDone
 	return
     }
-    if {$idx >= $catpanel(ai,total)} {
-	set idx [expr {$catpanel(ai,total) - 1}]
+    if {$idx >= [::ogf::cat::get ai,total]} {
+	set idx [expr {[::ogf::cat::get ai,total] - 1}]
     }
     CatalogPanelAIShowGroup $idx
 }
 
 proc CatalogPanelAIDone {} {
-    global catpanel
     global current
 
     # Delete AI markers
@@ -367,14 +360,14 @@ proc CatalogPanelAIDone {} {
     CatalogPanelAIUnbindKeys
 
     # Reset state
-    set catpanel(ai,groups) {}
-    set catpanel(ai,active) 0
-    set catpanel(ai,total) 0
-    set catpanel(ai,current) 0
+    ::ogf::cat::set ai,groups {}
+    ::ogf::cat::set ai,active 0
+    ::ogf::cat::set ai,total 0
+    ::ogf::cat::set ai,current 0
 
     # Re-mark all sources from authoritative data
     CatalogPanelCreateAllMarkers
 
-    set catpanel(status) "AI Merge session ended"
+    ::ogf::cat::set status "AI Merge session ended"
 }
 

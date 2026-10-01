@@ -5,14 +5,14 @@ proc CatalogPanelMergeSources {} {
     global catpanel
     global current
 
-    if {!$catpanel(merge,active)} return
-    if {[llength $catpanel(merge,list)] < 2} {
-	set catpanel(status) "Need at least 2 sources to merge"
+    if {![::ogf::cat::get merge,active]} return
+    if {[llength [::ogf::cat::get merge,list]] < 2} {
+	::ogf::cat::set status "Need at least 2 sources to merge"
 	return
     }
 
     # Parse alldata
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
     set ncols [llength $headers]
@@ -62,7 +62,7 @@ proc CatalogPanelMergeSources {} {
 	    set max_number $num_val
 	}
 
-	if {[lsearch -exact $catpanel(merge,list) $num_val] >= 0} {
+	if {[lsearch -exact [::ogf::cat::get merge,list] $num_val] >= 0} {
 	    lappend merge_rows $fields
 	    if {$idx_flux >= 0} {
 		set fval [string trim [lindex $fields $idx_flux]]
@@ -77,7 +77,7 @@ proc CatalogPanelMergeSources {} {
     }
 
     if {[llength $merge_rows] < 2} {
-	set catpanel(status) "Merge error: sources not found in catalog"
+	::ogf::cat::set status "Merge error: sources not found in catalog"
 	return
     }
 
@@ -188,8 +188,8 @@ proc CatalogPanelMergeSources {} {
 
     # MAG_AUTO from total flux
     set mag_zp 25.0
-    if {[info exists catpanel(param,mag-zeropoint)]} {
-	set mag_zp $catpanel(param,mag-zeropoint)
+    if {[::ogf::cat::exists param,mag-zeropoint]} {
+	set mag_zp [::ogf::cat::get param,mag-zeropoint]
     }
     set new_mag [expr {-2.5 * log10($total_flux) + $mag_zp}]
 
@@ -221,20 +221,20 @@ proc CatalogPanelMergeSources {} {
     set new_line [join $new_fields "\t"]
 
     OGFSessLog catalog.merge manual {} -tool native -requires catalog \
-	-title "Merge sources [join $catpanel(merge,list) ,]" \
-	-payload [dict create nums_list $catpanel(merge,list) mag_zp $mag_zp]
+	-title "Merge sources [join [::ogf::cat::get merge,list] ,]" \
+	-payload [dict create nums_list [::ogf::cat::get merge,list] mag_zp $mag_zp]
     # Rebuild alldata: header + other rows + merged row
     set newdata $header
     foreach row $other_rows {
 	append newdata "\n$row"
     }
     append newdata "\n$new_line"
-    set catpanel(alldata) $newdata
+    ::ogf::cat::set alldata $newdata
 
     # Clear merge state
-    set nmerged [llength $catpanel(merge,list)]
-    set catpanel(merge,list) {}
-    set catpanel(merge,active) 0
+    set nmerged [llength [::ogf::cat::get merge,list]]
+    ::ogf::cat::set merge,list {}
+    ::ogf::cat::set merge,active 0
 
     # Delete merge markers
     if {$current(frame) != {}} {
@@ -242,13 +242,13 @@ proc CatalogPanelMergeSources {} {
     }
 
     # Reload table and markers
-    CatalogPanelLoadTSV $catpanel(alldata) "merged"
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "merged"
     CatalogPanelCreateAllMarkers
 
     # Find merged source row and auto-select/navigate
-    global $catpanel(tbldb)
-    set ncols [$catpanel(tbl) cget -cols]
-    set nrows [$catpanel(tbl) cget -rows]
+    global [::ogf::cat::get tbldb]
+    set ncols [[::ogf::cat::get tbl] cget -cols]
+    set nrows [[::ogf::cat::get tbl] cget -rows]
     set col_num -1
     for {set c 1} {$c <= $ncols} {incr c} {
 	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
@@ -272,16 +272,15 @@ proc CatalogPanelMergeSources {} {
 	}
     }
     if {$merged_row >= 0} {
-	$catpanel(tbl) selection set $merged_row,1
-	$catpanel(tbl) see $merged_row,1
+	[::ogf::cat::get tbl] selection set $merged_row,1
+	[::ogf::cat::get tbl] see $merged_row,1
 	CatalogPanelGotoSource $merged_row
     }
 
-    set catpanel(status) "Merged $nmerged sources into #$new_num: pos=([format %.2f $new_x],[format %.2f $new_y]) mag=[format %.3f $new_mag]"
+    ::ogf::cat::set status "Merged $nmerged sources into #$new_num: pos=([format %.2f $new_x],[format %.2f $new_y]) mag=[format %.3f $new_mag]"
 }
 
 proc CatalogPanelMergeCancel {} {
-    global catpanel
     global current
 
     # Delete all merge markers
@@ -289,24 +288,23 @@ proc CatalogPanelMergeCancel {} {
 	catch {$current(frame) marker catalog sextract_merge delete}
     }
 
-    set catpanel(merge,list) {}
-    set catpanel(merge,active) 0
-    set catpanel(status) "Merge cancelled"
+    ::ogf::cat::set merge,list {}
+    ::ogf::cat::set merge,active 0
+    ::ogf::cat::set status "Merge cancelled"
 }
 
 proc CatalogPanelEscapeKey {} {
-    global catpanel
 
-    if {$catpanel(ai,active)} {
+    if {[::ogf::cat::get ai,active]} {
 	CatalogPanelAIDone
 	return
     }
-    if {$catpanel(merge,active)} {
+    if {[::ogf::cat::get merge,active]} {
 	CatalogPanelMergeCancel
     }
-    if {[llength $catpanel(sel,nums)] > 0} {
+    if {[llength [::ogf::cat::selection]] > 0} {
 	CatalogPanelClearSelection
-	set catpanel(status) "Selection cleared"
+	::ogf::cat::set status "Selection cleared"
     }
 }
 

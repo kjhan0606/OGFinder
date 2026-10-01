@@ -15,18 +15,18 @@ proc CatalogPanelSeparateGetScript {} {
 proc CatalogPanelGetSelectedSource {} {
     global catpanel
 
-    if {![info exists catpanel(tbl)]} { return {} }
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} { return {} }
+    if {![::ogf::cat::exists tbl]} { return {} }
+    if {![::ogf::cat::has]} { return {} }
 
     # Get selected row
-    set sel [$catpanel(tbl) curselection]
+    set sel [[::ogf::cat::get tbl] curselection]
     if {$sel eq {}} { return {} }
     # sel is "row,col" — extract row
     set row [lindex [split [lindex $sel 0] ","] 0]
     if {$row <= 0} { return {} }
 
-    global $catpanel(tbldb)
-    set ncols [$catpanel(tbl) cget -cols]
+    global [::ogf::cat::get tbldb]
+    set ncols [[::ogf::cat::get tbl] cget -cols]
 
     # Find column indices
     set col_num -1; set col_x -1; set col_y -1
@@ -83,24 +83,23 @@ proc CatalogPanelGetSelectedSource {} {
 }
 
 proc CatalogPanelDeleteSelected {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No catalog data"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No catalog data"
 	return
     }
 
     # Get selected source info
     set src [CatalogPanelGetSelectedSource]
     if {$src eq {}} {
-	set catpanel(status) "No source selected — click a source first"
+	::ogf::cat::set status "No source selected — click a source first"
 	return
     }
 
     set src_num [dict get $src number]
 
     # Remove the row from alldata
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
 
@@ -132,13 +131,13 @@ proc CatalogPanelDeleteSelected {} {
     }
 
     if {!$deleted} {
-	set catpanel(status) "Source $src_num not found in catalog"
+	::ogf::cat::set status "Source $src_num not found in catalog"
 	return
     }
 
     OGFSessLog catalog.delete manual {} -tool native -requires catalog \
 	-title "Delete source $src_num" -payload [dict create number $src_num]
-    set catpanel(alldata) [join $new_lines \n]
+    ::ogf::cat::set alldata [join $new_lines \n]
 
     # Delete the source marker
     global current
@@ -148,23 +147,22 @@ proc CatalogPanelDeleteSelected {} {
     }
 
     # Reload table and refresh markers
-    CatalogPanelLoadTSV $catpanel(alldata) "deleted"
-    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "deleted"
+    if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {
 	CatalogPanelCreateAllMarkers
     }
 
-    set catpanel(status) "Deleted source $src_num"
+    ::ogf::cat::set status "Deleted source $src_num"
 }
 
 proc CatalogPanelSeparateSelected {} {
-    global catpanel
     global current
 
     if {$current(frame) eq {}} return
 
     set src [CatalogPanelGetSelectedSource]
     if {$src eq {}} {
-	set catpanel(status) "Select a source first (click on an ellipse)"
+	::ogf::cat::set status "Select a source first (click on an ellipse)"
 	return
     }
 
@@ -174,13 +172,13 @@ proc CatalogPanelSeparateSelected {} {
 	set fn [$current(frame) get fits file name full]
     }
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelSeparateGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_separate.py not found"
+	::ogf::cat::set status "ERROR: ds9_separate.py not found"
 	return
     }
 
@@ -192,7 +190,7 @@ proc CatalogPanelSeparateSelected {} {
     set src_theta [dict get $src theta]
     set src_ir [dict get $src iso_radius]
 
-    set catpanel(status) "Separating source $src_num ..."
+    ::ogf::cat::set status "Separating source $src_num ..."
     update idletasks
 
     set paramargs {}
@@ -203,12 +201,12 @@ proc CatalogPanelSeparateSelected {} {
     lappend paramargs "--theta" $src_theta
     lappend paramargs "--iso-radius" $src_ir
     lappend paramargs "--parent-number" $src_num
-    lappend paramargs "--deblend-nthresh" $catpanel(param,sep-deblend-nthresh)
-    lappend paramargs "--deblend-mincont" $catpanel(param,sep-deblend-mincont)
-    lappend paramargs "--detect-thresh" $catpanel(param,sep-detect-thresh)
-    lappend paramargs "--detect-minarea" $catpanel(param,sep-detect-minarea)
-    lappend paramargs "--radius-factor" $catpanel(param,sep-radius-factor)
-    lappend paramargs "--back-size" $catpanel(param,sep-back-size)
+    lappend paramargs "--deblend-nthresh" [::ogf::cat::get param,sep-deblend-nthresh]
+    lappend paramargs "--deblend-mincont" [::ogf::cat::get param,sep-deblend-mincont]
+    lappend paramargs "--detect-thresh" [::ogf::cat::get param,sep-detect-thresh]
+    lappend paramargs "--detect-minarea" [::ogf::cat::get param,sep-detect-minarea]
+    lappend paramargs "--radius-factor" [::ogf::cat::get param,sep-radius-factor]
+    lappend paramargs "--back-size" [::ogf::cat::get param,sep-back-size]
 
     OGFSessLog catalog.separate manual {} -tool native -title "Separate source $src_num (manual deblend)" \
 	-note "hand-picked source; result is merged into the catalog by GUI code that is not replayable from the shell"
@@ -223,9 +221,9 @@ proc CatalogPanelSeparateSelected {} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Separate error: $last_err"
+	    ::ogf::cat::set status "Separate error: $last_err"
 	} else {
-	    set catpanel(status) "Separate error: $err"
+	    ::ogf::cat::set status "Separate error: $err"
 	}
 	return
     }
@@ -251,22 +249,21 @@ proc CatalogPanelSeparateSelected {} {
     }
 
     if {$n_sub == 0 || [llength $sub_lines] < 2} {
-	set catpanel(status) "No sub-components found for source $src_num"
+	::ogf::cat::set status "No sub-components found for source $src_num"
 	return
     }
 
     # Replace the parent source in alldata with sub-sources
     CatalogPanelSeparateReplace $src_num $sub_lines
 
-    set catpanel(status) "Source $src_num separated into $n_sub sub-components"
+    ::ogf::cat::set status "Source $src_num separated into $n_sub sub-components"
 }
 
 proc CatalogPanelSeparateReplace {parent_num sub_lines} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set all_lines [split $catpanel(alldata) \n]
+    set all_lines [split [::ogf::cat::tsv] \n]
     set header [lindex $all_lines 0]
     set headers [split $header "\t"]
 
@@ -331,20 +328,19 @@ proc CatalogPanelSeparateReplace {parent_num sub_lines} {
 	}
     }
 
-    set catpanel(alldata) [join $new_lines \n]
+    ::ogf::cat::set alldata [join $new_lines \n]
 
     # Reload table and markers
-    CatalogPanelLoadTSV $catpanel(alldata) "separated"
-    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "separated"
+    if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {
 	CatalogPanelCreateAllMarkers
     }
 }
 
 proc CatalogPanelSeparateSave {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No catalog to save"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No catalog to save"
 	return
     }
 
@@ -359,17 +355,16 @@ proc CatalogPanelSeparateSave {} {
 
     if {[catch {
 	set fd [open $outfile w]
-	puts -nonewline $fd $catpanel(alldata)
+	puts -nonewline $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "Save error: $err"
+	::ogf::cat::set status "Save error: $err"
 	return
     }
-    set catpanel(status) "Catalog saved to $outfile"
+    ::ogf::cat::set status "Catalog saved to $outfile"
 }
 
 proc CatalogPanelSeparateLoad {} {
-    global catpanel
 
     set types {
 	{{TSV Files} {.tsv .txt}}
@@ -384,16 +379,16 @@ proc CatalogPanelSeparateLoad {} {
 	set data [read $fd]
 	close $fd
     } err]} {
-	set catpanel(status) "Load error: $err"
+	::ogf::cat::set status "Load error: $err"
 	return
     }
 
-    set catpanel(alldata) [string trim $data]
-    CatalogPanelLoadTSV $catpanel(alldata) "loaded"
-    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+    ::ogf::cat::set alldata [string trim $data]
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "loaded"
+    if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {
 	CatalogPanelCreateAllMarkers
     }
-    set catpanel(status) "Catalog loaded from $infile"
+    ::ogf::cat::set status "Catalog loaded from $infile"
 }
 
 proc CatalogPanelAddObjectGetScript {} {
@@ -407,38 +402,37 @@ proc CatalogPanelAddObjectGetScript {} {
 }
 
 proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
-    global catpanel
     global current
 
     # Check if add objects mode is enabled
-    if {![info exists catpanel(add_objects_mode)] || !$catpanel(add_objects_mode)} {
-	set catpanel(status) "Enable Add Objects in Display menu first"
+    if {![::ogf::cat::exists add_objects_mode] || ![::ogf::cat::get add_objects_mode]} {
+	::ogf::cat::set status "Enable Add Objects in Display menu first"
 	return
     }
 
     if {$which ne $current(frame) || $which eq {}} return
     if {![$which has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first, then enable Add Objects"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first, then enable Add Objects"
 	return
     }
 
     # Get FITS filename
     set fn [$which get fits file name full]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelAddObjectGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_add_source.py not found"
+	::ogf::cat::set status "ERROR: ds9_add_source.py not found"
 	return
     }
 
     # Find max NUMBER in current catalog
     set max_num 0
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
     set num_idx -1
@@ -462,20 +456,20 @@ proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
     }
     set new_num [expr {$max_num + 1}]
 
-    set catpanel(status) "Detecting source at ($imgx, $imgy) ..."
+    ::ogf::cat::set status "Detecting source at ($imgx, $imgy) ..."
     update idletasks
 
     set paramargs {}
     lappend paramargs "--x" $imgx
     lappend paramargs "--y" $imgy
     lappend paramargs "--number" $new_num
-    lappend paramargs "--detect-thresh" $catpanel(param,detect-thresh)
-    lappend paramargs "--detect-minarea" $catpanel(param,detect-minarea)
-    lappend paramargs "--deblend-nthresh" $catpanel(param,deblend-nthresh)
-    lappend paramargs "--deblend-mincont" $catpanel(param,deblend-mincont)
-    lappend paramargs "--back-size" $catpanel(param,back-size)
-    lappend paramargs "--mag-zeropoint" $catpanel(param,mag-zeropoint)
-    lappend paramargs "--phot-aperture" $catpanel(param,phot-aperture)
+    lappend paramargs "--detect-thresh" [::ogf::cat::get param,detect-thresh]
+    lappend paramargs "--detect-minarea" [::ogf::cat::get param,detect-minarea]
+    lappend paramargs "--deblend-nthresh" [::ogf::cat::get param,deblend-nthresh]
+    lappend paramargs "--deblend-mincont" [::ogf::cat::get param,deblend-mincont]
+    lappend paramargs "--back-size" [::ogf::cat::get param,back-size]
+    lappend paramargs "--mag-zeropoint" [::ogf::cat::get param,mag-zeropoint]
+    lappend paramargs "--phot-aperture" [::ogf::cat::get param,phot-aperture]
 
     OGFSessLog catalog.add_object manual {} -tool native -title "Add object at ($imgx, $imgy) by hand" \
 	-note "hand-picked position; not replayable from the shell"
@@ -490,9 +484,9 @@ proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Add source error: $last_err"
+	    ::ogf::cat::set status "Add source error: $last_err"
 	} else {
-	    set catpanel(status) "Add source error: $err"
+	    ::ogf::cat::set status "Add source error: $err"
 	}
 	return
     }
@@ -519,7 +513,7 @@ proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
     }
 
     if {$found == 0 || $source_line eq {}} {
-	set catpanel(status) "No source detected at ($imgx, $imgy)"
+	::ogf::cat::set status "No source detected at ($imgx, $imgy)"
 	return
     }
 
@@ -548,14 +542,14 @@ proc CatalogPanelAddObjectAtPosition {which imgx imgy} {
     }
 
     # Append to alldata
-    append catpanel(alldata) "\n" [join $new_row "\t"]
+    ::ogf::cat::append alldata "\n" [join $new_row "\t"]
 
     # Reload table and markers
-    CatalogPanelLoadTSV $catpanel(alldata) "added"
-    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "added"
+    if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {
 	CatalogPanelCreateAllMarkers
     }
 
-    set catpanel(status) "Added source #$new_num at ($imgx, $imgy)"
+    ::ogf::cat::set status "Added source #$new_num at ($imgx, $imgy)"
 }
 
