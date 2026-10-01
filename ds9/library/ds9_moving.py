@@ -295,6 +295,8 @@ def m_orbit(a):
     el, sg = res["elements"], res["sigmas"]
     out.update(label=label, n_obs=int(obs.n), n_used=res["n_used"], rms_arcsec=res["rms_arcsec"], chi2_red=res["chi2_red"],
                arc_days=float(np.ptp(obs.mjd_utc)), epoch_jd=res["epoch_jd"], orbit_class=res["orbit_class"],
+               class_status=res.get("class_status", ""), orbit_class_probs=res.get("orbit_class_probs", {}),
+               class_note=res.get("class_note", ""), orbit_class_bestfit=res.get("orbit_class_bestfit", ""),
                elements={k: dict(value=el[k], sigma=sg[k]) for k in ("a", "e", "i", "om", "w", "ma", "q")},
                force_model=res["force_model"], residuals=dict(mjd=obs.mjd_utc.tolist(), dra=res["residual_ra"].tolist(), ddec=res["residual_dec"].tolist(),
                                                               active=res["active"].tolist(), stn=obs.stn))
@@ -307,7 +309,8 @@ def m_orbit(a):
     rg = res["info"].get("ranging")
     if rg:
         out["ranging"] = dict(neff=rg["neff"], class_probs=rg["class_probs"])
-        out["ranging_note"] = "arc too short for a unique orbit: classification probabilities from statistical ranging (simplified); elements are the best DC solution"
+        if not out["determined"]:
+            out["ranging_note"] = "arc too short for a unique orbit: classification probabilities from statistical ranging (simplified); the elements are NOT constrained"
     util.write_json(os.path.join(wd, "orbit_%s.json" % label), out)
     with open(os.path.join(wd, "orbit_%s.kv" % label), "w") as f:         # flat file for the Tcl dialog
         for k in ("label", "n_obs", "n_used", "rms_arcsec", "chi2_red", "arc_days", "epoch_jd", "orbit_class", "force_model"):
@@ -319,7 +322,8 @@ def m_orbit(a):
                 f.write("rq\t%s\t%.4g\t%.4g\t%.4g\n" % ((k,) + tuple(v)))
         for k, v in out["elements"].items():
             f.write("elem\t%s\t%.10g\t%.4g\n" % (k, v["value"], v["sigma"]))
-        for k, v in (out.get("ranging", {}).get("class_probs", {}) or {}).items():
+        f.write("info\tclass_status\t%s\n" % out["class_status"])
+        for k, v in (out.get("orbit_class_probs") or out.get("ranging", {}).get("class_probs", {}) or {}).items():
             f.write("class\t%s\t%.4f\n" % (k, v))
         r = out["residuals"]
         for i in range(len(r["mjd"])):

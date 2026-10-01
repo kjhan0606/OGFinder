@@ -159,6 +159,67 @@ def orbit_class(a, e, i=None):
     return "other"
 
 
+MIN_CLASS_ARC_DAYS = 1.0       # shorter arcs never get a dynamical class (the 6-parameter fit is degenerate)
+CLASS_CONFIDENT = 0.70         # a class is only reported when its probability (over the element uncertainty) reaches this
+
+
+def class_probs_from_covariance(a, e, i, cov3, n=4000, seed=7):
+    """Monte-Carlo class probabilities from the (a, e, i) mean and 3x3 covariance (first-order orbit-fit covariance).
+    Negative eigenvalues of a non-PSD covariance are clipped (orbit-fit degeneracy); samples with a <= 0 or e >= 1 count as
+    "HYP" (unbound / ill-defined)."""
+    cov3 = np.asarray(cov3, float)
+    if not np.all(np.isfinite(cov3)) or not np.all(np.isfinite([a, e, i])):
+        return None
+    w, V = np.linalg.eigh(0.5 * (cov3 + cov3.T))
+    w = np.clip(w, 0.0, None)
+    rng = np.random.default_rng(seed)
+    x = np.array([a, e, i]) + (rng.normal(size=(n, 3)) * np.sqrt(w)) @ V.T
+    out = {}
+    for aa, ee, ii in x:
+        c = orbit_class(aa, max(ee, 0.0), ii)
+        out[c] = out.get(c, 0.0) + 1.0 / n
+    return out
+
+
+def classify_arc(arc_days, a, e, i, sig=None, cov3=None, determined=True, ranging_probs=None,
+                 min_arc_days=MIN_CLASS_ARC_DAYS, confident=CLASS_CONFIDENT):
+    """Arc-length-aware dynamical classification.
+
+    Returns dict(label, status, probs, most_probable, p_most_probable, note):
+      status 'classified'   arc >= min_arc_days, the fit is well determined and one class has probability >= `confident`
+                            over the element uncertainty (Monte Carlo on the covariance);
+             'ambiguous'    well determined but the uncertainty straddles class boundaries: label 'ambiguous (X p=..)';
+             'unclassified' arc too short or the fit degenerate (hyperbolic / a<=0 / huge sigma): label
+                            'unclassified (arc 0.03 d too short)'.  The class probabilities then come from statistical ranging
+                            (`ranging_probs`) if given, otherwise from the covariance; they are the honest output for short arcs.
+    The old behaviour (always printing the class of the best-fit elements) labelled 0.03-day HST arcs as e.g. 'NEO' or 'TNO' with
+    no uncertainty."""
+    probs = None
+    short = arc_days < min_arc_days
+    degenerate = (not determined) or (not np.isfinite(a)) or a <= 0 or e >= 1 or not np.isfinite(e)
+    if ranging_probs and (short or degenerate):
+        probs = {k: float(v) for k, v in ranging_probs.items()}
+    elif cov3 is not None:
+        probs = class_probs_from_covariance(a, e, i, cov3)
+    elif sig is not None and all(k in sig for k in ("a", "e", "i")):
+        probs = class_probs_from_covariance(a, e, i, np.diag([sig["a"] ** 2, sig["e"] ** 2, sig["i"] ** 2]))
+    if probs:
+        tot = sum(probs.values()) or 1.0
+        probs = {k: v / tot for k, v in sorted(probs.items(), key=lambda kv: -kv[1])}
+    best, pbest = (next(iter(probs.items())) if probs else (None, 0.0))
+    if short or degenerate:
+        why = ("arc %.3g d too short" % arc_days) if short else "orbit fit degenerate / not determined"
+        return dict(label="unclassified (%s)" % why, status="unclassified", probs=probs or {}, most_probable=best,
+                    p_most_probable=float(pbest), note=why + ("; class probabilities from statistical ranging" if ranging_probs else ""))
+    if probs is None:
+        return dict(label=orbit_class(a, e, i), status="classified", probs={}, most_probable=orbit_class(a, e, i), p_most_probable=1.0,
+                    note="no covariance available")
+    if pbest >= confident:
+        return dict(label=best, status="classified", probs=probs, most_probable=best, p_most_probable=float(pbest), note="")
+    return dict(label="ambiguous (%s p=%.2f)" % (best, pbest), status="ambiguous", probs=probs, most_probable=best,
+                p_most_probable=float(pbest), note="element uncertainty straddles class boundaries")
+
+
 def radec_to_unit(ra_deg, dec_deg):
     ra = np.radians(ra_deg); de = np.radians(dec_deg)
     return np.stack([np.cos(de) * np.cos(ra), np.cos(de) * np.sin(ra), np.sin(de)], axis=-1)

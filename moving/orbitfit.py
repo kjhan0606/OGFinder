@@ -66,7 +66,7 @@ def fit_orbit(obs, prop=None, state0=None, jd0=None, n_starts=6, ranging_samples
     el, sg, Ce = O.elements_and_sigmas(prop, best["state"], best["cov"], jd0, jd_target=epoch_jd)
     best["epoch_jd"] = float(jd0 if epoch_jd is None else epoch_jd)
     best["elements"] = el; best["sigmas"] = sg; best["elem_cov"] = Ce
-    best["orbit_class"] = K.orbit_class(el["a"], el["e"], el["i"])
+    best["orbit_class_bestfit"] = K.orbit_class(el["a"], el["e"], el["i"])      # class of the best-fit elements (informational only)
     best["info"] = info
     # a unique orbit is only claimed when the fit is well conditioned; for arcs of a fraction of a day (single HST orbit)
     # the 6 parameters are degenerate and the DC "solution" is not meaningful (hyperbolic / enormous sigmas).
@@ -74,6 +74,10 @@ def fit_orbit(obs, prop=None, state0=None, jd0=None, n_starts=6, ranging_samples
     rel_a = sg["a"] / abs(el["a"]) if el["a"] != 0 else np.inf
     ok = (el["e"] < 1.0) and (el["a"] > 0) and (rel_a < 0.5) and (arc > 1.0 or best["ndof"] >= 6) and (sg["e"] < 0.5)
     best["determined"] = bool(ok)
+    rp = (info.get("ranging") or {}).get("class_probs")
+    ca = K.classify_arc(arc, el["a"], el["e"], el["i"], sig=sg, cov3=Ce[:3, :3], determined=bool(ok), ranging_probs=rp)
+    best["orbit_class"] = ca["label"]; best["orbit_class_probs"] = ca["probs"]; best["class_status"] = ca["status"]
+    best["class_note"] = ca["note"]; best["arc_days"] = arc
     if not ok and "ranging_result" in info:
         R = info["ranging_result"]
         q = {k: iod.weighted_quantiles(R[k], R["w"]) for k in ("a", "e", "i", "q")}
