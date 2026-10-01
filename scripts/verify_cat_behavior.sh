@@ -5,7 +5,7 @@
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
 DISP="${DISPLAY_OVERRIDE:-:77}"; GOLD="$HERE/golden/cat_behavior.golden"
 H=$(mktemp -d /tmp/ogf_cat_home.XXXXXX); OUT="$H/cat_out.txt"
-cd "$ROOT"
+cd "$ROOT"; unset OGFINDER_PYTHON   # the golden was captured with the default interpreter name (python3)
 DISPLAY=$DISP HOME=$H OGF_CAT_OUT=$OUT timeout -s KILL 300 bin/ds9 "${OGF_TEST_FITS:-/workspace/fits}/m51.fits" -geometry 1300x950 -source scripts/verify_cat_behavior.tcl > $H/stdout.txt 2>&1
 rc=$?
 sed -e "s#$H#<HOME>#g" "$OUT" > "$H/cat_norm.txt"

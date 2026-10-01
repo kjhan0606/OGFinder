@@ -23,7 +23,7 @@ need_x() { if ! DISPLAY=$DISP xdpyinfo >/dev/null 2>&1; then
 gui() { rm -rf ~/ds9.auto ~/ds9.auto.dir; DISPLAY=$DISP timeout -s KILL "${T:-240}" "$@"; }
 
 # ---- checks: each defines  chk_NAME  (print details on stdout, return 0 pass / 1 fail / 77 skip) and is registered in ALL / LONG
-ALL="tools_syntax ai_bridge_tests moving_tests ai_gui icl_export click_chooser click_xevent"
+ALL="tools_syntax ai_bridge_tests moving_tests ai_gui icl_export click_chooser click_xevent cat_api cat_behavior"
 LONG="session_replay link_bench moving_session"
 chk_tools_syntax() { local bad=0 f
   for f in tools/*.py scripts/*.py; do "$PY" -m py_compile "$f" 2>&1 || bad=1; done
@@ -51,6 +51,9 @@ chk_link_bench() { [ -f /workspace/work/inj1.json.pkl ] || { echo "injection set
   (cd moving/validation && "$PY" link_bench.py 2>&1 | tail -12); }
 chk_moving_session() { [ -n "$OGF_MOVING_SESSION" ] || { echo "set OGF_MOVING_SESSION=session.py REF=dir FIELD=... (needs network, MAST cache)"; return 77; }
   "$HERE/verify_moving_session.sh" "$OGF_MOVING_SESSION" "$OGF_MOVING_REF" "$OGF_MOVING_FIELD"; }
+chk_cat_api() { need_x || { echo "no X server"; return 77; }
+  OGF_CAT_API_OUT="$OUT/cat_api.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_cat_api.tcl > "$OUT/cat_api_raw.txt" 2>&1; tclsum "$OUT/cat_api.txt"; }
+chk_cat_behavior() { need_x || { echo "no X server"; return 77; }; DISPLAY_OVERRIDE=$DISP "$HERE/verify_cat_behavior.sh" 2>&1 | tail -8; [ ${PIPESTATUS[0]} = 0 ]; }
 # ---- extra checks registered by later work (appended below by the feature that adds them)
 #@EXTRA-CHECKS
 

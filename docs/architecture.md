@@ -451,11 +451,82 @@ rejected with a message (e.g. "PSF size: integer expected").
 | `CatalogPanelToggleDetach`, `SyncInfoHeight`, `RedrawTtk(+Do)` | | enforce the layout invariants (181/769/154) and touch the ds9 pane/canvas; kept in place on purpose |
 | `CreateHeader`, `CanvasDef`/`BlinkDef`/`FadeDef`/`TileDef`/`ViewDef`, `CreateCanvas`, `Layout*`, `TileRect*`, `Process*Cmd`, `*Canvas` bindings, `DisplayDefaultDialog` | | these are ds9 itself (SAOImageDS9 core), not OGFinder features |
 
-Still **not decoupled**: all migrated code reads and writes the `catpanel(...)` and `ed()` globals; it was moved
-verbatim, not rewritten behind the `::ogf::cat` service.  Moving a proc to a file does not remove that coupling; doing so
-is the next step and needs behaviour tests per feature (only the replay harness and `verify_ai_gui` cover it now).
+Coupling to the `catpanel(...)` global is addressed in section 7 (`::ogf::cat` accessor, done plugin by plugin); the `ed()`
+dialog globals are not.
 
-## 7. Verification (measured on the final build, see the final report)
+## 7. `::ogf::cat` key accessor (decoupling from `catpanel(...)`)
+
+Migrated plugin code no longer touches the `catpanel` global.  It goes through `::ogf::cat` (`ds9/library/ogf_core.tcl`):
+
+| call | meaning |
+|---|---|
+| `::ogf::cat::get KEY ?default?` | value; error if the key is unset and no default is given |
+| `::ogf::cat::set KEY VALUE` / `exists` / `unset KEY...` / `unset_glob PAT` | write, test, remove |
+| `::ogf::cat::append KEY ...` / `lappend KEY ...` | in-place string / list extension |
+| `::ogf::cat::keys ?GLOB?` | existing keys |
+| `::ogf::cat::trace add\|remove\|info KEY CMD` | `CMD KEY NEWVALUE` after every write of KEY, including writes by legacy code |
+| `::ogf::cat::has` / `tsv` / `selection` | catalog loaded? / the whole catalog TSV / NUMBERs of the selected rows |
+| `::ogf::cat::registry` / `describe KEY` | the documented key registry (below) |
+
+KEY is exactly the old array subscript (`param,detect-thresh`, `icl,center_x`, ...), and the storage is still the global
+`catpanel(KEY)`.  That is deliberate: unmigrated code (`layout.tcl`, `ogf_link`, `ogf_td`, `ogf_tile`, `ogf_session`) and migrated
+plugins see the same values, the `.prf` files, the CLI argv and the recorded session steps do not change, and the old and new
+styles can coexist while the code is migrated.  Swapping the storage later (a namespace variable or a dict) is a change in one
+place.
+
+**Key registry.**  `::ogf::cat::registry` holds 39 pattern entries `{pattern type owner access description}`, for example
+`param,*` (extract, scalar, rw; persisted in `sextract.prf`), `icl,*`, `lsbg,*`, `psf,param,*`, `merge,*`, `ai,*`, `morph,*`,
+`status`, `alldata` (read-only for plugins; written by the catalog loaders), `tbl`/`tbldb` (widget/array names, legacy, not for new
+code).  A key that matches no entry logs one WARN per key; `OGF_CAT_STRICT=1` turns this into an error (used while migrating).
+`::ogf::cat::describe KEY` prints the matching entry.  New plugins must register their keys in the registry (see `docs/plugins.md`).
+
+**Procedure used per plugin** (every stage was committed separately):
+
+1. extend `scripts/verify_cat_behavior.tcl` with the plugin's features and capture `scripts/golden/cat_behavior.golden` from the
+   *unmigrated* code.  The test runs a real ds9 with a scratch `HOME`, replaces `exec` by canned TSV for the Python scripts and
+   records, per feature: the exec argv, the `catpanel` keys that changed, the `.prf` files written/read, the session steps
+   (step, class, templated argv, post) and the status text;
+2. run `tools/cat_migrate.py FILE.tcl` (mechanical rewrite of `$catpanel(K)`, `set catpanel(K) v`, `info exists`, `append`,
+   `lappend`, `unset`, `array unset`, and dropping `catpanel` from `global` lines that no longer need it);
+3. `make`, run the golden test (must be byte-identical), commit.
+
+Result (82 features, 748 golden lines; `scripts/verify_cat_api.tcl` 19 checks, `verify_session_replay.py` 78/0 unchanged):
+
+| scope | `catpanel(` occurrences at the start (`f400f8fc9`) | now |
+|---|---|---|
+| `plugins/*.tcl` (all 16 plugins) | 1557 | 52 (47 `catpanel(tbldb)`, 5 table/plot widget bindings) |
+| `ds9/library/layout.tcl` (panel construction, defaults) | 198 | 198 (not migrated) |
+| `ogf_link.tcl` 68, `ogf_td.tcl` 35, `ogf_session.tcl` 12, `ogf_tile.tcl` 6, others <=2 | - | not migrated |
+| `::ogf::cat::` calls in plugins | 0 | 1572 |
+
+Migrated plugins: moving, photoz_sed, morphology, deconv, galaxy_model, bands, ai_services, mask, photometry, extract, star_psf,
+icl, lsbg, objects, catalog (catalog_io, catalog_table, catalog_markers, cli_script, plot_viewer).  Besides the mechanical rewrite
+one change was made by hand: the LSBG forced-photometry band dialog keeps its temporary state in a private `ogflsbg()` array
+instead of `catpanel(lsbg,tmp_bandname|band_dialog_done)` (nothing else read those keys).
+
+**Left entangled (the residual list):**
+
+* `catpanel(tbl)` / `catpanel(tbldb)` - the tktable widget path and the name of its data array.  Code such as
+  `global $catpanel(tbldb)` followed by `set ${catpanel(tbldb)}($row,$col)` (47 places in `catalog_table`, `catalog_io`,
+  `separate`, `merge`) reads cells directly.  `::ogf::cat::get tbldb` hides the name only; a real fix needs a row/cell accessor
+  (`::ogf::cat::cell ROW COL`, `::ogf::cat::rows`) and a decision about the widget, which is outside this item.
+* `-textvariable catpanel(...)` / `-variable catpanel(...)` bindings of the panel widgets in `layout.tcl` and of the plot dialog
+  (`plot,logx`, `plot,logy`, `plot,counter`): Tk needs a variable name.  Their storage must stay `catpanel` until the widgets are
+  built through a different mechanism.
+* `layout.tcl` (198) defines the defaults of all keys in `CreateCatalogPanel`; `ogf_link` (selection, 68), `ogf_td` (time-domain
+  table, 35), `ogf_session` (recorder reads parameter keys, 12), `ogf_tile`.  These are core, not plugins; they were left alone so
+  that the load order and the layout invariants (181/769/154) are not touched.
+* `catpanel_fdata(FRAME,KEY)` (per-frame snapshots of the keys) is still read directly by `plugins/icl/icl.tcl` (6 places).
+* The `ed()` dialog globals (not catpanel) remain in `extract` (`CatalogPanelParamDefaults`, dual extract, trim), `icl`
+  (sector / colour-profile dialogs), `photometry` (multi-band, cross-match, completeness) and `star_psf` (extended PSF, WebbPSF,
+  TinyTim dialogs).  They are dialog-local state; migrating them to `OGFParamDialog` (section 6, stage 6) would remove them.
+* The `tbl`-bound behaviour (row selection, header click sort, `CatalogPanelSelectCmd`) is covered by the behaviour test only
+  through direct calls and one header-click simulation; real mouse input on the table is not tested.
+
+Tests: `scripts/verify_cat_api.tcl` (accessor), `scripts/verify_cat_behavior.sh` (golden comparison; `--update` only from code that
+has been reviewed to be correct, never to make a migration pass), both registered in `scripts/run_all_checks.sh` (`docs/testing.md`).
+
+## 8. Verification (measured on the final build, see the final report)
 
 Measured on the final build (`bin/ds9`), display :77 (Xvfb), `-geometry 1300x950`.  Screenshots were only checked through
 measured geometry, pixel counts and logs, not looked at.
