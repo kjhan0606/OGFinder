@@ -2,7 +2,6 @@
 # Loaded through the "tcl" field of plugins/photoz_sed/plugin.json.
 
 proc CatalogPanelPhotoZParamLoad {} {
-    global catpanel
     set prf [file join [file normalize ~] .ds9 photo_z.prf]
     if {![file exists $prf]} return
     if {[catch {
@@ -17,34 +16,32 @@ proc CatalogPanelPhotoZParamLoad {} {
 	if {$eq < 0} continue
 	set key [string trim [string range $line 0 [expr {$eq-1}]]]
 	set val [string trim [string range $line [expr {$eq+1}] end]]
-	set catpanel(photoz,param,$key) $val
+	::ogf::cat::set photoz,param,$key $val
     }
 }
 
 proc CatalogPanelPhotoZParamSave {} {
-    global catpanel
     set prf [file join [file normalize ~] .ds9 photo_z.prf]
     catch {file mkdir [file dirname $prf]}
     if {[catch {set fd [open $prf w]}]} return
     foreach key {bands mag-columns checkpoint} {
-	if {[info exists catpanel(photoz,param,$key)]} {
-	    puts $fd "$key=$catpanel(photoz,param,$key)"
+	if {[::ogf::cat::exists photoz,param,$key]} {
+	    puts $fd "$key=[::ogf::cat::get photoz,param,$key]"
 	}
     }
     close $fd
 }
 
 proc CatalogPanelPhotoZ {} {
-    global catpanel
     if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook photoz]} return  ;# ogf_ai.tcl: backend local|external
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
     # Get column names for band mapping
-    set lines [split $catpanel(alldata) "\n"]
+    set lines [split [::ogf::cat::tsv] "\n"]
     set header [split [lindex $lines 0] "\t"]
 
     set w .catphotoz
@@ -55,7 +52,7 @@ proc CatalogPanelPhotoZ {} {
 
     ttk::label $w.lbands -text "Bands (comma-sep):"
     ttk::entry $w.bands -width 30
-    $w.bands insert 0 $catpanel(photoz,param,bands)
+    $w.bands insert 0 [::ogf::cat::get photoz,param,bands]
 
     ttk::label $w.lmags -text "Mag columns (comma-sep):"
     ttk::entry $w.mags -width 30
@@ -67,14 +64,14 @@ proc CatalogPanelPhotoZ {} {
 	}
     }
     set default_mags [join $magcols ","]
-    if {$catpanel(photoz,param,mag-columns) ne {}} {
-	set default_mags $catpanel(photoz,param,mag-columns)
+    if {[::ogf::cat::get photoz,param,mag-columns] ne {}} {
+	set default_mags [::ogf::cat::get photoz,param,mag-columns]
     }
     $w.mags insert 0 $default_mags
 
     ttk::label $w.lckpt -text "Checkpoint:"
     ttk::entry $w.ckpt -width 30
-    $w.ckpt insert 0 $catpanel(photoz,param,checkpoint)
+    $w.ckpt insert 0 [::ogf::cat::get photoz,param,checkpoint]
 
     ttk::frame $w.btns
     ttk::button $w.btns.run -text "Run Photo-z" \
@@ -89,37 +86,36 @@ proc CatalogPanelPhotoZ {} {
 }
 
 proc CatalogPanelPhotoZRun {dlg} {
-    global catpanel
 
     set bands [$dlg.bands get]
     set magcols [$dlg.mags get]
     set ckpt [$dlg.ckpt get]
 
     # Save params
-    set catpanel(photoz,param,bands) $bands
-    set catpanel(photoz,param,mag-columns) $magcols
-    set catpanel(photoz,param,checkpoint) $ckpt
+    ::ogf::cat::set photoz,param,bands $bands
+    ::ogf::cat::set photoz,param,mag-columns $magcols
+    ::ogf::cat::set photoz,param,checkpoint $ckpt
     CatalogPanelPhotoZParamSave
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_photo_z.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_photo_z.py"
+	::ogf::cat::set status "Script not found: ds9_photo_z.py"
 	return
     }
 
     set tmpcat [CatalogPanelSaveTempCatalog "photoz"]
     if {$tmpcat eq {}} {
-	set catpanel(status) "Failed to save temp catalog"
+	::ogf::cat::set status "Failed to save temp catalog"
 	return
     }
 
-    set catpanel(status) "Running Photo-z estimation..."
+    ::ogf::cat::set status "Running Photo-z estimation..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --catalog $tmpcat]
@@ -128,27 +124,26 @@ proc CatalogPanelPhotoZRun {dlg} {
     if {$ckpt ne {} && [file exists $ckpt]} {
 	lappend args --checkpoint $ckpt
     }
-    lappend args --n-workers $catpanel(param,n-workers)
+    lappend args --n-workers [::ogf::cat::get param,n-workers]
 
     OGFSessLog analysis.photo_z auto $args -title {Photo-z} -post [dict create kind add cols_list {PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER}]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Photo-z error: $err"
+	::ogf::cat::set status "Photo-z error: $err"
 	return
     }
 
     if {[string trim $data] eq {}} {
-	set catpanel(status) "Photo-z: no output"
+	::ogf::cat::set status "Photo-z: no output"
 	return
     }
 
     CatalogPanelAddColumnsFromTSV $data \
 	{PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER}
-    set catpanel(status) "Photo-z estimation complete"
+    ::ogf::cat::set status "Photo-z estimation complete"
     catch {destroy $dlg}
 }
 
 proc CatalogPanelSEDParamLoad {} {
-    global catpanel
     set prf [file join [file normalize ~] .ds9 sed_fit.prf]
     if {![file exists $prf]} return
     if {[catch {
@@ -163,34 +158,32 @@ proc CatalogPanelSEDParamLoad {} {
 	if {$eq < 0} continue
 	set key [string trim [string range $line 0 [expr {$eq-1}]]]
 	set val [string trim [string range $line [expr {$eq+1}] end]]
-	set catpanel(sed,param,$key) $val
+	::ogf::cat::set sed,param,$key $val
     }
 }
 
 proc CatalogPanelSEDParamSave {} {
-    global catpanel
     set prf [file join [file normalize ~] .ds9 sed_fit.prf]
     catch {file mkdir [file dirname $prf]}
     if {[catch {set fd [open $prf w]}]} return
     foreach key {bands mag-columns photoz-column checkpoint-emulator checkpoint-inverse backend} {
-	if {[info exists catpanel(sed,param,$key)]} {
-	    puts $fd "$key=$catpanel(sed,param,$key)"
+	if {[::ogf::cat::exists sed,param,$key]} {
+	    puts $fd "$key=[::ogf::cat::get sed,param,$key]"
 	}
     }
     close $fd
 }
 
 proc CatalogPanelSEDFit {} {
-    global catpanel
     if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook sed_fit]} return  ;# ogf_ai.tcl: backend local|external
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
     # Check for PHOTO_Z column
-    set lines [split $catpanel(alldata) "\n"]
+    set lines [split [::ogf::cat::tsv] "\n"]
     set header [split [lindex $lines 0] "\t"]
     set has_pz 0
     foreach c $header {
@@ -212,11 +205,11 @@ proc CatalogPanelSEDFit {} {
     ttk::label $w.lbackend -text "SPS Backend:"
     ttk::combobox $w.backend -width 15 -state readonly \
 	-values {auto analytic fsps bagpipes prospector cigale dense_basis}
-    $w.backend set $catpanel(sed,param,backend)
+    $w.backend set [::ogf::cat::get sed,param,backend]
 
     ttk::label $w.lbands -text "Bands (comma-sep):"
     ttk::entry $w.bands -width 30
-    $w.bands insert 0 $catpanel(sed,param,bands)
+    $w.bands insert 0 [::ogf::cat::get sed,param,bands]
 
     ttk::label $w.lmags -text "Mag columns (comma-sep):"
     ttk::entry $w.mags -width 30
@@ -227,22 +220,22 @@ proc CatalogPanelSEDFit {} {
 	}
     }
     set default_mags [join $magcols ","]
-    if {$catpanel(sed,param,mag-columns) ne {}} {
-	set default_mags $catpanel(sed,param,mag-columns)
+    if {[::ogf::cat::get sed,param,mag-columns] ne {}} {
+	set default_mags [::ogf::cat::get sed,param,mag-columns]
     }
     $w.mags insert 0 $default_mags
 
     ttk::label $w.lpzcol -text "Photo-z column:"
     ttk::entry $w.pzcol -width 20
-    $w.pzcol insert 0 $catpanel(sed,param,photoz-column)
+    $w.pzcol insert 0 [::ogf::cat::get sed,param,photoz-column]
 
     ttk::label $w.lcke -text "Emulator checkpoint:"
     ttk::entry $w.cke -width 30
-    $w.cke insert 0 $catpanel(sed,param,checkpoint-emulator)
+    $w.cke insert 0 [::ogf::cat::get sed,param,checkpoint-emulator]
 
     ttk::label $w.lcki -text "Inverse checkpoint:"
     ttk::entry $w.cki -width 30
-    $w.cki insert 0 $catpanel(sed,param,checkpoint-inverse)
+    $w.cki insert 0 [::ogf::cat::get sed,param,checkpoint-inverse]
 
     ttk::frame $w.btns
     ttk::button $w.btns.run -text "Run SED Fit" \
@@ -260,7 +253,6 @@ proc CatalogPanelSEDFit {} {
 }
 
 proc CatalogPanelSEDFitRun {dlg} {
-    global catpanel
 
     set backend [$dlg.backend get]
     set bands [$dlg.bands get]
@@ -269,33 +261,33 @@ proc CatalogPanelSEDFitRun {dlg} {
     set cke [$dlg.cke get]
     set cki [$dlg.cki get]
 
-    set catpanel(sed,param,backend) $backend
-    set catpanel(sed,param,bands) $bands
-    set catpanel(sed,param,mag-columns) $magcols
-    set catpanel(sed,param,photoz-column) $pzcol
-    set catpanel(sed,param,checkpoint-emulator) $cke
-    set catpanel(sed,param,checkpoint-inverse) $cki
+    ::ogf::cat::set sed,param,backend $backend
+    ::ogf::cat::set sed,param,bands $bands
+    ::ogf::cat::set sed,param,mag-columns $magcols
+    ::ogf::cat::set sed,param,photoz-column $pzcol
+    ::ogf::cat::set sed,param,checkpoint-emulator $cke
+    ::ogf::cat::set sed,param,checkpoint-inverse $cki
     CatalogPanelSEDParamSave
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_sed_fit.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_sed_fit.py"
+	::ogf::cat::set status "Script not found: ds9_sed_fit.py"
 	return
     }
 
     set tmpcat [CatalogPanelSaveTempCatalog "sedfit"]
     if {$tmpcat eq {}} {
-	set catpanel(status) "Failed to save temp catalog"
+	::ogf::cat::set status "Failed to save temp catalog"
 	return
     }
 
-    set catpanel(status) "Running SED fitting ($backend)..."
+    ::ogf::cat::set status "Running SED fitting ($backend)..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --catalog $tmpcat]
@@ -309,22 +301,22 @@ proc CatalogPanelSEDFitRun {dlg} {
     if {$cki ne {} && [file exists $cki]} {
 	lappend args --checkpoint-inverse $cki
     }
-    lappend args --n-workers $catpanel(param,n-workers)
+    lappend args --n-workers [::ogf::cat::get param,n-workers]
 
     OGFSessLog analysis.sed_fit auto $args -title {SED fitting} -post [dict create kind add cols_list {LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR}]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "SED fit error: $err"
+	::ogf::cat::set status "SED fit error: $err"
 	return
     }
 
     if {[string trim $data] eq {}} {
-	set catpanel(status) "SED fit: no output"
+	::ogf::cat::set status "SED fit: no output"
 	return
     }
 
     CatalogPanelAddColumnsFromTSV $data \
 	{LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR}
-    set catpanel(status) "SED fitting complete ($backend)"
+    ::ogf::cat::set status "SED fitting complete ($backend)"
     catch {destroy $dlg}
 }
 
