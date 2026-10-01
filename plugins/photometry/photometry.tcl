@@ -2,34 +2,34 @@
 # Loaded through the "tcl" field of plugins/photometry/plugin.json.
 
 proc CatalogPanelSegmentationMap {} {
-    global catpanel current ds9
+    global current ds9
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_segmap.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_segmap.py"
+	::ogf::cat::set status "Script not found: ds9_segmap.py"
 	return
     }
 
-    set catpanel(status) "Generating segmentation map..."
+    ::ogf::cat::set status "Generating segmentation map..."
     update idletasks
 
     set args [list [OGFPython] $script $fn]
-    if {[info exists catpanel(param,detect-thresh)]} {
-	lappend args --detect-thresh $catpanel(param,detect-thresh)
+    if {[::ogf::cat::exists param,detect-thresh]} {
+	lappend args --detect-thresh [::ogf::cat::get param,detect-thresh]
     }
-    if {[info exists catpanel(param,detect-minarea)]} {
-	lappend args --detect-minarea $catpanel(param,detect-minarea)
+    if {[::ogf::cat::exists param,detect-minarea]} {
+	lappend args --detect-minarea [::ogf::cat::get param,detect-minarea]
     }
 
     OGFSessLog analysis.segmap auto $args -title {Segmentation map} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Segmentation map error: $err"
+	::ogf::cat::set status "Segmentation map error: $err"
 	return
     }
 
@@ -44,70 +44,69 @@ proc CatalogPanelSegmentationMap {} {
 	    CreateFrame
 	    LoadFitsFile $outpath {} {}
 	} err2]} {
-	    set catpanel(status) "Error loading segmap: $err2"
+	    ::ogf::cat::set status "Error loading segmap: $err2"
 	    return
 	}
 
-	set catpanel(status) "Segmentation map: $nsrc sources"
+	::ogf::cat::set status "Segmentation map: $nsrc sources"
     } else {
-	set catpanel(status) "Segmentation map: unexpected output"
+	::ogf::cat::set status "Segmentation map: unexpected output"
     }
 }
 
 proc CatalogPanelPSFPhotometry {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     # Check for PSF file
-    if {![info exists catpanel(psf,file)] || ![file exists $catpanel(psf,file)]} {
-	set catpanel(status) "No PSF file — build PSF first (Reconstruction > PSF Generation)"
+    if {![::ogf::cat::exists psf,file] || ![file exists [::ogf::cat::get psf,file]]} {
+	::ogf::cat::set status "No PSF file — build PSF first (Reconstruction > PSF Generation)"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_psf_phot.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_psf_phot.py"
+	::ogf::cat::set status "Script not found: ds9_psf_phot.py"
 	return
     }
 
     set tmpcat [CatalogPanelSaveTempCatalog "psfphot"]
     if {$tmpcat eq {}} {
-	set catpanel(status) "Failed to save temp catalog"
+	::ogf::cat::set status "Failed to save temp catalog"
 	return
     }
 
-    set catpanel(status) "PSF photometry..."
+    ::ogf::cat::set status "PSF photometry..."
     update idletasks
 
-    set args [list [OGFPython] $script $fn --catalog $tmpcat --psf $catpanel(psf,file)]
-    if {[info exists catpanel(param,mag-zeropoint)]} {
-	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    set args [list [OGFPython] $script $fn --catalog $tmpcat --psf [::ogf::cat::get psf,file]]
+    if {[::ogf::cat::exists param,mag-zeropoint]} {
+	lappend args --mag-zeropoint [::ogf::cat::get param,mag-zeropoint]
     }
-    lappend args --n-workers $catpanel(param,n-workers)
+    lappend args --n-workers [::ogf::cat::get param,n-workers]
 
     OGFSessLog analysis.psf_phot auto $args -title {PSF photometry} -post [dict create kind add cols_list {FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF}] -requires [list psf]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "PSF photometry error: $err"
+	::ogf::cat::set status "PSF photometry error: $err"
 	return
     }
 
     CatalogPanelAddColumnsFromTSV $data \
 	{FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF}
-    set catpanel(status) "PSF photometry complete"
+    ::ogf::cat::set status "PSF photometry complete"
 }
 
 proc CatalogPanelMultiBand {} {
-    global catpanel ds9
+    global ds9
 
     set w {.multibandphot}
     set ed(ok) 0
@@ -155,7 +154,7 @@ proc CatalogPanelMultiBand {} {
     unset ed
 
     if {$detect_img eq {} || ![file exists $detect_img]} {
-	set catpanel(status) "Detection image not found"
+	::ogf::cat::set status "Detection image not found"
 	return
     }
 
@@ -167,102 +166,101 @@ proc CatalogPanelMultiBand {} {
 	lappend bands $line
     }
     if {[llength $bands] == 0} {
-	set catpanel(status) "No bands specified"
+	::ogf::cat::set status "No bands specified"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_multiband.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_multiband.py"
+	::ogf::cat::set status "Script not found: ds9_multiband.py"
 	return
     }
 
-    set catpanel(status) "Multi-band photometry ([llength $bands] bands)..."
+    ::ogf::cat::set status "Multi-band photometry ([llength $bands] bands)..."
     update idletasks
 
     set args [list [OGFPython] $script --detect-image $detect_img \
 	--bands [join $bands ","]]
 
     # Use existing catalog if available
-    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+    if {[::ogf::cat::has]} {
 	set tmpcat [CatalogPanelSaveTempCatalog "multiband"]
 	if {$tmpcat ne {}} {
 	    lappend args --catalog $tmpcat
 	}
     }
-    if {[info exists catpanel(param,mag-zeropoint)]} {
-	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    if {[::ogf::cat::exists param,mag-zeropoint]} {
+	lappend args --mag-zeropoint [::ogf::cat::get param,mag-zeropoint]
     }
-    lappend args --n-workers $catpanel(param,n-workers)
+    lappend args --n-workers [::ogf::cat::get param,n-workers]
 
     OGFSessLog analysis.multiband auto $args -title {Multi-band photometry (dialog, ds9_multiband.py)} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Multi-band error: $err"
+	::ogf::cat::set status "Multi-band error: $err"
 	return
     }
 
     # Load as new catalog (replaces current)
     CatalogPanelLoadTSV $data "multi-band"
-    set catpanel(status) "Multi-band photometry complete"
+    ::ogf::cat::set status "Multi-band photometry complete"
 }
 
 proc CatalogPanelCrowdedPhot {} {
-    global catpanel
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
-    if {![info exists catpanel(psf,file)] || ![file exists $catpanel(psf,file)]} {
-	set catpanel(status) "No PSF file — build PSF first"
+    if {![::ogf::cat::exists psf,file] || ![file exists [::ogf::cat::get psf,file]]} {
+	::ogf::cat::set status "No PSF file — build PSF first"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_crowded_phot.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_crowded_phot.py"
+	::ogf::cat::set status "Script not found: ds9_crowded_phot.py"
 	return
     }
 
     set tmpcat [CatalogPanelSaveTempCatalog "crowded"]
     if {$tmpcat eq {}} {
-	set catpanel(status) "Failed to save temp catalog"
+	::ogf::cat::set status "Failed to save temp catalog"
 	return
     }
 
-    set catpanel(status) "Crowded field photometry..."
+    ::ogf::cat::set status "Crowded field photometry..."
     update idletasks
 
     set args [list [OGFPython] $script $fn --catalog $tmpcat \
-	--psf $catpanel(psf,file)]
-    if {[info exists catpanel(param,mag-zeropoint)]} {
-	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+	--psf [::ogf::cat::get psf,file]]
+    if {[::ogf::cat::exists param,mag-zeropoint]} {
+	lappend args --mag-zeropoint [::ogf::cat::get param,mag-zeropoint]
     }
-    lappend args --n-workers $catpanel(param,n-workers)
+    lappend args --n-workers [::ogf::cat::get param,n-workers]
 
     OGFSessLog analysis.crowded_phot auto $args -title {Crowded field photometry} -post [dict create kind add cols_list {FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS}] -requires [list psf]
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Crowded phot error: $err"
+	::ogf::cat::set status "Crowded phot error: $err"
 	return
     }
 
     CatalogPanelAddColumnsFromTSV $data \
 	{FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS}
-    set catpanel(status) "Crowded field photometry complete"
+    ::ogf::cat::set status "Crowded field photometry complete"
 }
 
 proc CatalogPanelCrossMatch {} {
-    global catpanel ed
+    global ed
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first"
 	return
     }
 
@@ -307,17 +305,17 @@ proc CatalogPanelCrossMatch {} {
 
     set script [CatalogPanelGetScript ds9_crossmatch.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_crossmatch.py"
+	::ogf::cat::set status "Script not found: ds9_crossmatch.py"
 	return
     }
 
     set tmpcat [CatalogPanelSaveTempCatalog "crossmatch"]
     if {$tmpcat eq {}} {
-	set catpanel(status) "Failed to save temp catalog"
+	::ogf::cat::set status "Failed to save temp catalog"
 	return
     }
 
-    set catpanel(status) "Cross-matching with $vizcat (r=${matchrad}\")..."
+    ::ogf::cat::set status "Cross-matching with $vizcat (r=${matchrad}\")..."
     update idletasks
 
     OGFSessLog analysis.crossmatch auto [list [OGFPython] $script --catalog $tmpcat --vizier-cat $vizcat --radius $matchrad] -network 1 -title "Cross-match with $vizcat" -post [dict create kind add cols_list {MATCH_DIST MATCH_ID}]
@@ -325,20 +323,20 @@ proc CatalogPanelCrossMatch {} {
 	set data [exec [OGFPython] $script --catalog $tmpcat \
 	    --vizier-cat $vizcat --radius $matchrad 2>@stderr]
     } err]} {
-	set catpanel(status) "Cross-match error: $err"
+	::ogf::cat::set status "Cross-match error: $err"
 	return
     }
 
     CatalogPanelAddColumnsFromTSV $data {MATCH_DIST MATCH_ID}
-    set catpanel(status) "Cross-match complete ($vizcat)"
+    ::ogf::cat::set status "Cross-match complete ($vizcat)"
 }
 
 proc CatalogPanelCompleteness {} {
-    global catpanel ed
+    global ed
 
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
@@ -389,31 +387,31 @@ proc CatalogPanelCompleteness {} {
 
     set script [CatalogPanelGetScript ds9_completeness.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_completeness.py"
+	::ogf::cat::set status "Script not found: ds9_completeness.py"
 	return
     }
 
-    set catpanel(status) "Completeness simulation ($nbins bins)..."
+    ::ogf::cat::set status "Completeness simulation ($nbins bins)..."
     update idletasks
 
     set args [list [OGFPython] $script $fn \
 	--n-inject $ninject --mag-min $magmin --mag-max $magmax --n-bins $nbins]
-    if {[info exists catpanel(param,detect-thresh)]} {
-	lappend args --detect-thresh $catpanel(param,detect-thresh)
+    if {[::ogf::cat::exists param,detect-thresh]} {
+	lappend args --detect-thresh [::ogf::cat::get param,detect-thresh]
     }
-    if {[info exists catpanel(param,mag-zeropoint)]} {
-	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    if {[::ogf::cat::exists param,mag-zeropoint]} {
+	lappend args --mag-zeropoint [::ogf::cat::get param,mag-zeropoint]
     }
-    lappend args --n-workers $catpanel(param,n-workers)
+    lappend args --n-workers [::ogf::cat::get param,n-workers]
 
     OGFSessLog analysis.completeness auto $args -title {Completeness simulation (seed 42)} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Completeness error: $err"
+	::ogf::cat::set status "Completeness error: $err"
 	return
     }
 
     # Load completeness results as a new catalog view
     CatalogPanelLoadTSV $data "completeness"
-    set catpanel(status) "Completeness simulation complete"
+    ::ogf::cat::set status "Completeness simulation complete"
 }
 
