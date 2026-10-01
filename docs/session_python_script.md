@@ -23,7 +23,7 @@ a CRC32 of the tool's stdout / of the catalog after the step (used by replay che
 
 | class | steps |
 |---|---|
-| **automatic** (run in pipeline mode) | Extract Sources; forced photometry in bands (`bands.measure`); Auto Mask, Grow/Shrink/Invert/Clear/Masked/Export mask; Copy mask to bands; catalog Trim, Sort, Save, Export FITS; Sersic, morphometry, segmap, PSF photometry, crowded-field photometry, multiband, dual-image extraction, completeness, bulge+disk, photo-z, SED fit, galaxy morphology, star classification, find PSF stars, build PSF (also extended / WebbPSF / TinyTim), deconvolution; ICL background / profile / measure / multi-threshold / decompose / colour profile; LSBG steps; cross-match (needs `--allow-network`); external AI service runs on the whole catalogue (`ai.run`, network services need `--allow-network`, see `docs/ai_services.md`) |
+| **automatic** (run in pipeline mode) | Extract Sources; forced photometry in bands (`bands.measure`); Auto Mask, Grow/Shrink/Invert/Clear/Masked/Export mask; Copy mask to bands; catalog Trim, Sort, Save, Export FITS; Sersic, morphometry, segmap, PSF photometry, crowded-field photometry, multiband, dual-image extraction, completeness, bulge+disk, photo-z, SED fit, galaxy morphology, star classification, find PSF stars, build PSF (also extended / WebbPSF / TinyTim), deconvolution; ICL background / profile / measure / multi-threshold / decompose / colour profile; LSBG steps; cross-match (needs `--allow-network`); Moving Objects steps (`moving.*`, exposures after `--files`, see `docs/moving_objects.md`); external AI service runs on the whole catalogue (`ai.run`, network services need `--allow-network`, see `docs/ai_services.md`) |
 | **config** (applied silently) | Register band, Detection band, Remove band. In pipeline mode the band registry is built from the supplied images instead. |
 | **manual** (skipped in pipeline mode, listed with a message) | hand-drawn mask Add/Erase regions (image pixel coordinates), mask Undo/Redo/Import, catalog Merge sources, Delete selected, Separate selected, Add object at position, Load catalog, Clear catalog, "show visible only" subsets (`catalog.unrecorded`), AI-merge accept/reject (recorded as manual merges), external AI service run on a hand-selected row subset (`ai.run` with `--numbers`) |
 
@@ -100,6 +100,10 @@ It runs a scripted GUI session (`scripts/verify_gui_session.tcl`, same procs the
 T1 HUDF 3-band replay vs. GUI, T2 m51 replay incl. Sersic, morphometry and ICL chain, T3 determinism (n-workers 1/3/default),
 T4 pipeline mode on new data (3-band, 2-band and 1-band HUDF cut-outs and m51 in one batch with `--jobs 3`, `--resume`
 all-cached, `--resume` with a changed parameter). `scripts/verify_icl_export.tcl` is the ICL bash-export smoke test.
+
+Moving Objects: the exposures given after `--files` are session images (key `main`, `img2`, ...).  Replay uses the recorded
+exposures in recorded order; pipeline mode substitutes all images supplied for the field.  `scripts/verify_moving_session.sh`
+compares a replay with the GUI outputs (real HST ACS BB89 data, network needed; not part of `verify_session_replay.sh`).
 
 ## Known limits
 

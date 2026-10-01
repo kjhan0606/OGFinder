@@ -414,6 +414,10 @@ entries of the old 11 menus are reachable (144 as the same command, the old `Sho
 filter of the shared table, the three old settings dialogs by `OGFParamDialog`); 23 entries are new (tabs, tile options,
 plugin dialogs, details window).  Panel width is 559 px instead of 620 px.
 
+### 5.6 Click selection
+
+A click on overlapping markers/rows opens a chooser (ID, kind, mag, distance) instead of taking the topmost; a single hit selects the nearest row.  See `docs/click_selection.md`.
+
 ## 6. Migration status
 
 `layout.tcl`: 12958 lines originally, 12198 after the first pass (moving, ai_services, bands, mask), **1873 now**.

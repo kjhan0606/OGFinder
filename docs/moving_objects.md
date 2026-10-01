@@ -35,11 +35,11 @@ unchanged.
 |---|---|---|
 | Fetch | MAST (astroquery, public), Pan-STARRS cutouts, SkyBoT, Horizons | see LSST table below |
 | Align | Gaia DR3 (TAP) matching when stars exist, else relative chain with a polynomial/shift+rotation model between exposures | in the test field no Gaia stars matched; result is relative only (4–19 mas rms), the anchor exposure has no absolute tie |
-| Difference | ZOGY (Zackay, Ofek & Gal-Yam 2016) in Fourier space; template = median of the other aligned exposures | sky-noise-only normalisation; template PSF approximated by the target PSF; PSF is Gaussian with FWHM = max(measured, 0.085 arcsec) because the empirical pooled PSF was unusable here |
+| Difference | ZOGY (Zackay, Ofek & Gal-Yam 2016) in Fourier space; template = median of the other aligned exposures. `zogy.zogy` also returns `alpha_new`/`sigma_alpha_new` = flux in the *target exposure's* flux scale (alpha * Fn / Fr), which `difference_chip` uses | sky-noise-only normalisation (no source-noise term, no astrometric-error terms); one PSF per chip (empirical from field stars, Gaussian fallback with FWHM floor 0.085 arcsec), **no spatial PSF variation**; template PSF = target PSF. A PSF 20% too narrow gives ~22% low flux (`moving/tests/test_zogy.py`) |
 | Detect | thresholding on the S/N image, trail (elongated) channel, classes `point trail artefact_cr artefact_edge artefact_static artefact_dipole negative faint` | the archive CR mask is dense and mislabels real detections as `artefact_cr`; `artefact_static` = non-trail detection with template S/N > 8 |
-| Link | observer-parallax hypothesis grid over 1/Δ, pair + intermediate search with a KD-tree, trail PA/length/flux consistency in the score (HelioLinC-style, Holman et al. 2018 / Heinze et al. 2022; **simplified, no heliocentric clustering**) | see recovery numbers |
+| Link | triplet seeds (first / middle / last exposure) with an analytic parallax factor k from the middle exposure (k grid when the baseline is degenerate), KD-tree extension to the other exposures, vectorised 5-parameter weighted least squares (position, rate, k), rate and k gates, score = chi2 + missing-exposure penalty + weak k / rate priors, de-duplication (a candidate sharing >= 2 detections with a better one is dropped); handles >= 3 detections and missing exposures. The previous pair-based linker is kept as `tracklet.link_exposures_legacy`. **Still no heliocentric clustering** | see the injection benchmark below |
 | Identify | SkyBoT candidates re-checked with Horizons using the true HST observer (`500@-48`) | |
-| Orbit | statistical ranging over the admissible region (Granvik et al. 2009 / Muinonen et al. 2010 style, simplified), 2-body polish, then ASSIST/REBOUND differential correction (DE440 + 16 massive asteroids + GR) with Carpino et al. (2003) outlier rejection, Eggl et al. (2020) star-catalogue debiasing, default station sigmas | no classical Gauss IOD (not implemented); station weights are defaults, not the Veres et al. (2017) table; solar light deflection and stellar aberration neglected; `mcmc_posterior` (emcee) exists but is untested; arcs shorter than ~1 day are flagged `determined=False`: elements are blanked, only class probabilities and ranging quantiles are shown |
+| Orbit | statistical ranging over the admissible region (Granvik et al. 2009 / Muinonen et al. 2010 style, simplified), 2-body polish, then ASSIST/REBOUND differential correction (DE440 + 16 massive asteroids + GR) with Carpino et al. (2003) outlier rejection, Eggl et al. (2020) star-catalogue debiasing, default station sigmas | no classical Gauss IOD (not implemented); station weights are defaults, not the Veres et al. (2017) table; solar light deflection and stellar aberration neglected; `mcmc_posterior` (emcee) exists but is untested; arcs shorter than ~1 day are flagged `determined=False`: elements are blanked, only class probabilities and ranging quantiles are shown; **classification is arc-aware** (below) |
 | Transients | static grouping across ≥2 files (CRs cannot repeat), host association with any OGFinder/SExtractor TSV (separation, in R_e, z), heuristic labels | heuristic only, not a classifier; TNS crossmatch is optional via an environment variable and not tested (the site returned 403) |
 | Light curve | forced aperture photometry on difference images, AB magnitude from the header zero point | aperture only |
 | Photometry | HG phase function (Bowell et al. 1989), absolute magnitude H, diameter with an *assumed* albedo | |
@@ -85,11 +85,33 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
   marks it known (2015 BB89, 0.27 arcsec). It is not top-ranked and a second, partially wrong tracklet (id 37) also matched.
   Rates differ from the Horizons geocentric rate because the fit includes the parallax hypothesis; this was not reconciled.
 * Orbit from this 4-exposure, 0.024 d arc: not determined (as expected). Ranging gives class probabilities (Centaur/JFC 0.82,
-  Hilda 0.17) while the true object is a main-belt asteroid (a = 3.17 AU, e = 0.106, i = 19.0 deg); this classification is **wrong**
-  and must not be used for such short arcs.
-* Injection–recovery (30 synthetic Gaussian-PSF movers in real chips, mag 21–26.5, 1.5–40 arcsec/h geocentric): 30/30 detected in ≥3
+  Hilda 0.17; ranging a 16/50/84% = 5.2 / 7.8 / 10.4 AU) while the true object is a main-belt asteroid (a = 3.17 AU, e = 0.106,
+  i = 19.0 deg).  Before: `orbit_class` was the wrong top class.  Now (`kepler.classify_arc`): `orbit_class = "unclassified (arc 0.0244 d too short)"`,
+  `class_status = unclassified`, the probabilities are reported only as `orbit_class_probs` and the best-fit class as `orbit_class_bestfit`.
+* Injection–recovery, original linker (30 synthetic Gaussian-PSF movers in real chips, mag 21–26.5, 1.5–40 arcsec/h geocentric): 30/30 detected in ≥3
   exposures as single detections, but only 8/30 linked correctly (all with mag 21.4–22.8; none at mag ≥ 23.0). Fitted rates match the
   injected ones (e.g. 5.3/5.3, 11.7/11.7, 8.3/6.8 arcsec/h; one object at 32.8 arcsec/h was fitted as 74.9). The 13 correct tracklets (covering the 8 linked objects; `rank4.py`) ranked at positions 16–284 (list order, sorted by n then score) of the 400 returned tracklets (score 6.7–11.8); most returned tracklets are false. Injected sources use a Gaussian PSF, not a real ACS PSF.
+* Injection benchmark of the new linker (`python moving/validation/link_bench.py injN.json.pkl [--legacy] [--max-tracklets 400]`;
+  six injected sets inj1..inj6 = 10 + 5x30 movers in the real BB89 chips, tolerance 1.0 arcsec, recovered = a returned tracklet has
+  >= 3 members within 1 arcsec of the truth; "ceiling" = injected objects with >= 3 detections in the linker's input pool, i.e. the
+  most any linker can recover):
+
+  | set | injected | legacy (top 400) | new (top 400) | new (top 3000) | ceiling | legacy / new time |
+  |---|---|---|---|---|---|---|
+  | inj1 | 10 | 1 | 4 | 5 | 7 | 95 s / 7-9 s |
+  | inj2 | 30 | 5 | 15 | 17 | 24 | 54 s / 3-5 s |
+  | inj3 | 30 | 2 | 6 | 7 | 15 | 136 s / 11 s |
+  | inj4 | 30 | 8 | 8 | 8 | 20 | 134 s / 10 s |
+  | inj5 | 30 | 7 | 10 | 12 | 21 | 136 s / 13 s |
+  | inj6 | 30 | 10 | 10 | 10 | 18 | 131 s / 11 s |
+  | total | 160 | **33** | **53** | 59 | 105 | ~10-15x faster |
+
+  The "8/30" case above is inj4: the new linker also gets 8 there (no gain; its ceiling is 20, the remaining 12 are lost at the
+  detection/class selection or in the 400-tracklet cap).  Honest limits: recovery is bounded by detection; precision is low (about
+  390 of the 400 returned tracklets are false in this crowded pool of ~2100 detections per exposure) so ranking matters
+  (top 50: new 2/14/4/5/8/8 vs legacy 1/3/1/7/5/7); 3-member candidates cannot be validated because the parallax factor is free.
+  Unit tests: `moving/tests/test_tracklet.py` (3 detections, missing exposure, no duplicates, unphysical rate, ranking, a 10-mover
+  mini-injection with >= 8 recovered).
 * Alignment: relative rms 19.4 / 4.4 / 3.7 mas (exposures 2–4 w.r.t. the anchor), no Gaia stars matched.
 * Orbit fit pipeline check on an asteroid with a long observed arc (25153, public MPC astrometry, ASSIST force model, Eggl debiasing):
   * 90-day arc, 277 obs (100 used), rms 0.51 arcsec, χ²_red 1.15. Elements vs JPL SBDB, (fit − JPL)/σ_fit: a −1.4, e −0.9, i +0.5,
@@ -100,12 +122,30 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
   * A bug was found and fixed in the ASSIST propagator wrapper (one simulation reused for forward and backward sweeps): before the fix
     a differential correction started from the JPL state gave 57 arcsec rms, after the fix 1.76 arcsec (χ²_red 0.51) with default weights.
 
+## Session recorder: Moving Objects steps
+
+The eight steps (`moving.align/difference/link/identify/orbit/transients/lightcurve/export`) are recorded and exported by
+"Save Session as Python Script...".  The exposures after `--files` count as session images (also from `~/.ds9/mast_cache`),
+so the exported script contains `@{IMG:key}` placeholders; `--mode replay --field NAME:main=a.fits,img2=b.fits,...` re-runs on the
+original exposures, `--mode pipeline` (default) on any set of exposures supplied for the field (all images given are used).
+Ephemeris files: the exported `SESSION_META['ephem_dir']` is used as `OGF_EPHEM_DIR` when the script runs under a different HOME.
+Verified on the real cached HST ACS 2015 BB89 exposures (GUI run: align 34 s, difference 136 s, link 35 s, identify 21 s, orbit 37 s):
+replay in an empty HOME with `env -i` ran all 8 steps (321 s) and produced files byte-identical to the GUI run (detections.tsv,
+movers.tsv, tracklets.json, identified.tsv, orbit_tracklet0.json/.kv, transients.tsv, lightcurves.json, elements_export.json,
+tracklet0.obs80).  `scripts/verify_moving_session.sh` repeats that comparison (needs network and the cached data; exits 77 when
+they are missing).  Pipeline mode on the same four files in reversed order ran all 8 steps in 316 s, but the outputs differ
+(9824 vs 9809 detections; the template/anchor exposure changes), as expected.  Caveat: the recorded `moving.orbit --tracklet 0`
+is "whichever tracklet is rank 0" - on new data that is not necessarily a known object.
+
 ## Limitations (summary)
 
 * LSST provider unavailable without an RSP login; test field outside DP1. No real DP1 FITS tested.
-* No absolute astrometric tie for the test field; Gaussian PSF; dense archive CR flag; recovery limited to mag ≲ 23 in the injection test;
+* No absolute astrometric tie for the test field; Gaussian PSF; dense archive CR flag; recovery limited to mag ≲ 23 in the first injection test (new linker: see the benchmark, ceiling set by detection);
   the true BB89 tracklet is not the best-scored candidate.
-* Tracklets from one HST orbit cannot give orbits; class probabilities from such arcs are unreliable.
+* Tracklets from one HST orbit cannot give orbits.  Arc-aware classification (`kepler.classify_arc`, `class_probs_from_covariance`):
+  statuses `classified` / `ambiguous` / `unclassified`; arcs < 1 d, degenerate fits (e >= 1, a <= 0, not determined) and class
+  probabilities below 0.70 are *not* given a class label; the uncertainty (Monte-Carlo from the covariance, or ranging samples for
+  short arcs) is reported as `orbit_class_probs`, `class_note`.  Tests: `moving/tests/test_classify_arc.py`.
 * Station sigmas are defaults; Carpino rejection is aggressive on short arcs.
 * Transient / light-curve / export modes were exercised on one field only; light curves have no PSF photometry; host association needs a user catalogue.
 
