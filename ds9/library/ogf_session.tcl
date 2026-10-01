@@ -60,6 +60,19 @@ proc OGFSessIsImageFile {f} {
     return [regexp -nocase {\.(fits|fit|fts)(\.gz)?$} $f]
 }
 
+# exposures of a multi-exposure tool: the values after --files (Moving Objects steps).  They are images of the session
+# even when they live below the work directory (MAST cache ~/.ds9/mast_cache).
+proc OGFSessFilesArg {argv} {
+    set i [lsearch -exact $argv --files]
+    if {$i < 0} {return {}}
+    set out {}
+    foreach a [lrange $argv [expr {$i+1}] end] {
+	if {[string match -* $a]} break
+	if {[file isfile $a] && [regexp -nocase {\.(fits|fit|fts)(\.gz)?$} $a]} {lappend out [file normalize $a]}
+    }
+    return $out
+}
+
 # image files used by an argv: first positional (python tools / sextract),
 # --measure-image, --target-image
 proc OGFSessArgvImages {argv} {
@@ -74,6 +87,7 @@ proc OGFSessArgvImages {argv} {
 	    if {[OGFSessIsImageFile $v]} {lappend out [file normalize $v]}
 	}
     }
+    foreach f [OGFSessFilesArg $argv] {lappend out $f}
     return [lsort -unique $out]
 }
 
@@ -103,9 +117,13 @@ proc OGFSessTemplate {argv {useroutputs {}}} {
     set sbin [OGFSextractBin]
     set out {}
     set i 0
+    set fl [OGFSessFilesArg $argv]
     foreach a $argv {
 	set t $a
-	if {[lsearch -exact $useroutputs $a] >= 0} {
+	if {[llength $fl] && [lsearch -exact $fl [file normalize $a]] >= 0 && [file isfile $a]} {
+	    # exposure of a multi-exposure step: mapped to @{IMG:key} at export (the script substitutes the field images)
+	    set t $a
+	} elseif {[lsearch -exact $useroutputs $a] >= 0} {
 	    set t @\{OUT\}/[file tail $a]
 	} elseif {$i == 0 && $a eq [OGFPython]} {
 	    set t @\{PY\}
@@ -172,7 +190,8 @@ proc OGFSessLog {step class argv args} {
 	if {[string match -* $a]} continue
 	if {[string first [OGFSessWorkDir]/ $a] != 0 || ![file exists $a]} continue
 	set pf [lindex $argv [expr {$i-1}]]
-	if {[regexp {output|--catalog$|--regions$} $pf]} continue
+	if {[regexp {output|--catalog$|--regions$|--workdir$} $pf]} continue
+	if {[lsearch -exact [OGFSessFilesArg $argv] [file normalize $a]] >= 0} continue
 	if {[regexp {_catalog\.tsv$} $a]} continue
 	if {[regexp {mask_regions\.reg$} $a]} continue
 	if {[lindex $argv 1] ne {} && [file tail [lindex $argv 1]] eq "ds9_mask.py"} {
@@ -499,7 +518,7 @@ proc OGFSessExport {path} {
     set meta [dict create ogfinder_root $root ds9_version [expr {[info exists ds9(version)] ? $ds9(version) : {}}] \
 	ds9_exe [info nameofexecutable] git_head $git git_dirty_sources $dirty \
 	python [OGFPython] exported [clock format [clock seconds] -format "%Y-%m-%dT%H:%M:%S%z"] \
-	detection_key $detkey workdir [OGFSessWorkDir] n_workers_gui [expr {[info exists catpanel(param,n-workers)] ? $catpanel(param,n-workers) : {}}] \
+	detection_key $detkey workdir [OGFSessWorkDir] ephem_dir [expr {[file isdirectory [file join [OGFSessWorkDir] ephem]] ? [file join [OGFSessWorkDir] ephem] : {}}] n_workers_gui [expr {[info exists catpanel(param,n-workers)] ? $catpanel(param,n-workers) : {}}] \
 	session_started [clock format $ogfsess(t0) -format "%Y-%m-%dT%H:%M:%S%z"]]
     set meta_json [OGFJDict $meta]
     set tplf [CatalogPanelGetScript ogf_session_template.py]

@@ -169,6 +169,11 @@ def lib_env():
         libpaths.append(os.environ[var])
     if libpaths:
         env[var] = ':'.join(libpaths)
+    # Moving Objects steps need the ASSIST ephemeris files (~/.ds9/ephem of the GUI machine): when the script runs with another
+    # HOME, fall back to the directory recorded in the session
+    ed = SESSION_META.get('ephem_dir')
+    if ed and 'OGF_EPHEM_DIR' not in env and not os.path.isdir(os.path.join(os.path.expanduser('~'), '.ds9', 'ephem')) and os.path.isdir(ed):
+        env['OGF_EPHEM_DIR'] = ed
     return env
 
 
@@ -333,13 +338,37 @@ def expand(field, token, cat_written):
     return _tok.sub(rep, token)
 
 
-def step_image_keys(rec):
+def files_span(argv_t):
+    """(start, end) token range of the exposures after `--files` (Moving Objects steps), or None."""
+    if '--files' not in argv_t:
+        return None
+    i = argv_t.index('--files') + 1
+    j = i
+    while j < len(argv_t) and not argv_t[j].startswith('--'):
+        j += 1
+    return (i, j) if j > i else None
+
+
+def field_files(field):
+    """exposures of a multi-exposure step (Moving Objects): replay = the recorded exposures in recorded order,
+    pipeline = every image supplied for the field in the order given."""
+    if field.replay:
+        order = {i['key']: n for n, i in enumerate(IMAGES)}
+        keys = sorted(field.images, key=lambda k: order.get(k, 1 << 20))
+    else:
+        keys = list(field.images)
+    return [field.images[k] for k in keys]
+
+
+def step_image_keys(rec, with_files=True):
     keys = []
-    for t in rec['argv_t']:
+    sp = files_span(rec['argv_t'])
+    toks = rec['argv_t'] if (with_files or not sp) else rec['argv_t'][:sp[0]] + rec['argv_t'][sp[1]:]
+    for t in toks:
         for m in re.finditer(r'@\{IMG:([^}]*)\}', t):
             if m.group(1) not in keys:
                 keys.append(m.group(1))
-    for t in rec['argv_t']:
+    for t in toks:
         for m in re.finditer(r'@\{BASE:([^}]*)\}', t):
             if m.group(1) not in keys:
                 keys.append(m.group(1))
@@ -710,9 +739,11 @@ def decide(field, rec):
 
 def check_requirements(field, rec):
     """returns reason string if a requirement is not met"""
-    for key in step_image_keys(rec):
+    for key in step_image_keys(rec, with_files=field.replay):
         if field.img_for(key) is None:
             return 'input image/band %r of the recorded session is not available in this field' % key
+    if files_span(rec['argv_t']) and not field_files(field):
+        return 'no exposures supplied for this field'
     for r in rec.get('requires') or []:
         if r == 'catalog' and not field.get_cat():
             return 'no catalog available'
@@ -747,7 +778,12 @@ def check_requirements(field, rec):
 def build_argv(field, rec):
     cat_written = {}
     argv = []
-    for t in rec['argv_t']:
+    sp = files_span(rec['argv_t'])
+    for n_, t in enumerate(rec['argv_t']):
+        if sp and not field.replay and sp[0] <= n_ < sp[1]:
+            if n_ == sp[0]:
+                argv.extend(field_files(field))        # pipeline mode: every exposure supplied for this field
+            continue
         argv.append(expand(field, t, cat_written))
     # catalogue temp files, written exactly as the GUI wrote them
     for p, nl in cat_written.items():
@@ -827,6 +863,9 @@ def step_key(field, rec, prev_chain):
     for key in step_image_keys(rec):
         p = field.img_for(key)
         if p:
+            h.update(file_digest_cached(p).encode())
+    if files_span(rec['argv_t']):
+        for p in field_files(field):
             h.update(file_digest_cached(p).encode())
     for k in sorted(field.registry):
         h.update(json.dumps([k, field.registry[k]], sort_keys=True).encode())
