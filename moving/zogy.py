@@ -14,8 +14,13 @@ F_D = F_n F_r / sqrt(s_n^2 F_r^2 + s_r^2 F_n^2),  P^_D = F_n F_r P^_n P^_r / (F_
 S^ = F_D D^ conj(P^_D).  The transient flux estimate is  alpha = S / (F_D^2 sum P_D^2)  in units where the
 reference flux scale is F_r (we set F_r = 1, F_n = flux ratio new/reference), with sigma_alpha = 1/(F_D sqrt(sum P_D^2)).
 
-Not implemented: the source-noise term of S_corr (we use sky-noise-only normalisation, adequate for
-fields without very bright stars), and astrometric-error terms (we mask/ reject dipoles later).
+Flux scale: `alpha`/`sigma_alpha` are in the reference flux scale (F_r); `alpha_new`/`sigma_alpha_new` in the scale of N
+(= alpha * F_n / F_r).  detect.difference_chip reports the latter (flux of a mover in counts of the target exposure).
+
+Not implemented (documented limitations): the source-noise term of S_corr (sky-noise-only normalisation; around very bright
+stars the score noise is higher than 1, which is compensated empirically by the robust score normalisation and the
+static-residual / dipole vetoes in classify), the astrometric-error terms of S_corr, and spatially varying PSFs (one PSF per
+chip, measured from field stars in imaging.estimate_psf; the template PSF defaults to the target PSF).
 """
 import numpy as np
 from numpy.fft import rfft2, irfft2, ifftshift
@@ -26,9 +31,6 @@ def _pad_psf(psf, shape):
     out = np.zeros(shape, dtype=np.float64)
     ph, pw = psf.shape
     cy, cx = ph // 2, pw // 2
-    for y in range(ph):
-        for x in range(pw):
-            pass
     ys = (np.arange(ph) - cy) % shape[0]
     xs = (np.arange(pw) - cx) % shape[1]
     out[np.ix_(ys, xs)] = psf
@@ -53,7 +55,11 @@ def zogy(N, R, Pn, Pr, sn, sr, Fn=1.0, Fr=1.0, eps=1e-12):
     # construction (paper eq. 12 with the 1/den) the noise variance of D is sum |.|^2 -> estimate empirically
     alpha = S / (FD ** 2 * sumP2)
     sig_alpha = 1.0 / (FD * np.sqrt(sumP2))
-    return dict(D=D, S=S, alpha=alpha, sigma_alpha=sig_alpha, PD=np.fft.fftshift(PD), FD=FD, sumP2=sumP2)
+    # `alpha` is in the flux scale of the REFERENCE (F_r): a source of true flux f in N has alpha = f * F_r / F_n.  `alpha_new` /
+    # `sigma_alpha_new` convert to the flux scale of N (counts in the new image), which is what photometry of a mover needs.
+    to_new = Fn / Fr
+    return dict(D=D, S=S, alpha=alpha, sigma_alpha=sig_alpha, alpha_new=alpha * to_new, sigma_alpha_new=sig_alpha * to_new,
+                PD=np.fft.fftshift(PD), FD=FD, sumP2=sumP2)
 
 
 def scaled_subtraction(N, R, Pn, Pr, Fn=1.0, Fr=1.0):

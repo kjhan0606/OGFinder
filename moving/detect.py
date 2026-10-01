@@ -94,7 +94,7 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
     info["template_smooth_sigma"] = float(_k)
     if method == "zogy":
         out = Z.zogy(N, R, psf_t, psf_r, sn, sr, Fn=Fr_ratio, Fr=1.0)
-        S = out["S"]; alpha = out["alpha"]; sig_alpha = out["sigma_alpha"]
+        S = out["S"]; alpha = out["alpha_new"]; sig_alpha = out["sigma_alpha_new"]       # flux in the scale of the target exposure
         info["PD_sum2"] = out["sumP2"]
         # empirical score normalisation (robust) -- guards against non-white noise
         s_emp = Z.robust_sigma(S, ~valid)

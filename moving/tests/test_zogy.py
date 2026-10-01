@@ -50,3 +50,50 @@ def test_zogy_expected_snr():
     fl = np.array([out["alpha"][y, x] for y, x in pos])
     assert abs(fl.mean() - 80.0) < 3 * fl.std() / np.sqrt(len(fl)) + 1.0
     assert 0.7 < fl.std() / out["sigma_alpha"] < 1.3
+
+
+def _flux_case(Fn, sn, sr, fw_n, fw_r, flux=300.0, seed=3):
+    from scipy.signal import fftconvolve
+    rng = np.random.default_rng(seed); shape = (256, 256)
+    Pn = I.gaussian_psf(fw_n, 25); Pn /= Pn.sum(); Pr = I.gaussian_psf(fw_r, 25); Pr /= Pr.sum()
+    pos = [(40 + 40 * i, 40 + 40 * j) for i in range(5) for j in range(5)]
+    T = np.zeros(shape)
+    for y, x in pos:
+        T[y, x] = flux
+    stars = np.zeros(shape); stars[100, 100] = 5000.0
+    R = fftconvolve(stars, Pr, mode="same") + rng.normal(0, sr, shape)
+    N = Fn * fftconvolve(stars, Pn, mode="same") + fftconvolve(T, Pn, mode="same") + rng.normal(0, sn, shape)
+    o = Z.zogy(N, R, Pn, Pr, sn, sr, Fn=Fn, Fr=1.0)
+    return o, np.array([o["alpha_new"][y, x] for y, x in pos]), np.array([o["alpha"][y, x] for y, x in pos])
+
+
+def test_flux_normalisation_with_flux_ratio():
+    """A source of 300 counts in N is recovered as 300 (alpha_new) for any F_n/F_r; `alpha` is in the reference scale."""
+    for Fn in (0.5, 1.0, 2.0):
+        o, a_new, a_ref = _flux_case(Fn, 2.0, 2.0, 2.5, 2.5)
+        assert abs(a_new.mean() - 300.0) < 4 * a_new.std() / np.sqrt(len(a_new)) + 3.0, (Fn, a_new.mean())
+        assert abs(a_ref.mean() * Fn - 300.0) < 4 * a_new.std() / np.sqrt(len(a_new)) + 3.0
+        assert 0.6 < a_new.std() / o["sigma_alpha_new"] < 1.5, (Fn, a_new.std(), o["sigma_alpha_new"])
+
+
+def test_flux_unbiased_with_different_psfs_and_noise():
+    o, a_new, _ = _flux_case(1.0, 2.0, 3.0, 3.5, 2.2)
+    assert abs(a_new.mean() - 300.0) < 4 * a_new.std() / np.sqrt(len(a_new)) + 3.0
+    assert 0.6 < a_new.std() / o["sigma_alpha_new"] < 1.5
+
+
+def test_psf_width_mismatch_biases_flux_low():
+    """Measured sensitivity (documented limitation): a PSF 20% too narrow gives ~22% too little flux (matched filter applied with
+    the wrong profile), i.e. the bias is ~ the fractional FWHM error.  Hence the PSF is measured from field stars per chip."""
+    from scipy.signal import fftconvolve
+    rng = np.random.default_rng(8); shape = (256, 256)
+    Ptrue = I.gaussian_psf(3.0, 25); Ptrue /= Ptrue.sum(); Pwrong = I.gaussian_psf(3.0 * 0.8, 25); Pwrong /= Pwrong.sum()
+    pos = [(40 + 40 * i, 40 + 40 * j) for i in range(5) for j in range(5)]
+    T = np.zeros(shape)
+    for y, x in pos:
+        T[y, x] = 500.0
+    N = fftconvolve(T, Ptrue, mode="same") + rng.normal(0, 2.0, shape); R = rng.normal(0, 2.0, shape)
+    o = Z.zogy(N, R, Pwrong, Pwrong, 2.0, 2.0)
+    a = np.array([o["alpha_new"][y, x] for y, x in pos])
+    bias = a.mean() / 500.0 - 1.0
+    assert -0.32 < bias < -0.12, bias
