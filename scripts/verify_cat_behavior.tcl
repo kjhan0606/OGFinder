@@ -1,0 +1,269 @@
+# Characterisation test for the catalog-panel store (item 5 of the decoupling work).  It records, for every migrated plugin feature,
+#   * the argv that reaches exec (CLI args), with the python scripts replaced by canned TSV output,
+#   * the catpanel keys afterwards (values reaching the store) and the status text,
+#   * the contents of the .prf files written by the parameter save procs (HOME is a scratch dir) and what the load procs restore,
+#   * the session-recorder steps (step, class, templated argv, post) the feature logged,
+# and writes them to OGF_CAT_OUT.  scripts/verify_cat_behavior.sh diffs that file against scripts/golden/cat_behavior.golden, which
+# was produced BEFORE any plugin was migrated to ::ogf::cat.   Usage (HOME must be a scratch directory!):
+#   HOME=/tmp/ogf_cat_home OGF_CAT_OUT=/tmp/cat.txt DISPLAY=:77 bin/ds9 /workspace/fits/m51.fits -geometry 1300x950 -source scripts/verify_cat_behavior.tcl
+global catpanel current ds9 ogfsess
+set ::fh [open $::env(OGF_CAT_OUT) w]
+set ::HOME [file normalize ~]
+proc P {args} {puts $::fh [join $args { }]; flush $::fh}
+proc bgerror {m} {P "BGERROR $m"}
+rename tk_messageBox ::orig_mb
+proc tk_messageBox {args} {P "MESSAGEBOX [dict get $args -message]"; return ok}
+proc wait_idle {ms} {set t [clock milliseconds]; while {[clock milliseconds]-$t < $ms} {update; after 20}}
+
+# ---- exec stub: record argv; python scripts return canned output, everything else runs for real
+set ::EXEC {}
+rename exec ::real_exec
+proc exec {args} {
+    set a {}
+    foreach x $args {if {[string match 2>* $x]} continue; lappend a $x}
+    lappend ::EXEC $a
+    set py [expr {[llength $a] > 1 && [string match *.py [lindex $a 1]] ? [file tail [lindex $a 1]] : {}}]
+    if {$py eq {}} {return [::real_exec {*}$args]}
+    return [canned $py $a]
+}
+proc cat_numbers {a} {
+    set i [lsearch -exact $a --catalog]
+    if {$i < 0} {return {1 2 3}}
+    set fd [open [lindex $a [expr {$i+1}]] r]; set d [read $fd]; close $fd
+    set out {}
+    foreach l [lrange [split $d \n] 1 end] {if {[string trim $l] ne {}} {lappend out [lindex [split $l \t] 0]}}
+    return $out
+}
+proc tsv_cols {a cols} {
+    set lines [list [join [linsert $cols 0 NUMBER] \t]]
+    foreach n [cat_numbers $a] {
+	set row [list $n]; set k 0
+	foreach c $cols {lappend row [format %.3f [expr {($n % 7) + 0.25*[incr k]}]]}
+	lappend lines [join $row \t]
+    }
+    return [join $lines \n]
+}
+proc canned {py a} {
+    switch -- $py {
+	ds9_photo_z.py {return [tsv_cols $a {PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER}]}
+	ds9_sed_fit.py {return [tsv_cols $a {LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR}]}
+	ds9_bulge_disk.py {return [tsv_cols $a {BT_RATIO BULGE_RE BULGE_MAG DISK_RS DISK_MAG BD_CHI2 BD_FLAG}]}
+	ds9_morphometry.py {return [tsv_cols $a {CONC ASYM GINI M20 R_PETRO}]}
+	ds9_sersic.py {return [tsv_cols $a {SERSIC_N SERSIC_RE SERSIC_IE SERSIC_ELLIP SERSIC_THETA SERSIC_CHI2}]}
+	ds9_psf_phot.py {return [tsv_cols $a {FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF}]}
+	ds9_crowded_phot.py {return [tsv_cols $a {FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS}]}
+	ds9_crossmatch.py {return [tsv_cols $a {MATCH_DIST MATCH_ID}]}
+	ds9_galaxy_morph.py {
+	    set lines [list "#GALAXY_MORPH\tN_CLASSIFIED=3\tN_SOURCES=3" "NUMBER\tT\tD\tC\ta\tb\tc\td\te\tf\tCOLOR"]
+	    foreach n [lrange [cat_numbers $a] 0 2] {lappend lines [join [list $n E elliptical 0.9 x 1 x 1 x 1 green] \t]}
+	    return [join $lines \n]
+	}
+	ds9_completeness.py {return "MAG\tFRAC\n20.0\t0.99\n21.0\t0.9"}
+	ds9_multiband.py {return "NUMBER\tMAG_G\tMAG_R\n1\t20.1\t19.8"}
+	default {return ""}
+    }
+}
+
+# ---- recorder helpers
+proc steps_sig {from} {
+    global ogfsess
+    set out {}
+    foreach r [lrange $ogfsess(steps) $from end] {
+	lappend out "STEP [dict get $r step] [dict get $r class] | [norm [dict get $r argv_t]] | post=[dict get $r post] title=[dict get $r title] requires=[dict get $r requires]"
+    }
+    return $out
+}
+proc norm {s} {
+    set s [string map [list $::HOME <HOME> /workspace/fits <FITS> [file normalize bin] <BIN>] $s]
+    regsub -all {/tmp/[A-Za-z0-9_.-]+} $s <TMP> s
+    return $s
+}
+proc snap {globs} {
+    global catpanel
+    set out {}
+    foreach g $globs {
+	foreach k [lsort [array names catpanel $g]] {
+	    set v $catpanel($k)
+	    if {$k eq "alldata"} {set v "<tsv rows=[expr {[llength [split $v \n]]-1}] cols=[llength [split [lindex [split $v \n] 0] \t]]>"}
+	    lappend out "  catpanel($k) = [norm $v]"
+	}
+    }
+    return [join $out \n]
+}
+proc cols {} {global catpanel; return [lrange [split [lindex [split $catpanel(alldata) \n] 0] \t] 0 end]}
+proc feature {name body {globs {status}}} {
+    global ogfsess
+    set s0 [llength $ogfsess(steps)]; set e0 [llength $::EXEC]
+    P "=== $name"
+    if {[catch {uplevel #0 $body} err]} {P "  ERROR: [norm $err]"}
+    update; wait_idle 100
+    foreach a [lrange $::EXEC $e0 end] {P "  EXEC [norm $a]"}
+    foreach s [steps_sig $s0] {P "  $s"}
+    set sn [snap $globs]; if {$sn ne {}} {P $sn}
+}
+proc prf {name} {
+    set f [file join $::HOME .ds9 $name]
+    if {![file exists $f]} {P "  PRF $name: (absent)"; return}
+    set fd [open $f r]; set d [read $fd]; close $fd
+    P "  PRF $name:"; foreach l [split [string trim $d] \n] {P "    $l"}
+}
+
+proc run {} {
+    global catpanel current ds9 ogfsess
+    update; wait_idle 500
+    P "HOME-scratch [expr {[string match /tmp/* $::HOME] ? {yes} : {NO - refusing}}]"
+    if {![string match /tmp/* $::HOME]} {P SUMMARY-ABORT; close $::fh; exit 2}
+    # ---------------------------------------------------------------- extraction (real ds9_sextract)
+    feature extract {set catpanel(param,detect-thresh) 3.0; CatalogPanelExtract; \
+	set t0 [clock milliseconds]; while {$catpanel(alldata) eq {} && [clock milliseconds]-$t0 < 60000} {update; after 100}} \
+	{alldata extract_param,* param,detect-thresh param,mag-zeropoint status}
+    P "  columns: [llength [cols]] first=[lindex [cols] 0] n_rows=[expr {[llength [split $catpanel(alldata) \n]]-2}]"
+    # ---------------------------------------------------------------- parameter stores: legacy write -> prf -> wipe -> load
+    feature params_extract {
+	set catpanel(param,detect-thresh) 2.5; set catpanel(param,back-size) 48; set catpanel(param,n-workers) 3
+	CatalogPanelParamSave
+    } {}
+    prf sextract.prf
+    feature params_extract_load {
+	set catpanel(param,detect-thresh) 9; set catpanel(param,back-size) 9; set catpanel(param,n-workers) 9
+	CatalogPanelParamLoad
+    } {param,detect-thresh param,back-size param,n-workers}
+    feature params_psf {
+	set catpanel(psf,param,psf-size) 31; set catpanel(psf,param,rl-iterations) 25; set catpanel(psf,param,clean-gain) 0.2
+	CatalogPanelPSFParamSave
+    } {}
+    prf psf_deconv.prf
+    feature params_psf_load {
+	set catpanel(psf,param,psf-size) 1; set catpanel(psf,param,rl-iterations) 1; CatalogPanelPSFParamLoad
+    } {psf,param,psf-size psf,param,rl-iterations psf,param,clean-gain}
+    feature params_bd {
+	set catpanel(bd,param,max-sources) 17; set catpanel(bd,param,free-bulge-n) 1; set catpanel(bd,param,mag-zeropoint) 26.5; set catpanel(bd,param,pixel-scale) 0.05
+	CatalogPanelBDParamSave
+    } {}
+    prf bulge_disk.prf
+    feature params_bd_load {
+	set catpanel(bd,param,max-sources) 1; CatalogPanelBDParamLoad
+    } {bd,param,*}
+    feature params_photoz {
+	set catpanel(photoz,param,bands) g,r,i; set catpanel(photoz,param,mag-columns) MAG_APER_2; set catpanel(photoz,param,checkpoint) /nonexistent.pt
+	CatalogPanelPhotoZParamSave
+    } {}
+    prf photo_z.prf
+    feature params_photoz_load {
+	set catpanel(photoz,param,bands) x; CatalogPanelPhotoZParamLoad
+    } {photoz,param,*}
+    feature params_sed {
+	set catpanel(sed,param,backend) prospector; set catpanel(sed,param,bands) g,r; set catpanel(sed,param,photoz-column) PHOTO_Z
+	CatalogPanelSEDParamSave
+    } {}
+    prf sed_fit.prf
+    feature params_sed_load {
+	set catpanel(sed,param,backend) x; CatalogPanelSEDParamLoad
+    } {sed,param,*}
+    # declarative-dialog path: ::ogf::params put/get/save/restore
+    feature params_api {
+	::ogf::params::put morphology max-sources 23
+	::ogf::params::put morphology pixel-scale 0.11
+	set ::pv [list [::ogf::params::get morphology max-sources] [::ogf::params::get morphology pixel-scale]]
+	::ogf::params::save morphology
+	::ogf::params::put deconv rl-iterations 44
+	::ogf::params::save deconv
+	::ogf::params::put extract detect-thresh 4.5
+	::ogf::params::save extract
+	P "  api values: $::pv"
+    } {bd,param,max-sources bd,param,pixel-scale psf,param,rl-iterations param,detect-thresh}
+    prf bulge_disk.prf; prf psf_deconv.prf; prf sextract.prf
+    # restore sane values for the runs below
+    set catpanel(param,detect-thresh) 3.0; set catpanel(param,n-workers) 2; set catpanel(param,mag-zeropoint) 24.5
+    set catpanel(bd,param,max-sources) 50; set catpanel(bd,param,free-bulge-n) 0; set catpanel(bd,param,mag-zeropoint) 25.0; set catpanel(bd,param,pixel-scale) 0.05
+    # ---------------------------------------------------------------- analysis steps (python canned)
+    feature sersic {CatalogPanelSersicFit} {status param,mag-zeropoint}
+    P "  cols+: [lrange [cols] end-5 end]"
+    feature morphometry {CatalogPanelMorphometry}
+    P "  cols+: [lrange [cols] end-4 end]"
+    feature bulge_disk {CatalogPanelBulgeDisk}
+    P "  cols+: [lrange [cols] end-6 end]"
+    feature photoz_dialog_run {
+	set catpanel(photoz,param,bands) g,r,i; set catpanel(photoz,param,mag-columns) {}
+	CatalogPanelPhotoZ
+	.catphotoz.bands delete 0 end; .catphotoz.bands insert 0 "u,g"
+	CatalogPanelPhotoZRun .catphotoz
+    } {status photoz,param,*}
+    P "  cols+: [lrange [cols] end-3 end]"
+    P "  photoz dialog destroyed: [expr {![winfo exists .catphotoz]}]"
+    prf photo_z.prf
+    feature sed_dialog_run {
+	CatalogPanelSEDFit
+	set w .catsedfit
+	if {[winfo exists $w]} {
+	    # the run proc is the "Run" button's command; find it
+	    set cmd [$w.btns.run cget -command]
+	    P "  run command: [norm $cmd]"
+	    uplevel #0 $cmd
+	}
+    } {status sed,param,*}
+    P "  cols+: [lrange [cols] end-6 end]"
+    # PSF-dependent steps need a PSF file
+    set psf [file join $::HOME fake_psf.fits]; set fd [open $psf w]; puts $fd x; close $fd
+    set catpanel(psf,file) $psf; set catpanel(psf,has_psf) 1
+    feature psf_photometry {CatalogPanelPSFPhotometry}
+    P "  cols+: [lrange [cols] end-6 end]"
+    feature crowded_phot {CatalogPanelCrowdedPhot}
+    P "  cols+: [lrange [cols] end-5 end]"
+    foreach alg {rl wiener clean} {
+	feature deconvolve_$alg [list CatalogPanelDeconvolve $alg] {status psf,param,rl-iterations psf,param,wiener-nsr psf,param,clean-gain}
+    }
+    feature crossmatch_dialog {after 400 {set ed(ok) 1}; CatalogPanelCrossMatch}
+    P "  cols+: [lrange [cols] end-1 end]"
+    feature completeness_dialog {after 400 {set ed(ok) 1}; CatalogPanelCompleteness}
+    # galaxy morphology (CNN) result parsing -> morph keys, new columns, marker colours
+    feature galaxy_morphology {CatalogPanelGalaxyMorphology} {status morph,* markall,on}
+    P "  cols+: [lrange [cols] end-1 end]"
+    # mask: presets read the icl / lsbg parameters of the store
+    feature mask_presets {
+	set catpanel(icl,param,detect-thresh) 2.2; set catpanel(icl,param,expand-factor) 1.7; set catpanel(icl,param,max-dilate-radius) 40
+	set catpanel(icl,param,bright-star-mag-limit) 17; set catpanel(icl,param,bright-star-radius-scale) 2.5
+	OGFMaskInit; OGFMaskPresetICL
+	set s1 "[array get ::ogfmask p,*]"
+	set catpanel(lsbg,param,mask-detect-thresh) 1.1; set catpanel(lsbg,param,mask-detect-minarea) 7; set catpanel(lsbg,param,mask-expand-factor) 1.3
+	set catpanel(lsbg,param,max-dilate-radius) 33; set catpanel(lsbg,param,bright-star-mag-limit) 16; set catpanel(lsbg,param,bright-star-radius-scale) 2.1
+	set catpanel(lsbg,param,mask-mag-threshold) 21; set catpanel(lsbg,param,lsb-protect) 1
+	OGFMaskPresetLSBG
+	set s2 "[array get ::ogfmask p,*]"
+	P "  mask preset icl : [lsort -stride 2 $s1]"
+	P "  mask preset lsbg: [lsort -stride 2 $s2]"
+    } {}
+    feature mask_auto_args {
+	set catpanel(lsbg,param,pixel-scale) 0.2; set catpanel(lsbg,param,lsb-mu-threshold) 26.5
+	set a [OGFMaskAutoArgs]
+	P "  auto args: [norm $a]"
+	set catpanel(icl,cmdlog) {}
+	OGFMaskSyncPipelines [dict create bool /tmp/zz_mask.fits base /tmp/zz]
+	P "  sync keys: [lsort [array names catpanel *mask*]]"
+    } {icl,mask_file icl,has_mask lsbg,mask_file lsbg,has_mask icl,fits_base_mask lsbg,fits_base_mask}
+    # bands (the dialog-free procs)
+    feature bands_register {
+	OGFBandsInit
+	CatalogPanelBandsRegisterFrame $current(frame) gband 25.5 {} [CatalogPanelGetFITS]
+	P "  bands: $::ogfband(names) detect=$::ogfband(detect)"
+    } {status param,mag-zeropoint param,pixel-scale}
+    feature bands_set_detect {CatalogPanelBandsSetDetect gband} {status param,mag-zeropoint param,pixel-scale}
+    # segmentation map (output loaded into a new frame)
+    feature segmap {
+	set ::segout [file join $::HOME segout.fits]; file copy -force /workspace/fits/m51.fits $::segout
+	rename canned ::canned0
+	proc canned {py a} {if {$py eq "ds9_segmap.py"} {return "OK 5 $::segout"}; return [::canned0 $py $a]}
+	CatalogPanelSegmentationMap
+	rename canned {}; rename ::canned0 canned
+    } {status param,detect-thresh}
+    # selection-dependent reads
+    feature selection_reads {
+	set catpanel(sel,nums) {3 5 8}
+	P "  AI row count=[OGFAIRowCount] selection=$catpanel(sel,nums)"
+	set catpanel(sel,nums) {}
+    } {}
+    P "SUMMARY-DONE steps=[llength $ogfsess(steps)] exec=[llength $::EXEC]"
+    close $::fh
+    exit
+}
+after 4000 {if {[catch run err]} {P "ERROR $err\n$::errorInfo"; close $::fh; exit 1}}

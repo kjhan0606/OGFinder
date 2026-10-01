@@ -1,0 +1,300 @@
+HOME-scratch yes
+=== extract
+  EXEC <BIN>/ds9_sextract <FITS>/m51.fits --detect-thresh 3.0 --detect-minarea 5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-aperture 5.0 --mag-zeropoint 25.0 --gain 0.0 --pixel-scale 1.0 --seeing-fwhm 3.0 --back-size 64 --back-filtersize 3 --phot-aperture-2 4.0 --phot-aperture-3 6.0 --phot-aperture-5 10.0 --conv-filter default
+  STEP extract auto | @{SEXTRACT} <FITS>/m51.fits --detect-thresh 3.0 --detect-minarea 5 --deblend-nthresh 32 --deblend-mincont 0.005 --phot-aperture 5.0 --mag-zeropoint 25.0 --gain 0.0 --pixel-scale 1.0 --seeing-fwhm 3.0 --back-size 64 --back-filtersize 3 --phot-aperture-2 4.0 --phot-aperture-3 6.0 --phot-aperture-5 10.0 --conv-filter default | post=kind set title=Extract sources (ds9_sextract) requires=
+  catpanel(alldata) = <tsv rows=164 cols=35>
+  catpanel(extract_param,back-filtersize) = 3
+  catpanel(extract_param,back-size) = 64
+  catpanel(extract_param,deblend-mincont) = 0.005
+  catpanel(extract_param,deblend-nthresh) = 32
+  catpanel(extract_param,detect-minarea) = 5
+  catpanel(extract_param,detect-thresh) = 3.0
+  catpanel(extract_param,mag-zeropoint) = 25.0
+  catpanel(param,detect-thresh) = 3.0
+  catpanel(param,mag-zeropoint) = 25.0
+  catpanel(status) = m51.fits: 164 sources extracted
+  columns: 35 first=NUMBER n_rows=163
+=== params_extract
+  PRF sextract.prf:
+    detect-thresh 2.5
+    detect-minarea 5
+    deblend-nthresh 32
+    deblend-mincont 0.005
+    phot-aperture 5.0
+    mag-zeropoint 25.0
+    gain 0.0
+    pixel-scale 1.0
+    seeing-fwhm 3.0
+    back-size 48
+    back-filtersize 3
+    phot-aperture-2 4.0
+    phot-aperture-3 6.0
+    phot-aperture-5 10.0
+    conv-filter default
+    n-workers 3
+    sep-deblend-nthresh 64
+    sep-deblend-mincont 0.0001
+    sep-detect-thresh 0.8
+    sep-detect-minarea 3
+    sep-radius-factor 3.0
+    sep-back-size 32
+=== params_extract_load
+  catpanel(param,detect-thresh) = 2.5
+  catpanel(param,back-size) = 48
+  catpanel(param,n-workers) = 3
+=== params_psf
+  PRF psf_deconv.prf:
+    class-star-thresh 0.8
+    max-ellipticity 0.2
+    fwhm-sigma 2.0
+    min-flux-snr 10.0
+    psf-size 31
+    rl-iterations 25
+    wiener-nsr 0.01
+    tikhonov-lambda 0.001
+    tv-lambda 0.001
+    clean-gain 0.2
+    clean-niter 1000
+    clean-threshold 0.0
+    mem-lambda 0.1
+    mem-niter 100
+    ext-core-mag-min 18.0
+    ext-core-mag-max 22.0
+    ext-wing-mag-max 16.0
+    ext-core-size 51
+    ext-wing-size 201
+    ext-blend-inner 20.0
+    ext-blend-outer 30.0
+    ext-saturation-limit 60000.0
+    sim-telescope auto
+    sim-instrument auto
+    sim-filter auto
+    sim-psf-size 201
+    sim-oversample 1
+    sim-jitter-sigma 0.007
+    sim-focus-offset 0.0
+=== params_psf_load
+  catpanel(psf,param,psf-size) = 31
+  catpanel(psf,param,rl-iterations) = 25
+  catpanel(psf,param,clean-gain) = 0.2
+=== params_bd
+  PRF bulge_disk.prf:
+    max-sources=17
+    free-bulge-n=1
+    mag-zeropoint=26.5
+    pixel-scale=0.05
+=== params_bd_load
+  catpanel(bd,param,free-bulge-n) = 1
+  catpanel(bd,param,mag-zeropoint) = 26.5
+  catpanel(bd,param,max-sources) = 17
+  catpanel(bd,param,pixel-scale) = 0.05
+=== params_photoz
+  PRF photo_z.prf:
+    bands=g,r,i
+    mag-columns=MAG_APER_2
+    checkpoint=/nonexistent.pt
+=== params_photoz_load
+  catpanel(photoz,param,bands) = g,r,i
+  catpanel(photoz,param,checkpoint) = /nonexistent.pt
+  catpanel(photoz,param,mag-columns) = MAG_APER_2
+=== params_sed
+  PRF sed_fit.prf:
+    bands=g,r
+    mag-columns=
+    photoz-column=PHOTO_Z
+    checkpoint-emulator=
+    checkpoint-inverse=
+    backend=prospector
+=== params_sed_load
+  catpanel(sed,param,backend) = prospector
+  catpanel(sed,param,bands) = g,r
+  catpanel(sed,param,checkpoint-emulator) = 
+  catpanel(sed,param,checkpoint-inverse) = 
+  catpanel(sed,param,mag-columns) = 
+  catpanel(sed,param,photoz-column) = PHOTO_Z
+=== params_api
+  api values: 23 0.11
+  catpanel(bd,param,max-sources) = 23
+  catpanel(bd,param,pixel-scale) = 0.11
+  catpanel(psf,param,rl-iterations) = 44
+  catpanel(param,detect-thresh) = 4.5
+  PRF bulge_disk.prf:
+    max-sources=23
+    free-bulge-n=1
+    mag-zeropoint=26.5
+    pixel-scale=0.11
+  PRF psf_deconv.prf:
+    class-star-thresh 0.8
+    max-ellipticity 0.2
+    fwhm-sigma 2.0
+    min-flux-snr 10.0
+    psf-size 31
+    rl-iterations 44
+    wiener-nsr 0.01
+    tikhonov-lambda 0.001
+    tv-lambda 0.001
+    clean-gain 0.2
+    clean-niter 1000
+    clean-threshold 0.0
+    mem-lambda 0.1
+    mem-niter 100
+    ext-core-mag-min 18.0
+    ext-core-mag-max 22.0
+    ext-wing-mag-max 16.0
+    ext-core-size 51
+    ext-wing-size 201
+    ext-blend-inner 20.0
+    ext-blend-outer 30.0
+    ext-saturation-limit 60000.0
+    sim-telescope auto
+    sim-instrument auto
+    sim-filter auto
+    sim-psf-size 201
+    sim-oversample 1
+    sim-jitter-sigma 0.007
+    sim-focus-offset 0.0
+  PRF sextract.prf:
+    detect-thresh 4.5
+    detect-minarea 5
+    deblend-nthresh 32
+    deblend-mincont 0.005
+    phot-aperture 5.0
+    mag-zeropoint 25.0
+    gain 0.0
+    pixel-scale 1.0
+    seeing-fwhm 3.0
+    back-size 48
+    back-filtersize 3
+    phot-aperture-2 4.0
+    phot-aperture-3 6.0
+    phot-aperture-5 10.0
+    conv-filter default
+    n-workers 3
+    sep-deblend-nthresh 64
+    sep-deblend-mincont 0.0001
+    sep-detect-thresh 0.8
+    sep-detect-minarea 3
+    sep-radius-factor 3.0
+    sep-back-size 32
+=== sersic
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_sersic.py <FITS>/m51.fits --catalog <HOME>/.ds9/sersic_catalog.tsv --mag-zeropoint 24.5 --n-workers 2
+  STEP analysis.sersic auto | @{PY} @{LIB}/ds9_sersic.py <FITS>/m51.fits --catalog @{CAT:sersic} --mag-zeropoint 24.5 --n-workers 2 | post=kind add cols_list {SERSIC_N SERSIC_RE SERSIC_IE SERSIC_ELLIP SERSIC_THETA SERSIC_CHI2} title=Sersic fitting requires=
+  catpanel(status) = Sérsic fitting complete
+  catpanel(param,mag-zeropoint) = 24.5
+  cols+: SERSIC_N SERSIC_RE SERSIC_IE SERSIC_ELLIP SERSIC_THETA SERSIC_CHI2
+=== morphometry
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_morphometry.py <FITS>/m51.fits --catalog <HOME>/.ds9/morphometry_catalog.tsv --n-workers 2
+  STEP analysis.morphometry auto | @{PY} @{LIB}/ds9_morphometry.py <FITS>/m51.fits --catalog @{CAT:morphometry} --n-workers 2 | post=kind add cols_list {CONC ASYM GINI M20 R_PETRO} title=Non-parametric morphology (CAS/Gini/M20) requires=
+  catpanel(status) = Morphometry complete (CAS/Gini/M20/Petrosian)
+  cols+: CONC ASYM GINI M20 R_PETRO
+=== bulge_disk
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_bulge_disk.py <FITS>/m51.fits --catalog <HOME>/.ds9/bulgedisk_catalog.tsv --mag-zeropoint 25.0 --pixel-scale 0.05 --max-sources 50 --n-workers 2
+  STEP analysis.bulge_disk auto | @{PY} @{LIB}/ds9_bulge_disk.py <FITS>/m51.fits --catalog @{CAT:bulgedisk} --mag-zeropoint 25.0 --pixel-scale 0.05 --max-sources 50 --n-workers 2 | post=kind add cols_list {BT_RATIO BULGE_RE BULGE_MAG DISK_RS DISK_MAG BD_CHI2 BD_FLAG} title=Bulge+Disk decomposition requires=
+  catpanel(status) = Bulge+Disk decomposition complete
+  cols+: BT_RATIO BULGE_RE BULGE_MAG DISK_RS DISK_MAG BD_CHI2 BD_FLAG
+=== photoz_dialog_run
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_photo_z.py <FITS>/m51.fits --catalog <HOME>/.ds9/photoz_catalog.tsv --bands u,g --mag-columns MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5 --n-workers 2
+  STEP analysis.photo_z auto | @{PY} @{LIB}/ds9_photo_z.py <FITS>/m51.fits --catalog @{CAT:photoz} --bands u,g --mag-columns MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5 --n-workers 2 | post=kind add cols_list {PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER} title=Photo-z requires=
+  catpanel(status) = Photo-z estimation complete
+  catpanel(photoz,param,bands) = u,g
+  catpanel(photoz,param,checkpoint) = /nonexistent.pt
+  catpanel(photoz,param,mag-columns) = MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5
+  cols+: PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER
+  photoz dialog destroyed: 1
+  PRF photo_z.prf:
+    bands=u,g
+    mag-columns=MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5
+    checkpoint=/nonexistent.pt
+=== sed_dialog_run
+  run command: CatalogPanelSEDFitRun .catsedfit
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_sed_fit.py <FITS>/m51.fits --catalog <HOME>/.ds9/sedfit_catalog.tsv --backend prospector --bands g,r --mag-columns MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5 --photo-z-column PHOTO_Z --n-workers 2
+  STEP analysis.sed_fit auto | @{PY} @{LIB}/ds9_sed_fit.py <FITS>/m51.fits --catalog @{CAT:sedfit} --backend prospector --bands g,r --mag-columns MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5 --photo-z-column PHOTO_Z --n-workers 2 | post=kind add cols_list {LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR} title=SED fitting requires=
+  catpanel(status) = SED fitting complete (prospector)
+  catpanel(sed,param,backend) = prospector
+  catpanel(sed,param,bands) = g,r
+  catpanel(sed,param,checkpoint-emulator) = 
+  catpanel(sed,param,checkpoint-inverse) = 
+  catpanel(sed,param,mag-columns) = MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5
+  catpanel(sed,param,photoz-column) = PHOTO_Z
+  cols+: LOG_MASS LOG_MASS_ERR LOG_AGE LOG_AGE_ERR LOG_Z AV SFR
+=== psf_photometry
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_psf_phot.py <FITS>/m51.fits --catalog <HOME>/.ds9/psfphot_catalog.tsv --psf <HOME>/fake_psf.fits --mag-zeropoint 24.5 --n-workers 2
+  STEP analysis.psf_phot auto | @{PY} @{LIB}/ds9_psf_phot.py <FITS>/m51.fits --catalog @{CAT:psfphot} --psf <HOME>/fake_psf.fits --mag-zeropoint 24.5 --n-workers 2 | post=kind add cols_list {FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF} title=PSF photometry requires=psf
+  catpanel(status) = PSF photometry complete
+  cols+: FLUX_PSF FLUXERR_PSF MAG_PSF MAGERR_PSF CHI2_PSF X_PSF Y_PSF
+=== crowded_phot
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_crowded_phot.py <FITS>/m51.fits --catalog <HOME>/.ds9/crowded_catalog.tsv --psf <HOME>/fake_psf.fits --mag-zeropoint 24.5 --n-workers 2
+  STEP analysis.crowded_phot auto | @{PY} @{LIB}/ds9_crowded_phot.py <FITS>/m51.fits --catalog @{CAT:crowded} --psf <HOME>/fake_psf.fits --mag-zeropoint 24.5 --n-workers 2 | post=kind add cols_list {FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS} title=Crowded field photometry requires=psf
+  catpanel(status) = Crowded field photometry complete
+  cols+: FLUX_CROWD FLUXERR_CROWD MAG_CROWD X_CROWD Y_CROWD N_NEIGHBORS
+=== deconvolve_rl
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_psf_deconv.py <FITS>/m51.fits --mode deconvolve --psf <HOME>/fake_psf.fits --algorithm rl --output <HOME>/.ds9/deconv_result.fits --iterations 44
+  STEP deconv.run auto | @{PY} @{LIB}/ds9_psf_deconv.py <FITS>/m51.fits --mode deconvolve --psf <HOME>/fake_psf.fits --algorithm rl --output @{WORK}/deconv_result.fits --iterations 44 | post= title=Deconvolution ($algorithm) requires=psf
+  catpanel(status) = Deconvolution complete but output file not found
+  catpanel(psf,param,rl-iterations) = 44
+  catpanel(psf,param,wiener-nsr) = 0.01
+  catpanel(psf,param,clean-gain) = 0.2
+=== deconvolve_wiener
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_psf_deconv.py <FITS>/m51.fits --mode deconvolve --psf <HOME>/fake_psf.fits --algorithm wiener --output <HOME>/.ds9/deconv_result.fits --wiener-nsr 0.01
+  STEP deconv.run auto | @{PY} @{LIB}/ds9_psf_deconv.py <FITS>/m51.fits --mode deconvolve --psf <HOME>/fake_psf.fits --algorithm wiener --output @{WORK}/deconv_result.fits --wiener-nsr 0.01 | post= title=Deconvolution ($algorithm) requires=psf
+  catpanel(status) = Deconvolution complete but output file not found
+  catpanel(psf,param,rl-iterations) = 44
+  catpanel(psf,param,wiener-nsr) = 0.01
+  catpanel(psf,param,clean-gain) = 0.2
+=== deconvolve_clean
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_psf_deconv.py <FITS>/m51.fits --mode deconvolve --psf <HOME>/fake_psf.fits --algorithm clean --output <HOME>/.ds9/deconv_result.fits --clean-gain 0.2 --clean-niter 1000 --clean-threshold 0.0
+  STEP deconv.run auto | @{PY} @{LIB}/ds9_psf_deconv.py <FITS>/m51.fits --mode deconvolve --psf <HOME>/fake_psf.fits --algorithm clean --output @{WORK}/deconv_result.fits --clean-gain 0.2 --clean-niter 1000 --clean-threshold 0.0 | post= title=Deconvolution ($algorithm) requires=psf
+  catpanel(status) = Deconvolution complete but output file not found
+  catpanel(psf,param,rl-iterations) = 44
+  catpanel(psf,param,wiener-nsr) = 0.01
+  catpanel(psf,param,clean-gain) = 0.2
+=== crossmatch_dialog
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_crossmatch.py --catalog <HOME>/.ds9/crossmatch_catalog.tsv --vizier-cat GAIA_DR3 --radius 2.0
+  STEP analysis.crossmatch auto | @{PY} @{LIB}/ds9_crossmatch.py --catalog @{CAT:crossmatch} --vizier-cat GAIA_DR3 --radius 2.0 | post=kind add cols_list {MATCH_DIST MATCH_ID} title=Cross-match with GAIA_DR3 requires=
+  catpanel(status) = Cross-match complete (GAIA_DR3)
+  cols+: MATCH_DIST MATCH_ID
+=== completeness_dialog
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_completeness.py <FITS>/m51.fits --n-inject 500 --mag-min 20.0 --mag-max 28.0 --n-bins 16 --detect-thresh 3.0 --mag-zeropoint 24.5 --n-workers 2
+  STEP analysis.completeness auto | @{PY} @{LIB}/ds9_completeness.py <FITS>/m51.fits --n-inject 500 --mag-min 20.0 --mag-max 28.0 --n-bins 16 --detect-thresh 3.0 --mag-zeropoint 24.5 --n-workers 2 | post= title=Completeness simulation (seed 42) requires=
+  catpanel(status) = Completeness simulation complete
+=== galaxy_morphology
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_galaxy_morph.py <FITS>/m51.fits --catalog <HOME>/.ds9/morph_catalog.tsv
+  STEP galaxy.morphology auto | @{PY} @{LIB}/ds9_galaxy_morph.py <FITS>/m51.fits --catalog @{CATNL:morph} | post=kind morph title=Galaxy morphology (CNN) requires=
+  catpanel(status) = Morphology: 3 galaxies classified
+  catpanel(morph,20.0) = E elliptical 0.9 green
+  catpanel(morph,21.0) = E elliptical 0.9 green
+  catpanel(morph,map) = 20.0 21.0
+  catpanel(markall,on) = 0
+  cols+: MAG FRAC
+=== mask_presets
+  mask preset icl : p,bright-star-mag-limit 17 p,bright-star-radius-scale 2.5 p,detect-thresh 2.2 p,expand-factor 1.7 p,lsb-protect 0 p,mag-threshold 99 p,max-dilate-radius 40 p,minarea 5
+  mask preset lsbg: p,bright-star-mag-limit 16 p,bright-star-radius-scale 2.1 p,detect-thresh 1.1 p,expand-factor 1.3 p,lsb-protect 1 p,mag-threshold 21 p,max-dilate-radius 33 p,minarea 7
+=== mask_auto_args
+  auto args: --detect-thresh 1.1 --minarea 7 --expand-factor 1.3 --max-dilate-radius 33 --bright-star-mag-limit 16 --bright-star-radius-scale 2.1 --mag-threshold 21 --mag-zeropoint 24.5 --n-workers 2 --pixel-scale 0.2 --lsb-mu-threshold 26.5 --lsb-protect
+  sync keys: icl,fits_base_mask icl,has_mask icl,mask_file icl,masked_file lsbg,fits_base_mask lsbg,has_mask lsbg,mask_file lsbg,masked_file lsbg,param,mask-detect-minarea lsbg,param,mask-detect-thresh lsbg,param,mask-expand-factor lsbg,param,mask-mag-threshold
+  catpanel(icl,mask_file) = <TMP>
+  catpanel(icl,has_mask) = 0
+  catpanel(lsbg,mask_file) = <TMP>
+  catpanel(lsbg,has_mask) = 0
+  catpanel(icl,fits_base_mask) = <TMP>
+  catpanel(lsbg,fits_base_mask) = <TMP>
+=== bands_register
+  bands: gband detect=gband
+  EXEC <BIN>/ds9_sextract --info <FITS>/m51.fits
+  STEP bands.register config |  | post= title=Register band gband (ZP 25.5) requires=
+  catpanel(status) = Morphology: 3 galaxies classified
+  catpanel(param,mag-zeropoint) = 24.5
+  catpanel(param,pixel-scale) = 1.0
+=== bands_set_detect
+  STEP bands.detect config |  | post= title=Detection band = gband requires=
+  catpanel(status) = Detection band = gband
+  catpanel(param,mag-zeropoint) = 24.5
+  catpanel(param,pixel-scale) = 1.0
+=== segmap
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_segmap.py <FITS>/m51.fits --detect-thresh 3.0 --detect-minarea 5
+  STEP analysis.segmap auto | @{PY} @{LIB}/ds9_segmap.py <FITS>/m51.fits --detect-thresh 3.0 --detect-minarea 5 | post= title=Segmentation map requires=
+  catpanel(status) = Segmentation map: 5 sources
+  catpanel(param,detect-thresh) = 3.0
+=== selection_reads
+  AI row count=0 selection=3 5 8
+SUMMARY-DONE steps=17 exec=16

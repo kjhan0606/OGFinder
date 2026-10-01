@@ -47,35 +47,35 @@ proc ::ogf::cat::tsv {} {
 }
 proc ::ogf::cat::has {} {return [expr {[tsv] ne {}}]}
 proc ::ogf::cat::columns {} {
-    set d [tsv]
+    ::set d [tsv]
     if {$d eq {}} {return {}}
     return [lmap h [split [lindex [split $d \n] 0] \t] {string trim $h}]
 }
 proc ::ogf::cat::nrows {} {
-    set n 0
+    ::set n 0
     foreach l [lrange [split [tsv] \n] 1 end] {if {[string trim $l] ne {}} {incr n}}
     return $n
 }
 # values of one column (all rows, catalog order)
 proc ::ogf::cat::values {col} {
-    set i [lsearch -exact [columns] $col]
+    ::set i [lsearch -exact [columns] $col]
     if {$i < 0} {return {}}
-    set out {}
+    ::set out {}
     foreach l [lrange [split [tsv] \n] 1 end] {
 	if {[string trim $l] eq {}} continue
-	lappend out [string trim [lindex [split $l \t] $i]]
+	::lappend out [string trim [lindex [split $l \t] $i]]
     }
     return $out
 }
 # list of dicts, one per row
 proc ::ogf::cat::rows {} {
-    set cols [columns]
-    set out {}
+    ::set cols [columns]
+    ::set out {}
     foreach l [lrange [split [tsv] \n] 1 end] {
 	if {[string trim $l] eq {}} continue
-	set d {}
+	::set d {}
 	foreach c $cols v [split $l \t] {dict set d $c [string trim $v]}
-	lappend out $d
+	::lappend out $d
     }
     return $out
 }
@@ -85,10 +85,10 @@ proc ::ogf::cat::selection {} {
 }
 # mode: replace | add | toggle
 proc ::ogf::cat::select {nums {mode replace} {pan 1}} {
-    set first 1
+    ::set first 1
     foreach n $nums {
 	CatalogPanelLinkSelect $n [expr {$first ? $mode : "add"}] [expr {$pan && $first}]
-	set first 0
+	::set first 0
     }
 }
 proc ::ogf::cat::clear_selection {} {CatalogPanelClearSelection}
@@ -98,6 +98,118 @@ proc ::ogf::cat::load_tsv {tsv name} {CatalogPanelLoadTSV $tsv $name}
 proc ::ogf::cat::temp_file {suffix} {return [CatalogPanelSaveTempCatalog $suffix]}
 proc ::ogf::cat::image_file {} {return [CatalogPanelGetFITS]}
 proc ::ogf::cat::status {msg} {::ogf::status $msg}
+
+# ---------------------------------------------------------------- key accessor  (docs/architecture.md section 7)
+#   ::ogf::cat::get KEY ?default?   value of a catalog-panel key; error if it is unset and no default is given
+#   ::ogf::cat::set KEY VALUE       store; returns VALUE
+#   ::ogf::cat::exists KEY          1/0
+#   ::ogf::cat::unset KEY ...       remove keys (missing keys are ignored)
+#   ::ogf::cat::unset_glob PATTERN  remove every key matching a glob
+#   ::ogf::cat::append KEY args...  /  ::ogf::cat::lappend KEY args...
+#   ::ogf::cat::keys ?GLOB?         existing keys matching GLOB
+#   ::ogf::cat::trace add KEY CMD   call  CMD KEY NEWVALUE  after every write of KEY (accessor or legacy code)
+#   ::ogf::cat::trace remove KEY CMD / ::ogf::cat::trace info KEY
+#   ::ogf::cat::registry            list of {pattern type owner access description};  ::ogf::cat::describe KEY
+# Storage is still the legacy global array catpanel(KEY): KEY is exactly the old subscript, so unmigrated code (layout.tcl,
+# plugins/catalog, objects, icl, lsbg) and migrated plugins see the same values; .prf files and session steps are unchanged.
+# Every KEY should match an entry of the registry (otherwise one WARN is logged per key; OGF_CAT_STRICT=1 makes it an error).
+# NOTE: this namespace defines set/unset/append/lappend/trace, so code inside ::ogf::cat must call the Tcl builtins as ::set etc.
+namespace eval ::ogf::cat {
+    variable registry {
+        {status                 text   catalog   rw   "status-bar text (label textvariable); every step writes progress/errors here"}
+        {alldata                tsv    catalog   r    "the whole catalog as TSV text, header line first; written only by the catalog loaders (LoadTSV, AddColumns...); plugins use add_columns / load_tsv"}
+        {sel,nums               list   catalog   r    "NUMBER values of the selected table rows"}
+        {sel,*                  any    catalog   r    "selection internals (text, base)"}
+        {tbl                    widget catalog   r    "path of the table widget (legacy; not for new code)"}
+        {tbldb                  array  catalog   r    "name of the table's data array (legacy; not for new code)"}
+        {markall,on             bool   catalog   rw   "all catalog markers are drawn"}
+        {param,*                scalar extract   rw   "extraction parameters, e.g. param,detect-thresh, param,mag-zeropoint, param,n-workers (shared by all analysis plugins); persisted in ~/.ds9/sextract.prf"}
+        {extract_param,*        scalar extract   rw   "snapshot of param,* taken at the last Extract (AI Merge reuses it)"}
+        {psf,param,*            scalar star_psf  rw   "PSF / deconvolution parameters; persisted in ~/.ds9/psf_deconv.prf"}
+        {psf,file               path   star_psf  rw   "FITS file of the current PSF (written by Build/Load PSF; read by deconv, photometry, morphology)"}
+        {psf,has_psf            bool   star_psf  rw   "1 when psf,file is valid"}
+        {psf,star_indices       list   star_psf  rw   "row indices of the stars found by Find Stars"}
+        {psf,stars              any    star_psf  rw   "star list (legacy)"}
+        {psf,sim_*              bool   star_psf  rw   "availability flags of WebbPSF / TinyTim"}
+        {bd,param,*             scalar morphology rw  "bulge+disk parameters; persisted in ~/.ds9/bulge_disk.prf"}
+        {photoz,param,*         scalar photoz_sed rw  "photo-z dialog values; persisted in ~/.ds9/photo_z.prf"}
+        {sed,param,*            scalar photoz_sed rw  "SED-fit dialog values; persisted in ~/.ds9/sed_fit.prf"}
+        {morph,map              list   galaxy_model rw "NUMBERs that have a CNN morphology"}
+        {morph,*                list   galaxy_model rw "per NUMBER: {type description confidence color}"}
+        {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
+        {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
+        {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}
+        {lsbg,*                 any    lsbg      rw   "LSBG pipeline state"}
+        {ai,*                   any    objects   r    "AI-merge state"}
+        {merge,*                any    objects   r    "merge state"}
+        {add_objects_mode       any    objects   r    "add-objects mode"}
+        {trim,*                 any    extract   rw   "trim filter state"}
+        {plot,*                 any    catalog   r    "plot viewer state"}
+        {cache,dirty            bool   core      r    "marker cache needs rebuilding"}
+        {delim                  text   catalog   r    "column delimiter of alldata"}
+        {filename               path   catalog   r    "source name of the loaded catalog"}
+        {visible_mode           any    catalog   r    "visible-only mode"}
+        {search_var             text   catalog   r    "search box text"}
+        {sort,*                 any    catalog   r    "sort column / direction"}
+        {*,mask_file            path   mask      rw   "per-pipeline mask file (icl / lsbg)"}
+        {*,has_mask             bool   mask      rw   "per-pipeline mask flag"}
+        {*,fits_base_mask       path   mask      rw   "per-pipeline base image of the mask"}
+        {*,cmdlog               list   mask      rw   "per-pipeline command log"}
+    }
+    variable warned {}
+    variable traces
+    array set traces {}
+}
+proc ::ogf::cat::registry {} {variable registry; return $registry}
+proc ::ogf::cat::describe {key} {
+    variable registry
+    foreach r $registry {if {[string match [lindex $r 0] $key]} {return $r}}
+    return {}
+}
+proc ::ogf::cat::_check {key} {
+    variable warned
+    if {[describe $key] ne {}} return
+    if {[info exists ::env(OGF_CAT_STRICT)] && $::env(OGF_CAT_STRICT)} {error "::ogf::cat: key \"$key\" is not in the registry"}
+    if {$key ni $warned} {::lappend warned $key; ::ogf::log WARN "::ogf::cat: unregistered key \"$key\""}
+}
+proc ::ogf::cat::get {key args} {
+    _check $key
+    if {[info exists ::catpanel($key)]} {return $::catpanel($key)}
+    if {[llength $args]} {return [lindex $args 0]}
+    error "::ogf::cat::get: no value for key \"$key\""
+}
+proc ::ogf::cat::set {key val} {
+    _check $key
+    return [::set ::catpanel($key) $val]
+}
+proc ::ogf::cat::exists {key} {return [info exists ::catpanel($key)]}
+proc ::ogf::cat::unset {args} {foreach k $args {::unset -nocomplain ::catpanel($k)}}
+proc ::ogf::cat::unset_glob {pat} {array unset ::catpanel $pat}
+proc ::ogf::cat::append {key args} {_check $key; return [::append ::catpanel($key) {*}$args]}
+proc ::ogf::cat::lappend {key args} {_check $key; return [::lappend ::catpanel($key) {*}$args]}
+proc ::ogf::cat::keys {{pat *}} {return [lsort [array names ::catpanel $pat]]}
+proc ::ogf::cat::trace {op key {cmd {}}} {
+    variable traces
+    switch -- $op {
+	add {
+	    _check $key
+	    ::trace add variable ::catpanel($key) write [list ::ogf::cat::_fire $key $cmd]
+	    ::lappend traces($key) $cmd
+	}
+	remove {
+	    ::trace remove variable ::catpanel($key) write [list ::ogf::cat::_fire $key $cmd]
+	    if {[info exists traces($key)]} {
+		::set i [lsearch -exact $traces($key) $cmd]
+		if {$i >= 0} {::set traces($key) [lreplace $traces($key) $i $i]}
+	    }
+	}
+	info {if {[info exists traces($key)]} {return $traces($key)}; return {}}
+	default {error "::ogf::cat::trace: bad operation \"$op\" (add|remove|info)"}
+    }
+}
+proc ::ogf::cat::_fire {key cmd name1 name2 op} {
+    uplevel #0 [list {*}$cmd $key [expr {[info exists ::catpanel($key)] ? $::catpanel($key) : {}}]]
+}
 
 # ================================================================ mask service
 namespace eval ::ogf::mask {}
