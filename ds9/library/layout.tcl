@@ -657,6 +657,8 @@ proc CreateCatalogPanel {} {
     pack $f.menubar.icl -side left
     pack $f.menubar.lsbg -side left
     pack $f.menubar.analysis -side left
+    # Moving Objects menu (ogf_moving.tcl)
+    pack [OGFMovingMenu $f.menubar] -side left
 
     # Info area: same height as the left pane header so the catalog
     # table lines up with the image display
@@ -1017,6 +1019,7 @@ proc CreateCatalogPanel {} {
     OGFMaskInit
     OGFLinkInit
     OGFSessInit
+    OGFMovingInit
 
     # Force ttk widgets to redraw on resize (X11 compositing conflict)
     bind $f <Configure> [list CatalogPanelRedrawTtk $f]
