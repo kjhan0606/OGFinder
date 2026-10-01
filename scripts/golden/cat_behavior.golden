@@ -297,4 +297,6 @@ HOME-scratch yes
   catpanel(param,detect-thresh) = 3.0
 === selection_reads
   AI row count=0 selection=3 5 8
+=== moving_status
+  catpanel(status) = Moving: linking 3 of 7
 SUMMARY-DONE steps=17 exec=16

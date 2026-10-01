@@ -262,6 +262,7 @@ proc run {} {
 	P "  AI row count=[OGFAIRowCount] selection=$catpanel(sel,nums)"
 	set catpanel(sel,nums) {}
     } {}
+    feature moving_status {OGFMovStatus "linking 3 of 7"} {status}
     P "SUMMARY-DONE steps=[llength $ogfsess(steps)] exec=[llength $::EXEC]"
     close $::fh
     exit

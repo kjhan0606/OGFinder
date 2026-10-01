@@ -157,6 +157,8 @@ namespace eval ::ogf::cat {
         {*,cmdlog               list   mask      rw   "per-pipeline command log"}
     }
     variable warned {}
+    variable checked
+    array set checked {}
     variable traces
     array set traces {}
 }
@@ -168,7 +170,9 @@ proc ::ogf::cat::describe {key} {
 }
 proc ::ogf::cat::_check {key} {
     variable warned
-    if {[describe $key] ne {}} return
+    variable checked
+    if {[info exists checked($key)]} return
+    if {[describe $key] ne {}} {::set checked($key) 1; return}
     if {[info exists ::env(OGF_CAT_STRICT)] && $::env(OGF_CAT_STRICT)} {error "::ogf::cat: key \"$key\" is not in the registry"}
     if {$key ni $warned} {::lappend warned $key; ::ogf::log WARN "::ogf::cat: unregistered key \"$key\""}
 }
