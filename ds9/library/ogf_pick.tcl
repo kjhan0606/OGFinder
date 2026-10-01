@@ -214,16 +214,25 @@ proc OGFPickChooser {which cands rootx rooty} {
     raise $w
     bind $w.l <Return> {OGFPickChoose [%W index active]}
     bind $w.l <KP_Enter> {OGFPickChoose [%W index active]}
-    bind $w.l <ButtonRelease-1> {if {%x >= 0 && %y >= 0 && %x < [winfo width %W] && %y < [winfo height %W]} {OGFPickChoose [%W nearest %y]}}
+    bind $w.l <ButtonRelease-1> {if {%x >= 0 && %y >= 0 && %x < [winfo width %W] && %y < [winfo height %W]} {OGFPickChoose [%W nearest %y]}; break}
     bind $w.l <Motion> {%W selection clear 0 end; %W selection set [%W nearest %y]; %W activate [%W nearest %y]}
     foreach b [list $w $w.l $w.h] {bind $b <Escape> {after idle OGFPickDismiss}}
     # Esc anywhere and a click anywhere outside the chooser dismiss it (no grab: the original press/release of the click
     # must reach ds9, and a click-away keeps its normal meaning).  The old "all" bindings are restored by OGFPickDismiss.
+    # The bindings are armed only after the current event has been fully processed: the ButtonPress that opened the chooser
+    # is still being dispatched (widget -> class -> toplevel -> all) and would otherwise reach the new "all" binding as a
+    # click-away and close the chooser at once (found with real X events, scripts/verify_click_xevent.tcl).
+    after idle [list OGFPickArm $w]
+    catch {focus -force $w.l}
+}
+
+proc OGFPickArm {w} {
+    global ogfpick
+    if {![winfo exists $w] || [info exists ogfpick(old_bp)]} return
     set ogfpick(old_bp) [bind all <ButtonPress>]
     set ogfpick(old_esc) [bind all <Escape>]
     bind all <ButtonPress> "$ogfpick(old_bp)\nOGFPickOutside %W %X %Y"
     bind all <Escape> "$ogfpick(old_esc)\nafter idle OGFPickDismiss"
-    catch {focus -force $w.l}
 }
 
 # a ButtonPress anywhere in the application: outside the chooser rectangle = click-away
