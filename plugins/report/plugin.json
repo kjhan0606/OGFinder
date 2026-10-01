@@ -1,0 +1,302 @@
+{
+ "schema": 1,
+ "id": "report",
+ "name": "Review and report",
+ "short": "Report",
+ "tab": "Results",
+ "order": 25,
+ "description": "Accept / reject / uncertain review of candidates (stored in the catalog columns REVIEW, REVIEW_NOTE, REVIEW_TIME, filterable, recorded as informational session steps) and a self-contained HTML (optionally PDF) report with cut-outs, measurements and processing provenance.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "PIL"
+  ]
+ },
+ "primary": "export",
+ "settings": "params",
+ "tcl": "report.tcl",
+ "init": "OGFReviewInit",
+ "tcl_always": 0,
+ "steps": [
+  {
+   "id": "accept",
+   "label": "Accept Selected",
+   "proc": "OGFReviewSet accept",
+   "session": "NONE",
+   "records": [
+    "review.set"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "reject",
+   "label": "Reject Selected",
+   "proc": "OGFReviewSet reject",
+   "session": "NONE",
+   "records": [
+    "review.set"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "uncertain",
+   "label": "Mark Selected Uncertain",
+   "proc": "OGFReviewSet uncertain",
+   "session": "NONE",
+   "records": [
+    "review.set"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "clear",
+   "label": "Clear Review of Selected",
+   "proc": "OGFReviewSet clear",
+   "session": "NONE",
+   "records": [
+    "review.set"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "note",
+   "label": "Set Note on Selected...",
+   "proc": "OGFReviewNoteDialog",
+   "session": "NONE",
+   "records": [
+    "review.note"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "shown",
+   "label": "Review All Shown Rows",
+   "session": "NONE",
+   "records": [
+    "review.set"
+   ],
+   "needs": [
+    "catalog"
+   ],
+   "variants": [
+    {
+     "id": "accept_shown",
+     "label": "Accept All Shown",
+     "proc": "OGFReviewSetShown accept"
+    },
+    {
+     "id": "reject_shown",
+     "label": "Reject All Shown",
+     "proc": "OGFReviewSetShown reject"
+    },
+    {
+     "id": "uncertain_shown",
+     "label": "Mark All Shown Uncertain",
+     "proc": "OGFReviewSetShown uncertain"
+    }
+   ]
+  },
+  {
+   "id": "filter",
+   "label": "Show by Review",
+   "session": "NONE",
+   "needs": [
+    "catalog"
+   ],
+   "variants": [
+    {
+     "id": "f_all",
+     "label": "All",
+     "proc": "OGFReviewShow all"
+    },
+    {
+     "id": "f_accept",
+     "label": "Accepted",
+     "proc": "OGFReviewShow accept"
+    },
+    {
+     "id": "f_reject",
+     "label": "Rejected",
+     "proc": "OGFReviewShow reject"
+    },
+    {
+     "id": "f_uncertain",
+     "label": "Uncertain",
+     "proc": "OGFReviewShow uncertain"
+    },
+    {
+     "id": "f_none",
+     "label": "Unreviewed",
+     "proc": "OGFReviewShow none"
+    },
+    {
+     "id": "f_notrej",
+     "label": "Not Rejected",
+     "proc": "OGFReviewShow notrej"
+    }
+   ]
+  },
+  {
+   "id": "export",
+   "label": "Export Report...",
+   "title": "Export candidate report",
+   "proc": "OGFReportExport",
+   "session": "NONE",
+   "records": [
+    "report.export"
+   ],
+   "needs": [
+    "catalog"
+   ]
+  },
+  {
+   "id": "options",
+   "label": "Report Options...",
+   "proc": "OGFParamDialog report",
+   "session": "NONE",
+   "settings_only": 1
+  }
+ ],
+ "params": [
+  {
+   "name": "title",
+   "label": "Title",
+   "type": "string",
+   "default": "OGFinder candidate report",
+   "group": "Content",
+   "help": "Heading of the report."
+  },
+  {
+   "name": "author",
+   "label": "Prepared by",
+   "type": "string",
+   "default": "",
+   "group": "Content",
+   "help": "Name shown under the title (optional)."
+  },
+  {
+   "name": "include",
+   "label": "Candidates",
+   "type": "choice",
+   "default": "table",
+   "choices": [
+    "table",
+    "all",
+    "accepted",
+    "accepted_uncertain",
+    "not_rejected",
+    "uncertain",
+    "rejected",
+    "unreviewed"
+   ],
+   "group": "Content",
+   "help": "table = the rows the table shows now (text search and review filter); the others select by review state from the whole catalog."
+  },
+  {
+   "name": "sort_by",
+   "label": "Sort by column",
+   "type": "string",
+   "default": "",
+   "group": "Content",
+   "help": "Catalog column name; a leading - sorts descending (e.g. -MAG_AUTO). Empty keeps the catalog order."
+  },
+  {
+   "name": "max_rows",
+   "label": "Maximum candidates listed",
+   "type": "int",
+   "default": 500,
+   "min": 1,
+   "max": 100000,
+   "group": "Content",
+   "help": "Further candidates are counted but not listed (each cut-out is embedded in the HTML, about 3 kB)."
+  },
+  {
+   "name": "thumbnails",
+   "label": "Cut-outs (PNG)",
+   "type": "bool",
+   "default": true,
+   "group": "Cut-outs",
+   "help": "Embed a PNG cut-out of the image around each candidate."
+  },
+  {
+   "name": "cutout_size",
+   "label": "Cut-out size",
+   "type": "int",
+   "default": 64,
+   "min": 16,
+   "max": 256,
+   "unit": "px",
+   "group": "Cut-outs",
+   "help": "Side of the square cut-out in image pixels."
+  },
+  {
+   "name": "thumb_zoom",
+   "label": "Zoom",
+   "type": "int",
+   "default": 2,
+   "min": 1,
+   "max": 6,
+   "group": "Cut-outs",
+   "help": "Integer enlargement of the cut-out in the report."
+  },
+  {
+   "name": "stretch",
+   "label": "Stretch",
+   "type": "choice",
+   "default": "zscale",
+   "choices": [
+    "zscale",
+    "asinh",
+    "linear"
+   ],
+   "group": "Cut-outs",
+   "help": "One stretch from the whole image is used for all cut-outs."
+  },
+  {
+   "name": "marker",
+   "label": "Mark candidate position",
+   "type": "bool",
+   "default": true,
+   "group": "Cut-outs",
+   "help": "Draw a yellow circle at the centre of each cut-out."
+  },
+  {
+   "name": "all_columns",
+   "label": "List all measurements",
+   "type": "bool",
+   "default": true,
+   "group": "Content",
+   "help": "Add a collapsible line with every catalog column under each candidate.",
+   "expert": true
+  },
+  {
+   "name": "columns",
+   "label": "Columns shown",
+   "type": "string",
+   "default": "",
+   "group": "Content",
+   "help": "Comma-separated column names for the main table; empty = standard selection plus analysis columns.",
+   "expert": true
+  },
+  {
+   "name": "pdf",
+   "label": "Also write a PDF",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Needs Chrome/Chromium (headless) on PATH; otherwise only the HTML is written and a warning is logged.",
+   "expert": true
+  }
+ ]
+}
