@@ -7,7 +7,7 @@
 package provide DS9 1.0
 
 proc OGFMaskInit {} {
-    global catpanel ogfmask
+    global ogfmask
     set ogfmask(overlay) 0
     set ogfmask(color) red
     set ogfmask(transparency) 50
@@ -16,12 +16,12 @@ proc OGFMaskInit {} {
     catch {OGFSessInitMasks}
     # shared Auto Mask parameters.  Defaults = the ICL values; LSBG-specific
     # values are offered as a preset in the Auto Mask dialog.
-    set ogfmask(p,detect-thresh) $catpanel(icl,param,detect-thresh)
+    set ogfmask(p,detect-thresh) [::ogf::cat::get icl,param,detect-thresh]
     set ogfmask(p,minarea) 5
-    set ogfmask(p,expand-factor) $catpanel(icl,param,expand-factor)
-    set ogfmask(p,max-dilate-radius) $catpanel(icl,param,max-dilate-radius)
-    set ogfmask(p,bright-star-mag-limit) $catpanel(icl,param,bright-star-mag-limit)
-    set ogfmask(p,bright-star-radius-scale) $catpanel(icl,param,bright-star-radius-scale)
+    set ogfmask(p,expand-factor) [::ogf::cat::get icl,param,expand-factor]
+    set ogfmask(p,max-dilate-radius) [::ogf::cat::get icl,param,max-dilate-radius]
+    set ogfmask(p,bright-star-mag-limit) [::ogf::cat::get icl,param,bright-star-mag-limit]
+    set ogfmask(p,bright-star-radius-scale) [::ogf::cat::get icl,param,bright-star-radius-scale]
     set ogfmask(p,mag-threshold) 99
     set ogfmask(p,lsb-protect) 0
 }
@@ -32,7 +32,6 @@ proc OGFMaskBase {fn} {
 
 # Paths for the image in the current frame.  Returns {} when none.
 proc OGFMaskPaths {{fn {}}} {
-    global catpanel
     if {$fn eq {}} {set fn [CatalogPanelGetFITS]}
     if {$fn eq {}} {return {}}
     set base [OGFMaskBase $fn]
@@ -45,15 +44,15 @@ proc OGFMaskPaths {{fn {}}} {
 }
 
 proc OGFMaskRun {mode fn extra} {
-    global catpanel ogfmask
+    global ogfmask
     set p [OGFMaskPaths $fn]
     if {$p eq {}} {
-	set catpanel(status) "Mask: no FITS image loaded"
+	::ogf::cat::set status "Mask: no FITS image loaded"
 	return {}
     }
     set script [CatalogPanelGetScript ds9_mask.py]
     if {![file exists $script]} {
-	set catpanel(status) "Mask: ds9_mask.py not found"
+	::ogf::cat::set status "Mask: ds9_mask.py not found"
 	return {}
     }
     set args [list [OGFPython] $script [dict get $p fits] --mode $mode \
@@ -61,10 +60,10 @@ proc OGFMaskRun {mode fn extra} {
     # Mask operations used to leak into the ICL cmdlog (only when it existed, and with
     # edit payloads missing).  They now go to the session recorder (OGFMaskSessLog) and,
     # unchanged for the "Export Script" menus, still into the ICL cmdlog.
-    if {[info exists catpanel(icl,cmdlog)]} {lappend catpanel(icl,cmdlog) $args}
+    if {[::ogf::cat::exists icl,cmdlog]} {::ogf::cat::lappend icl,cmdlog $args}
     catch {OGFMaskSessLog $mode $args $extra}
     if {[catch {set out [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Mask $mode error: [string range $err 0 160]"
+	::ogf::cat::set status "Mask $mode error: [string range $err 0 160]"
 	return {}
     }
     foreach line [split $out \n] {
@@ -134,7 +133,7 @@ proc OGFMaskSessLog {mode args extra} {
 }
 
 proc OGFMaskParseStats {line} {
-    global ogfmask catpanel
+    global ogfmask
     foreach kv [lrange $line 1 end] {
 	if {[regexp {^([A-Z_]+)=(.*)$} $kv -> k v]} {set ogfmask(s,$k) $v}
     }
@@ -146,12 +145,12 @@ proc OGFMaskParseStats {line} {
     }
     if {[info exists ogfmask(s,UNDO)]} {append txt "  (undo $ogfmask(s,UNDO) / redo $ogfmask(s,REDO))"}
     set ogfmask(stats) $txt
-    set catpanel(status) $txt
+    ::ogf::cat::set status $txt
 }
 
 # Put the shared mask on the native DS9 mask layer of the current frame.
 proc OGFMaskRefreshOverlay {} {
-    global ogfmask current catpanel
+    global ogfmask current
     if {!$ogfmask(overlay)} return
     set fr $current(frame)
     if {$fr eq {} || ![$fr has fits]} return
@@ -162,7 +161,7 @@ proc OGFMaskRefreshOverlay {} {
     }
     catch {$fr mask clear}
     if {[catch {LoadFitsFile [dict get $p bool] mask {}} err]} {
-	set catpanel(status) "Mask overlay: $err"
+	::ogf::cat::set status "Mask overlay: $err"
 	return
     }
     OGFMaskApplyStyle $fr
@@ -180,13 +179,13 @@ proc OGFMaskApplyStyle {fr} {
 }
 
 proc CatalogPanelMaskToggleOverlay {} {
-    global ogfmask current catpanel
+    global ogfmask current
     set fr $current(frame)
     if {$ogfmask(overlay)} {
 	set p [OGFMaskPaths]
 	if {$p eq {} || ![file exists [dict get $p mask]]} {
 	    set ogfmask(overlay) 0
-	    set catpanel(status) "Mask: none yet - use Mask > Auto Mask..."
+	    ::ogf::cat::set status "Mask: none yet - use Mask > Auto Mask..."
 	    return
 	}
 	OGFMaskRefreshOverlay
@@ -197,7 +196,7 @@ proc CatalogPanelMaskToggleOverlay {} {
 
 # ------------------------------------------------------------- auto mask
 proc OGFMaskAutoArgs {} {
-    global ogfmask catpanel
+    global ogfmask
     set a [list --detect-thresh $ogfmask(p,detect-thresh) \
 	--minarea $ogfmask(p,minarea) \
 	--expand-factor $ogfmask(p,expand-factor) \
@@ -205,37 +204,37 @@ proc OGFMaskAutoArgs {} {
 	--bright-star-mag-limit $ogfmask(p,bright-star-mag-limit) \
 	--bright-star-radius-scale $ogfmask(p,bright-star-radius-scale) \
 	--mag-threshold $ogfmask(p,mag-threshold) \
-	--mag-zeropoint $catpanel(param,mag-zeropoint) \
-	--n-workers $catpanel(param,n-workers)]
-    if {[info exists catpanel(lsbg,param,pixel-scale)]} {
-	lappend a --pixel-scale $catpanel(lsbg,param,pixel-scale) \
-	    --lsb-mu-threshold $catpanel(lsbg,param,lsb-mu-threshold)
+	--mag-zeropoint [::ogf::cat::get param,mag-zeropoint] \
+	--n-workers [::ogf::cat::get param,n-workers]]
+    if {[::ogf::cat::exists lsbg,param,pixel-scale]} {
+	lappend a --pixel-scale [::ogf::cat::get lsbg,param,pixel-scale] \
+	    --lsb-mu-threshold [::ogf::cat::get lsbg,param,lsb-mu-threshold]
     }
     if {$ogfmask(p,lsb-protect)} {lappend a --lsb-protect}
     return $a
 }
 
 proc OGFMaskPresetICL {} {
-    global ogfmask catpanel
-    set ogfmask(p,detect-thresh) $catpanel(icl,param,detect-thresh)
-    set ogfmask(p,expand-factor) $catpanel(icl,param,expand-factor)
-    set ogfmask(p,max-dilate-radius) $catpanel(icl,param,max-dilate-radius)
-    set ogfmask(p,bright-star-mag-limit) $catpanel(icl,param,bright-star-mag-limit)
-    set ogfmask(p,bright-star-radius-scale) $catpanel(icl,param,bright-star-radius-scale)
+    global ogfmask
+    set ogfmask(p,detect-thresh) [::ogf::cat::get icl,param,detect-thresh]
+    set ogfmask(p,expand-factor) [::ogf::cat::get icl,param,expand-factor]
+    set ogfmask(p,max-dilate-radius) [::ogf::cat::get icl,param,max-dilate-radius]
+    set ogfmask(p,bright-star-mag-limit) [::ogf::cat::get icl,param,bright-star-mag-limit]
+    set ogfmask(p,bright-star-radius-scale) [::ogf::cat::get icl,param,bright-star-radius-scale]
     set ogfmask(p,mag-threshold) 99
     set ogfmask(p,lsb-protect) 0
     OGFMaskFormRefresh
 }
 proc OGFMaskPresetLSBG {} {
-    global ogfmask catpanel
-    set ogfmask(p,detect-thresh) $catpanel(lsbg,param,mask-detect-thresh)
-    set ogfmask(p,minarea) $catpanel(lsbg,param,mask-detect-minarea)
-    set ogfmask(p,expand-factor) $catpanel(lsbg,param,mask-expand-factor)
-    set ogfmask(p,max-dilate-radius) $catpanel(lsbg,param,max-dilate-radius)
-    set ogfmask(p,bright-star-mag-limit) $catpanel(lsbg,param,bright-star-mag-limit)
-    set ogfmask(p,bright-star-radius-scale) $catpanel(lsbg,param,bright-star-radius-scale)
-    set ogfmask(p,mag-threshold) $catpanel(lsbg,param,mask-mag-threshold)
-    set ogfmask(p,lsb-protect) $catpanel(lsbg,param,lsb-protect)
+    global ogfmask
+    set ogfmask(p,detect-thresh) [::ogf::cat::get lsbg,param,mask-detect-thresh]
+    set ogfmask(p,minarea) [::ogf::cat::get lsbg,param,mask-detect-minarea]
+    set ogfmask(p,expand-factor) [::ogf::cat::get lsbg,param,mask-expand-factor]
+    set ogfmask(p,max-dilate-radius) [::ogf::cat::get lsbg,param,max-dilate-radius]
+    set ogfmask(p,bright-star-mag-limit) [::ogf::cat::get lsbg,param,bright-star-mag-limit]
+    set ogfmask(p,bright-star-radius-scale) [::ogf::cat::get lsbg,param,bright-star-radius-scale]
+    set ogfmask(p,mag-threshold) [::ogf::cat::get lsbg,param,mask-mag-threshold]
+    set ogfmask(p,lsb-protect) [::ogf::cat::get lsbg,param,lsb-protect]
     OGFMaskFormRefresh
 }
 proc OGFMaskFormRefresh {} {
@@ -266,12 +265,12 @@ proc CatalogPanelMaskAutoDialog {} {
 }
 
 proc CatalogPanelMaskAuto {{ask 1}} {
-    global catpanel ogfmask
+    global ogfmask
     if {$ask && ![CatalogPanelMaskAutoDialog]} return
-    set catpanel(status) "Mask: running Auto Mask..."
+    ::ogf::cat::set status "Mask: running Auto Mask..."
     update idletasks
     set extra [OGFMaskAutoArgs]
-    if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+    if {[::ogf::cat::has]} {
 	set cf [CatalogPanelSaveTempCatalog mask]
 	if {$cf ne {}} {lappend extra --catalog $cf}
     }
@@ -284,7 +283,7 @@ proc CatalogPanelMaskAuto {{ask 1}} {
 
 # make the ICL/LSBG "has mask" flags and overlay consistent after any edit
 proc OGFMaskAfterEdit {} {
-    global catpanel ogfmask
+    global ogfmask
     set p [OGFMaskPaths]
     if {$p ne {}} {
 	OGFMaskSyncPipelines $p
@@ -294,18 +293,17 @@ proc OGFMaskAfterEdit {} {
 
 # Point the ICL / LSBG steps at the shared mask (boolean file).
 proc OGFMaskSyncPipelines {p} {
-    global catpanel
     foreach pl {icl lsbg} {
-	set catpanel($pl,mask_file) [dict get $p bool]
-	set catpanel($pl,has_mask) [file exists [dict get $p bool]]
-	set catpanel($pl,fits_base_mask) [dict get $p base]
+	::ogf::cat::set $pl,mask_file [dict get $p bool]
+	::ogf::cat::set $pl,has_mask [file exists [dict get $p bool]]
+	::ogf::cat::set $pl,fits_base_mask [dict get $p base]
     }
 }
 
 # Guarantee a shared mask exists; generate with the current shared
 # parameters (seeded from the calling pipeline) when missing.  Returns 1/0.
 proc OGFMaskEnsure {pipeline} {
-    global catpanel ogfmask
+    global ogfmask
     set p [OGFMaskPaths]
     if {$p eq {}} {return 0}
     if {[file exists [dict get $p mask]] && [file exists [dict get $p bool]]} {
@@ -320,7 +318,7 @@ proc OGFMaskEnsure {pipeline} {
 
 # ----------------------------------------------- region add / erase, edits
 proc OGFMaskRegionsFile {} {
-    global current catpanel
+    global current
     set fr $current(frame)
     if {$fr eq {} || ![$fr has fits]} {return {}}
     set f [file join [file normalize ~] .ds9 mask_regions.reg]
@@ -342,22 +340,20 @@ proc OGFMaskRegionsFile {} {
 }
 
 proc CatalogPanelMaskRegions {erase} {
-    global catpanel
     set rf [OGFMaskRegionsFile]
     if {$rf eq {}} {
-	set catpanel(status) "Mask: draw circle/ellipse/box/polygon regions first (Region menu)"
+	::ogf::cat::set status "Mask: draw circle/ellipse/box/polygon regions first (Region menu)"
 	return
     }
     lassign $rf f n
     set mode [expr {$erase ? "erase" : "add"}]
     set r [OGFMaskRun $mode {} [list --regions $f]]
     if {$r eq {}} return
-    append ::catpanel(status) "  ($n regions $mode)"
+    ::ogf::cat::append status "  ($n regions $mode)"
     OGFMaskAfterEdit
 }
 
 proc CatalogPanelMaskGrow {shrink} {
-    global catpanel
     set r [OGFForm [expr {$shrink ? "Shrink Mask" : "Grow Mask"}] {{px "Pixels" 3}}]
     if {$r eq {}} return
     set px [dict get $r px]
@@ -376,10 +372,9 @@ proc CatalogPanelMaskStats {} {
 }
 
 proc CatalogPanelMaskSaveAs {} {
-    global catpanel
     set p [OGFMaskPaths]
     if {$p eq {} || ![file exists [dict get $p mask]]} {
-	set catpanel(status) "Mask: nothing to save"
+	::ogf::cat::set status "Mask: nothing to save"
 	return
     }
     set fname [tk_getSaveFile -title "Save Mask As..." \
@@ -392,11 +387,10 @@ proc CatalogPanelMaskSaveAs {} {
     set extra [list --file $fname]
     if {$isbool} {lappend extra --boolean}
     if {[OGFMaskRun export {} $extra] eq {}} return
-    append ::catpanel(status) "  saved: $fname"
+    ::ogf::cat::append status "  saved: $fname"
 }
 
 proc CatalogPanelMaskImport {} {
-    global catpanel
     set fname [tk_getOpenFile -title "Import Mask FITS..." \
 	-filetypes {{{FITS files} {.fits .fit}} {{All files} *}}]
     if {$fname eq {}} return
@@ -414,15 +408,14 @@ proc OGFMaskMakeMasked {interp} {
 }
 
 proc CatalogPanelMaskShowMasked {} {
-    global catpanel
     set p [OGFMaskPaths]
     if {$p eq {} || ![file exists [dict get $p mask]]} {
-	set catpanel(status) "Mask: none yet - use Mask > Auto Mask..."
+	::ogf::cat::set status "Mask: none yet - use Mask > Auto Mask..."
 	return
     }
-    set catpanel(status) "Mask: interpolating masked image..."
+    ::ogf::cat::set status "Mask: interpolating masked image..."
     update idletasks
-    set f [OGFMaskMakeMasked $catpanel(icl,param,interp-method)]
+    set f [OGFMaskMakeMasked [::ogf::cat::get icl,param,interp-method]]
     if {$f eq {}} return
     CreateFrame
     if {![catch {LoadFitsFile $f {} {}}]} {
@@ -430,20 +423,20 @@ proc CatalogPanelMaskShowMasked {} {
 	set scale(mode) zscale
 	ChangeScaleMode
     }
-    set catpanel(status) "Mask: masked image shown in a new frame (written on demand to $f)"
+    ::ogf::cat::set status "Mask: masked image shown in a new frame (written on demand to $f)"
 }
 
 # Reuse the detection-band mask on every other registered band
 proc CatalogPanelMaskCopyToBands {} {
-    global catpanel ogfband
+    global ogfband
     if {![info exists ogfband] || $ogfband(detect) eq {}} {
-	set catpanel(status) "Mask: register bands first (Bands menu)"
+	::ogf::cat::set status "Mask: register bands first (Bands menu)"
 	return
     }
     set det $ogfband(detect)
     set dp [OGFMaskPaths $ogfband($det,file)]
     if {![file exists [dict get $dp mask]]} {
-	set catpanel(status) "Mask: make a mask on the detection band ($det) first"
+	::ogf::cat::set status "Mask: make a mask on the detection band ($det) first"
 	return
     }
     set script [CatalogPanelGetScript ds9_mask.py]
@@ -457,12 +450,12 @@ proc CatalogPanelMaskCopyToBands {} {
 	    --mask [dict get $dp mask] --target-image $ogfband($b,file) \
 	    --output [dict get $bp mask]]
 	if {[catch {exec {*}$args 2>@stderr} out]} {
-	    set catpanel(status) "Mask copy to $b failed: [string range $out 0 120]"
+	    ::ogf::cat::set status "Mask copy to $b failed: [string range $out 0 120]"
 	    return
 	}
 	incr n
     }
-    set catpanel(status) "Mask from $det reprojected to $n other band(s) (~/.ds9/mask_<band>.fits)"
+    ::ogf::cat::set status "Mask from $det reprojected to $n other band(s) (~/.ds9/mask_<band>.fits)"
 }
 
 # ------------------------------------------- ICL / LSBG integration
@@ -487,13 +480,12 @@ proc OGFMaskRefinedPath {pipeline} {
 
 # Interpolated image for a downstream step; produced now from the shared mask.
 proc OGFMaskMaskedFor {pipeline fn} {
-    global catpanel
     set p [OGFMaskPaths $fn]
     if {$p eq {}} {return $fn}
-    set interp $catpanel(icl,param,interp-method)
-    if {$pipeline eq "lsbg"} {set interp $catpanel(lsbg,param,interp-method)}
+    set interp [::ogf::cat::get icl,param,interp-method]
+    if {$pipeline eq "lsbg"} {set interp [::ogf::cat::get lsbg,param,interp-method]}
     set out [dict get $p masked]
-    set catpanel(status) "Mask: producing masked image for the $pipeline step..."
+    ::ogf::cat::set status "Mask: producing masked image for the $pipeline step..."
     update idletasks
     set f [OGFMaskMakeMasked $interp]
     if {$f eq {}} {return $fn}
@@ -504,10 +496,10 @@ proc OGFMaskMaskedFor {pipeline fn} {
 # Reuse the shared mask when it exists (keeps manual edits); otherwise build
 # it with the calling method's parameters as defaults for the shared dialog.
 proc OGFMaskPipelineMask {pipeline} {
-    global catpanel ogfmask
+    global ogfmask
     set fn [CatalogPanelGetFITS]
     if {$fn eq {}} {
-	set catpanel(status) "[string toupper $pipeline]: No FITS file loaded"
+	::ogf::cat::set status "[string toupper $pipeline]: No FITS file loaded"
 	return
     }
     CatalogPanelICLUpdateFiles $fn
@@ -517,7 +509,7 @@ proc OGFMaskPipelineMask {pipeline} {
 	set ogfmask(overlay) 1
 	OGFMaskRefreshOverlay
 	OGFMaskRun stats {} {}
-	append catpanel(status) "  (existing shared mask reused; Mask > Auto Mask... to regenerate)"
+	::ogf::cat::append status "  (existing shared mask reused; Mask > Auto Mask... to regenerate)"
 	return
     }
     if {$pipeline eq "lsbg"} {OGFMaskPresetLSBG} else {OGFMaskPresetICL}
