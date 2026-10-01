@@ -162,13 +162,13 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
   * **Clustering in (position, apparent velocity)**: candidates within 1 arcsec and 3 arcsec/h of a better one are merged.  On the leave-one-out
     candidate lists: 71 -> 74 recovered, top-50 of the *kept* list 138 -> 125 true entries (duplicates removed); this is a small effect.
   * Dropped idea: de-duplication by "no shared detection" (instead of "no shared pair") loses objects (57 vs 71).
-  * **inj4 (30 injected, ceiling 20): still 8 recovered (9 with `--no-bound`).**  The per-object diagnosis (`link_bench` + truth fits): of the 12 objects below the ceiling's
-    reach, 5 have <= 2 detections in the linker pool; of the 20 within reach, 8 are found.  The others have true tracklets that rank 5000-31000 among 95k
-    candidates: their detections are partly CR-flagged or have single-exposure sizes/centroids that disagree with the track by 0.7-0.9 arcsec (5 of the 20
-    have a member 0.7-0.95 arcsec off the true position: trail centroids of the first/third exposure, or mis-centred CR-contaminated point detections), so they fail the
-    rms gate or lose against thousands of chance alignments with a better chi2; `inj4` contains the mag 25-26 objects and 6 unbound fast objects.
-    The top-100 count on inj4 is 8 both before and after: the logistic score reorders (top-10 3 -> 4, top-25 4 -> 8) but cannot recover the objects whose
-    detections are missing or off.  Only detection-side work (a better trail centroid, CR handling for faint movers) would help; that was out of scope of this item.
+  * **inj4 (30 injected, ceiling 20): still 8 recovered (9 with `--no-bound`).**  Per-object diagnosis (`validation` scripts, truth positions): 10 of the 30
+    objects have <= 2 detections in the linker pool (this *is* the ceiling gap: 20 reachable).  Of the 20 reachable, 8 are recovered in the top 400.
+    The other 12 have their true tracklet at rank 70-31000 of ~95000 candidates (checked with 30000 returned): 18 of the 30 injected objects have at
+    least one detected member 0.65-0.95 arcsec from the true position (trail centroids of faint/long trails and CR-contaminated point detections, 1 arcsec
+    match radius), so the track has an rms of 0.25-0.5 arcsec and loses against thousands of chance alignments with a smaller rms; 6 objects are unbound by
+    construction and 5 of them are at mag >= 25.  The logistic score reorders (top-10 3 -> 4, top-25 4 -> 8) but cannot lift tracks whose members are missing or
+    mis-centred; the count does not change (8 -> 8).  Only detection-side work (better trail centroids, CR handling for faint movers) would help; out of scope here.
   * Real data: with `max_per_exposure=900`, tol 1.0, the true 2015 BB89 tracklet is rank 0 of 400 both with the stage-1 ranking and with the new
     score (prob 0.24); the earlier docs value (rank 20 with other settings) was not reproduced here, so no improvement is claimed on the real field.
   * Runtime: +0.5-1.7 s per set (the logistic features are vectorised over all gated candidates; the Sun-bound check runs on at most 50000).
