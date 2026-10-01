@@ -221,5 +221,7 @@
  ],
  "short": "ICL",
  "primary": "measure",
- "settings": "CatalogPanelICLSettings"
+ "settings": "CatalogPanelICLSettings",
+ "tcl": "icl.tcl",
+ "tcl_always": 1
 }

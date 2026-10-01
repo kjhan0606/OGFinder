@@ -96,6 +96,9 @@
  ],
  "short": "Catalog",
  "primary": "save",
- "tcl": "plot_viewer.tcl",
+ "tcl": [
+  "plot_viewer.tcl",
+  "cli_script.tcl"
+ ],
  "tcl_always": 1
 }

@@ -236,5 +236,7 @@
  ],
  "short": "LSBG",
  "primary": "run_all",
- "settings": "CatalogPanelLSBGSettings"
+ "settings": "CatalogPanelLSBGSettings",
+ "tcl": "lsbg.tcl",
+ "tcl_always": 1
 }
