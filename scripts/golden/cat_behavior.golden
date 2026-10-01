@@ -529,6 +529,20 @@ MESSAGEBOX Unable to load fits  <HOME>/.ds9/lsbg_segmap.fits
   catpanel(ai,groups) = 
   catpanel(ai,total) = 0
   catpanel(ai,active) = 0
+=== markers_mark_all
+  catpanel(status) = Marked 7 sources (yellow ellipses)
+  catpanel(markall,on) = 1
+=== markers_clear
+  catpanel(status) = Markers cleared
+  catpanel(markall,on) = 0
+=== markers_ctrl_select
+  catpanel(status) = Merge: 3 sources selected (Ctrl+M to merge, Esc to cancel)
+  catpanel(merge,list) = 8 10 3
+  catpanel(merge,active) = 1
+=== markers_show_visible
+  STEP catalog.unrecorded manual |  | post= title=Show Visible Only replaced the catalog by the sources in view requires=
+  catpanel(status) = Showing all sources
+  catpanel(visible_mode) = 0
 === moving_status
   catpanel(status) = Moving: linking 3 of 7
-SUMMARY-DONE steps=27 exec=25
+SUMMARY-DONE steps=28 exec=25

@@ -374,6 +374,10 @@ proc run {} {
     feature ai_merge_reject {CatalogPanelAIReject} {status ai,groups ai,total ai,current}
     feature ai_merge_accept {CatalogPanelAIAccept; P "  rows after accept: [llength [split [::ogf::cat::tsv] \n]]"} {status ai,groups ai,total ai,current ai,active merge,list merge,active}
     feature ai_merge_done {CatalogPanelAIDone; P "  keys unbound: [expr {[bind . <Key-n>] eq {}}]"} {status ai,groups ai,total ai,active}
+    feature markers_mark_all {CatalogPanelMarkAll} {status markall,on}
+    feature markers_clear {CatalogPanelClearMarkers} {status markall,on}
+    feature markers_ctrl_select {CatalogPanelCtrlSelect 2; CatalogPanelCtrlSelect 3; CatalogPanelCtrlSelect 2} {status merge,list merge,active}
+    feature markers_show_visible {set catpanel(visible_mode) 1; CatalogPanelShowVisible; set catpanel(visible_mode) 0; CatalogPanelShowVisible} {status visible_mode}
     feature moving_status {OGFMovStatus "linking 3 of 7"} {status}
     P "SUMMARY-DONE steps=[llength $ogfsess(steps)] exec=[llength $::EXEC]"
     close $::fh
