@@ -1,18 +1,30 @@
 # Moving Objects: asteroids, transients and reference images in OGFinder
 
-*Moving Objects* is a menu (next to *Analysis* in the catalogue panel) that runs a multi-epoch pipeline on HST/ACS-type
+*Moving Objects* is a plugin (`plugins/moving/`, chip **Moving** on the **Time-domain** tab of the workflow panel) that runs a multi-epoch pipeline on HST/ACS-type
 `*_flc.fits` exposures: fetch references, align, difference, detect, link tracklets, identify known objects, fit an orbit,
 find static transients, make light curves and export. All numerics are in the `moving/` package and are driven through one
-CLI, `ds9/library/ds9_moving.py`; `ds9/library/ogf_moving.tcl` is only menu, dialogs, table, markers and the orbit window.
+CLI, `ds9/library/ds9_moving.py`; `plugins/moving/moving.tcl` is only the plugin's dialogs, kind registration for the shared
+table, markers and the details window.
 
 **What existed before.** There was no asteroid mode in this repository. It had stock DS9 SkyBoT access (`catskybot.tcl`) and a
 wish-list section about difference imaging in `docs/manual/main.tex`. Everything described here is new.
 
-## Menu (exact labels)
+## Menu (exact labels) and the shared table
 
-`Moving Objects` → `Fetch Reference...`, `Align`, `Difference`, `Detect`, `Link Tracklets`, `Identify Known Objects`,
-`Orbit Fit...`, `Transient Candidates...`, `Light Curve`, `Export...`, (separator) `Select Exposures...`,
-`Show Results Table`, `Work Directory...`.
+Chip menu **Moving** on the Time-domain tab (it replaced the old top-level *Moving Objects* menu) → `Fetch Reference...`,
+`Align`, `Difference`, `Detect`, `Link Tracklets`, `Identify Known Objects`, `Orbit Fit...`, `Transient Candidates...`,
+`Light Curve`, `Export...`, (separator) `Select Exposures...`, `Time-domain details...`, `Work Directory...`.
+
+There is **no separate results window** any more (the old `Show Results Table` entry is gone).  Results are shown in the
+one catalogue table, which has a `kind` filter (radio buttons *Galaxies / Moving / Transients / Detections / All* under the
+tab chips).  Sorting, filtering, row selection (table row <-> marker) and *Save* behave as for galaxies.  Moving objects
+get an `overlap` / `overlap_id` column (a galaxy of the current catalogue within the tracklet's footprint), transients get
+`host_id` / `host_sep` (nearest catalogue galaxy within 5 arcsec).  Marker colours: moving = magenta, transients = red,
+detections = white.  Markers are drawn in every tile in tile mode.
+
+**Time-domain details** is ONE detachable window (`.ogftd`) with the tabs *Orbit* and *Light curve*; it is created once
+and reused.  Selecting a moving row shows the Orbit tab, a transient row the Light curve tab.  The CLI argv of each step is
+unchanged.
 
 *Fetch Reference...* has a provider radio button **MAST / LSST / both**; the choice is written to the CLI as
 `--provider mast|lsst|both` and therefore appears in the session-recorder step arguments.
@@ -55,7 +67,7 @@ themselves and pass `--lsst-local-dir`; that path was **not** tested with real D
 
 * `moving/` Python package (`tests/` pytest suite, `validation/` the scripts used for the numbers below)
 * `ds9/library/ds9_moving.py` CLI (`--mode setup|fetch|align|difference|link|identify|orbit|transients|lightcurve|export`);
-  prints `#MOVING {json}` status lines; `ds9/library/ogf_moving.tcl` GUI
+  prints `#MOVING {json}` status lines; `plugins/moving/moving.tcl` GUI (plugin; manifest `plugins/moving/plugin.json`)
 * `scripts/run_moving_pipeline.py` standard-library driver that runs align → difference → link → identify and writes a
   manifest with the command lines, package versions and sha256 of inputs and outputs
 * Each GUI step is logged with `OGFSessLog` (one argv, declared outputs) when the session recorder is present. Table selection

@@ -5,9 +5,9 @@ New Tcl modules (all in `ds9/library/`, embedded into `bin/ds9` by `make`):
 | file | purpose |
 |---|---|
 | `ogf_util.tcl`  | `OGFPython` (python interpreter, override with `OGFINDER_PYTHON`), small modal forms |
-| `ogf_bands.tcl` | band registry, forced photometry driver, colour columns, tile view |
+| `plugins/bands/bands.tcl` | band registry, forced photometry driver, colour columns, tile view |
 | `ogf_link.tcl`  | image <-> table selection, hover readout, multi-select, key stepping |
-| `ogf_mask.tcl`  | shared mask manager + ICL/LSBG integration |
+| `plugins/mask/mask.tcl`  | shared mask manager + ICL/LSBG integration |
 | `ds9_mask.py`   | mask back end (numpy/scipy/astropy/sep) |
 
 The catalog-panel menubar now has ten menus; `CatMenu.TMenubutton` padding was

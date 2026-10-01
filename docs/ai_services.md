@@ -6,7 +6,7 @@ catalogue columns, and records everything so the session script can replay it. N
 particular commercial or research model or endpoint is supported; all example profiles that point at a "service" use the
 reserved host `example.invalid` and are **templates**.
 
-* GUI: `ds9/library/ogf_ai.tcl`; CLI: `ds9/library/ds9_ai_bridge.py`; library: `ai_bridge/` (Python 3 standard library;
+* GUI: `plugins/ai_services/ai.tcl`; CLI: `ds9/library/ds9_ai_bridge.py`; library: `ai_bridge/` (Python 3 standard library;
   `numpy` + `astropy` only for cutouts); example profiles: `ai_services.example.json`; tests: `ai_bridge/tests/`,
   `scripts/verify_ai_gui.py`.
 
