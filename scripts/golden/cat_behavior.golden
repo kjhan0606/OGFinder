@@ -623,6 +623,126 @@ MESSAGEBOX Unable to load fits  <HOME>/.ds9/lsbg_segmap.fits
   STEP catalog.unrecorded manual |  | post= title=Show Visible Only replaced the catalog by the sources in view requires=
   catpanel(status) = Showing all sources
   catpanel(visible_mode) = 0
+=== catalog_load_tsv
+  rows: 1,2,3,4,5,6,7,8
+  catpanel(status) = synth: 8 sources extracted
+  catpanel(alldata) = <tsv rows=8 cols=11>
+  catpanel(delim) = 	
+=== catalog_filter
+  rows: 1,2,3,4,5,6,7,8
+  rows: 1,2,3,4,5,6,7,8
+  catpanel(status) = Showing all 8 sources
+  catpanel(search_var) = 
+=== catalog_sort
+  rows: 1,2,3,4,5,6,7,8
+  rows: 1,2,3,4,5,6,7,8
+  STEP catalog.sort auto |  | post= title=Sort catalog by MAG_AUTO descending requires=catalog
+  STEP catalog.sort auto |  | post= title=Sort catalog by NUMBER ascending requires=catalog
+  catpanel(status) = Sorted by NUMBER ascending
+  catpanel(sort,col) = 
+  catpanel(sort,dir) = 
+  catpanel(alldata) = <tsv rows=8 cols=11>
+=== catalog_header_click
+  rows: 8,7,6,5,4,3,2,1
+  STEP catalog.sort auto |  | post= title=Sort catalog by X_IMAGE ascending requires=catalog
+  STEP catalog.sort auto |  | post= title=Sort catalog by X_IMAGE descending requires=catalog
+  catpanel(status) = Sorted by X_IMAGE descending
+  catpanel(sort,col) = X_IMAGE
+  catpanel(sort,dir) = descending
+=== catalog_select_row
+  STEP catalog.sort auto |  | post= title=Sort catalog by NUMBER ascending requires=catalog
+  catpanel(status) = Source at image (30.0, 30.0)
+  catpanel(sel,text) = Source #3   x,y = 30, 30
+RA,Dec = -, -
+MAG_AUTO = 19.7   FWHM = -   e = -   Star = -
+  catpanel(sel,nums) = 3
+=== catalog_save_tsv
+  FILE c1.tsv: 470 bytes
+    NUMBER	X_IMAGE	Y_IMAGE	A_IMAGE	B_IMAGE	THETA_IMAGE	ISO_RADIUS	FLUX_AUTO	MAG_AUTO	NPIX_ISO	FLAGS
+    1	10.0	10.0	3.0	2.0	5.0	6.0	1000.0	19.90	21	0
+    2	20.0	20.0	3.0	2.0	10.0	6.0	2000.0	19.80	22	0
+    3	30.0	30.0	3.0	2.0	15.0	6.0	3000.0	19.70	23	0
+  STEP catalog.save auto |  | post= title=Save catalog as c1.tsv requires=catalog
+  catpanel(status) = Saved 8 sources to c1.tsv
+=== catalog_save_csv
+  FILE c1.csv: 470 bytes
+    NUMBER,X_IMAGE,Y_IMAGE,A_IMAGE,B_IMAGE,THETA_IMAGE,ISO_RADIUS,FLUX_AUTO,MAG_AUTO,NPIX_ISO,FLAGS
+    1,10.0,10.0,3.0,2.0,5.0,6.0,1000.0,19.90,21,0
+    2,20.0,20.0,3.0,2.0,10.0,6.0,2000.0,19.80,22,0
+    3,30.0,30.0,3.0,2.0,15.0,6.0,3000.0,19.70,23,0
+  STEP catalog.save auto |  | post= title=Save catalog as c1.csv requires=catalog
+  catpanel(status) = Saved 8 sources to c1.csv
+=== catalog_load_csv
+  rows: 1,2,3,4,5,6,7,8
+  STEP catalog.load manual |  | post= title=Load catalog c1.csv requires=
+  catpanel(status) = c1.csv: 8 sources extracted
+  catpanel(alldata) = <tsv rows=8 cols=11>
+=== catalog_load_missing
+  catpanel(status) = Load error: couldn't open "<HOME>/nonexist.tsv": no such file or directory
+=== catalog_export_regions
+  FILE c1.reg: 537 bytes
+    # Region file format: DS9 version 4.1
+    global color=green dashlist=8 3 width=1 font="helvetica 10 normal roman" select=1 highlite=1 dash=0 fixed=0 edit=1 move=1 delete=1 include=1 source=1
+    image
+    ellipse(10.0,10.0,3.0,2.0,5.0) # text={1}
+  catpanel(status) = Exported 8 regions to c1.reg
+=== catalog_export_fits
+  EXEC python3 /workspace/OGFinder/ds9/library/ds9_fits_export.py --input <HOME>/.ds9/fits_export_catalog.tsv --output <HOME>/c1.fits
+  STEP catalog.export_fits auto | @{PY} @{LIB}/ds9_fits_export.py --input @{CAT:fits_export} --output @{OUT}/c1.fits | post= title=Export FITS table c1.fits requires=
+  catpanel(status) = Exported FITS table to c1.fits
+=== catalog_temp_catalog
+  tmp: <HOME>/.ds9/unit_catalog.tsv
+  FILE unit_catalog.tsv: 470 bytes
+    NUMBER	X_IMAGE	Y_IMAGE	A_IMAGE	B_IMAGE	THETA_IMAGE	ISO_RADIUS	FLUX_AUTO	MAG_AUTO	NPIX_ISO	FLAGS
+    1	10.0	10.0	3.0	2.0	5.0	6.0	1000.0	19.90	21	0
+    2	20.0	20.0	3.0	2.0	10.0	6.0	2000.0	19.80	22	0
+    3	30.0	30.0	3.0	2.0	15.0	6.0	3000.0	19.70	23	0
+=== catalog_add_columns
+  header: NUMBER	X_IMAGE	Y_IMAGE	A_IMAGE	B_IMAGE	THETA_IMAGE	ISO_RADIUS	FLUX_AUTO	MAG_AUTO	NPIX_ISO	FLAGS	NEWCOL	OTHER
+  row1: 1	10.0	10.0	3.0	2.0	5.0	6.0	1000.0	19.90	21	0	1.5	x
+  catpanel(status) = analysis: 8 sources extracted
+  catpanel(alldata) = <tsv rows=8 cols=13>
+=== catalog_frame_state
+  saved: Frame1,add_objects_mode Frame1,ai,active Frame1,ai,current Frame1,ai,groups Frame1,ai,total Frame1,alldata Frame1,filename Frame1,icl,bgsub_file Frame1,icl,bkg_file Frame1,icl,center_x Frame1,icl,center_y Frame1,icl,has_bkg Frame1,icl,has_mask Frame1,icl,has_profile Frame1,icl,mask_file Frame1,icl,masked_file Frame1,icl,profile_file Frame1,lsbg,bkg_file Frame1,lsbg,catalog_file Frame1,lsbg,cleaned_file Frame1,lsbg,detect_data Frame1,lsbg,has_catalog Frame1,lsbg,has_clean Frame1,lsbg,has_detect Frame1,lsbg,has_mask Frame1,lsbg,mask_file Frame1,lsbg,masked_file Frame1,lsbg,segmap_file Frame1,markall,on Frame1,merge,active Frame1,merge,list Frame1,morph,20.0 Frame1,morph,21.0 Frame1,morph,map Frame1,psf,file Frame1,psf,has_psf Frame1,psf,star_indices Frame1,psf,stars Frame1,search_var Frame1,sort,col Frame1,sort,dir Frame1,status Frame1,trim,active Frame1,visible_mode Frame2,add_objects_mode Frame2,ai,active Frame2,ai,current Frame2,ai,groups Frame2,ai,total Frame2,alldata Frame2,filename Frame2,icl,bgsub_file Frame2,icl,bkg_file Frame2,icl,center_x Frame2,icl,center_y Frame2,icl,has_bkg Frame2,icl,has_mask Frame2,icl,has_profile Frame2,icl,mask_file Frame2,icl,masked_file Frame2,icl,profile_file Frame2,lsbg,bkg_file Frame2,lsbg,catalog_file Frame2,lsbg,cleaned_file Frame2,lsbg,detect_data Frame2,lsbg,has_catalog Frame2,lsbg,has_clean Frame2,lsbg,has_detect Frame2,lsbg,has_mask Frame2,lsbg,mask_file Frame2,lsbg,masked_file Frame2,lsbg,segmap_file Frame2,markall,on Frame2,merge,active Frame2,merge,list Frame2,morph,map Frame2,psf,file Frame2,psf,has_psf Frame2,psf,star_indices Frame2,psf,stars Frame2,search_var Frame2,sort,col Frame2,sort,dir Frame2,status Frame2,trim,active Frame2,visible_mode Frame3,add_objects_mode Frame3,ai,active Frame3,ai,current Frame3,ai,groups Frame3,ai,total Frame3,alldata Frame3,filename Frame3,icl,bgsub_file Frame3,icl,bkg_file Frame3,icl,center_x Frame3,icl,center_y Frame3,icl,has_bkg Frame3,icl,has_mask Frame3,icl,has_profile Frame3,icl,mask_file Frame3,icl,masked_file Frame3,icl,profile_file Frame3,lsbg,bkg_file Frame3,lsbg,catalog_file Frame3,lsbg,cleaned_file Frame3,lsbg,detect_data Frame3,lsbg,has_catalog Frame3,lsbg,has_clean Frame3,lsbg,has_detect Frame3,lsbg,has_mask Frame3,lsbg,mask_file Frame3,lsbg,masked_file Frame3,lsbg,segmap_file Frame3,markall,on Frame3,merge,active Frame3,merge,list Frame3,morph,map Frame3,psf,file Frame3,psf,has_psf Frame3,psf,star_indices Frame3,psf,stars Frame3,search_var Frame3,sort,col Frame3,sort,dir Frame3,status Frame3,trim,active Frame3,visible_mode
+  restored: search=keepme sort=NUMBER rows=1,2,3,4,5,6,7,8
+  after delete: 84 keys
+  catpanel(status) = : 8 sources extracted
+  catpanel(search_var) = keepme
+  catpanel(sort,col) = NUMBER
+  catpanel(alldata) = <tsv rows=8 cols=13>
+=== catalog_clear
+  rows: 
+  STEP catalog.clear manual |  | post= title=Clear catalog requires=
+  catpanel(status) = Ready
+  catpanel(alldata) = <tsv rows=-1 cols=0>
+  catpanel(filename) = 
+=== catalog_clear_all
+  rows: 
+  catpanel(status) = Ready
+  catpanel(alldata) = <tsv rows=-1 cols=0>
+  catpanel(filename) = 
+  catpanel(sort,col) = 
+  catpanel(sort,dir) = 
+  catpanel(visible_mode) = 0
+  catpanel(markall,on) = 0
+  catpanel(add_objects_mode) = 0
+  catpanel(trim,active) = 0
+  catpanel(merge,active) = 0
+  catpanel(merge,list) = 
+  catpanel(ai,active) = 0
+  catpanel(ai,current) = 0
+  catpanel(ai,groups) = 
+  catpanel(ai,threshold) = 0.7
+  catpanel(ai,total) = 0
+  catpanel(psf,has_psf) = 0
+  catpanel(icl,has_bkg) = 0
+  catpanel(icl,has_mask) = 0
+  catpanel(icl,has_profile) = 0
+  catpanel(lsbg,has_catalog) = 0
+  catpanel(lsbg,has_clean) = 0
+  catpanel(lsbg,has_detect) = 0
+  catpanel(lsbg,has_mask) = 0
+  catpanel(search_var) = 
 === moving_status
   catpanel(status) = Moving: linking 3 of 7
-SUMMARY-DONE steps=34 exec=31
+SUMMARY-DONE steps=44 exec=32

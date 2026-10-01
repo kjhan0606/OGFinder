@@ -400,6 +400,71 @@ proc run {} {
     feature markers_clear {CatalogPanelClearMarkers} {status markall,on}
     feature markers_ctrl_select {CatalogPanelCtrlSelect 2; CatalogPanelCtrlSelect 3; CatalogPanelCtrlSelect 2} {status merge,list merge,active}
     feature markers_show_visible {set catpanel(visible_mode) 1; CatalogPanelShowVisible; set catpanel(visible_mode) 0; CatalogPanelShowVisible} {status visible_mode}
+    # ---------------------------------------------------------------- catalog core: table fill, filter, sort, select, save/load, export, frame state
+    proc tbl_rows {} {
+	update; global catpanel; set db $catpanel(tbldb); global $db
+	set out {}
+	for {set r 1} {$r < [$catpanel(tbl) cget -rows]} {incr r} {
+	    if {[info exists ${db}($r,1)]} {lappend out [set ${db}($r,1)]}
+	}
+	return [join $out ,]
+    }
+    proc fileio {save open body} {
+	foreach c {tk_getSaveFile tk_getOpenFile} {rename $c ::cat_orig_$c}
+	set ::cat_save $save; set ::cat_open $open
+	proc tk_getSaveFile {args} {return $::cat_save}
+	proc tk_getOpenFile {args} {return $::cat_open}
+	set rc [catch {uplevel #0 $body} e]
+	foreach c {tk_getSaveFile tk_getOpenFile} {rename $c {}; rename ::cat_orig_$c $c}
+	if {$rc} {P "  ERROR: [norm $e]"}
+    }
+    proc dumpfile {f} {
+	if {![file exists $f]} {P "  FILE [norm $f]: absent"; return}
+	set fd [open $f r]; set d [read $fd]; close $fd
+	P "  FILE [file tail $f]: [string length $d] bytes"; foreach l [lrange [split $d \n] 0 3] {P "    [norm [string range $l 0 150]]"}
+    }
+    set ::synth $synth
+    CatalogPanelLoadTSV $synth synth
+    feature catalog_load_tsv {P "  rows: [tbl_rows]"} {status alldata delim}
+    feature catalog_filter {set catpanel(search_var) 3; CatalogPanelFilter; P "  rows: [tbl_rows]"; set catpanel(search_var) {}; CatalogPanelFilter; P "  rows: [tbl_rows]"} {status search_var}
+    feature catalog_sort {CatalogPanelSort MAG_AUTO descending; P "  rows: [tbl_rows]"; CatalogPanelSort NUMBER ascending; P "  rows: [tbl_rows]"} {status sort,* alldata}
+    feature catalog_header_click {
+	set tb $catpanel(tbl); set bb [$tb bbox 0,2]
+	CatalogPanelTableClick [expr {[lindex $bb 0]+2}] [expr {[lindex $bb 1]+2}]
+	CatalogPanelTableClick [expr {[lindex $bb 0]+2}] [expr {[lindex $bb 1]+2}]
+	P "  rows: [tbl_rows]"
+    } {status sort,*}
+    feature catalog_select_row {
+	CatalogPanelSort NUMBER ascending
+	CatalogPanelUpdateSelInfo 3
+	CatalogPanelSelectCmd 1,1 3,1
+	after 300 {set ::sel_done 1}; vwait ::sel_done
+    } {status sel,text sel,nums}
+    feature catalog_save_tsv {fileio [file join $::HOME c1.tsv] {} {CatalogPanelSaveCatalog}; dumpfile [file join $::HOME c1.tsv]} {status}
+    feature catalog_save_csv {fileio [file join $::HOME c1.csv] {} {CatalogPanelSaveCatalog}; dumpfile [file join $::HOME c1.csv]} {status}
+    feature catalog_load_csv {fileio {} [file join $::HOME c1.csv] {CatalogPanelLoadCatalog}; P "  rows: [tbl_rows]"} {status alldata}
+    feature catalog_load_missing {fileio {} [file join $::HOME nonexist.tsv] {CatalogPanelLoadCatalog}} {status}
+    feature catalog_export_regions {fileio [file join $::HOME c1.reg] {} {CatalogPanelExportRegions}; dumpfile [file join $::HOME c1.reg]} {status}
+    feature catalog_export_fits {fileio [file join $::HOME c1.fits] {} {CatalogPanelExportFITS}} {status}
+    feature catalog_temp_catalog {P "  tmp: [norm [CatalogPanelSaveTempCatalog unit]]"; dumpfile [file join $::HOME .ds9 unit_catalog.tsv]} {}
+    feature catalog_add_columns {
+	CatalogPanelAddColumnsFromTSV "NUMBER\tNEWCOL\tOTHER\n1\t1.5\tx\n3\t2.5\ty\n99\t0\tz" {NEWCOL OTHER}
+	P "  header: [lindex [split [::ogf::cat::tsv] \n] 0]"
+	P "  row1: [lindex [split [::ogf::cat::tsv] \n] 1]"
+    } {status alldata}
+    feature catalog_frame_state {
+	set f0 [lindex $ds9(frames) 0]
+	set catpanel(search_var) keepme; set catpanel(sort,col) NUMBER
+	CatalogPanelSaveFrameState $f0
+	P "  saved: [lsort [array names ::catpanel_fdata]]"
+	set catpanel(alldata) {}; set catpanel(search_var) {}; set catpanel(sort,col) {}
+	CatalogPanelRestoreFrameState $f0
+	P "  restored: search=$catpanel(search_var) sort=$catpanel(sort,col) rows=[tbl_rows]"
+	CatalogPanelDeleteFrameState $f0
+	P "  after delete: [llength [array names ::catpanel_fdata]] keys"
+    } {status search_var sort,col alldata}
+    feature catalog_clear {CatalogPanelClear; P "  rows: [tbl_rows]"} {status alldata filename}
+    feature catalog_clear_all {CatalogPanelLoadTSV $synth synth; set catpanel(merge,list) {1}; set catpanel(ai,active) 0; CatalogPanelClearAll; P "  rows: [tbl_rows]"} {status alldata filename sort,* visible_mode markall,on add_objects_mode trim,active merge,* ai,* psf,has_psf icl,has_* lsbg,has_* search_var}
     feature moving_status {OGFMovStatus "linking 3 of 7"} {status}
     P "SUMMARY-DONE steps=[llength $ogfsess(steps)] exec=[llength $::EXEC]"
     close $::fh
