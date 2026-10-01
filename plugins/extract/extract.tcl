@@ -3,7 +3,6 @@
 
 # Run source extraction on the currently loaded FITS image
 proc CatalogPanelExtract {} {
-    global catpanel
     global ds9
     global current
     global loadParam
@@ -18,7 +17,7 @@ proc CatalogPanelExtract {} {
 	set sextract [file join $bindir ds9_sextract]
     }
     if {![file executable $sextract]} {
-	set catpanel(status) "ERROR: ds9_sextract not found in $bindir"
+	::ogf::cat::set status "ERROR: ds9_sextract not found in $bindir"
 	return
     }
 
@@ -28,7 +27,7 @@ proc CatalogPanelExtract {} {
 	catch {set fn [$current(frame) get fits file name full]}
     }
     if {$fn eq {}} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
@@ -39,21 +38,21 @@ proc CatalogPanelExtract {} {
     regsub {\[.*\]$} $fn {} fn
 
     if {![file exists $fn]} {
-	set catpanel(status) "File not found: $fn"
+	::ogf::cat::set status "File not found: $fn"
 	return
     }
 
     # Set log scale with optimized limits
     CatalogPanelSetLogScale
 
-    set catpanel(status) "Extracting sources from [file tail $fn] ..."
+    ::ogf::cat::set status "Extracting sources from [file tail $fn] ..."
     update idletasks
 
     # Save extraction parameters so AI Merge uses the same values
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont \
 		   mag-zeropoint back-size back-filtersize} {
-	if {[info exists catpanel(param,$pname)]} {
-	    set catpanel(extract_param,$pname) $catpanel(param,$pname)
+	if {[::ogf::cat::exists param,$pname]} {
+	    ::ogf::cat::set extract_param,$pname [::ogf::cat::get param,$pname]
 	}
     }
 
@@ -63,8 +62,8 @@ proc CatalogPanelExtract {} {
 		   phot-aperture mag-zeropoint gain pixel-scale seeing-fwhm \
 		   back-size back-filtersize \
 		   phot-aperture-2 phot-aperture-3 phot-aperture-5 conv-filter} {
-	if {[info exists catpanel(param,$pname)]} {
-	    lappend paramargs "--$pname" $catpanel(param,$pname)
+	if {[::ogf::cat::exists param,$pname]} {
+	    lappend paramargs "--$pname" [::ogf::cat::get param,$pname]
 	}
     }
 
@@ -108,7 +107,7 @@ proc CatalogPanelExtract {} {
 	-tool sextract -post [dict create kind set]
     # Run extraction (cross-platform exec)
     if {[catch {set data [exec $sextract $fn {*}$paramargs 2>@stderr]} err]} {
-	set catpanel(status) "Extraction error: $err"
+	::ogf::cat::set status "Extraction error: $err"
 	return
     }
 
@@ -117,38 +116,36 @@ proc CatalogPanelExtract {} {
 }
 
 proc CatalogPanelParamDef {} {
-    global catpanel
 
-    set catpanel(param,detect-thresh) 1.5
-    set catpanel(param,detect-minarea) 5
-    set catpanel(param,deblend-nthresh) 32
-    set catpanel(param,deblend-mincont) 0.005
-    set catpanel(param,phot-aperture) 5.0
-    set catpanel(param,mag-zeropoint) 25.0
-    set catpanel(param,gain) 0.0
-    set catpanel(param,pixel-scale) 1.0
-    set catpanel(param,seeing-fwhm) 3.0
-    set catpanel(param,back-size) 64
-    set catpanel(param,back-filtersize) 3
-    set catpanel(param,phot-aperture-2) 4.0
-    set catpanel(param,phot-aperture-3) 6.0
-    set catpanel(param,phot-aperture-5) 10.0
-    set catpanel(param,conv-filter) default
-    set catpanel(param,n-workers) 0
+    ::ogf::cat::set param,detect-thresh 1.5
+    ::ogf::cat::set param,detect-minarea 5
+    ::ogf::cat::set param,deblend-nthresh 32
+    ::ogf::cat::set param,deblend-mincont 0.005
+    ::ogf::cat::set param,phot-aperture 5.0
+    ::ogf::cat::set param,mag-zeropoint 25.0
+    ::ogf::cat::set param,gain 0.0
+    ::ogf::cat::set param,pixel-scale 1.0
+    ::ogf::cat::set param,seeing-fwhm 3.0
+    ::ogf::cat::set param,back-size 64
+    ::ogf::cat::set param,back-filtersize 3
+    ::ogf::cat::set param,phot-aperture-2 4.0
+    ::ogf::cat::set param,phot-aperture-3 6.0
+    ::ogf::cat::set param,phot-aperture-5 10.0
+    ::ogf::cat::set param,conv-filter default
+    ::ogf::cat::set param,n-workers 0
 
     # Separate (deblend) parameters
-    set catpanel(param,sep-deblend-nthresh) 64
-    set catpanel(param,sep-deblend-mincont) 0.0001
-    set catpanel(param,sep-detect-thresh) 0.8
-    set catpanel(param,sep-detect-minarea) 3
-    set catpanel(param,sep-radius-factor) 3.0
-    set catpanel(param,sep-back-size) 32
+    ::ogf::cat::set param,sep-deblend-nthresh 64
+    ::ogf::cat::set param,sep-deblend-mincont 0.0001
+    ::ogf::cat::set param,sep-detect-thresh 0.8
+    ::ogf::cat::set param,sep-detect-minarea 3
+    ::ogf::cat::set param,sep-radius-factor 3.0
+    ::ogf::cat::set param,sep-back-size 32
 
     CatalogPanelParamLoad
 }
 
 proc CatalogPanelParamLoad {} {
-    global catpanel
 
     set preffile [file join [file normalize ~] .ds9 sextract.prf]
     if {![file exists $preffile]} return
@@ -160,8 +157,8 @@ proc CatalogPanelParamLoad {} {
 	if {[llength $parts] >= 2} {
 	    set key [lindex $parts 0]
 	    set val [lindex $parts 1]
-	    if {[info exists catpanel(param,$key)]} {
-		set catpanel(param,$key) $val
+	    if {[::ogf::cat::exists param,$key]} {
+		::ogf::cat::set param,$key $val
 	    }
 	}
     }
@@ -169,7 +166,6 @@ proc CatalogPanelParamLoad {} {
 }
 
 proc CatalogPanelParamSave {} {
-    global catpanel
 
     set prefdir [file join [file normalize ~] .ds9]
     if {![file isdirectory $prefdir]} {
@@ -184,7 +180,7 @@ proc CatalogPanelParamSave {} {
 		   n-workers \
 		   sep-deblend-nthresh sep-deblend-mincont sep-detect-thresh \
 		   sep-detect-minarea sep-radius-factor sep-back-size} {
-	puts $fd "$pname $catpanel(param,$pname)"
+	puts $fd "$pname [::ogf::cat::get param,$pname]"
     }
     close $fd
 }
@@ -211,7 +207,7 @@ proc CatalogPanelParamDefaults {} {
 }
 
 proc CatalogPanelDualExtract {} {
-    global catpanel ds9 current ed
+    global ds9 current ed
 
     set w {.dualextract}
     set ed(ok) 0
@@ -264,52 +260,51 @@ proc CatalogPanelDualExtract {} {
     unset ed
 
     if {$detect_img eq {} || ![file exists $detect_img]} {
-	set catpanel(status) "Detection image not found"
+	::ogf::cat::set status "Detection image not found"
 	return
     }
     if {$measure_img eq {} || ![file exists $measure_img]} {
-	set catpanel(status) "Measurement image not found"
+	::ogf::cat::set status "Measurement image not found"
 	return
     }
 
     set script [CatalogPanelGetScript ds9_dual_extract.py]
     if {![file exists $script]} {
-	set catpanel(status) "Script not found: ds9_dual_extract.py"
+	::ogf::cat::set status "Script not found: ds9_dual_extract.py"
 	return
     }
 
-    set catpanel(status) "Dual-image extraction..."
+    ::ogf::cat::set status "Dual-image extraction..."
     update idletasks
 
     set args [list [OGFPython] $script \
 	--detect-image $detect_img --measure-image $measure_img]
-    if {[info exists catpanel(param,detect-thresh)]} {
-	lappend args --detect-thresh $catpanel(param,detect-thresh)
+    if {[::ogf::cat::exists param,detect-thresh]} {
+	lappend args --detect-thresh [::ogf::cat::get param,detect-thresh]
     }
-    if {[info exists catpanel(param,detect-minarea)]} {
-	lappend args --detect-minarea $catpanel(param,detect-minarea)
+    if {[::ogf::cat::exists param,detect-minarea]} {
+	lappend args --detect-minarea [::ogf::cat::get param,detect-minarea]
     }
-    if {[info exists catpanel(param,phot-aperture)]} {
-	lappend args --phot-aperture $catpanel(param,phot-aperture)
+    if {[::ogf::cat::exists param,phot-aperture]} {
+	lappend args --phot-aperture [::ogf::cat::get param,phot-aperture]
     }
-    if {[info exists catpanel(param,mag-zeropoint)]} {
-	lappend args --mag-zeropoint $catpanel(param,mag-zeropoint)
+    if {[::ogf::cat::exists param,mag-zeropoint]} {
+	lappend args --mag-zeropoint [::ogf::cat::get param,mag-zeropoint]
     }
 
     OGFSessLog analysis.dual_extract auto $args -title {Dual-image extract} 
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
-	set catpanel(status) "Dual extract error: $err"
+	::ogf::cat::set status "Dual extract error: $err"
 	return
     }
 
     CatalogPanelLoadTSV $data "dual-image"
-    set catpanel(status) "Dual-image extraction complete"
+    ::ogf::cat::set status "Dual-image extraction complete"
 }
 
 # Hook: automatically extract sources after FITS file is loaded
 proc CatalogPanelAutoExtract {} {
-    global catpanel
-    if {[info exists catpanel(tbl)]} {
+    if {[::ogf::cat::exists tbl]} {
 	after 500 CatalogPanelExtract
     }
 }

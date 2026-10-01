@@ -2,11 +2,10 @@
 # Loaded through the "tcl" field of plugins/extract/plugin.json.
 
 proc CatalogPanelTrimDialog {} {
-    global catpanel
     global ed
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No catalog data to trim"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No catalog data to trim"
 	return
     }
 
@@ -15,7 +14,7 @@ proc CatalogPanelTrimDialog {} {
     set ed(ok) 0
 
     # Get column names from alldata header
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
     set ncols [llength $headers]
@@ -25,13 +24,13 @@ proc CatalogPanelTrimDialog {} {
 	set colname [string trim [lindex $headers $i]]
 	lappend ed(trim,cols) $colname
 	# Initialize from existing trim values or empty
-	if {[info exists catpanel(trim,$colname,min)]} {
-	    set ed(trim,$colname,min) $catpanel(trim,$colname,min)
+	if {[::ogf::cat::exists trim,$colname,min]} {
+	    set ed(trim,$colname,min) [::ogf::cat::get trim,$colname,min]
 	} else {
 	    set ed(trim,$colname,min) {}
 	}
-	if {[info exists catpanel(trim,$colname,max)]} {
-	    set ed(trim,$colname,max) $catpanel(trim,$colname,max)
+	if {[::ogf::cat::exists trim,$colname,max]} {
+	    set ed(trim,$colname,max) [::ogf::cat::get trim,$colname,max]
 	} else {
 	    set ed(trim,$colname,max) {}
 	}
@@ -105,8 +104,8 @@ proc CatalogPanelTrimDialog {} {
     if {$ed(ok)} {
 	# Copy trim values from ed to catpanel
 	foreach colname $ed(trim,cols) {
-	    set catpanel(trim,$colname,min) $ed(trim,$colname,min)
-	    set catpanel(trim,$colname,max) $ed(trim,$colname,max)
+	    ::ogf::cat::set trim,$colname,min $ed(trim,$colname,min)
+	    ::ogf::cat::set trim,$colname,max $ed(trim,$colname,max)
 	}
 	CatalogPanelTrimApply
     }
@@ -155,12 +154,11 @@ proc CatalogPanelTrimLoadToEd {} {
 }
 
 proc CatalogPanelTrimApply {} {
-    global catpanel
     global current
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
     set ncols [llength $headers]
@@ -173,16 +171,16 @@ proc CatalogPanelTrimApply {} {
 	set has_max 0
 	set minval 0
 	set maxval 0
-	if {[info exists catpanel(trim,$colname,min)] && $catpanel(trim,$colname,min) ne {}} {
-	    if {[string is double -strict $catpanel(trim,$colname,min)]} {
+	if {[::ogf::cat::exists trim,$colname,min] && [::ogf::cat::get trim,$colname,min] ne {}} {
+	    if {[string is double -strict [::ogf::cat::get trim,$colname,min]]} {
 		set has_min 1
-		set minval $catpanel(trim,$colname,min)
+		set minval [::ogf::cat::get trim,$colname,min]
 	    }
 	}
-	if {[info exists catpanel(trim,$colname,max)] && $catpanel(trim,$colname,max) ne {}} {
-	    if {[string is double -strict $catpanel(trim,$colname,max)]} {
+	if {[::ogf::cat::exists trim,$colname,max] && [::ogf::cat::get trim,$colname,max] ne {}} {
+	    if {[string is double -strict [::ogf::cat::get trim,$colname,max]]} {
 		set has_max 1
-		set maxval $catpanel(trim,$colname,max)
+		set maxval [::ogf::cat::get trim,$colname,max]
 	    }
 	}
 	if {$has_min || $has_max} {
@@ -192,9 +190,9 @@ proc CatalogPanelTrimApply {} {
 
     # If no conditions, show all
     if {[llength $conditions] == 0} {
-	set catpanel(trim,active) 0
-	CatalogPanelLoadTSV $catpanel(alldata) "all"
-	set catpanel(status) "Trim cleared - showing all sources"
+	::ogf::cat::set trim,active 0
+	CatalogPanelLoadTSV [::ogf::cat::tsv] "all"
+	::ogf::cat::set status "Trim cleared - showing all sources"
 	return
     }
 
@@ -248,17 +246,16 @@ proc CatalogPanelTrimApply {} {
     OGFSessLog catalog.trim auto {} -tool native -requires catalog \
 	-title "Trim catalog: [llength $conditions] condition(s)" \
 	-payload [dict create conditions_json "\[[join $jc {, }]\]"]
-    set catpanel(trim,active) 1
+    ::ogf::cat::set trim,active 1
     CatalogPanelLoadTSV $filtered "trimmed"
 
     # Re-mark from authoritative data
     CatalogPanelCreateAllMarkers
 
-    set catpanel(status) "Trimmed: $count of $total sources match conditions"
+    ::ogf::cat::set status "Trimmed: $count of $total sources match conditions"
 }
 
 proc CatalogPanelTrimSave {} {
-    global catpanel
 
     set prefdir [file join [file normalize ~] .ds9]
     if {![file isdirectory $prefdir]} {
@@ -267,18 +264,18 @@ proc CatalogPanelTrimSave {} {
     set preffile [file join $prefdir sextract_trim.prf]
     if {[catch {set fd [open $preffile w]} err]} return
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     set header [lindex $lines 0]
     set headers [split $header "\t"]
     foreach h $headers {
 	set colname [string trim $h]
 	set minval {}
 	set maxval {}
-	if {[info exists catpanel(trim,$colname,min)]} {
-	    set minval $catpanel(trim,$colname,min)
+	if {[::ogf::cat::exists trim,$colname,min]} {
+	    set minval [::ogf::cat::get trim,$colname,min]
 	}
-	if {[info exists catpanel(trim,$colname,max)]} {
-	    set maxval $catpanel(trim,$colname,max)
+	if {[::ogf::cat::exists trim,$colname,max]} {
+	    set maxval [::ogf::cat::get trim,$colname,max]
 	}
 	puts $fd "$colname\t$minval\t$maxval"
     }
@@ -286,7 +283,6 @@ proc CatalogPanelTrimSave {} {
 }
 
 proc CatalogPanelTrimLoad {} {
-    global catpanel
 
     set preffile [file join [file normalize ~] .ds9 sextract_trim.prf]
     if {![file exists $preffile]} return
@@ -298,8 +294,8 @@ proc CatalogPanelTrimLoad {} {
 	set parts [split $line "\t"]
 	if {[llength $parts] >= 3} {
 	    set colname [lindex $parts 0]
-	    set catpanel(trim,$colname,min) [lindex $parts 1]
-	    set catpanel(trim,$colname,max) [lindex $parts 2]
+	    ::ogf::cat::set trim,$colname,min [lindex $parts 1]
+	    ::ogf::cat::set trim,$colname,max [lindex $parts 2]
 	}
     }
     close $fd
