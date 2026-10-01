@@ -323,23 +323,13 @@ proc OGFAIRegistry {} {
     ttk::button $w.btn.close -text Close -command [list destroy $w]
     pack $w.btn.en $w.btn.test $w.btn.mk -side left -padx 4
     pack $w.btn.close -side right -padx 4
-    ttk::labelframe $w.bk -text "Backend of the existing local steps (default: local = unchanged behaviour)"
-    set r 0
-    global OGFAI_BACKEND_STEPS
-    foreach {step spec} $OGFAI_BACKEND_STEPS {
-	ttk::label $w.bk.l$step -text [lindex $spec 2]
-	ttk::combobox $w.bk.c$step -textvariable ogfai(backend,$step) -state readonly -width 28 -values local
-	bind $w.bk.c$step <<ComboboxSelected>> OGFAIPrefSave
-	grid $w.bk.l$step -row $r -column 0 -sticky w -padx 6 -pady 1
-	grid $w.bk.c$step -row $r -column 1 -sticky w -padx 6 -pady 1
-	incr r
-    }
+    ttk::button $w.btn.set -text "Profile / Backends..." -command {OGFParamDialog ai_services}
+    pack $w.btn.set -side left -padx 4
     ttk::label $w.sec -text "Keys are never stored or shown: a profile names an environment variable; this window shows only set / unset." -foreground gray30
     pack $w.top -fill x -pady 4
     pack $w.tv -fill both -expand true -padx 4
     pack $w.msg -fill x -padx 6 -pady 2
     pack $w.btn -fill x -pady 4
-    pack $w.bk -fill x -padx 4 -pady 4
     pack $w.sec -padx 6 -pady 4 -anchor w
     OGFAIRegRefresh
 }
@@ -368,17 +358,20 @@ proc OGFAIRegRefresh {} {
     }
     if {$err ne {}} {append msg "\nERROR: $err"}
     $w.msg configure -text $msg
-    # backend comboboxes: local + enabled valid services of the matching task
+}
+
+# choices of a "Backend of the local steps" setting: local + the enabled, valid services of the matching task
+# (plugin.json ai_services "choices_proc")
+proc OGFAIBackendChoices {step} {
     global OGFAI_BACKEND_STEPS
-    foreach {step spec} $OGFAI_BACKEND_STEPS {
-	set task [lindex $spec 0]
-	set vals local
-	foreach r $rows {
-	    if {[dict get $r enabled] eq "yes" && [dict get $r valid] eq "yes" && [dict get $r task] in [list $task any]} {lappend vals [dict get $r name]}
-	}
-	$w.bk.c$step configure -values $vals
-	if {$ogfai(backend,$step) ni $vals} {set ogfai(backend,$step) local}
+    OGFAIInit
+    set task [lindex [dict get $OGFAI_BACKEND_STEPS $step] 0]
+    lassign [OGFAIServices] rows path err
+    set vals local
+    foreach r $rows {
+	if {[dict get $r enabled] eq "yes" && [dict get $r valid] eq "yes" && [dict get $r task] in [list $task any]} {lappend vals [dict get $r name]}
     }
+    return $vals
 }
 
 proc OGFAIRegApplyPath {} {

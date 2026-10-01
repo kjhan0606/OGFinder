@@ -226,7 +226,7 @@
   {
    "id": "lsbg_settings",
    "label": "LSBG Settings...",
-   "proc": "CatalogPanelLSBGSettings",
+   "proc": "OGFParamDialog lsbg",
    "legacy": [
     "LSBG > Settings..."
    ],
@@ -236,7 +236,496 @@
  ],
  "short": "LSBG",
  "primary": "run_all",
- "settings": "CatalogPanelLSBGSettings",
+ "settings": "params",
  "tcl": "lsbg.tcl",
- "tcl_always": 1
+ "tcl_always": 1,
+ "params": [
+  {
+   "name": "mask-mag-threshold",
+   "label": "Mask mag threshold",
+   "type": "float",
+   "default": 22.0,
+   "group": "Masking",
+   "help": "Sources brighter than this are masked.",
+   "min": -10,
+   "max": 99
+  },
+  {
+   "name": "mask-expand-factor",
+   "label": "Expand factor",
+   "type": "float",
+   "default": 1.5,
+   "group": "Masking",
+   "help": "Mask expansion factor.",
+   "min": 0,
+   "max": 50
+  },
+  {
+   "name": "max-dilate-radius",
+   "label": "Max dilate radius",
+   "type": "int",
+   "default": 30,
+   "group": "Masking",
+   "help": "Largest dilation radius.",
+   "min": 0,
+   "max": 10000,
+   "unit": "pix"
+  },
+  {
+   "name": "bright-star-mag-limit",
+   "label": "Bright star mag limit",
+   "type": "float",
+   "default": 18.0,
+   "group": "Masking",
+   "help": "Stars brighter than this get an extended mask.",
+   "min": -10,
+   "max": 40
+  },
+  {
+   "name": "bright-star-radius-scale",
+   "label": "Bright star radius scale",
+   "type": "float",
+   "default": 12.0,
+   "group": "Masking",
+   "help": "Radius scale of the bright-star masks.",
+   "min": 0,
+   "max": 1000
+  },
+  {
+   "name": "interp-method",
+   "label": "Interpolation",
+   "type": "choice",
+   "default": "linear",
+   "group": "Masking",
+   "help": "Interpolation across masked pixels.",
+   "choices": [
+    "linear",
+    "cubic",
+    "nearest"
+   ]
+  },
+  {
+   "name": "mask-detect-thresh",
+   "label": "Mask detect threshold",
+   "type": "float",
+   "default": 1.5,
+   "group": "Masking",
+   "help": "Detection threshold for the mask.",
+   "min": 0.01,
+   "max": 100,
+   "unit": "sigma"
+  },
+  {
+   "name": "mask-detect-minarea",
+   "label": "Mask detect min area",
+   "type": "int",
+   "default": 5,
+   "group": "Masking",
+   "help": "Minimum area for the mask detection.",
+   "min": 1,
+   "max": 100000,
+   "unit": "pix",
+   "expert": 1
+  },
+  {
+   "name": "lsb-protect",
+   "label": "LSB structure protection",
+   "type": "bool",
+   "default": 1,
+   "group": "Masking",
+   "help": "Do not mask extended low-surface-brightness structures."
+  },
+  {
+   "name": "lsb-mu-threshold",
+   "label": "LSB mu threshold",
+   "type": "float",
+   "default": 24.0,
+   "group": "Masking",
+   "help": "Surface brightness above which structures are protected.",
+   "min": 0,
+   "max": 40,
+   "unit": "mag/arcsec2"
+  },
+  {
+   "name": "bkg-method",
+   "label": "Method",
+   "type": "choice",
+   "default": "sep_large",
+   "group": "Background",
+   "help": "Background model.",
+   "choices": [
+    "sep_large",
+    "polynomial",
+    "chebyshev"
+   ]
+  },
+  {
+   "name": "bkg-mesh-size",
+   "label": "Mesh size",
+   "type": "int",
+   "default": 256,
+   "group": "Background",
+   "help": "Mesh size of the SEP background.",
+   "min": 4,
+   "max": 8192,
+   "unit": "pix"
+  },
+  {
+   "name": "bkg-poly-order",
+   "label": "Polynomial order",
+   "type": "int",
+   "default": 3,
+   "group": "Background",
+   "help": "Order of the polynomial / Chebyshev background.",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "bkg-sigma-clip",
+   "label": "Sigma clip",
+   "type": "float",
+   "default": 3.0,
+   "group": "Background",
+   "help": "Sigma clipping.",
+   "min": 0.5,
+   "max": 20
+  },
+  {
+   "name": "bkg-n-iterations",
+   "label": "Iterations",
+   "type": "int",
+   "default": 3,
+   "group": "Background",
+   "help": "Refinement iterations.",
+   "min": 1,
+   "max": 50
+  },
+  {
+   "name": "bkg-refine-thresh",
+   "label": "Refine threshold",
+   "type": "float",
+   "default": 2.0,
+   "group": "Background",
+   "help": "Threshold for masking sources during refinement.",
+   "min": 0.1,
+   "max": 50,
+   "unit": "sigma"
+  },
+  {
+   "name": "bkg-rms-quantile",
+   "label": "RMS quantile",
+   "type": "float",
+   "default": 0.25,
+   "group": "Background",
+   "help": "Quantile used for the noise estimate.",
+   "min": 0.01,
+   "max": 1,
+   "expert": 1
+  },
+  {
+   "name": "bkg-convergence-tol",
+   "label": "Convergence tolerance",
+   "type": "float",
+   "default": 0.01,
+   "group": "Background",
+   "help": "Stop when the background changes less than this.",
+   "min": 0,
+   "max": 1,
+   "expert": 1
+  },
+  {
+   "name": "detect-thresh",
+   "label": "Detect threshold",
+   "type": "float",
+   "default": 0.8,
+   "group": "Detection",
+   "help": "Detection threshold.",
+   "min": 0.01,
+   "max": 100,
+   "unit": "sigma"
+  },
+  {
+   "name": "detect-minarea",
+   "label": "Min area",
+   "type": "int",
+   "default": 50,
+   "group": "Detection",
+   "help": "Minimum area of a candidate.",
+   "min": 1,
+   "max": 1000000,
+   "unit": "pix"
+  },
+  {
+   "name": "detect-filter-kernel",
+   "label": "Filter kernel",
+   "type": "choice",
+   "default": "gauss5x5",
+   "group": "Detection",
+   "help": "Convolution kernel.",
+   "choices": [
+    "none",
+    "gauss3x3",
+    "gauss5x5",
+    "gauss7x7",
+    "gauss9x9",
+    "tophat5",
+    "tophat7",
+    "mexhat"
+   ]
+  },
+  {
+   "name": "deblend-nthresh",
+   "label": "Deblend N thresholds",
+   "type": "int",
+   "default": 32,
+   "group": "Detection",
+   "help": "Deblending sub-thresholds.",
+   "min": 1,
+   "max": 1024
+  },
+  {
+   "name": "deblend-mincont",
+   "label": "Deblend min contrast",
+   "type": "float",
+   "default": 0.005,
+   "group": "Detection",
+   "help": "Deblending minimum contrast.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "multiscale",
+   "label": "Multi-scale detection",
+   "type": "bool",
+   "default": 1,
+   "group": "Detection",
+   "help": "Also detect on binned images."
+  },
+  {
+   "name": "multiscale-factors",
+   "label": "Scale factors",
+   "type": "string",
+   "default": "1,2,4",
+   "group": "Detection",
+   "help": "Comma separated binning factors."
+  },
+  {
+   "name": "sersic-fit",
+   "label": "Sersic profile fitting",
+   "type": "bool",
+   "default": 1,
+   "group": "Detection",
+   "help": "Fit a Sersic profile to each candidate."
+  },
+  {
+   "name": "sersic-n-min",
+   "label": "Sersic n min (fit)",
+   "type": "float",
+   "default": 0.2,
+   "group": "Sersic fit",
+   "help": "Lower bound of the fitted Sersic index.",
+   "min": 0.1,
+   "max": 20,
+   "expert": 1
+  },
+  {
+   "name": "sersic-n-max",
+   "label": "Sersic n max (fit)",
+   "type": "float",
+   "default": 10.0,
+   "group": "Sersic fit",
+   "help": "Upper bound of the fitted Sersic index.",
+   "min": 0.1,
+   "max": 20,
+   "expert": 1
+  },
+  {
+   "name": "sersic-re-min",
+   "label": "Re min (fit)",
+   "type": "float",
+   "default": 0.5,
+   "group": "Sersic fit",
+   "help": "Lower bound of the fitted effective radius.",
+   "min": 0,
+   "max": 10000.0,
+   "expert": 1
+  },
+  {
+   "name": "sersic-cutout-scale",
+   "label": "Cutout scale",
+   "type": "float",
+   "default": 5.0,
+   "group": "Sersic fit",
+   "help": "Cutout size in units of the source radius.",
+   "min": 1,
+   "max": 100,
+   "expert": 1
+  },
+  {
+   "name": "sersic-max-nfev",
+   "label": "Max function evaluations",
+   "type": "int",
+   "default": 500,
+   "group": "Sersic fit",
+   "help": "Limit of the least-squares fit.",
+   "min": 10,
+   "max": 1000000,
+   "expert": 1
+  },
+  {
+   "name": "mag-zeropoint",
+   "label": "Mag zeropoint",
+   "type": "float",
+   "default": 25.0,
+   "group": "Calibration & filter",
+   "help": "Photometric zeropoint.",
+   "min": -100,
+   "max": 100
+  },
+  {
+   "name": "pixel-scale",
+   "label": "Pixel scale",
+   "type": "float",
+   "default": 0.06,
+   "group": "Calibration & filter",
+   "help": "Pixel scale.",
+   "min": 1e-06,
+   "max": 1000,
+   "unit": "arcsec/px"
+  },
+  {
+   "name": "phot-apertures",
+   "label": "Phot apertures",
+   "type": "string",
+   "default": "5,10,20,40",
+   "group": "Calibration & filter",
+   "help": "Comma separated aperture diameters in pixels."
+  },
+  {
+   "name": "mu-eff-min",
+   "label": "mu_eff min",
+   "type": "float",
+   "default": 24.0,
+   "group": "Calibration & filter",
+   "help": "Faintest-end filter: minimum effective surface brightness.",
+   "min": 0,
+   "max": 40,
+   "unit": "mag/arcsec2"
+  },
+  {
+   "name": "mu-eff-max",
+   "label": "mu_eff max",
+   "type": "float",
+   "default": 30.0,
+   "group": "Calibration & filter",
+   "help": "Maximum effective surface brightness.",
+   "min": 0,
+   "max": 40,
+   "unit": "mag/arcsec2"
+  },
+  {
+   "name": "r-eff-min",
+   "label": "R_eff min",
+   "type": "float",
+   "default": 2.5,
+   "group": "Calibration & filter",
+   "help": "Minimum effective radius.",
+   "min": 0,
+   "max": 10000.0,
+   "unit": "arcsec"
+  },
+  {
+   "name": "r-eff-max",
+   "label": "R_eff max",
+   "type": "float",
+   "default": 60.0,
+   "group": "Calibration & filter",
+   "help": "Maximum effective radius.",
+   "min": 0,
+   "max": 10000.0,
+   "unit": "arcsec"
+  },
+  {
+   "name": "ellipticity-max",
+   "label": "Ellipticity max",
+   "type": "float",
+   "default": 0.7,
+   "group": "Calibration & filter",
+   "help": "Maximum ellipticity.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "min-snr",
+   "label": "Min SNR",
+   "type": "float",
+   "default": 2.0,
+   "group": "Calibration & filter",
+   "help": "Minimum S/N.",
+   "min": 0,
+   "max": 10000.0
+  },
+  {
+   "name": "sersic-n-filter-min",
+   "label": "Sersic n min (filter)",
+   "type": "float",
+   "default": 0.3,
+   "group": "Calibration & filter",
+   "help": "Sersic index lower limit of the filter.",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "sersic-n-filter-max",
+   "label": "Sersic n max (filter)",
+   "type": "float",
+   "default": 6.0,
+   "group": "Calibration & filter",
+   "help": "Sersic index upper limit of the filter.",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "sersic-chi2-max",
+   "label": "Sersic chi2 max",
+   "type": "float",
+   "default": 10.0,
+   "group": "Calibration & filter",
+   "help": "Maximum reduced chi2 of the Sersic fit.",
+   "min": 0,
+   "max": 1000000.0
+  },
+  {
+   "name": "svm-classify",
+   "label": "SVM classification",
+   "type": "bool",
+   "default": 0,
+   "group": "SVM",
+   "help": "Classify candidates with the SVM model."
+  },
+  {
+   "name": "svm-threshold",
+   "label": "SVM threshold",
+   "type": "float",
+   "default": 0.3,
+   "group": "SVM",
+   "help": "Probability threshold.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "svm-checkpoint",
+   "label": "SVM checkpoint",
+   "type": "string",
+   "default": "",
+   "group": "SVM",
+   "help": "Model checkpoint file (empty = built-in)."
+  }
+ ],
+ "store": {
+  "array": "catpanel",
+  "key": "lsbg,param,%s",
+  "save": "CatalogPanelLSBGParamSave"
+ },
+ "dialog_tabs": 1
 }

@@ -14,7 +14,16 @@ proc OGFParamDialog {plugin args} {
     global ogfdlg
     array set o {-step {} -title {} -group {} -parent .}
     array set o $args
-    set specs [::ogf::params::specs $plugin $o(-step)]
+    # "on_open": Tcl called before the values are read (lazy initialisation of the legacy store);
+    # a spec with "choices_proc": the choices are computed when the dialog opens (e.g. enabled AI services)
+    set oo [::ogf::json::get [::ogf::reg::get $plugin] on_open]
+    if {$oo ne {}} {catch {uplevel #0 $oo}}
+    set specs {}
+    foreach s0 [::ogf::params::specs $plugin $o(-step)] {
+	set cp [::ogf::json::get $s0 choices_proc]
+	if {$cp ne {} && ![catch {uplevel #0 $cp} ch]} {dict set s0 choices $ch}
+	lappend specs $s0
+    }
     if {[llength $specs] == 0} {
 	::ogf::status "no parameters declared for $plugin"
 	return {}
@@ -34,7 +43,10 @@ proc OGFParamDialog {plugin args} {
     set ogfdlg($w,preset) {}
     set ogfdlg($w,widgets) {}
     foreach s $specs {
-	set ogfdlg($w,v,[dict get $s name]) [::ogf::params::get $plugin [dict get $s name]]
+	set v [::ogf::params::get $plugin [dict get $s name]]
+	# a dynamic choice list may no longer contain the stored value (e.g. a disabled service): fall back to the default
+	if {[::ogf::json::get $s choices_proc] ne {} && $v ni [::ogf::json::get $s choices]} {set v [::ogf::json::get $s default]}
+	set ogfdlg($w,v,[dict get $s name]) $v
     }
     # top: presets + expert toggle
     ttk::frame $w.top
@@ -49,6 +61,12 @@ proc OGFParamDialog {plugin args} {
     # body: groups in order of first appearance
     ttk::frame $w.body
     pack $w.body -side top -fill both -expand 1 -padx 6
+    # "dialog_tabs": 1 in the manifest = one notebook tab per group (long dialogs: ICL, LSBG, Stars/PSF)
+    set ogfdlg($w,tabs) [::ogf::json::get [::ogf::reg::get $plugin] dialog_tabs 0]
+    if {$ogfdlg($w,tabs)} {
+	ttk::notebook $w.body.nb
+	pack $w.body.nb -side top -fill both -expand 1
+    }
     set groups {}
     foreach s $specs {
 	set g [::ogf::json::get $s group General]
@@ -57,7 +75,11 @@ proc OGFParamDialog {plugin args} {
     set ogfdlg($w,groups) $groups
     set gi 0
     foreach g $groups {
-	ttk::labelframe $w.body.g$gi -text $g
+	if {$ogfdlg($w,tabs)} {
+	    ttk::frame $w.body.g$gi
+	} else {
+	    ttk::labelframe $w.body.g$gi -text $g
+	}
 	set ogfdlg($w,gf,$g) $w.body.g$gi
 	set r 0
 	foreach s $specs {
@@ -122,7 +144,7 @@ proc OGFParamLayout {w} {
     global ogfdlg
     foreach g $ogfdlg($w,groups) {
 	set gf $ogfdlg($w,gf,$g)
-	pack forget $gf
+	if {$ogfdlg($w,tabs)} {catch {$w.body.nb forget $gf}} else {pack forget $gf}
 	foreach c [winfo children $gf] {grid forget $c}
     }
     set vis {}
@@ -138,7 +160,10 @@ proc OGFParamLayout {w} {
 	    incr r
 	}
 	grid columnconfigure $gf 1 -weight 1
-	if {$r > 0} {pack $gf -in $w.body -side top -fill x -pady 3; lappend vis $g}
+	if {$r > 0} {
+	    if {$ogfdlg($w,tabs)} {$w.body.nb add $gf -text $g} else {pack $gf -in $w.body -side top -fill x -pady 3}
+	    lappend vis $g
+	}
     }
     set ogfdlg($w,visible_groups) $vis
 }

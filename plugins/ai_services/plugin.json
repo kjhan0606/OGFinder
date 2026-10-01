@@ -44,6 +44,59 @@
  ],
  "short": "AI Services",
  "primary": "run",
- "settings": "OGFAIRegistry",
- "tcl": "ai.tcl"
+ "settings": "params",
+ "tcl": "ai.tcl",
+ "params": [
+  {
+   "name": "sf",
+   "label": "Service profile file",
+   "type": "file",
+   "default": "",
+   "group": "Services",
+   "help": "JSON profile that lists the external services (see docs/ai_services.md). Empty = built-in MOCK only."
+  },
+  {
+   "name": "backend,photoz",
+   "label": "Photo-z backend",
+   "type": "choice",
+   "default": "local",
+   "group": "Backend of the local steps",
+   "help": "local = the built-in model (unchanged behaviour); otherwise an enabled service of task photoz.",
+   "choices_proc": "OGFAIBackendChoices photoz"
+  },
+  {
+   "name": "backend,sed_fit",
+   "label": "SED fitting backend",
+   "type": "choice",
+   "default": "local",
+   "group": "Backend of the local steps",
+   "help": "local or an enabled sed_fit service.",
+   "choices_proc": "OGFAIBackendChoices sed_fit"
+  },
+  {
+   "name": "backend,morphology",
+   "label": "Galaxy morphology backend",
+   "type": "choice",
+   "default": "local",
+   "group": "Backend of the local steps",
+   "help": "local or an enabled morphology service.",
+   "choices_proc": "OGFAIBackendChoices morphology"
+  },
+  {
+   "name": "backend,star",
+   "label": "AI star classification backend",
+   "type": "choice",
+   "default": "local",
+   "group": "Backend of the local steps",
+   "help": "local or an enabled star_galaxy service.",
+   "choices_proc": "OGFAIBackendChoices star"
+  }
+ ],
+ "store": {
+  "array": "ogfai",
+  "key": "%s",
+  "save": "OGFAIPrefSave"
+ },
+ "on_apply": "OGFAIRegRefresh",
+ "on_open": "OGFAIInit"
 }

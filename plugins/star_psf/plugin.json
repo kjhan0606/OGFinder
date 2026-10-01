@@ -197,7 +197,7 @@
   {
    "id": "psf_settings",
    "label": "PSF / Star Settings...",
-   "proc": "CatalogPanelStarPSFSettings",
+   "proc": "OGFParamDialog star_psf",
    "legacy": [
     "Star(PSF) > Settings..."
    ],
@@ -207,7 +207,225 @@
  ],
  "short": "Stars/PSF",
  "primary": "ai_star",
- "settings": "CatalogPanelStarPSFSettings",
+ "settings": "params",
  "tcl": "star_psf.tcl",
- "tcl_always": 1
+ "tcl_always": 1,
+ "params": [
+  {
+   "name": "class-star-thresh",
+   "label": "CLASS_STAR threshold",
+   "type": "float",
+   "default": 0.8,
+   "group": "Star finding",
+   "help": "Minimum SExtractor CLASS_STAR for a PSF star candidate.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "max-ellipticity",
+   "label": "Max ellipticity",
+   "type": "float",
+   "default": 0.2,
+   "group": "Star finding",
+   "help": "Stars rounder than this are kept.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "fwhm-sigma",
+   "label": "FWHM sigma",
+   "type": "float",
+   "default": 2.0,
+   "group": "Star finding",
+   "help": "FWHM clipping in units of the robust scatter of the stellar locus.",
+   "min": 0.1,
+   "max": 20
+  },
+  {
+   "name": "min-flux-snr",
+   "label": "Min flux S/N",
+   "type": "float",
+   "default": 10.0,
+   "group": "Star finding",
+   "help": "Minimum S/N of a PSF star.",
+   "min": 0,
+   "max": 10000
+  },
+  {
+   "name": "psf-size",
+   "label": "PSF size",
+   "type": "int",
+   "default": 51,
+   "group": "PSF",
+   "help": "Stamp size of the empirical PSF.",
+   "min": 5,
+   "max": 2001,
+   "unit": "pix"
+  },
+  {
+   "name": "ext-core-mag-min",
+   "label": "Core mag min",
+   "type": "float",
+   "default": 18.0,
+   "group": "Extended PSF",
+   "help": "Brightest magnitude of the core stars.",
+   "min": -10,
+   "max": 40
+  },
+  {
+   "name": "ext-core-mag-max",
+   "label": "Core mag max",
+   "type": "float",
+   "default": 22.0,
+   "group": "Extended PSF",
+   "help": "Faintest magnitude of the core stars.",
+   "min": -10,
+   "max": 40
+  },
+  {
+   "name": "ext-wing-mag-max",
+   "label": "Wing mag max",
+   "type": "float",
+   "default": 16.0,
+   "group": "Extended PSF",
+   "help": "Faintest magnitude of the bright stars that define the wings.",
+   "min": -10,
+   "max": 40
+  },
+  {
+   "name": "ext-core-size",
+   "label": "Core cutout size",
+   "type": "int",
+   "default": 51,
+   "group": "Extended PSF",
+   "help": "Cutout size of the core PSF.",
+   "min": 5,
+   "max": 2001,
+   "unit": "pix"
+  },
+  {
+   "name": "ext-wing-size",
+   "label": "Wing cutout size",
+   "type": "int",
+   "default": 201,
+   "group": "Extended PSF",
+   "help": "Cutout size of the wing PSF.",
+   "min": 5,
+   "max": 4001,
+   "unit": "pix"
+  },
+  {
+   "name": "ext-blend-inner",
+   "label": "Blend inner",
+   "type": "float",
+   "default": 20.0,
+   "group": "Extended PSF",
+   "help": "Radius where the core-to-wing blend starts.",
+   "min": 0,
+   "max": 2000,
+   "unit": "pix"
+  },
+  {
+   "name": "ext-blend-outer",
+   "label": "Blend outer",
+   "type": "float",
+   "default": 30.0,
+   "group": "Extended PSF",
+   "help": "Radius where the blend ends.",
+   "min": 0,
+   "max": 2000,
+   "unit": "pix"
+  },
+  {
+   "name": "ext-saturation-limit",
+   "label": "Saturation",
+   "type": "float",
+   "default": 60000.0,
+   "group": "Extended PSF",
+   "help": "Pixels above this level are treated as saturated.",
+   "min": 0,
+   "max": 1000000000.0,
+   "unit": "ADU"
+  },
+  {
+   "name": "sim-telescope",
+   "label": "Telescope",
+   "type": "choice",
+   "default": "auto",
+   "group": "Simulation",
+   "help": "Telescope for the simulated PSF (auto = from the header).",
+   "choices": [
+    "auto",
+    "jwst",
+    "hst"
+   ]
+  },
+  {
+   "name": "sim-instrument",
+   "label": "Instrument",
+   "type": "string",
+   "default": "auto",
+   "group": "Simulation",
+   "help": "Instrument name, or auto."
+  },
+  {
+   "name": "sim-filter",
+   "label": "Filter",
+   "type": "string",
+   "default": "auto",
+   "group": "Simulation",
+   "help": "Filter name, or auto."
+  },
+  {
+   "name": "sim-psf-size",
+   "label": "PSF size",
+   "type": "int",
+   "default": 201,
+   "group": "Simulation",
+   "help": "Size of the simulated PSF.",
+   "min": 5,
+   "max": 4001,
+   "unit": "pix"
+  },
+  {
+   "name": "sim-oversample",
+   "label": "Oversample",
+   "type": "int",
+   "default": 1,
+   "group": "Simulation",
+   "help": "Oversampling factor.",
+   "min": 1,
+   "max": 16,
+   "expert": 1
+  },
+  {
+   "name": "sim-jitter-sigma",
+   "label": "Jitter sigma",
+   "type": "float",
+   "default": 0.007,
+   "group": "Simulation",
+   "help": "Pointing jitter (WebbPSF).",
+   "min": 0,
+   "max": 5,
+   "unit": "arcsec",
+   "expert": 1
+  },
+  {
+   "name": "sim-focus-offset",
+   "label": "Focus offset",
+   "type": "float",
+   "default": 0.0,
+   "group": "Simulation",
+   "help": "Focus offset (TinyTim).",
+   "min": -100,
+   "max": 100,
+   "expert": 1
+  }
+ ],
+ "store": {
+  "array": "catpanel",
+  "key": "psf,param,%s",
+  "save": "CatalogPanelPSFParamSave"
+ },
+ "dialog_tabs": 1
 }

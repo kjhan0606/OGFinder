@@ -211,7 +211,7 @@
   {
    "id": "icl_settings",
    "label": "ICL Settings...",
-   "proc": "CatalogPanelICLSettings",
+   "proc": "OGFParamDialog icl",
    "legacy": [
     "ICL > Settings..."
    ],
@@ -221,7 +221,266 @@
  ],
  "short": "ICL",
  "primary": "measure",
- "settings": "CatalogPanelICLSettings",
+ "settings": "params",
  "tcl": "icl.tcl",
- "tcl_always": 1
+ "tcl_always": 1,
+ "params": [
+  {
+   "name": "expand-factor",
+   "label": "Expand factor",
+   "type": "float",
+   "default": 1.5,
+   "group": "Masking",
+   "help": "Source-mask expansion factor.",
+   "min": 0,
+   "max": 50
+  },
+  {
+   "name": "max-dilate-radius",
+   "label": "Max dilate radius",
+   "type": "int",
+   "default": 20,
+   "group": "Masking",
+   "help": "Largest dilation radius of the mask.",
+   "min": 0,
+   "max": 10000,
+   "unit": "pix"
+  },
+  {
+   "name": "bright-star-mag-limit",
+   "label": "Bright star mag limit",
+   "type": "float",
+   "default": 18.0,
+   "group": "Masking",
+   "help": "Stars brighter than this get an extended mask.",
+   "min": -10,
+   "max": 40
+  },
+  {
+   "name": "bright-star-radius-scale",
+   "label": "Bright star radius scale",
+   "type": "float",
+   "default": 10.0,
+   "group": "Masking",
+   "help": "Radius scale of the bright-star masks.",
+   "min": 0,
+   "max": 1000
+  },
+  {
+   "name": "interp-method",
+   "label": "Interpolation",
+   "type": "choice",
+   "default": "linear",
+   "group": "Masking",
+   "help": "Interpolation across masked pixels.",
+   "choices": [
+    "linear",
+    "cubic",
+    "nearest"
+   ]
+  },
+  {
+   "name": "detect-thresh",
+   "label": "Detect threshold",
+   "type": "float",
+   "default": 5.0,
+   "group": "Masking",
+   "help": "Source detection threshold for the mask.",
+   "min": 0.01,
+   "max": 100,
+   "unit": "sigma"
+  },
+  {
+   "name": "bkg-order",
+   "label": "Polynomial order",
+   "type": "int",
+   "default": 3,
+   "group": "Background",
+   "help": "Order of the polynomial / Chebyshev background.",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "bkg-sigma-clip",
+   "label": "Sigma clip",
+   "type": "float",
+   "default": 3.0,
+   "group": "Background",
+   "help": "Sigma clipping for the background fit.",
+   "min": 0.5,
+   "max": 20
+  },
+  {
+   "name": "bkg-sep-mesh",
+   "label": "SEP mesh size",
+   "type": "int",
+   "default": 256,
+   "group": "Background",
+   "help": "Mesh size of the SEP background.",
+   "min": 4,
+   "max": 8192,
+   "unit": "pix"
+  },
+  {
+   "name": "bkg-iterative",
+   "label": "Iterative refinement",
+   "type": "bool",
+   "default": 0,
+   "group": "Background",
+   "help": "Re-fit the background excluding sources found on the previous pass."
+  },
+  {
+   "name": "bkg-n-iterations",
+   "label": "N iterations",
+   "type": "int",
+   "default": 3,
+   "group": "Background",
+   "help": "Iterations of the refinement.",
+   "min": 1,
+   "max": 50
+  },
+  {
+   "name": "bkg-convergence-tol",
+   "label": "Convergence tol",
+   "type": "float",
+   "default": 0.01,
+   "group": "Background",
+   "help": "Stop when the background changes less than this.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "bkg-refine-thresh",
+   "label": "Refine threshold",
+   "type": "float",
+   "default": 2.0,
+   "group": "Background",
+   "help": "Threshold for masking sources during refinement.",
+   "min": 0.1,
+   "max": 50,
+   "unit": "sigma"
+  },
+  {
+   "name": "rmin",
+   "label": "R min",
+   "type": "float",
+   "default": 5.0,
+   "group": "Profile",
+   "help": "Innermost radius of the radial profile.",
+   "min": 0,
+   "max": 1000000.0,
+   "unit": "pix"
+  },
+  {
+   "name": "rmax",
+   "label": "R max",
+   "type": "float",
+   "default": 1000.0,
+   "group": "Profile",
+   "help": "Outermost radius of the radial profile.",
+   "min": 1,
+   "max": 1000000.0,
+   "unit": "pix"
+  },
+  {
+   "name": "nsteps",
+   "label": "N steps",
+   "type": "int",
+   "default": 80,
+   "group": "Profile",
+   "help": "Number of radial bins.",
+   "min": 2,
+   "max": 10000
+  },
+  {
+   "name": "spacing",
+   "label": "Spacing",
+   "type": "choice",
+   "default": "log",
+   "group": "Profile",
+   "help": "Radial bin spacing.",
+   "choices": [
+    "log",
+    "linear"
+   ]
+  },
+  {
+   "name": "ellipticity",
+   "label": "Ellipticity",
+   "type": "float",
+   "default": 0.0,
+   "group": "Profile",
+   "help": "Ellipticity of the elliptical annuli.",
+   "min": 0,
+   "max": 0.99
+  },
+  {
+   "name": "pa",
+   "label": "PA",
+   "type": "float",
+   "default": 0.0,
+   "group": "Profile",
+   "help": "Position angle of the annuli.",
+   "min": -360,
+   "max": 360,
+   "unit": "deg"
+  },
+  {
+   "name": "mag-zeropoint",
+   "label": "Mag zeropoint",
+   "type": "float",
+   "default": 25.0,
+   "group": "Calibration",
+   "help": "Photometric zeropoint.",
+   "min": -100,
+   "max": 100
+  },
+  {
+   "name": "pixel-scale",
+   "label": "Pixel scale",
+   "type": "float",
+   "default": 0.06,
+   "group": "Calibration",
+   "help": "Pixel scale.",
+   "min": 1e-06,
+   "max": 1000,
+   "unit": "arcsec/px"
+  },
+  {
+   "name": "mu-threshold",
+   "label": "ICL mu threshold",
+   "type": "float",
+   "default": 26.5,
+   "group": "Calibration",
+   "help": "Surface-brightness threshold that defines the ICL.",
+   "min": 0,
+   "max": 40,
+   "unit": "mag/arcsec2"
+  },
+  {
+   "name": "mu-levels",
+   "label": "Isophotal mu levels",
+   "type": "string",
+   "default": "26.0,27.0,28.0",
+   "group": "Calibration",
+   "help": "Comma separated surface-brightness levels of the multi-threshold measurement."
+  },
+  {
+   "name": "measure-radius",
+   "label": "Measure radius",
+   "type": "float",
+   "default": 500.0,
+   "group": "Calibration",
+   "help": "Radius of the ICL measurement.",
+   "min": 1,
+   "max": 1000000.0,
+   "unit": "pix"
+  }
+ ],
+ "store": {
+  "array": "catpanel",
+  "key": "icl,param,%s",
+  "save": "CatalogPanelICLParamSave"
+ },
+ "dialog_tabs": 1
 }

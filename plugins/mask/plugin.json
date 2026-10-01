@@ -34,11 +34,12 @@
   {
    "id": "overlay_style",
    "label": "Overlay Colour/Transparency...",
-   "proc": "CatalogPanelMaskOverlaySettings",
+   "proc": "OGFParamDialog mask",
    "legacy": [
     "Mask > Overlay Colour/Transparency..."
    ],
-   "session": "NONE"
+   "session": "NONE",
+   "settings_only": 1
   },
   {
    "id": "edit",
@@ -172,7 +173,33 @@
  ],
  "short": "Mask",
  "primary": "auto",
- "settings": "CatalogPanelMaskOverlaySettings",
+ "settings": "params",
  "tcl": "mask.tcl",
- "required": 1
+ "required": 1,
+ "params": [
+  {
+   "name": "color",
+   "label": "Colour",
+   "type": "string",
+   "default": "red",
+   "group": "Overlay",
+   "help": "Colour name or #rrggbb of the mask overlay."
+  },
+  {
+   "name": "transparency",
+   "label": "Transparency",
+   "type": "int",
+   "default": 50,
+   "group": "Overlay",
+   "help": "Overlay transparency in percent (0 = opaque, 100 = invisible).",
+   "min": 0,
+   "max": 100,
+   "unit": "%"
+  }
+ ],
+ "store": {
+  "array": "ogfmask",
+  "key": "%s"
+ },
+ "on_apply": "OGFMaskOverlayApplied"
 }

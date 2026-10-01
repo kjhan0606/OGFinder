@@ -195,18 +195,6 @@ proc CatalogPanelMaskToggleOverlay {} {
     }
 }
 
-proc CatalogPanelMaskOverlaySettings {} {
-    global ogfmask current
-    set r [OGFForm "Mask Overlay" [list \
-	{color "Colour (red, green, cyan, #rrggbb)" $ogfmask(color)} \
-	{trans "Transparency 0-100 (%)" $ogfmask(transparency)}]]
-    if {$r eq {}} return
-    set ogfmask(color) [dict get $r color]
-    set t [dict get $r trans]
-    if {[string is integer -strict $t]} {set ogfmask(transparency) [expr {max(0,min(100,$t))}]}
-    if {$ogfmask(overlay)} {OGFMaskApplyStyle $current(frame)}
-}
-
 # ------------------------------------------------------------- auto mask
 proc OGFMaskAutoArgs {} {
     global ogfmask catpanel
@@ -536,4 +524,10 @@ proc OGFMaskPipelineMask {pipeline} {
     if {![CatalogPanelMaskAutoDialog]} return
     set ogfmask(overlay) 1
     CatalogPanelMaskAuto 0
+}
+
+# called by the declarative overlay dialog (plugins/mask/plugin.json "on_apply") after colour / transparency changed
+proc OGFMaskOverlayApplied {} {
+    global ogfmask current
+    if {$ogfmask(overlay)} {OGFMaskApplyStyle $current(frame)}
 }
