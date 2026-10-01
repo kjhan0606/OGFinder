@@ -2,35 +2,34 @@
 # Loaded through the "tcl" field of plugins/star_psf/plugin.json.
 
 proc CatalogPanelStarFinder {} {
-    global catpanel
     global current
     if {[info commands OGFAIBackendHook] ne {} && [OGFAIBackendHook star]} return  ;# ogf_ai.tcl: backend local|external
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "No sources — run Extract first"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "No sources — run Extract first"
 	return
     }
 
     # Get FITS filename
     set fn [CatalogPanelGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     # Find script
     set script [CatalogPanelGetScript ds9_star_finder.py]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_star_finder.py not found"
+	::ogf::cat::set status "ERROR: ds9_star_finder.py not found"
 	return
     }
 
     # Save catalog to temp TSV
     set catfile [CatalogPanelSaveTempCatalog star]
     if {$catfile eq {}} {
-	set catpanel(status) "Star Finder: cannot write catalog"
+	::ogf::cat::set status "Star Finder: cannot write catalog"
 	return
     }
 
@@ -39,12 +38,12 @@ proc CatalogPanelStarFinder {} {
     lappend paramargs "--catalog" $catfile
 
     # Pass PSF file if available
-    if {[info exists catpanel(psf,file)] && $catpanel(psf,file) ne {} &&
-	[file exists $catpanel(psf,file)]} {
-	lappend paramargs "--psf" $catpanel(psf,file)
+    if {[::ogf::cat::exists psf,file] && [::ogf::cat::get psf,file] ne {} &&
+	[file exists [::ogf::cat::get psf,file]]} {
+	lappend paramargs "--psf" [::ogf::cat::get psf,file]
     }
 
-    set catpanel(status) "AI Star Classification: classifying sources on [file tail $fn] ..."
+    ::ogf::cat::set status "AI Star Classification: classifying sources on [file tail $fn] ..."
     update idletasks
 
     # Run classification
@@ -61,10 +60,10 @@ proc CatalogPanelStarFinder {} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Star Finder error: $last_err"
+	    ::ogf::cat::set status "Star Finder error: $last_err"
 	    puts "Star Finder full stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "Star Finder error: $err"
+	    ::ogf::cat::set status "Star Finder error: $err"
 	}
 	return
     }
@@ -76,7 +75,6 @@ proc CatalogPanelStarFinder {} {
 }
 
 proc CatalogPanelStarFinderParse {data} {
-    global catpanel
 
     set lines [split $data \n]
     set n_classified 0
@@ -107,7 +105,7 @@ proc CatalogPanelStarFinderParse {data} {
     }
 
     if {[llength $result_lines] == 0} {
-	set catpanel(status) "Star Finder: no sources classified"
+	::ogf::cat::set status "Star Finder: no sources classified"
 	return
     }
 
@@ -123,11 +121,10 @@ proc CatalogPanelStarFinderParse {data} {
     # Recolor markers
     CatalogPanelStarFinderColorMarkers $result_lines
 
-    set catpanel(status) "AI Star Classification: $n_classified sources classified"
+    ::ogf::cat::set status "AI Star Classification: $n_classified sources classified"
 }
 
 proc CatalogPanelStarFinderColorMarkers {result_lines} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
@@ -146,9 +143,9 @@ proc CatalogPanelStarFinderColorMarkers {result_lines} {
     # Delete existing markers and recreate with star/galaxy colors
     OGFMarkDelete $frame
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
+    if {![::ogf::cat::has]} return
 
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     if {[llength $lines] < 2} return
 
     set headers [split [lindex $lines 0] "\t"]
@@ -252,11 +249,10 @@ proc CatalogPanelStarFinderColorMarkers {result_lines} {
 	OGFMarkSend $frame
     }
 
-    set catpanel(markall,on) 1
+    ::ogf::cat::set markall,on 1
 }
 
 proc CatalogPanelPSFParamLoad {} {
-    global catpanel
 
     set preffile [file join [file normalize ~] .ds9 psf_deconv.prf]
     if {![file exists $preffile]} return
@@ -268,8 +264,8 @@ proc CatalogPanelPSFParamLoad {} {
 	if {[llength $parts] >= 2} {
 	    set key [lindex $parts 0]
 	    set val [lindex $parts 1]
-	    if {[info exists catpanel(psf,param,$key)]} {
-		set catpanel(psf,param,$key) $val
+	    if {[::ogf::cat::exists psf,param,$key]} {
+		::ogf::cat::set psf,param,$key $val
 	    }
 	}
     }
@@ -277,7 +273,6 @@ proc CatalogPanelPSFParamLoad {} {
 }
 
 proc CatalogPanelPSFParamSave {} {
-    global catpanel
 
     set prefdir [file join [file normalize ~] .ds9]
     if {![file isdirectory $prefdir]} {
@@ -293,7 +288,7 @@ proc CatalogPanelPSFParamSave {} {
 		   ext-saturation-limit \
 		   sim-telescope sim-instrument sim-filter sim-psf-size \
 		   sim-oversample sim-jitter-sigma sim-focus-offset} {
-	puts $fd "$pname $catpanel(psf,param,$pname)"
+	puts $fd "$pname [::ogf::cat::get psf,param,$pname]"
     }
     close $fd
 }
@@ -321,23 +316,22 @@ proc CatalogPanelPSFGetFITS {} {
 }
 
 proc CatalogPanelFindStars {method} {
-    global catpanel
     global current
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first before finding stars"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first before finding stars"
 	return
     }
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
@@ -346,10 +340,10 @@ proc CatalogPanelFindStars {method} {
     catch {file mkdir [file dirname $catfile]}
     if {[catch {
 	set fd [open $catfile w]
-	puts $fd $catpanel(alldata)
+	puts $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "Star finding error: cannot write catalog: $err"
+	::ogf::cat::set status "Star finding error: cannot write catalog: $err"
 	return
     }
 
@@ -358,12 +352,12 @@ proc CatalogPanelFindStars {method} {
     lappend paramargs "--mode" "find_stars"
     lappend paramargs "--catalog" $catfile
     lappend paramargs "--method" $method
-    lappend paramargs "--class-star-thresh" $catpanel(psf,param,class-star-thresh)
-    lappend paramargs "--max-ellipticity" $catpanel(psf,param,max-ellipticity)
-    lappend paramargs "--fwhm-sigma" $catpanel(psf,param,fwhm-sigma)
-    lappend paramargs "--min-flux-snr" $catpanel(psf,param,min-flux-snr)
+    lappend paramargs "--class-star-thresh" [::ogf::cat::get psf,param,class-star-thresh]
+    lappend paramargs "--max-ellipticity" [::ogf::cat::get psf,param,max-ellipticity]
+    lappend paramargs "--fwhm-sigma" [::ogf::cat::get psf,param,fwhm-sigma]
+    lappend paramargs "--min-flux-snr" [::ogf::cat::get psf,param,min-flux-snr]
 
-    set catpanel(status) "Finding stars ($method) ..."
+    ::ogf::cat::set status "Finding stars ($method) ..."
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
@@ -379,10 +373,10 @@ proc CatalogPanelFindStars {method} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Star finding error: $last_err"
+	    ::ogf::cat::set status "Star finding error: $last_err"
 	    puts "Star finding stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "Star finding error: $err"
+	    ::ogf::cat::set status "Star finding error: $err"
 	}
 	return
     }
@@ -414,15 +408,14 @@ proc CatalogPanelFindStars {method} {
 	}
     }
 
-    set catpanel(psf,star_indices) $star_indices
-    set catpanel(status) "Found $n_stars stars ($method)"
+    ::ogf::cat::set psf,star_indices $star_indices
+    ::ogf::cat::set status "Found $n_stars stars ($method)"
 
     # Show star markers
     CatalogPanelShowStars
 }
 
 proc CatalogPanelShowStars {} {
-    global catpanel
     global current
 
     if {$current(frame) eq {}} return
@@ -431,13 +424,13 @@ proc CatalogPanelShowStars {} {
     # Clear existing star markers
     catch {$frame marker catalog tag psf_star delete}
 
-    if {![info exists catpanel(psf,star_indices)] || $catpanel(psf,star_indices) eq {}} {
-	set catpanel(status) "No stars found — run Star Finding first"
+    if {![::ogf::cat::exists psf,star_indices] || [::ogf::cat::get psf,star_indices] eq {}} {
+	::ogf::cat::set status "No stars found — run Star Finding first"
 	return
     }
 
     # Parse alldata to find star positions
-    set lines [split $catpanel(alldata) \n]
+    set lines [split [::ogf::cat::tsv] \n]
     if {[llength $lines] < 2} return
 
     set header [lindex $lines 0]
@@ -465,7 +458,7 @@ proc CatalogPanelShowStars {} {
 	set fields [split $line "\t"]
 	if {[llength $fields] <= $num_idx} continue
 	set num [string trim [lindex $fields $num_idx]]
-	if {[lsearch -exact $catpanel(psf,star_indices) $num] < 0} continue
+	if {[lsearch -exact [::ogf::cat::get psf,star_indices] $num] < 0} continue
 
 	set x [string trim [lindex $fields $x_idx]]
 	set y [string trim [lindex $fields $y_idx]]
@@ -481,39 +474,37 @@ proc CatalogPanelShowStars {} {
     if {$count > 0} {
 	set psf_star_reg $reg
 	catch {$frame marker catalog command ds9 var psf_star_reg}
-	set catpanel(status) "Showing $count star markers"
+	::ogf::cat::set status "Showing $count star markers"
     }
 }
 
 proc CatalogPanelClearStars {} {
-    global catpanel
     global current
 
-    set catpanel(psf,star_indices) {}
+    ::ogf::cat::set psf,star_indices {}
     if {$current(frame) ne {}} {
 	catch {$current(frame) marker catalog tag psf_star delete}
     }
-    set catpanel(status) "Star markers cleared"
+    ::ogf::cat::set status "Star markers cleared"
 }
 
 proc CatalogPanelBuildPSF {method} {
-    global catpanel
     global current
 
-    if {![info exists catpanel(psf,star_indices)] || $catpanel(psf,star_indices) eq {}} {
-	set catpanel(status) "Find stars first before building PSF"
+    if {![::ogf::cat::exists psf,star_indices] || [::ogf::cat::get psf,star_indices] eq {}} {
+	::ogf::cat::set status "Find stars first before building PSF"
 	return
     }
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
@@ -522,24 +513,24 @@ proc CatalogPanelBuildPSF {method} {
     catch {file mkdir [file dirname $catfile]}
     if {[catch {
 	set fd [open $catfile w]
-	puts $fd $catpanel(alldata)
+	puts $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "PSF build error: cannot write catalog: $err"
+	::ogf::cat::set status "PSF build error: cannot write catalog: $err"
 	return
     }
 
-    set star_list [join $catpanel(psf,star_indices) ","]
+    set star_list [join [::ogf::cat::get psf,star_indices] ","]
 
     set paramargs {}
     lappend paramargs "--mode" "build_psf"
     lappend paramargs "--catalog" $catfile
     lappend paramargs "--star-indices" $star_list
     lappend paramargs "--psf-method" $method
-    lappend paramargs "--psf-size" $catpanel(psf,param,psf-size)
-    lappend paramargs "--psf-output" $catpanel(psf,file)
+    lappend paramargs "--psf-size" [::ogf::cat::get psf,param,psf-size]
+    lappend paramargs "--psf-output" [::ogf::cat::get psf,file]
 
-    set catpanel(status) "Building PSF ($method) from [llength $catpanel(psf,star_indices)] stars ..."
+    ::ogf::cat::set status "Building PSF ($method) from [llength [::ogf::cat::get psf,star_indices]] stars ..."
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
@@ -555,34 +546,33 @@ proc CatalogPanelBuildPSF {method} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "PSF build error: $last_err"
+	    ::ogf::cat::set status "PSF build error: $last_err"
 	    puts "PSF build stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "PSF build error: $err"
+	    ::ogf::cat::set status "PSF build error: $err"
 	}
 	return
     }
     catch {file delete $errfile}
     catch {file delete $catfile}
 
-    set catpanel(psf,has_psf) 1
+    ::ogf::cat::set psf,has_psf 1
 
     # Parse info from output
     foreach line [split $data \n] {
 	if {[string match "#PSF_BUILT*" $line]} {
 	    set info_str [string range $line 10 end]
-	    set catpanel(status) "PSF built: $info_str"
+	    ::ogf::cat::set status "PSF built: $info_str"
 	    break
 	}
     }
 }
 
 proc CatalogPanelBuildExtendedPSF {} {
-    global catpanel
     global ed
 
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} {
-	set catpanel(status) "Extract sources first before building extended PSF"
+    if {![::ogf::cat::has]} {
+	::ogf::cat::set status "Extract sources first before building extended PSF"
 	return
     }
 
@@ -600,7 +590,7 @@ proc CatalogPanelBuildExtendedPSF {} {
     foreach pname {ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
 		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
 		   ext-saturation-limit} {
-	set ed(psf,$pname) $catpanel(psf,param,$pname)
+	set ed(psf,$pname) [::ogf::cat::get psf,param,$pname]
     }
 
     set f [ttk::frame $w.content]
@@ -690,26 +680,25 @@ proc CatalogPanelBuildExtendedPSF {} {
 }
 
 proc CatalogPanelBuildExtendedPSFExec {w} {
-    global catpanel
     global ed
 
     # Apply params
     foreach pname {ext-core-mag-min ext-core-mag-max ext-wing-mag-max \
 		   ext-core-size ext-wing-size ext-blend-inner ext-blend-outer \
 		   ext-saturation-limit} {
-	set catpanel(psf,param,$pname) $ed(psf,$pname)
+	::ogf::cat::set psf,param,$pname $ed(psf,$pname)
     }
     CatalogPanelPSFParamSave
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
@@ -718,27 +707,27 @@ proc CatalogPanelBuildExtendedPSFExec {w} {
     catch {file mkdir [file dirname $catfile]}
     if {[catch {
 	set fd [open $catfile w]
-	puts $fd $catpanel(alldata)
+	puts $fd [::ogf::cat::tsv]
 	close $fd
     } err]} {
-	set catpanel(status) "Extended PSF error: cannot write catalog: $err"
+	::ogf::cat::set status "Extended PSF error: cannot write catalog: $err"
 	return
     }
 
     set paramargs {}
     lappend paramargs "--mode" "build_psf_extended"
     lappend paramargs "--catalog" $catfile
-    lappend paramargs "--ext-core-mag-min" $catpanel(psf,param,ext-core-mag-min)
-    lappend paramargs "--ext-core-mag-max" $catpanel(psf,param,ext-core-mag-max)
-    lappend paramargs "--ext-wing-mag-max" $catpanel(psf,param,ext-wing-mag-max)
-    lappend paramargs "--ext-core-size" $catpanel(psf,param,ext-core-size)
-    lappend paramargs "--ext-wing-size" $catpanel(psf,param,ext-wing-size)
-    lappend paramargs "--ext-blend-inner" $catpanel(psf,param,ext-blend-inner)
-    lappend paramargs "--ext-blend-outer" $catpanel(psf,param,ext-blend-outer)
-    lappend paramargs "--ext-saturation-limit" $catpanel(psf,param,ext-saturation-limit)
-    lappend paramargs "--psf-output" $catpanel(psf,file)
+    lappend paramargs "--ext-core-mag-min" [::ogf::cat::get psf,param,ext-core-mag-min]
+    lappend paramargs "--ext-core-mag-max" [::ogf::cat::get psf,param,ext-core-mag-max]
+    lappend paramargs "--ext-wing-mag-max" [::ogf::cat::get psf,param,ext-wing-mag-max]
+    lappend paramargs "--ext-core-size" [::ogf::cat::get psf,param,ext-core-size]
+    lappend paramargs "--ext-wing-size" [::ogf::cat::get psf,param,ext-wing-size]
+    lappend paramargs "--ext-blend-inner" [::ogf::cat::get psf,param,ext-blend-inner]
+    lappend paramargs "--ext-blend-outer" [::ogf::cat::get psf,param,ext-blend-outer]
+    lappend paramargs "--ext-saturation-limit" [::ogf::cat::get psf,param,ext-saturation-limit]
+    lappend paramargs "--psf-output" [::ogf::cat::get psf,file]
 
-    set catpanel(status) "Building extended PSF ..."
+    ::ogf::cat::set status "Building extended PSF ..."
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
@@ -754,21 +743,21 @@ proc CatalogPanelBuildExtendedPSFExec {w} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "Extended PSF error: $last_err"
+	    ::ogf::cat::set status "Extended PSF error: $last_err"
 	    puts "Extended PSF stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "Extended PSF error: $err"
+	    ::ogf::cat::set status "Extended PSF error: $err"
 	}
 	return
     }
     catch {file delete $errfile}
     catch {file delete $catfile}
 
-    set catpanel(psf,has_psf) 1
+    ::ogf::cat::set psf,has_psf 1
 
     foreach line [split $data \n] {
 	if {[string match "#PSF_EXTENDED*" $line]} {
-	    set catpanel(status) "Extended PSF: [string range $line 15 end]"
+	    ::ogf::cat::set status "Extended PSF: [string range $line 15 end]"
 	    break
 	}
     }
@@ -777,19 +766,18 @@ proc CatalogPanelBuildExtendedPSFExec {w} {
 }
 
 proc CatalogPanelCheckSimAvail {} {
-    global catpanel
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(psf,sim_webbpsf_ok) 0
-	set catpanel(psf,sim_tinytim_ok) 0
+	::ogf::cat::set psf,sim_webbpsf_ok 0
+	::ogf::cat::set psf,sim_tinytim_ok 0
 	return
     }
 
     # Use a dummy fits arg for check_sim mode
     if {[catch {set data [exec [OGFPython] $script dummy.fits --mode check_sim 2>/dev/null]} err]} {
-	set catpanel(psf,sim_webbpsf_ok) 0
-	set catpanel(psf,sim_tinytim_ok) 0
+	::ogf::cat::set psf,sim_webbpsf_ok 0
+	::ogf::cat::set psf,sim_tinytim_ok 0
 	return
     }
 
@@ -797,10 +785,10 @@ proc CatalogPanelCheckSimAvail {} {
 	if {[string match "#SIM_STATUS*" $line]} {
 	    foreach part [split $line \t] {
 		if {[string match "WEBBPSF=*" $part]} {
-		    set catpanel(psf,sim_webbpsf_ok) [string range $part 8 end]
+		    ::ogf::cat::set psf,sim_webbpsf_ok [string range $part 8 end]
 		}
 		if {[string match "TINYTIM=*" $part]} {
-		    set catpanel(psf,sim_tinytim_ok) [string range $part 8 end]
+		    ::ogf::cat::set psf,sim_tinytim_ok [string range $part 8 end]
 		}
 	    }
 	}
@@ -808,7 +796,6 @@ proc CatalogPanelCheckSimAvail {} {
 }
 
 proc CatalogPanelSimPSFWebbPSF {} {
-    global catpanel
     global ed
 
     set w .webbpsfdlg
@@ -818,7 +805,7 @@ proc CatalogPanelSimPSFWebbPSF {} {
     }
 
     # Check availability if not yet done
-    if {$catpanel(psf,sim_webbpsf_ok) == -1} {
+    if {[::ogf::cat::get psf,sim_webbpsf_ok] == -1} {
 	CatalogPanelCheckSimAvail
     }
 
@@ -826,12 +813,12 @@ proc CatalogPanelSimPSFWebbPSF {} {
     wm title $w "WebbPSF (JWST)"
     wm geometry $w 360x380
 
-    set ed(psf,sim-instrument) $catpanel(psf,param,sim-instrument)
-    set ed(psf,sim-filter) $catpanel(psf,param,sim-filter)
-    set ed(psf,sim-psf-size) $catpanel(psf,param,sim-psf-size)
-    set ed(psf,sim-oversample) $catpanel(psf,param,sim-oversample)
-    set ed(psf,sim-jitter-sigma) $catpanel(psf,param,sim-jitter-sigma)
-    set ed(psf,sim-focus-offset) $catpanel(psf,param,sim-focus-offset)
+    set ed(psf,sim-instrument) [::ogf::cat::get psf,param,sim-instrument]
+    set ed(psf,sim-filter) [::ogf::cat::get psf,param,sim-filter]
+    set ed(psf,sim-psf-size) [::ogf::cat::get psf,param,sim-psf-size]
+    set ed(psf,sim-oversample) [::ogf::cat::get psf,param,sim-oversample]
+    set ed(psf,sim-jitter-sigma) [::ogf::cat::get psf,param,sim-jitter-sigma]
+    set ed(psf,sim-focus-offset) [::ogf::cat::get psf,param,sim-focus-offset]
 
     set f [ttk::frame $w.content]
     pack $f -fill both -expand true -padx 8 -pady 8
@@ -839,13 +826,13 @@ proc CatalogPanelSimPSFWebbPSF {} {
     set r 0
 
     # Availability status
-    if {$catpanel(psf,sim_webbpsf_ok) == 1} {
+    if {[::ogf::cat::get psf,sim_webbpsf_ok] == 1} {
 	set statxt "WebbPSF: Available"
     } else {
 	set statxt "WebbPSF: Not found (pip install webbpsf)"
     }
     ttk::label $f.status -text $statxt -foreground \
-	[expr {$catpanel(psf,sim_webbpsf_ok) == 1 ? "green" : "red"}]
+	[expr {[::ogf::cat::get psf,sim_webbpsf_ok] == 1 ? "green" : "red"}]
     grid $f.status -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {4 8}
     incr r
 
@@ -920,40 +907,39 @@ proc CatalogPanelSimPSFWebbPSF {} {
 }
 
 proc CatalogPanelSimPSFWebbPSFExec {w} {
-    global catpanel
     global ed
 
     foreach pname {sim-instrument sim-filter sim-psf-size sim-oversample \
 		   sim-jitter-sigma sim-focus-offset} {
-	set catpanel(psf,param,$pname) $ed(psf,$pname)
+	::ogf::cat::set psf,param,$pname $ed(psf,$pname)
     }
-    set catpanel(psf,param,sim-telescope) jwst
+    ::ogf::cat::set psf,param,sim-telescope jwst
     CatalogPanelPSFParamSave
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
     set paramargs {}
     lappend paramargs "--mode" "sim_psf"
     lappend paramargs "--sim-telescope" "jwst"
-    lappend paramargs "--sim-instrument" $catpanel(psf,param,sim-instrument)
-    lappend paramargs "--sim-filter" $catpanel(psf,param,sim-filter)
-    lappend paramargs "--sim-psf-size" $catpanel(psf,param,sim-psf-size)
-    lappend paramargs "--sim-oversample" $catpanel(psf,param,sim-oversample)
-    lappend paramargs "--sim-jitter-sigma" $catpanel(psf,param,sim-jitter-sigma)
-    lappend paramargs "--sim-focus-offset" $catpanel(psf,param,sim-focus-offset)
-    lappend paramargs "--psf-output" $catpanel(psf,file)
+    lappend paramargs "--sim-instrument" [::ogf::cat::get psf,param,sim-instrument]
+    lappend paramargs "--sim-filter" [::ogf::cat::get psf,param,sim-filter]
+    lappend paramargs "--sim-psf-size" [::ogf::cat::get psf,param,sim-psf-size]
+    lappend paramargs "--sim-oversample" [::ogf::cat::get psf,param,sim-oversample]
+    lappend paramargs "--sim-jitter-sigma" [::ogf::cat::get psf,param,sim-jitter-sigma]
+    lappend paramargs "--sim-focus-offset" [::ogf::cat::get psf,param,sim-focus-offset]
+    lappend paramargs "--psf-output" [::ogf::cat::get psf,file]
 
-    set catpanel(status) "Generating WebbPSF ($catpanel(psf,param,sim-instrument) / $catpanel(psf,param,sim-filter)) ..."
+    ::ogf::cat::set status "Generating WebbPSF ([::ogf::cat::get psf,param,sim-instrument] / [::ogf::cat::get psf,param,sim-filter]) ..."
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
@@ -968,20 +954,20 @@ proc CatalogPanelSimPSFWebbPSFExec {w} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "WebbPSF error: $last_err"
+	    ::ogf::cat::set status "WebbPSF error: $last_err"
 	    puts "WebbPSF stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "WebbPSF error: $err"
+	    ::ogf::cat::set status "WebbPSF error: $err"
 	}
 	return
     }
     catch {file delete $errfile}
 
-    set catpanel(psf,has_psf) 1
+    ::ogf::cat::set psf,has_psf 1
 
     foreach line [split $data \n] {
 	if {[string match "#PSF_SIM*" $line]} {
-	    set catpanel(status) "Sim PSF: [string range $line 9 end]"
+	    ::ogf::cat::set status "Sim PSF: [string range $line 9 end]"
 	    break
 	}
     }
@@ -990,7 +976,6 @@ proc CatalogPanelSimPSFWebbPSFExec {w} {
 }
 
 proc CatalogPanelSimPSFTinyTim {} {
-    global catpanel
     global ed
 
     set w .tinytimdlg
@@ -999,7 +984,7 @@ proc CatalogPanelSimPSFTinyTim {} {
 	return
     }
 
-    if {$catpanel(psf,sim_tinytim_ok) == -1} {
+    if {[::ogf::cat::get psf,sim_tinytim_ok] == -1} {
 	CatalogPanelCheckSimAvail
     }
 
@@ -1007,11 +992,11 @@ proc CatalogPanelSimPSFTinyTim {} {
     wm title $w "TinyTim (HST)"
     wm geometry $w 360x340
 
-    set ed(psf,sim-instrument) $catpanel(psf,param,sim-instrument)
-    set ed(psf,sim-filter) $catpanel(psf,param,sim-filter)
-    set ed(psf,sim-psf-size) $catpanel(psf,param,sim-psf-size)
-    set ed(psf,sim-oversample) $catpanel(psf,param,sim-oversample)
-    set ed(psf,sim-focus-offset) $catpanel(psf,param,sim-focus-offset)
+    set ed(psf,sim-instrument) [::ogf::cat::get psf,param,sim-instrument]
+    set ed(psf,sim-filter) [::ogf::cat::get psf,param,sim-filter]
+    set ed(psf,sim-psf-size) [::ogf::cat::get psf,param,sim-psf-size]
+    set ed(psf,sim-oversample) [::ogf::cat::get psf,param,sim-oversample]
+    set ed(psf,sim-focus-offset) [::ogf::cat::get psf,param,sim-focus-offset]
 
     set f [ttk::frame $w.content]
     pack $f -fill both -expand true -padx 8 -pady 8
@@ -1019,13 +1004,13 @@ proc CatalogPanelSimPSFTinyTim {} {
     set r 0
 
     # Availability status
-    if {$catpanel(psf,sim_tinytim_ok) == 1} {
+    if {[::ogf::cat::get psf,sim_tinytim_ok] == 1} {
 	set statxt "TinyTim: Available"
     } else {
 	set statxt "TinyTim: Not found (tiny1/tiny2/tiny3 not on PATH)"
     }
     ttk::label $f.status -text $statxt -foreground \
-	[expr {$catpanel(psf,sim_tinytim_ok) == 1 ? "green" : "red"}]
+	[expr {[::ogf::cat::get psf,sim_tinytim_ok] == 1 ? "green" : "red"}]
     grid $f.status -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {4 8}
     incr r
 
@@ -1089,39 +1074,38 @@ proc CatalogPanelSimPSFTinyTim {} {
 }
 
 proc CatalogPanelSimPSFTinyTimExec {w} {
-    global catpanel
     global ed
 
     foreach pname {sim-instrument sim-filter sim-psf-size sim-oversample \
 		   sim-focus-offset} {
-	set catpanel(psf,param,$pname) $ed(psf,$pname)
+	::ogf::cat::set psf,param,$pname $ed(psf,$pname)
     }
-    set catpanel(psf,param,sim-telescope) hst
+    ::ogf::cat::set psf,param,sim-telescope hst
     CatalogPanelPSFParamSave
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
     set paramargs {}
     lappend paramargs "--mode" "sim_psf"
     lappend paramargs "--sim-telescope" "hst"
-    lappend paramargs "--sim-instrument" $catpanel(psf,param,sim-instrument)
-    lappend paramargs "--sim-filter" $catpanel(psf,param,sim-filter)
-    lappend paramargs "--sim-psf-size" $catpanel(psf,param,sim-psf-size)
-    lappend paramargs "--sim-oversample" $catpanel(psf,param,sim-oversample)
-    lappend paramargs "--sim-focus-offset" $catpanel(psf,param,sim-focus-offset)
-    lappend paramargs "--psf-output" $catpanel(psf,file)
+    lappend paramargs "--sim-instrument" [::ogf::cat::get psf,param,sim-instrument]
+    lappend paramargs "--sim-filter" [::ogf::cat::get psf,param,sim-filter]
+    lappend paramargs "--sim-psf-size" [::ogf::cat::get psf,param,sim-psf-size]
+    lappend paramargs "--sim-oversample" [::ogf::cat::get psf,param,sim-oversample]
+    lappend paramargs "--sim-focus-offset" [::ogf::cat::get psf,param,sim-focus-offset]
+    lappend paramargs "--psf-output" [::ogf::cat::get psf,file]
 
-    set catpanel(status) "Generating TinyTim PSF ($catpanel(psf,param,sim-instrument) / $catpanel(psf,param,sim-filter)) ..."
+    ::ogf::cat::set status "Generating TinyTim PSF ([::ogf::cat::get psf,param,sim-instrument] / [::ogf::cat::get psf,param,sim-filter]) ..."
     update idletasks
 
     set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
@@ -1136,20 +1120,20 @@ proc CatalogPanelSimPSFTinyTimExec {w} {
 	if {$stderr_msg ne ""} {
 	    set stderr_lines [split [string trim $stderr_msg] \n]
 	    set last_err [lindex $stderr_lines end]
-	    set catpanel(status) "TinyTim error: $last_err"
+	    ::ogf::cat::set status "TinyTim error: $last_err"
 	    puts "TinyTim stderr:\n$stderr_msg"
 	} else {
-	    set catpanel(status) "TinyTim error: $err"
+	    ::ogf::cat::set status "TinyTim error: $err"
 	}
 	return
     }
     catch {file delete $errfile}
 
-    set catpanel(psf,has_psf) 1
+    ::ogf::cat::set psf,has_psf 1
 
     foreach line [split $data \n] {
 	if {[string match "#PSF_SIM*" $line]} {
-	    set catpanel(status) "Sim PSF: [string range $line 9 end]"
+	    ::ogf::cat::set status "Sim PSF: [string range $line 9 end]"
 	    break
 	}
     }
@@ -1189,18 +1173,17 @@ proc CatalogPanelSimPSFUpdateFilters {cfilt telescope} {
 }
 
 proc CatalogPanelSimPSFAutoDetect {cinst cfilt telescope} {
-    global catpanel
     global ed
 
     set fn [CatalogPanelPSFGetFITS]
     if {$fn eq {} || ![file exists $fn]} {
-	set catpanel(status) "No FITS image loaded"
+	::ogf::cat::set status "No FITS image loaded"
 	return
     }
 
     set script [CatalogPanelPSFGetScript]
     if {![file exists $script]} {
-	set catpanel(status) "ERROR: ds9_psf_deconv.py not found"
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
 	return
     }
 
@@ -1236,14 +1219,13 @@ proc CatalogPanelSimPSFAutoDetect {cinst cfilt telescope} {
     # Update filter list for the detected instrument
     CatalogPanelSimPSFUpdateFilters $cfilt $telescope
 
-    set catpanel(status) "Auto-detected: $ed(psf,sim-instrument) / $ed(psf,sim-filter)"
+    ::ogf::cat::set status "Auto-detected: $ed(psf,sim-instrument) / $ed(psf,sim-filter)"
 }
 
 proc CatalogPanelViewPSF {} {
-    global catpanel
 
-    if {!$catpanel(psf,has_psf) || ![file exists $catpanel(psf,file)]} {
-	set catpanel(status) "No PSF available — build PSF first"
+    if {![::ogf::cat::get psf,has_psf] || ![file exists [::ogf::cat::get psf,file]]} {
+	::ogf::cat::set status "No PSF available — build PSF first"
 	return
     }
 
@@ -1282,9 +1264,8 @@ proc CatalogPanelViewPSF {} {
 }
 
 proc CatalogPanelViewPSFRender {w} {
-    global catpanel
 
-    set psffile $catpanel(psf,file)
+    set psffile [::ogf::cat::get psf,file]
     set tmpimg [file join [file normalize ~] .ds9 psf_view.ppm]
 
     # Write render script to temp file
@@ -1351,7 +1332,6 @@ print(f'{w0}x{h0}  peak={vmax:.4g}')
 }
 
 proc CatalogPanelViewPSFLoad {w} {
-    global catpanel
 
     set types {
 	{{FITS Files} {.fits .fit .fts}}
@@ -1361,19 +1341,18 @@ proc CatalogPanelViewPSFLoad {w} {
 		    -title "Load PSF FITS"]
     if {$infile eq {}} return
 
-    file copy -force $infile $catpanel(psf,file)
-    set catpanel(psf,has_psf) 1
-    set catpanel(status) "PSF loaded from $infile"
+    file copy -force $infile [::ogf::cat::get psf,file]
+    ::ogf::cat::set psf,has_psf 1
+    ::ogf::cat::set status "PSF loaded from $infile"
 
     # Refresh the viewer
     CatalogPanelViewPSFRender $w
 }
 
 proc CatalogPanelSavePSF {} {
-    global catpanel
 
-    if {!$catpanel(psf,has_psf) || ![file exists $catpanel(psf,file)]} {
-	set catpanel(status) "No PSF available — build PSF first"
+    if {![::ogf::cat::get psf,has_psf] || ![file exists [::ogf::cat::get psf,file]]} {
+	::ogf::cat::set status "No PSF available — build PSF first"
 	return
     }
 
@@ -1386,12 +1365,11 @@ proc CatalogPanelSavePSF {} {
 		     -initialfile "psf.fits"]
     if {$outfile eq {}} return
 
-    file copy -force $catpanel(psf,file) $outfile
-    set catpanel(status) "PSF saved to $outfile"
+    file copy -force [::ogf::cat::get psf,file] $outfile
+    ::ogf::cat::set status "PSF saved to $outfile"
 }
 
 proc CatalogPanelLoadPSF {} {
-    global catpanel
 
     set types {
 	{{FITS Files} {.fits .fit .fts}}
@@ -1401,9 +1379,9 @@ proc CatalogPanelLoadPSF {} {
 		    -title "Load PSF FITS"]
     if {$infile eq {}} return
 
-    file copy -force $infile $catpanel(psf,file)
-    set catpanel(psf,has_psf) 1
-    set catpanel(status) "PSF loaded from $infile"
+    file copy -force $infile [::ogf::cat::get psf,file]
+    ::ogf::cat::set psf,has_psf 1
+    ::ogf::cat::set status "PSF loaded from $infile"
 
     # Refresh viewer if open
     if {[winfo exists .psfviewer]} {
