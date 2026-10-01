@@ -35,7 +35,7 @@ unchanged.
 |---|---|---|
 | Fetch | MAST (astroquery, public), Pan-STARRS cutouts, SkyBoT, Horizons | see LSST table below |
 | Align | Gaia DR3 (TAP) matching when stars exist, else relative chain with a polynomial/shift+rotation model between exposures | in the test field no Gaia stars matched; result is relative only (4–19 mas rms), the anchor exposure has no absolute tie |
-| Difference | ZOGY (Zackay, Ofek & Gal-Yam 2016) in Fourier space; template = median of the other aligned exposures. `zogy.zogy` also returns `alpha_new`/`sigma_alpha_new` = flux in the *target exposure's* flux scale (alpha * Fn / Fr), which `difference_chip` uses | sky-noise-only normalisation (no source-noise term, no astrometric-error terms); one PSF per chip (empirical from field stars, Gaussian fallback with FWHM floor 0.085 arcsec), **no spatial PSF variation**; template PSF = target PSF. A PSF 20% too narrow gives ~22% low flux (`moving/tests/test_zogy.py`) |
+| Difference | ZOGY (Zackay, Ofek & Gal-Yam 2016) in Fourier space; template = median of the other aligned exposures. `zogy.zogy` also returns `alpha_new`/`sigma_alpha_new` = flux in the *target exposure's* flux scale (alpha * Fn / Fr), which `difference_chip` uses. **Optional, off by default** (see "Difference-image quality" below): source-noise variance maps `Vn`/`Vr` (eqs. 26-33 of the paper), astrometric-registration variance `astrom_n`/`astrom_r` (`S_corr`, `V_S`), per-tile empirical PSF (`imaging.measure_psf_field`, `zogy.zogy_tiled`), separate target/template PSFs | default call = sky-noise-only normalisation exactly as before; one PSF per chip unless a `PSFField` is passed; on the BB89 data the PSF field falls back to a constant PSF (see below). A PSF 20% too narrow gives ~22% low flux (`moving/tests/test_zogy.py`) |
 | Detect | thresholding on the S/N image, trail (elongated) channel, classes `point trail artefact_cr artefact_edge artefact_static artefact_dipole negative faint` | the archive CR mask is dense and mislabels real detections as `artefact_cr`; `artefact_static` = non-trail detection with template S/N > 8 |
 | Link | triplet seeds (first / middle / last exposure) with an analytic parallax factor k from the middle exposure (k grid when the baseline is degenerate), KD-tree extension to the other exposures, vectorised 5-parameter weighted least squares (position, rate, k), rate and k gates, chi2-like score (stage 1). **Precision stage (2026-10):** detection veto masks before the pool cap (`pipeline.detection_veto`: stationary in all other exposures, template residual, chip edge), a tracklet-level logistic score (`tracklet.LLR_MODEL`: log rate, members, archive-CR fraction, sharpness, trail members, min S/N, chi2) that becomes `score` (= minus logit) with `prob`, a Sun-bound-orbit cut (`bound_orbit_ratio`), and clustering of near-identical (position, apparent velocity) candidates; a candidate sharing >= 2 detections with a better one is still dropped. The previous pair-based linker is kept as `tracklet.link_exposures_legacy`; `rescore=False` reproduces the stage-1 ranking. **Still no multi-night heliocentric clustering** (`helio_linc` exists but is not wired into the linker) | see the injection benchmark below |
 | Identify | SkyBoT candidates re-checked with Horizons using the true HST observer (`500@-48`) | |
@@ -185,6 +185,64 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
   * Same 4-day window through the shipped CLI (`--mode orbit --designation 25153 --mjd-min 58495 --mjd-max 58499`, all 115 observations, 37 used, no thinning): rms 0.56 arcsec, χ²_red 1.46; deviations +1.2 σ (a), +1.3 (e), −2.3 (i), +1.7 (Ω), +1.9 (ω), +2.4 (M), i.e. 2σ-level offsets with 78 observations rejected; this short arc is marginal.
   * A bug was found and fixed in the ASSIST propagator wrapper (one simulation reused for forward and backward sweeps): before the fix
     a differential correction started from the JPL state gave 57 arcsec rms, after the fix 1.76 arcsec (χ²_red 0.51) with default weights.
+
+## Difference-image quality (ZOGY extensions)
+
+Code: `moving/zogy.py` (`zogy(..., Vn, Vr, astrom_n, astrom_r)`, `zogy_tiled`), `moving/imaging.py` (`PSFField`,
+`measure_psf_field`, `constant_psf_field`, `collect_star_cutouts`), `moving/detect.py` (`difference_chip(..., source_noise=,
+astrom_sigma=, psf_field_t=, psf_field_r=, template_psf=, tile=, astrom_template_sigma=)`).  Every new argument defaults to the old
+behaviour: `zogy()` called as before returns exactly the old keys and values.  With variance maps / astrometric sigmas it adds
+`S_corr` (the corrected score image), `V_S`, `sigma_alpha_map`, `sigma_alpha_new_map`.  `astrom_sigma=True` takes the per-chip
+registration rms from the alignment sidecar (`chip.align['rms_mas']`).  **Not yet wired into `pipeline.detect_in_region` or the CLI**
+(the CLI argv is unchanged); use from Python.
+
+Measured on synthetic Poisson star fields (bright stars + 25 injected 300-count transients, 4 seeds; `moving/tests/test_zogy.py` has the
+corresponding assertions):
+
+| quantity | classic (sky-only) | new |
+|---|---|---|
+| false positives > 5 sigma per image (no real variability) | 90-99 | 0-0.5 with source-noise terms |
+| injected transients recovered > 5 sigma | ~100% | 98-100% |
+| flux bias (the noise terms do not change alpha) | 0 to -12% depending on a 0-0.3 px astrometric offset, scatter ~8% | same |
+| PSF FWHM_x varies 1.6 -> 3.6 px across the chip: flux bias left / right | +4.9% / -7.8% (constant PSF) | -0.6% / -3.2% (tiled PSF) |
+| FWHM_x 2.0 -> 3.2 px: flux bias left / right | +1.9% / -2.3% | -1.4% / +0.5% |
+| 0.3 px mis-registered 2e5-count star: dipole significance | 1 | < 0.2 (astrometric term) |
+
+Real HST ACS BB89 data (cached `j8pu38{c7,a,e,i}q_flc.fits`, 4 chips of 1240x1240 px around 150.1375, +2.361; template = median of the
+other exposures; script not in the repo, numbers from this box).  "pos" = positive detections with S/N >= 8 other than the known mover,
+a *proxy* for false positives (the field is full of cosmic-ray residuals, moving objects and unmasked stars, so most are not noise
+fluctuations); "mover" = number of exposures (of 7 chip-exposures at the mover position) where the known asteroid is found at >= 5 sigma:
+
+| configuration | pos (S/N>=8) | negative >= 5 | mover hits | static-star residuals |
+|---|---|---|---|---|
+| classic | 7639 | 20 | 7 | 148 |
+| source noise | 7870 | 7 | 6 | 143 |
+| source noise + astrometry 0.5 px | 2021 | 2 | 4 | 36 |
+| source noise + astrometry from alignment sidecar (19.4/4.4/3.7 mas) | 6442 | 4 | 4 | 109 |
+| source noise + astrometry 0.3 px + tiled PSF | 2660 | 4 | 4 | 48 |
+| tiled PSF only | 7648 | 20 | 7 | 147 |
+| template PSF measured separately | 7639 | 20 | 7 | 148 |
+
+Honest reading: (a) the astrometric term removes most of the residuals around bright static stars (static residuals 148 -> 36-48
+with a 0.3-0.5 px assumption, 148 -> 109 with the real sidecar rms, which is much smaller than 0.3 px), which is its purpose, but
+the large drop in "pos" for 0.3-0.5 px is mostly because it down-weights *everything* near sources in a crowded field, and it also
+costs 3 of the 7 mover detections (the asteroid passes near stars in some exposures); (b) the tiled-PSF and separate-template-PSF
+options changed nothing on this data because **no tile had enough field stars** (9-16 usable stars per chip with `min_stars` per tile
+not reached in any of the 25 tiles: `tiles_from_stars = 0`) so every tile used the constant fallback, and the pooled empirical PSF has
+FWHM 1.13 px, below the 0.085" (~1.7 px) floor, i.e. it is probably contaminated by cosmic-ray/hot-pixel "stars"; (c) the source-noise
+term helps negatives (20 -> 7) but not positives here.  The synthetic gains for a varying PSF are therefore *not* demonstrated on real
+data.
+
+### Remaining limits
+
+* Spatial PSF variation needs enough isolated stars per tile (default `min_stars` per tile); sparse fields fall back to one PSF.
+* The astrometric term uses one scalar (or x/y) sigma per image, not a measured per-star residual map; it assumes the template and
+  target noise are independent and stationary within a tile.
+* Source-noise maps need a gain/readnoise-consistent variance estimate; `source_noise=True` uses the Poisson variance of the
+  (smoothed) image, which is biased for the template of a median stack (correlated across exposures).
+* Per-tile ZOGY (`zogy_tiled`) is seam-free only within the `margin` overlap; very strong PSF gradients across one tile are unmodelled.
+* No colour term, no differential chromatic refraction, no handling of correlated noise from drizzle/resampling.
+* Not yet exposed in the GUI/CLI, so session scripts do not record these options.
 
 ## Session recorder: Moving Objects steps
 
