@@ -65,6 +65,14 @@ chk_review_gui() { need_x || { echo "no X server"; return 77; }
 chk_moving_options() { need_x || { echo "no X server"; return 77; }
   OGF_MOVOPT_OUT="$OUT/movopt.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_moving_options.tcl > "$OUT/movopt_raw.txt" 2>&1; tclsum "$OUT/movopt.txt"; }
 EXTRA="$EXTRA moving_options"
+chk_manifests() { "$PY" tools/validate_manifests.py 2>&1 | tail -5; [ ${PIPESTATUS[0]} = 0 ] || return 1
+  "$PY" -m pytest -q tools/tests 2>&1 | tail -2; [ ${PIPESTATUS[0]} = 0 ]; }
+chk_cli_templates() { need_x || { echo "no X server"; return 77; }
+  local H; H=$(mktemp -d /tmp/ogf_clitpl_home.XXXXXX); rm -f "$OUT/clitpl_fake.log"
+  HOME=$H OGF_CLITPL_OUT="$OUT/clitpl.txt" FAKE_LOG="$OUT/clitpl_fake.log" OGFINDER_PYTHON="$ROOT/scripts/fake_python_for_templates.sh" \
+    gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_cli_templates.tcl > "$OUT/clitpl_raw.txt" 2>&1
+  tclsum "$OUT/clitpl.txt"; local rc=$?; rm -rf "$H"; return $rc; }
+EXTRA="$EXTRA manifests cli_templates"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
