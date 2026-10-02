@@ -236,6 +236,40 @@ proc sec_sedcodes {} {
     R sedcodes_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_cluster {} {
+    ::ogf::params::put cluster dens-sigma 150
+    ::ogf::params::put cluster dens-bin 8
+    ::ogf::params::put cluster fit-radius 100000
+    lassign [run_step cluster members] ok recs
+    R cluster_members_ran $ok $recs
+    R cluster_members_recorded [expr {[lindex $recs 0 0] eq "analysis.cluster_members"}] $recs
+    set cols [::ogf::cat::columns]
+    R cluster_members_columns [expr {"CL_RS_RES" in $cols && "CL_PMEM" in $cols && "CL_MEMBER" in $cols && "CL_R" in $cols}]
+    R cluster_members_rows [expr {[nonempty CL_R] >= 20 && [nonempty CL_RS_PULL] >= 20}] "r=[nonempty CL_R] pull=[nonempty CL_RS_PULL]"
+    lassign [run_step cluster density] ok recs
+    R cluster_density_ran $ok $recs
+    R cluster_density_rows [expr {[nonempty CL_SIGMA] >= 20}] "sigma=[nonempty CL_SIGMA]"
+    lassign [run_step cluster arcs] ok recs
+    R cluster_arcs_ran $ok $recs
+    R cluster_arcs_columns [expr {"ARC_LW" in [::ogf::cat::columns] && "ARC_FLAG" in [::ogf::cat::columns]}]
+    R cluster_arcs_rows [expr {[nonempty ARC_LW] >= 1}] "measured=[nonempty ARC_LW] flagged=[llength [lsearch -all -inline [col_values ARC_FLAG] 1]]"
+    set w [file join [OGFSessWorkDir] cluster]
+    foreach f {cluster_summary.json cluster_rs.png cluster_density.fits cluster_peaks.tsv} {
+	R cluster_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 50}]
+    }
+    R cluster_keys [expr {[::ogf::cat::exists cluster,density_file] && [::ogf::cat::exists cluster,rs_png]}]
+    set pw [OGFClusterPlot]
+    R cluster_plot_window [expr {[winfo exists $pw] && [image width ogfclusterimg] > 300}] "[image width ogfclusterimg]x[image height ogfclusterimg]"
+    destroy $pw
+    OGFClusterSummary; update
+    R cluster_summary_window [expr {[winfo exists .ogftext] && [string match "*red_sequence*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    set f0 [llength $::ds9(frames)]
+    set n [OGFClusterFrame]
+    R cluster_frame [expr {$n == 1 && [llength $::ds9(frames)] == $f0 + 1}] "$f0 -> [llength $::ds9(frames)]"
+    R cluster_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -325,7 +359,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
