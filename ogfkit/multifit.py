@@ -179,7 +179,7 @@ def _apply(comps, free, tie_map, vec):
 
 
 # ------------------------------------------------------------------------------------------------------------------ the fit
-def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, gain=None, zp=25.0, tie=None, max_nfev=200, reweight=1, ftol=1e-8):
+def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, gain=None, zp=25.0, tie=None, max_nfev=200, reweight=1, ftol=1e-8, sky_grad=None):
     """Fit `comps` to `data` (2-D array, usually a cutout) with a common sky.
 
     comps    list of component dicts (see module doc); `fixed` (iterable of names), `bounds` ({name: (lo, hi)}) per component.
@@ -187,6 +187,7 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
     rms      sigma of the background noise (scalar or array); with `gain` the Poisson noise of the model is added (var = rms^2 + max(model, 0) / gain).
     mask     bool array, True = ignore pixel.
     sky      'const' (fitted), 'plane' (constant + x/y gradient, fitted) or 'fixed' (uses `sky_value`).
+    sky_grad (gx, gy) per pixel about the array centre: start value for sky='plane', fixed value otherwise (default 0, 0).
     tie      [('1.x', '0.x'), ...]: parameter of the first entry is set equal to the second (common centre, common PA, ...).
     Returns a dict: components (params, errors, mag, magerr), sky, sky_err, chi2, dof, chi2_red, bic, flags, nfev, converged, model, residual, weights."""
     data = np.asarray(data, float)
@@ -206,6 +207,7 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
     if sky == 'fixed':
         sky0 = float(sky_value if sky_value is not None else 0.0)
     nsky = {'const': 1, 'plane': 3, 'fixed': 0}[sky]
+    g_fix = (float(sky_grad[0]), float(sky_grad[1])) if sky_grad is not None else (0.0, 0.0)
     lo, hi, x0, xs = [], [], [], []
     for i, name in free:
         c = comps0[i]
@@ -218,7 +220,7 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
         lo.append(-np.inf); hi.append(np.inf); x0.append(sky0); xs.append(max(float(np.median(rms_a[good])), 1e-6))
     if nsky == 3:
         for _ in range(2):
-            lo.append(-np.inf); hi.append(np.inf); x0.append(0.0); xs.append(max(float(np.median(rms_a[good])), 1e-6) / max(nx, ny))
+            lo.append(-np.inf); hi.append(np.inf); x0.append(g_fix[_]); xs.append(max(float(np.median(rms_a[good])), 1e-6) / max(nx, ny))
     x0 = np.array(x0, float); lo = np.array(lo, float); hi = np.array(hi, float); xs = np.array(xs, float)
     nfree = len(free) + nsky
     psfs = [psf for _ in comps0]
@@ -226,9 +228,9 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
     def unpack(v):
         cs = _apply(comps0, free, tie_map, v[:len(free)])
         if nsky == 0:
-            return cs, sky0, (0.0, 0.0)
+            return cs, sky0, g_fix
         s = v[len(free)]
-        g = (v[len(free) + 1], v[len(free) + 2]) if nsky == 3 else (0.0, 0.0)
+        g = (v[len(free) + 1], v[len(free) + 2]) if nsky == 3 else g_fix
         return cs, s, g
 
     sig = np.where(good, rms_a, np.inf)
