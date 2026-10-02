@@ -166,11 +166,54 @@ proc OGFUIBuild {f} {
 	}
 	if {$t eq "Time-domain"} {catch {OGFUITimeDomainControls $cf}}
     }
+    # chips that do not fit into the panel width go into a "More" menu (see OGFUIOverflow)
+    update idletasks
+    foreach t $::ogf::tabs {catch {OGFUIOverflow $t $ogfui(tabframe,$t)}}
     # plugin menus living in Workflow / Tools
     OGFUIBuildMainMenus
     trace add variable ::ogfsess(steps) write OGFUIProgressSoon
     OGFUIShowTab Detect
     OGFUIProgressRefresh
+}
+
+# The chip row is one line of ogfui(panelwidth) pixels.  When the chips of a tab are wider than that, the last ones are
+# unpacked and appear as cascades of a "More" menubutton (same steps and Settings entry); the chip widgets (and ogfui(run,ID),
+# ogfui(set,ID), ogfui(menu,ID)) still exist, so scripts and the job-state code keep working.
+proc OGFUIOverflow {t cf} {
+    global ogfui
+    set chips {}
+    foreach w [pack slaves $cf] {
+	if {[string match c_* [winfo name $w]]} {lappend chips $w}
+    }
+    set widths {}
+    set total 0
+    foreach w $chips {set wd [expr {[winfo reqwidth $w] + 6}]; lappend widths $wd; incr total $wd}
+    set budget [expr {$ogfui(panelwidth) - 6}]
+    if {$total <= $budget} return
+    set more_w 70
+    set acc 0
+    set keep 0
+    foreach wd $widths {
+	if {$acc + $wd + $more_w > $budget} break
+	incr acc $wd
+	incr keep
+    }
+    set hidden [lrange $chips $keep end]
+    set mb [ttk::menubutton $cf.more -text "More \u25be" -style CatChip.TMenubutton -menu $cf.more.m]
+    menu $cf.more.m -tearoff 0
+    foreach w $hidden {
+	set id [string range [winfo name $w] 2 end]
+	pack forget $w
+	set pm [::ogf::reg::get $id]
+	set sub $cf.more.m.p_$id
+	menu $sub -tearoff 0
+	OGFUIFillPluginMenu $sub $id
+	$cf.more.m add cascade -label [::ogf::json::get $pm short [dict get $pm name]] -menu $sub
+	lappend ogfui(overflow,$t) $id
+    }
+    pack $mb -side left -padx {0 6}
+    OGFUITip $mb "More: [join [lmap w $hidden {string range [winfo name $w] 2 end}] {, }]"
+    set ogfui(more,$t) $mb
 }
 
 proc OGFUITabId {t} {return [string tolower [string map {- _ { } _} $t]]}

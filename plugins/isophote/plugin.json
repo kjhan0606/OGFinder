@@ -4,7 +4,7 @@
  "name": "Isophote ellipse fitting",
  "short": "Isophote",
  "tab": "Measure",
- "order": 15,
+ "order": 25,
  "description": "IRAF-ellipse style isophote fitting (photutils.isophote): per-galaxy radial profiles of intensity / surface brightness, ellipticity, PA, centre, A3/B3/A4/B4 (boxy/disky), growth curve; cmodel and residual images in new frames; honours the shared mask; profile table and plot window.",
  "requires": {
   "python": [

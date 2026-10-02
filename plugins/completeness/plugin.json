@@ -4,7 +4,7 @@
  "name": "Completeness and limiting magnitude",
  "short": "Complete.",
  "tab": "Measure",
- "order": 16,
+ "order": 26,
  "description": "Artificial star / Sersic galaxy injection with a detection callback (default: the application's own extraction): recovery fraction vs magnitude (and size), photometric bias and scatter, false-positive rate, 50 % / 90 % limits written into the catalog (COMPL_* columns and catalog metadata).",
  "requires": {
   "python": [
