@@ -87,6 +87,11 @@ chk_cli_templates() { need_x || { echo "no X server"; return 77; }
     gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_cli_templates.tcl > "$OUT/clitpl_raw.txt" 2>&1
   tclsum "$OUT/clitpl.txt"; local rc=$?; rm -rf "$H"; return $rc; }
 EXTRA="$EXTRA manifests cli_templates"
+chk_newplugins() { need_x || { echo "no X server"; return 77; }
+  DISPLAY_OVERRIDE=$DISP "$HERE/verify_newplugins.sh" "$OUT/newplugins_work" 2>&1 | tail -8; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA newplugins"
+chk_isophote_tests() { "$PY" -m pytest -q plugins/isophote/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA isophote_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
