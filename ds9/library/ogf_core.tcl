@@ -322,6 +322,7 @@ namespace eval ::ogf::cat {
         {sed,param,*            scalar photoz_sed rw  "SED-fit dialog values; persisted in ~/.ds9/sed_fit.prf"}
         {morph,map              list   galaxy_model rw "NUMBERs that have a CNN morphology"}
         {morph,*                list   galaxy_model rw "per NUMBER: {type description confidence color}"}
+        {isophote,*             any    isophote  rw   "isophote plugin: last output files (model_file, resid_file, table_file, plot_file) and the show-frames state"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}
@@ -898,6 +899,10 @@ proc ::ogf::step::context {id {catname {}}} {
     set m [::ogf::reg::get $id]
     set ctx [dict create python [OGFPython] plugin_dir [::ogf::step::plugin_dir $id] work [OGFSessWorkDir] root [OGFSessRoot]]
     dict set ctx image [CatalogPanelGetFITS]
+    # {mask}: effective-mask FITS (0/1) of the shared mask manager for the current image, empty when there is none
+    # (use inside {"if_file": "{mask}", "argv": ["--mask", "{mask}"]})
+    dict set ctx mask {}
+    catch {if {[::ogf::mask::exists]} {set mp [::ogf::mask::bool_path]; if {$mp ne {} && [file isfile $mp]} {dict set ctx mask $mp}}}
     if {$catname ne {}} {
 	dict set ctx catalog [::ogf::cat::temp_file $catname]
     }
@@ -1034,6 +1039,7 @@ proc ::ogf::step::done {id sid ok output ms} {
     if {$ds ne {}} {::ogf::status $ds}
     set p [::ogf::json::get $step after]
     if {$p ne {}} {catch {uplevel #0 $p}}
+    return {}
 }
 
 # stage progress for the strip: {stage {state elapsed_s}}; derived from the session recorder

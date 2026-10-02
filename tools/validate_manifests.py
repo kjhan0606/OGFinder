@@ -24,7 +24,7 @@ NEEDS = {"image", "catalog", "psf"}
 PTYPES = {"int", "float", "string", "bool", "choice", "file"}
 OUT_MODES = {"add_columns", "set", "text"}
 TOKEN = re.compile(r"\{([A-Za-z0-9_.:,-]+)\}")
-BUILTIN = {"python", "plugin_dir", "work", "root", "image", "catalog"}
+BUILTIN = {"python", "plugin_dir", "work", "root", "image", "catalog", "mask"}
 
 
 def procs_in(files):
