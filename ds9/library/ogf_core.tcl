@@ -328,6 +328,7 @@ namespace eval ::ogf::cat {
         {daophot,*              any    daophot   rw   "daophot plugin: last output files (stars_file, psf_file, resid_file, diag_file, cmd_file)"}
         {psfex,*                any    psfex     rw   "psfex plugin: last output files (model_file, center_file, stars_file, maps_file, plot_file)"}
         {multifit,*             any    multifit  rw   "multifit plugin: output files (results_file, model_file, residual_file, montage_file)"}
+        {morphext,*             any    morphology rw  "extended morphology step: output files (growth_file, plot_file)"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}
