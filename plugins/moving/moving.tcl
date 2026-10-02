@@ -391,6 +391,16 @@ proc OGFMovAlign {} {
 	[concat [list --mode align --workdir $wd --files] $ogfmov(files)] {OGFMovDone} 1 [list [file join $wd align_report.json]]
 }
 
+# ZOGY options from the plugin parameters (Tools > Plugin settings > Moving); only NON-default values are added, so the default argv is unchanged
+proc OGFMovZogyArgs {} {
+    set a {}
+    if {![catch {::ogf::params::get moving source-noise} v] && $v} {lappend a --source-noise}
+    if {![catch {::ogf::params::get moving astrom} v] && $v ni {{} off}} {lappend a --astrom $v}
+    if {![catch {::ogf::params::get moving psf-tile} v] && [string is integer -strict $v] && $v > 0} {lappend a --psf-tile $v}
+    if {![catch {::ogf::params::get moving template-psf} v] && $v ni {{} target}} {lappend a --template-psf $v}
+    return $a
+}
+
 proc OGFMovDifference {} {
     global ogfmov
     if {![OGFMovNeedFiles]} return
@@ -400,6 +410,7 @@ proc OGFMovDifference {} {
     if {[string is double -strict $ogfmov(ra)] && [string is double -strict $ogfmov(dec)]} {
 	lappend extra --ra $ogfmov(ra) --dec $ogfmov(dec)
     }
+    lappend extra {*}[OGFMovZogyArgs]
     OGFMovRun moving.difference "Difference (template + ZOGY) and detection" $extra OGFMovDifferenceDone 0 \
 	[list [file join $wd detections.tsv] [file join $wd diff]]
 }

@@ -156,5 +156,54 @@
   "short": "Moving",
   "primary": "link",
   "tcl": "moving.tcl",
-  "init": "OGFMovingInit"
+  "init": "OGFMovingInit",
+  "settings": "params",
+  "params": [
+    {
+      "name": "source-noise",
+      "label": "Source-noise term",
+      "type": "bool",
+      "default": 0,
+      "group": "Difference (ZOGY)",
+      "help": "Include the Poisson variance of bright sources in the ZOGY score (fewer negative / static-star residuals; the known BB89 mover keeps all its detections). Off = classic sky-noise-only ZOGY."
+    },
+    {
+      "name": "astrom",
+      "label": "Registration error",
+      "type": "choice",
+      "default": "off",
+      "choices": [
+        "off",
+        "measure",
+        "sidecar"
+      ],
+      "group": "Difference (ZOGY)",
+      "help": "Astrometric-registration term of ZOGY. measure = estimated from the star offsets of every exposure/template pair; sidecar = rms of the alignment fit; off = none (default). Can remove real movers near stars - see docs/moving_objects.md."
+    },
+    {
+      "name": "psf-tile",
+      "label": "PSF tile size",
+      "type": "int",
+      "default": 0,
+      "min": 0,
+      "max": 2048,
+      "unit": "pix",
+      "group": "Difference (ZOGY)",
+      "expert": 1,
+      "help": "0 = one PSF per chip. N > 0 = PSF measured per N x N tile and tiled ZOGY (needs several stars per tile; sparse fields fall back to the pooled PSF)."
+    },
+    {
+      "name": "template-psf",
+      "label": "Template PSF",
+      "type": "choice",
+      "default": "target",
+      "choices": [
+        "target",
+        "measure"
+      ],
+      "group": "Difference (ZOGY)",
+      "expert": 1,
+      "help": "target = use the target PSF for the template (default); measure = measure the template PSF from the template's own stars."
+    }
+  ]
 }

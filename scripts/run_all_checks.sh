@@ -62,6 +62,9 @@ chk_report_tests() { "$PY" -m pytest -q plugins/report/tests 2>&1 | tail -3; [ $
 chk_review_gui() { need_x || { echo "no X server"; return 77; }
   OGF_REVIEW_OUT="$OUT/review.txt" OGF_REVIEW_DIR="$OUT/review_work" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_review_gui.tcl > "$OUT/review_raw.txt" 2>&1; tclsum "$OUT/review.txt"; }
 # ---- extra checks registered by later work (appended below by the feature that adds them)
+chk_moving_options() { need_x || { echo "no X server"; return 77; }
+  OGF_MOVOPT_OUT="$OUT/movopt.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_moving_options.tcl > "$OUT/movopt_raw.txt" 2>&1; tclsum "$OUT/movopt.txt"; }
+EXTRA="$EXTRA moving_options"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
