@@ -80,7 +80,103 @@
       "Deconvolution > Maximum Entropy (MEM)"
      ]
     }
-   ]
+   ],
+   "headless": {
+    "title": "Deconvolution ($algorithm)",
+    "record": "deconv.run",
+    "requires": "psf",
+    "done_status": "Deconvolution complete",
+    "needs": [
+     "image",
+     "psf"
+    ],
+    "session": "AUTO",
+    "after": "OGFDeconvAfter",
+    "cli": [
+     "{python}",
+     "{script:ds9_psf_deconv.py}",
+     "{image}",
+     "--mode",
+     "deconvolve",
+     "--psf",
+     "{psf}",
+     "--algorithm",
+     "{algorithm}",
+     "--output",
+     "{work}/deconv_result.fits",
+     {
+      "if_eq": [
+       "algorithm",
+       "rl",
+       "rl_accelerated",
+       "rl_tv"
+      ],
+      "argv": [
+       "--iterations",
+       "{rl-iterations}"
+      ]
+     },
+     {
+      "if_eq": [
+       "algorithm",
+       "rl_tv"
+      ],
+      "argv": [
+       "--tv-lambda",
+       "{tv-lambda}"
+      ]
+     },
+     {
+      "if_eq": [
+       "algorithm",
+       "wiener"
+      ],
+      "argv": [
+       "--wiener-nsr",
+       "{wiener-nsr}"
+      ]
+     },
+     {
+      "if_eq": [
+       "algorithm",
+       "tikhonov"
+      ],
+      "argv": [
+       "--tikhonov-lambda",
+       "{tikhonov-lambda}"
+      ]
+     },
+     {
+      "if_eq": [
+       "algorithm",
+       "clean"
+      ],
+      "argv": [
+       "--clean-gain",
+       "{clean-gain}",
+       "--clean-niter",
+       "{clean-niter}",
+       "--clean-threshold",
+       "{clean-threshold}"
+      ]
+     },
+     {
+      "if_eq": [
+       "algorithm",
+       "mem"
+      ],
+      "argv": [
+       "--mem-lambda",
+       "{mem-lambda}",
+       "--mem-niter",
+       "{mem-niter}"
+      ]
+     }
+    ],
+    "output": {
+     "mode": "capture"
+    }
+   }
   },
   {
    "id": "quick",
@@ -189,6 +285,24 @@
    "help": "Number of MEM iterations.",
    "min": 1,
    "max": 100000
+  },
+  {
+   "name": "algorithm",
+   "label": "Algorithm (cli/batch)",
+   "type": "choice",
+   "default": "rl",
+   "group": "Headless",
+   "help": "Algorithm of the cli / batch deconvolution step (the GUI menu entries select it directly).",
+   "choices": [
+    "rl",
+    "rl_accelerated",
+    "rl_tv",
+    "wiener",
+    "tikhonov",
+    "clean",
+    "mem"
+   ],
+   "expert": true
   }
  ],
  "short": "Deconvolve",

@@ -75,7 +75,37 @@
    "needs": [
     "catalog",
     "image"
-   ]
+   ],
+   "headless": {
+    "title": "Multi-band photometry (dialog, ds9_multiband.py)",
+    "record": "analysis.multiband",
+    "requires": "",
+    "done_status": "Multi-band photometry complete",
+    "needs": [
+     "image",
+     "catalog"
+    ],
+    "session": "AUTO",
+    "catalog_tmp": "multiband",
+    "cli": [
+     "{python}",
+     "{script:ds9_multiband.py}",
+     "--detect-image",
+     "{image}",
+     "--bands",
+     "{mb-bands}",
+     "--catalog",
+     "{catalog}",
+     "--mag-zeropoint",
+     "{extract:mag-zeropoint}",
+     "--n-workers",
+     "{extract:n-workers}"
+    ],
+    "output": {
+     "mode": "set",
+     "name": "multi-band"
+    }
+   }
   },
   {
    "id": "crowded",
@@ -144,7 +174,36 @@
    "needs": [
     "catalog"
    ],
-   "network": 1
+   "network": 1,
+   "headless": {
+    "title": "Cross-match (VizieR)",
+    "record": "analysis.crossmatch",
+    "requires": "",
+    "done_status": "Cross-match complete ({xm-catalog})",
+    "needs": [
+     "catalog"
+    ],
+    "session": "AUTO",
+    "network": 1,
+    "catalog_tmp": "crossmatch",
+    "cli": [
+     "{python}",
+     "{script:ds9_crossmatch.py}",
+     "--catalog",
+     "{catalog}",
+     "--vizier-cat",
+     "{xm-catalog}",
+     "--radius",
+     "{xm-radius}"
+    ],
+    "output": {
+     "mode": "add_columns",
+     "columns": [
+      "MATCH_DIST",
+      "MATCH_ID"
+     ]
+    }
+   }
   },
   {
    "id": "segmap",
@@ -159,7 +218,29 @@
    ],
    "needs": [
     "image"
-   ]
+   ],
+   "headless": {
+    "title": "Segmentation map",
+    "record": "analysis.segmap",
+    "requires": "",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "after": "OGFSegmapAfter",
+    "cli": [
+     "{python}",
+     "{script:ds9_segmap.py}",
+     "{image}",
+     "--detect-thresh",
+     "{extract:detect-thresh}",
+     "--detect-minarea",
+     "{extract:detect-minarea}"
+    ],
+    "output": {
+     "mode": "capture"
+    }
+   }
   },
   {
    "id": "completeness",
@@ -174,11 +255,116 @@
    ],
    "needs": [
     "image"
-   ]
+   ],
+   "headless": {
+    "title": "Completeness simulation (seed 42)",
+    "record": "analysis.completeness",
+    "requires": "",
+    "done_status": "Completeness simulation complete",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "cli": [
+     "{python}",
+     "{script:ds9_completeness.py}",
+     "{image}",
+     "--n-inject",
+     "{comp-ninject}",
+     "--mag-min",
+     "{comp-magmin}",
+     "--mag-max",
+     "{comp-magmax}",
+     "--n-bins",
+     "{comp-nbins}",
+     "--detect-thresh",
+     "{extract:detect-thresh}",
+     "--mag-zeropoint",
+     "{extract:mag-zeropoint}",
+     "--n-workers",
+     "{extract:n-workers}"
+    ],
+    "output": {
+     "mode": "set",
+     "name": "completeness"
+    }
+   }
   }
  ],
  "short": "Photometry",
  "primary": "psf_phot",
  "tcl": "photometry.tcl",
- "tcl_always": 1
+ "tcl_always": 1,
+ "params": [
+  {
+   "name": "mb-bands",
+   "label": "Multi-band: bands",
+   "type": "string",
+   "default": "",
+   "group": "Multi-band",
+   "help": "Bands as NAME:FILE,NAME:FILE (the legacy dialog takes one NAME:FILE per line; they are joined with commas). The detection image is the current image."
+  },
+  {
+   "name": "xm-catalog",
+   "label": "Cross-match: VizieR catalog",
+   "type": "choice",
+   "default": "GAIA_DR3",
+   "group": "Cross-match",
+   "help": "VizieR catalog for the cross-match step.",
+   "choices": [
+    "GAIA_DR3",
+    "2MASS",
+    "PanSTARRS_DR1",
+    "SDSS_DR17",
+    "ALLWISE"
+   ]
+  },
+  {
+   "name": "xm-radius",
+   "label": "Cross-match: radius",
+   "type": "float",
+   "default": 2.0,
+   "group": "Cross-match",
+   "help": "Match radius in arcsec.",
+   "min": 0.05,
+   "max": 60,
+   "unit": "arcsec"
+  },
+  {
+   "name": "comp-ninject",
+   "label": "Completeness: N inject per bin",
+   "type": "int",
+   "default": 500,
+   "group": "Completeness",
+   "help": "Artificial sources injected per magnitude bin.",
+   "min": 1,
+   "max": 100000
+  },
+  {
+   "name": "comp-magmin",
+   "label": "Completeness: mag min",
+   "type": "float",
+   "default": 20.0,
+   "group": "Completeness",
+   "help": "Faintest-bright edge of the magnitude range."
+  },
+  {
+   "name": "comp-magmax",
+   "label": "Completeness: mag max",
+   "type": "float",
+   "default": 28.0,
+   "group": "Completeness",
+   "help": "Faint edge of the magnitude range."
+  },
+  {
+   "name": "comp-nbins",
+   "label": "Completeness: N bins",
+   "type": "int",
+   "default": 16,
+   "group": "Completeness",
+   "help": "Number of magnitude bins.",
+   "min": 1,
+   "max": 200
+  }
+ ]
 }

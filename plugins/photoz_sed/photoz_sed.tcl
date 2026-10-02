@@ -320,3 +320,9 @@ proc CatalogPanelSEDFitRun {dlg} {
     catch {destroy $dlg}
 }
 
+
+# "save" hook of the photoz_sed parameter store: the two legacy preference files
+proc OGFPhotozSedSave {} {
+    CatalogPanelPhotoZParamSave
+    CatalogPanelSEDParamSave
+}

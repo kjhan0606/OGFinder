@@ -31,7 +31,56 @@
    "needs": [
     "image"
    ],
-   "settings": "params"
+   "settings": "params",
+   "headless": {
+    "title": "Extract sources (ds9_sextract)",
+    "tool": "sextract",
+    "record": "extract",
+    "requires": "",
+    "before": "OGFHeadlessExtractBefore",
+    "cli": [
+     "{sextract}",
+     "{image}",
+     "--detect-thresh",
+     "{detect-thresh}",
+     "--detect-minarea",
+     "{detect-minarea}",
+     "--deblend-nthresh",
+     "{deblend-nthresh}",
+     "--deblend-mincont",
+     "{deblend-mincont}",
+     "--phot-aperture",
+     "{phot-aperture}",
+     "--mag-zeropoint",
+     "{mag-zeropoint}",
+     "--gain",
+     "{gain}",
+     "--pixel-scale",
+     "{pixel-scale}",
+     "--seeing-fwhm",
+     "{seeing-fwhm}",
+     "--back-size",
+     "{back-size}",
+     "--back-filtersize",
+     "{back-filtersize}",
+     "--phot-aperture-2",
+     "{phot-aperture-2}",
+     "--phot-aperture-3",
+     "{phot-aperture-3}",
+     "--phot-aperture-5",
+     "{phot-aperture-5}",
+     "--conv-filter",
+     "{conv-filter}"
+    ],
+    "output": {
+     "mode": "set",
+     "name": "{image_tail}"
+    },
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO"
+   }
   },
   {
    "id": "dual",
@@ -47,7 +96,37 @@
    ],
    "needs": [
     "image"
-   ]
+   ],
+   "headless": {
+    "title": "Dual-image extract",
+    "record": "analysis.dual_extract",
+    "requires": "",
+    "done_status": "Dual-image extraction complete",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "cli": [
+     "{python}",
+     "{script:ds9_dual_extract.py}",
+     "--detect-image",
+     "{image}",
+     "--measure-image",
+     "{dual-measure-image}",
+     "--detect-thresh",
+     "{detect-thresh}",
+     "--detect-minarea",
+     "{detect-minarea}",
+     "--phot-aperture",
+     "{phot-aperture}",
+     "--mag-zeropoint",
+     "{mag-zeropoint}"
+    ],
+    "output": {
+     "mode": "set",
+     "name": "dual-image"
+    }
+   }
   },
   {
    "id": "trim",
@@ -241,6 +320,15 @@
    "min": 0,
    "max": 256,
    "expert": 1
+  },
+  {
+   "name": "dual-measure-image",
+   "label": "Dual extract: measurement image",
+   "type": "file",
+   "default": "",
+   "group": "Dual image (headless)",
+   "help": "Measurement image of the Dual-Image Extract step when it runs as a cli/batch step (the detection image is the current image).",
+   "expert": true
   }
  ],
  "short": "Extract",

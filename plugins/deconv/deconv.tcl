@@ -139,3 +139,21 @@ proc CatalogPanelQuickDeconvolve {} {
     CatalogPanelDeconvolve rl
 }
 
+
+# after-hook of the headless deconvolution step: result into a new frame (as CatalogPanelDeconvolve)
+proc OGFDeconvAfter {} {
+    set outfile [file join [OGFSessWorkDir] deconv_result.fits]
+    if {[file exists $outfile]} {
+	CreateFrame
+	if {[catch {LoadFitsFile $outfile {} {}} loaderr]} {
+	    ::ogf::cat::set status "Deconvolution error: cannot load result: $loaderr"
+	    return
+	}
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+	::ogf::cat::set status "Deconvolution complete ([::ogf::params::get deconv algorithm]) - result in new frame"
+    } else {
+	::ogf::cat::set status "Deconvolution complete but output file not found"
+    }
+}

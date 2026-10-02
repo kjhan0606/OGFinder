@@ -21,7 +21,58 @@
    ],
    "needs": [
     "catalog"
-   ]
+   ],
+   "headless": {
+    "title": "Photo-z",
+    "record": "analysis.photo_z",
+    "requires": "",
+    "done_status": "Photo-z estimation complete",
+    "needs": [
+     "image",
+     "catalog"
+    ],
+    "session": "AUTO",
+    "catalog_tmp": "photoz",
+    "cli": [
+     "{python}",
+     "{script:ds9_photo_z.py}",
+     "{image}",
+     "--catalog",
+     "{catalog}",
+     {
+      "if": "photoz-bands",
+      "argv": [
+       "--bands",
+       "{photoz-bands}"
+      ]
+     },
+     {
+      "if": "photoz-mag-columns",
+      "argv": [
+       "--mag-columns",
+       "{photoz-mag-columns}"
+      ]
+     },
+     {
+      "if_file": "{photoz-checkpoint}",
+      "argv": [
+       "--checkpoint",
+       "{photoz-checkpoint}"
+      ]
+     },
+     "--n-workers",
+     "{extract:n-workers}"
+    ],
+    "output": {
+     "mode": "add_columns",
+     "columns": [
+      "PHOTO_Z",
+      "PHOTO_Z_ERR",
+      "PHOTO_Z_Q68",
+      "PHOTO_Z_OUTLIER"
+     ]
+    }
+   }
   },
   {
    "id": "sed",
@@ -38,11 +89,174 @@
    ],
    "needs": [
     "catalog"
-   ]
+   ],
+   "headless": {
+    "title": "SED fitting",
+    "record": "analysis.sed_fit",
+    "requires": "",
+    "done_status": "SED fitting complete ({sed-backend})",
+    "needs": [
+     "image",
+     "catalog"
+    ],
+    "session": "AUTO",
+    "catalog_tmp": "sedfit",
+    "cli": [
+     "{python}",
+     "{script:ds9_sed_fit.py}",
+     "{image}",
+     "--catalog",
+     "{catalog}",
+     {
+      "if": "sed-backend",
+      "argv": [
+       "--backend",
+       "{sed-backend}"
+      ]
+     },
+     {
+      "if": "sed-bands",
+      "argv": [
+       "--bands",
+       "{sed-bands}"
+      ]
+     },
+     {
+      "if": "sed-mag-columns",
+      "argv": [
+       "--mag-columns",
+       "{sed-mag-columns}"
+      ]
+     },
+     {
+      "if": "sed-photoz-column",
+      "argv": [
+       "--photo-z-column",
+       "{sed-photoz-column}"
+      ]
+     },
+     {
+      "if_file": "{sed-checkpoint-emulator}",
+      "argv": [
+       "--checkpoint-emulator",
+       "{sed-checkpoint-emulator}"
+      ]
+     },
+     {
+      "if_file": "{sed-checkpoint-inverse}",
+      "argv": [
+       "--checkpoint-inverse",
+       "{sed-checkpoint-inverse}"
+      ]
+     },
+     "--n-workers",
+     "{extract:n-workers}"
+    ],
+    "output": {
+     "mode": "add_columns",
+     "columns": [
+      "LOG_MASS",
+      "LOG_MASS_ERR",
+      "LOG_AGE",
+      "LOG_AGE_ERR",
+      "LOG_Z",
+      "AV",
+      "SFR"
+     ]
+    }
+   }
   }
  ],
  "short": "Photo-z/SED",
  "primary": "photoz",
  "tcl": "photoz_sed.tcl",
- "tcl_always": 1
+ "tcl_always": 1,
+ "store": {
+  "array": "catpanel",
+  "key": "%s",
+  "save": "OGFPhotozSedSave"
+ },
+ "params": [
+  {
+   "name": "photoz-bands",
+   "label": "Photo-z: bands",
+   "type": "string",
+   "default": "g,r,i,z",
+   "group": "Photo-z",
+   "help": "Band names, comma separated.",
+   "key": "photoz,param,bands"
+  },
+  {
+   "name": "photoz-mag-columns",
+   "label": "Photo-z: magnitude columns",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z",
+   "help": "Catalog columns holding the magnitudes (empty = automatic).",
+   "key": "photoz,param,mag-columns"
+  },
+  {
+   "name": "photoz-checkpoint",
+   "label": "Photo-z: checkpoint",
+   "type": "file",
+   "default": "",
+   "group": "Photo-z",
+   "help": "Model checkpoint file (used only when it exists).",
+   "key": "photoz,param,checkpoint"
+  },
+  {
+   "name": "sed-backend",
+   "label": "SED fit: backend",
+   "type": "string",
+   "default": "auto",
+   "group": "SED fit",
+   "help": "Backend of ds9_sed_fit.py.",
+   "key": "sed,param,backend"
+  },
+  {
+   "name": "sed-bands",
+   "label": "SED fit: bands",
+   "type": "string",
+   "default": "g,r,i,z",
+   "group": "SED fit",
+   "help": "Band names, comma separated.",
+   "key": "sed,param,bands"
+  },
+  {
+   "name": "sed-mag-columns",
+   "label": "SED fit: magnitude columns",
+   "type": "string",
+   "default": "",
+   "group": "SED fit",
+   "help": "Catalog columns holding the magnitudes.",
+   "key": "sed,param,mag-columns"
+  },
+  {
+   "name": "sed-photoz-column",
+   "label": "SED fit: photo-z column",
+   "type": "string",
+   "default": "PHOTO_Z",
+   "group": "SED fit",
+   "help": "Catalog column with the redshift.",
+   "key": "sed,param,photoz-column"
+  },
+  {
+   "name": "sed-checkpoint-emulator",
+   "label": "SED fit: emulator checkpoint",
+   "type": "file",
+   "default": "",
+   "group": "SED fit",
+   "help": "Emulator checkpoint (used only when it exists).",
+   "key": "sed,param,checkpoint-emulator"
+  },
+  {
+   "name": "sed-checkpoint-inverse",
+   "label": "SED fit: inverse checkpoint",
+   "type": "file",
+   "default": "",
+   "group": "SED fit",
+   "help": "Inverse-model checkpoint (used only when it exists).",
+   "key": "sed,param,checkpoint-inverse"
+  }
+ ]
 }

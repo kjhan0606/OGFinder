@@ -309,3 +309,16 @@ proc CatalogPanelAutoExtract {} {
     }
 }
 
+
+# before-hook of the headless "extract" step (::ogf::step::run extract extract headless): what CatalogPanelExtract does around the exec
+proc OGFHeadlessExtractBefore {} {
+    if {![file executable [file join [file dirname [info nameofexecutable]] [expr {$::tcl_platform(os) eq "Windows NT" ? "ds9_sextract.exe" : "ds9_sextract"}]]]} {
+	error "ds9_sextract not found"
+    }
+    catch {CatalogPanelSetLogScale}
+    foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont mag-zeropoint back-size back-filtersize} {
+	if {[::ogf::cat::exists param,$pname]} {
+	    ::ogf::cat::set extract_param,$pname [::ogf::cat::get param,$pname]
+	}
+    }
+}
