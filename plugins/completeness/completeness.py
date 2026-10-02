@@ -182,11 +182,12 @@ def render_object(o, psf, zp, gain=0.0, rng=None):
         ix, iy = int(round(o['x'])), int(round(o['y']))
         Ie = models.sersic_Ie_from_flux(flux, o['re'], o['n'], o['q'])
         gal = models.render_sersic((size, size), o['x'] - (ix - half), o['y'] - (iy - half), Ie, o['re'], o['n'], o['q'], o['pa'])
-        stamp = models.convolve_same(gal, psf)
+        stamp = models.convolve_same(gal, psf.stamp(o['x'], o['y'], o['x'] - ix, o['y'] - iy) if hasattr(psf, 'stamp') else psf)
         y0, x0 = iy - half, ix - half
     else:
         ix, iy = int(round(o['x'])), int(round(o['y']))
-        stamp = flux * models.shifted_psf(psf, o['x'] - ix, o['y'] - iy)
+        stamp = flux * (psf.stamp(o['x'], o['y'], o['x'] - ix, o['y'] - iy) if hasattr(psf, 'stamp')       # spatially varying PSFModel (ogfkit.psfmodel)
+                        else models.shifted_psf(psf, o['x'] - ix, o['y'] - iy))
         y0, x0 = iy - h, ix - h
     if gain and rng is not None:
         stamp = stamp + rng.normal(0.0, 1.0, stamp.shape) * np.sqrt(np.clip(stamp, 0, None) / gain)
