@@ -323,6 +323,7 @@ namespace eval ::ogf::cat {
         {morph,map              list   galaxy_model rw "NUMBERs that have a CNN morphology"}
         {morph,*                list   galaxy_model rw "per NUMBER: {type description confidence color}"}
         {isophote,*             any    isophote  rw   "isophote plugin: last output files (model_file, resid_file, table_file, plot_file) and the show-frames state"}
+        {completeness,*         any    completeness rw "completeness plugin: result files and the 50 % / 90 % limiting magnitudes (lim50, lim90) of the last run"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}

@@ -1,0 +1,256 @@
+{
+ "schema": 1,
+ "id": "completeness",
+ "name": "Completeness and limiting magnitude",
+ "short": "Complete.",
+ "tab": "Measure",
+ "order": 16,
+ "description": "Artificial star / Sersic galaxy injection with a detection callback (default: the application's own extraction): recovery fraction vs magnitude (and size), photometric bias and scatter, false-positive rate, 50 % / 90 % limits written into the catalog (COMPL_* columns and catalog metadata).",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy"
+  ]
+ },
+ "primary": "measure",
+ "settings": "params",
+ "tcl": "completeness.tcl",
+ "steps": [
+  {
+   "id": "measure",
+   "label": "Completeness / Limiting Magnitude",
+   "title": "Completeness simulation (injection / recovery)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.completeness_sim",
+   "catalog_tmp": "completeness",
+   "done_status": "Completeness simulation complete",
+   "after": "OGFCompletenessAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/completeness.py",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--detector",
+    "{detector}",
+    "--kind",
+    "{kind}",
+    "--mag-min",
+    "{mag-min}",
+    "--mag-max",
+    "{mag-max}",
+    "--n-bins",
+    "{n-bins}",
+    "--per-bin",
+    "{per-bin}",
+    "--per-image",
+    "{per-image}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--pixel-scale",
+    "{extract:pixel-scale}",
+    "--detect-thresh",
+    "{extract:detect-thresh}",
+    "--detect-minarea",
+    "{extract:detect-minarea}",
+    "--psf-fwhm",
+    "{psf-fwhm}",
+    "--match-radius",
+    "{match-radius}",
+    "--re-bins",
+    "{re-bins}",
+    "--crop-size",
+    "{crop-size}",
+    "--seed",
+    "{seed}",
+    "--n-workers",
+    "{extract:n-workers}",
+    {
+     "if_file": "{cat:psf,file}",
+     "argv": [
+      "--psf",
+      "{cat:psf,file}"
+     ]
+    },
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if": "allow-blends",
+     "argv": [
+      "--allow-blends"
+     ]
+    },
+    "--json-out",
+    "{work}/completeness.json",
+    "--curve-out",
+    "{work}/completeness_curve.tsv",
+    "--plot-out",
+    "{work}/completeness_plot.png",
+    "--meta-out",
+    "{work}/catalog_meta.json"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "COMPL_FRAC",
+     "COMPL_LIM50",
+     "COMPL_LIM90"
+    ]
+   }
+  },
+  {
+   "id": "plot",
+   "label": "Completeness Curve...",
+   "proc": "OGFCompletenessPlot",
+   "session": "NONE"
+  },
+  {
+   "id": "table",
+   "label": "Completeness Table...",
+   "proc": "OGFCompletenessTable",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "kind",
+   "label": "Injected objects",
+   "type": "choice",
+   "choices": [
+    "star",
+    "galaxy"
+   ],
+   "default": "star",
+   "group": "Injection",
+   "help": "star = PSF stamps; galaxy = PSF-convolved Sersic profiles (n in {1,4}, random q and PA, Re in the size bins)."
+  },
+  {
+   "name": "detector",
+   "label": "Detection",
+   "type": "string",
+   "default": "sextract",
+   "group": "Detection",
+   "help": "sextract = the application's own ds9_sextract (uses the Extract tab thresholds); sep = SEP; or 'package.module:factory' of your own detection callback (see docs/completeness.md)."
+  },
+  {
+   "name": "mag-min",
+   "label": "Brightest magnitude",
+   "type": "float",
+   "default": 22.0,
+   "min": 0,
+   "max": 40,
+   "group": "Injection",
+   "unit": "mag"
+  },
+  {
+   "name": "mag-max",
+   "label": "Faintest magnitude",
+   "type": "float",
+   "default": 29.0,
+   "min": 0,
+   "max": 45,
+   "group": "Injection",
+   "unit": "mag"
+  },
+  {
+   "name": "n-bins",
+   "label": "Magnitude bins",
+   "type": "int",
+   "default": 14,
+   "min": 3,
+   "max": 60,
+   "group": "Injection"
+  },
+  {
+   "name": "per-bin",
+   "label": "Objects per bin",
+   "type": "int",
+   "default": 60,
+   "min": 5,
+   "max": 2000,
+   "group": "Injection",
+   "help": "Statistical error of a bin fraction ~ sqrt(f(1-f)/N)."
+  },
+  {
+   "name": "per-image",
+   "label": "Objects per realisation",
+   "type": "int",
+   "default": 25,
+   "min": 1,
+   "max": 500,
+   "group": "Injection",
+   "help": "Objects injected into one copy of the image (kept apart by a minimum separation); many realisations are run."
+  },
+  {
+   "name": "psf-fwhm",
+   "label": "PSF FWHM (Gaussian)",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.8,
+   "max": 30,
+   "group": "Injection",
+   "unit": "pix",
+   "help": "Used when no PSF file is loaded (Stars/PSF tab)."
+  },
+  {
+   "name": "match-radius",
+   "label": "Match radius",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 20,
+   "group": "Detection",
+   "unit": "pix",
+   "help": "An injected object is recovered when a detection lies this close (galaxies: at least 0.5 Re)."
+  },
+  {
+   "name": "re-bins",
+   "label": "Galaxy Re bin edges",
+   "type": "string",
+   "default": "2,4,8,16",
+   "group": "Injection",
+   "help": "Comma list of half-light radius edges (pixels) for galaxies; the result lists limits per size bin."
+  },
+  {
+   "name": "crop-size",
+   "label": "Central crop",
+   "type": "int",
+   "default": 1500,
+   "min": 0,
+   "max": 20000,
+   "group": "Detection",
+   "unit": "pix",
+   "help": "Test the central N x N pixels only (0 = whole image); keeps big images fast."
+  },
+  {
+   "name": "allow-blends",
+   "label": "Inject on top of sources",
+   "type": "bool",
+   "default": false,
+   "group": "Injection",
+   "help": "Also place objects on detected sources (completeness then includes blending); default: empty sky only.",
+   "expert": true
+  },
+  {
+   "name": "seed",
+   "label": "Random seed",
+   "type": "int",
+   "default": 1,
+   "min": 0,
+   "max": 2147483647,
+   "group": "Detection",
+   "expert": true
+  }
+ ]
+}
