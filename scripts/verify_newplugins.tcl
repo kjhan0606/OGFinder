@@ -270,6 +270,48 @@ proc sec_cluster {} {
     R cluster_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_spectra {} {
+    set root [file normalize [file join [::ogf::step::plugin_dir spectra] .. ..]]
+    set dir [file join [file dirname [OGFSessWorkDir]] spec_demo]
+    set nums [lrange [::ogf::cat::values NUMBER] 0 29]
+    exec [OGFPython] [file join [::ogf::step::plugin_dir spectra] make_demo.py] $dir [join $nums ,] --seed 3
+    ::ogf::params::put spectra spec-dir $dir
+    lassign [run_step spectra link] ok recs
+    R spectra_link_ran $ok $recs
+    R spectra_link_recorded [expr {[lindex $recs 0 0] eq "analysis.spectra_link"}] $recs
+    R spectra_link_rows [expr {[nonempty SP_OK] >= 25 && "SP_FILE" in [::ogf::cat::columns]}] "ok=[nonempty SP_OK]"
+    lassign [run_step spectra fit] ok recs
+    R spectra_fit_ran $ok $recs
+    R spectra_fit_columns [expr {"SP_Z" in [::ogf::cat::columns] && "SP_ZQ" in [::ogf::cat::columns] && "SP_LINE_FLUX" in [::ogf::cat::columns]}]
+    R spectra_fit_rows [expr {[nonempty SP_Z] >= 20}] "z=[nonempty SP_Z]"
+    # redshift accuracy against the demo truth
+    set tf [open [file join $dir truth.tsv] r]; set tl [split [read $tf] \n]; close $tf
+    set zt {}
+    foreach l [lrange $tl 1 end] {if {$l ne {}} {dict set zt [lindex $l 0] [lindex $l 1]}}
+    set nn [::ogf::cat::values NUMBER]; set zz [::ogf::cat::values SP_Z]; set qq [::ogf::cat::values SP_ZQ]
+    set maxd 0.0; set n 0
+    foreach num $nn z $zz q $qq {
+	if {$z eq {} || $q < 2 || ![dict exists $zt $num]} continue
+	set d [expr {abs($z - [dict get $zt $num])}]
+	if {$d > $maxd} {set maxd $d}
+	incr n
+    }
+    R spectra_z_accuracy [expr {$n >= 20 && $maxd < 0.002}] "n=$n max|dz|=$maxd"
+    foreach f {spectra_links.tsv spectra_results.json} {
+	R spectra_file_$f [expr {[file exists [file join [OGFSessWorkDir] spectra $f]] && [file size [file join [OGFSessWorkDir] spectra $f]] > 50}]
+    }
+    set w [OGFSpectraViewer [lindex $nums 0]]
+    update
+    R spectra_viewer [expr {[winfo exists $w] && [image width ogfspecimg] > 400 && [image height ogfspecimg] > 200}] "[image width ogfspecimg]x[image height ogfspecimg]"
+    OGFSpectraStep 1; update
+    R spectra_viewer_next [expr {$::ogf_spec_num eq [lindex $nums 1]}] "now $::ogf_spec_num"
+    destroy $w
+    OGFSpectraTable; update
+    R spectra_table_window [expr {[winfo exists .ogftext] && [string match "*NUMBER*FILE*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    R spectra_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -359,7 +401,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster spectra} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

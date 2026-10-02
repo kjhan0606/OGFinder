@@ -108,6 +108,8 @@ chk_sedcodes_tests() { "$PY" -m pytest -q plugins/sedcodes/tests 2>&1 | tail -3;
 EXTRA="$EXTRA sedcodes_tests"
 chk_cluster_tests() { "$PY" -m pytest -q plugins/cluster/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA cluster_tests"
+chk_spectra_tests() { "$PY" -m pytest -q plugins/spectra/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA spectra_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
