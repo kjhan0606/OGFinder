@@ -207,6 +207,98 @@
     "[NII]6585",
     "[SII]6718"
    ]
+  },
+  {
+   "name": "kin-line",
+   "label": "Kinematics line",
+   "type": "choice",
+   "default": "Ha",
+   "group": "Kinematics",
+   "help": "Emission line whose centroid / width gives v and sigma (2D spectra and IFU cubes).",
+   "choices": [
+    "Hb",
+    "[OIII]5008",
+    "Ha",
+    "[NII]6585",
+    "[SII]6718",
+    "[OII]",
+    "[SIII]9069"
+   ]
+  },
+  {
+   "name": "kin-z",
+   "label": "Redshift for kinematics",
+   "type": "float",
+   "default": 0.0,
+   "group": "Kinematics",
+   "help": "0 = use the z column, else the blind redshift of the extracted 1D spectrum. Sets the systemic wavelength.",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "name": "kin-window-kms",
+   "label": "Line window (+- km/s)",
+   "type": "float",
+   "default": 600.0,
+   "group": "Kinematics",
+   "help": "Half width of the fitting window around the systemic line; neighbouring lines (e.g. [NII] next to Ha at +-700 km/s) must stay outside, so keep it below their offset.",
+   "min": 100,
+   "max": 5000,
+   "unit": "km/s"
+  },
+  {
+   "name": "kin-snr-pix",
+   "label": "Min S/N per spaxel / row",
+   "type": "float",
+   "default": 3.0,
+   "group": "Kinematics",
+   "help": "Matched-filter line S/N below which a spaxel (cube) or row (2D, when no binning) is not fitted.",
+   "min": 0.5,
+   "max": 50
+  },
+  {
+   "name": "kin-bin-snr",
+   "label": "Target S/N of a bin",
+   "type": "float",
+   "default": 0.0,
+   "group": "Kinematics",
+   "help": ">0: adjacent rows (2D) / spaxels (cube) are accreted until the bin reaches this S/N (0 = fit every spaxel / row on its own).",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "name": "kin-inst-fwhm",
+   "label": "Instrumental FWHM (A)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Kinematics",
+   "help": "Removed in quadrature from the fitted line width to give the intrinsic dispersion (0 = none).",
+   "min": 0,
+   "max": 50,
+   "unit": "A"
+  },
+  {
+   "name": "kin-inc",
+   "label": "Inclination (deg, 0 = fit)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Kinematics",
+   "help": "Fixed inclination (e.g. from the image axis ratio): deprojects the rotation curve (2D) and removes the v_c - inclination degeneracy (cube).",
+   "min": 0,
+   "max": 89,
+   "unit": "deg"
+  },
+  {
+   "name": "kin-slit-psi",
+   "label": "Slit offset from major axis (deg)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Kinematics",
+   "help": "2D spectra: angle between the slit and the kinematic major axis (observed v_c is reduced by cos psi).",
+   "min": -90,
+   "max": 90,
+   "unit": "deg",
+   "expert": true
   }
  ],
  "steps": [
@@ -355,6 +447,102 @@
    }
   },
   {
+   "id": "kin",
+   "label": "Fit Kinematics (2D slit / IFU cube)",
+   "title": "Emission-line kinematics (rotation curve, velocity and dispersion maps)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_kin",
+   "catalog_tmp": "spectra_kin",
+   "done_status": "kinematics fitted",
+   "after": "OGFSpectraKinAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "kin",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--snr-min",
+    "{snr-min}",
+    "--kernel-sigma-px",
+    "{kernel-sigma-px}",
+    "--cont-width",
+    "{cont-width}",
+    "--z-column",
+    "{z-column}",
+    "--zmax",
+    "{zmax}",
+    "--kin-line",
+    "{kin-line}",
+    "--kin-z",
+    "{kin-z}",
+    "--kin-window-kms",
+    "{kin-window-kms}",
+    "--kin-snr-pix",
+    "{kin-snr-pix}",
+    "--kin-bin-snr",
+    "{kin-bin-snr}",
+    "--kin-inst-fwhm",
+    "{kin-inst-fwhm}",
+    "--kin-inc",
+    "{kin-inc}",
+    "--kin-slit-psi",
+    "{kin-slit-psi}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SP_KIN_VSYS",
+     "SP_KIN_VSINI",
+     "SP_KIN_VC",
+     "SP_KIN_VC_ERR",
+     "SP_KIN_RT",
+     "SP_KIN_PA",
+     "SP_KIN_INC",
+     "SP_KIN_SIGMA",
+     "SP_KIN_CHI2R",
+     "SP_KIN_N"
+    ]
+   }
+  },
+  {
    "id": "viewer",
    "label": "Spectrum Viewer...",
    "proc": "OGFSpectraViewer",
@@ -364,6 +552,12 @@
    "id": "table",
    "label": "Link / Result Table...",
    "proc": "OGFSpectraTable",
+   "session": "NONE"
+  },
+  {
+   "id": "kinview",
+   "label": "Kinematics Viewer...",
+   "proc": "OGFSpectraKinViewer",
    "session": "NONE"
   }
  ]

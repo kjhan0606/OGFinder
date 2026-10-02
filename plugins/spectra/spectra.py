@@ -4,6 +4,7 @@
     spectra.py --task link --catalog TSV --work DIR [--spec-dir D --spec-pattern spec_{NUMBER}.fits | --link-file TSV]
     spectra.py --task fit  --catalog TSV --work DIR [same link options] [--snr-min 4 --z-column Z_SPEC --fit-line Ha ...]
     spectra.py --task plot --number N --catalog TSV --work DIR --out PNG [same link options]
+    spectra.py --task kin  --catalog TSV --work DIR [same link options] [--kin-line Ha --kin-z Z --kin-inc DEG ...]   (2D slit / IFU-cube kinematics, see docs/spectra.md)
 
 link/fit follow the add_columns contract.  The link table (DIR/spectra_links.tsv: NUMBER FILE KIND X Y ROW) is written by every task; a user-supplied --link-file
 (columns NUMBER FILE, optional KIND X Y ROW) overrides the file-name pattern.  fit also writes DIR/spectra_results.json (per object: redshift, lines).
@@ -23,11 +24,12 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, spectra as sp, meta as ometa  # noqa: E402
+from ogfkit import tsvio, spectra as sp, meta as ometa, kinematics as kin  # noqa: E402
 
 COLUMNS = {
     'link': ['SP_FILE', 'SP_KIND', 'SP_OK'],
     'fit': ['SP_Z', 'SP_ZERR', 'SP_ZQ', 'SP_NLINES', 'SP_SNR', 'SP_LINE_FLUX', 'SP_LINE_FLUXERR', 'SP_LINE_FWHM_KMS', 'SP_LINE_EW'],
+    'kin': ['SP_KIN_VSYS', 'SP_KIN_VSINI', 'SP_KIN_VC', 'SP_KIN_VC_ERR', 'SP_KIN_RT', 'SP_KIN_PA', 'SP_KIN_INC', 'SP_KIN_SIGMA', 'SP_KIN_CHI2R', 'SP_KIN_N'],
 }
 C_KMS = 299792.458
 
@@ -150,6 +152,162 @@ def task_fit(a, cols, rows, W):
     return out, dict(n_linked=sum(l['OK'] for l in links), n_redshift=int(nz)), links, results
 
 
+def json_clean(o):
+    """numpy -> python, NaN/inf -> null (the Tcl JSON parser and strict readers reject NaN)"""
+    if isinstance(o, dict):
+        return {str(k): json_clean(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [json_clean(v) for v in o]
+    if isinstance(o, np.ndarray):
+        return json_clean(o.tolist())
+    if isinstance(o, (np.integer,)):
+        return int(o)
+    if isinstance(o, (float, np.floating)):
+        return float(o) if np.isfinite(o) else None
+    if isinstance(o, (np.bool_,)):
+        return bool(o)
+    return o
+
+
+def kin_redshift(a, r, lk):
+    """redshift for the kinematics: --kin-z, else the z column, else the blind redshift of the extracted 1D spectrum (quality >= 1)"""
+    if a.kin_z > 0:
+        return a.kin_z, 'kin-z'
+    zk = tsvio.fnum(r.get(a.z_column)) if a.z_column and a.z_column in r else float('nan')
+    if np.isfinite(zk) and zk > 0:
+        return zk, 'catalog column %s' % a.z_column
+    s = load_1d(a, lk)
+    err = s['err']
+    if err is not None:
+        err = np.where(np.isfinite(err) & (err > 0), err, np.nan)
+    an = sp.analyse_spectrum(s['wave'], s['flux'], err, a.snr_min, a.kernel_sigma_px, a.cont_width, z_known=None, zmax=a.zmax)
+    z = an['redshift']
+    if z['quality'] >= 1:
+        return float(z['z']), 'blind redshift (quality %d)' % z['quality']
+    return None, 'no redshift'
+
+
+def kin_plot_2d(path, t, lam_sys, prof, rc, number):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 2, figsize=(9, 3.8), gridspec_kw=dict(width_ratios=[1.3, 1]))
+    d = t['data']
+    w = t['wave']
+    m = np.abs(w - lam_sys) < 25 * lam_sys / 6563.0
+    v1, v2 = np.nanpercentile(d[:, m], [5, 99.7])
+    ax[0].imshow(d[:, m], origin='lower', aspect='auto', cmap='gray', vmin=v1, vmax=v2, extent=[w[m][0], w[m][-1], -0.5, d.shape[0] - 0.5])
+    if len(prof['y']):
+        ax[0].plot(lam_sys * (1 + prof['v'] / kin.C_KMS), prof['y'], 'r.', ms=4)
+    ax[0].set_xlabel('wavelength (A)'); ax[0].set_ylabel('row')
+    ax[1].errorbar(prof['y'], prof['v'], prof['v_err'], fmt='ko', ms=3)
+    if rc.get('ok'):
+        yy = np.linspace(prof['y'].min(), prof['y'].max(), 200)
+        ax[1].plot(yy, rc['vsys'] + kin.arctan_rc(yy - rc['y0'], rc['vc_obs'], rc['rt']), 'r-')
+    ax[1].set_xlabel('row'); ax[1].set_ylabel('v (km/s)')
+    ax[1].set_title('object %s: arctan fit%s' % (number, (' v_obs=%.0f r_t=%.2f px' % (abs(rc['vc_obs']), rc['rt'])) if rc.get('ok') else ' failed'), fontsize=8)
+    fig.tight_layout(); fig.savefig(path, dpi=80); plt.close(fig)
+
+
+def kin_plot_cube(path, maps, vf, number):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(2, 3, figsize=(9, 6))
+    vmax = np.nanpercentile(np.abs(maps['vel']), 98) if np.isfinite(maps['vel']).any() else 100
+    panels = [('flux', maps['flux'], 'gray', None), ('velocity (km/s)', maps['vel'], 'RdBu_r', (-vmax, vmax)), ('dispersion (km/s)', maps['sigma'], 'viridis', None)]
+    if vf.get('ok'):
+        panels += [('model velocity', np.where(np.isfinite(maps['vel']), vf['model'], np.nan), 'RdBu_r', (-vmax, vmax)), ('residual', maps['vel'] - vf['model'], 'PuOr', (-0.5 * vmax, 0.5 * vmax)),
+                   ('S/N', maps['snr'], 'magma', None)]
+    for ax, (ti, im, cm, lim) in zip(axs.ravel(), panels):
+        h = ax.imshow(im, origin='lower', cmap=cm, vmin=lim[0] if lim else None, vmax=lim[1] if lim else None)
+        ax.set_title(ti, fontsize=8)
+        plt.colorbar(h, ax=ax, fraction=0.046)
+    if vf.get('ok'):
+        for ax in axs.ravel()[:5]:
+            th = math.radians(vf['pa'])
+            ax.plot([vf['x0'] - 8 * math.cos(th), vf['x0'] + 8 * math.cos(th)], [vf['y0'] - 8 * math.sin(th), vf['y0'] + 8 * math.sin(th)], 'k--', lw=0.6)
+        fig.suptitle('object %s: PA %.1f  inc %.1f  vc %.0f  rt %.2f px  chi2r %.2f' % (number, vf['pa'], vf['inc'], vf['vc'], vf['rt'], vf['chi2r']), fontsize=9)
+    fig.tight_layout(); fig.savefig(path, dpi=80); plt.close(fig)
+
+
+def save_maps(path, maps, vf, hdr_extra):
+    from astropy.io import fits
+    hl = fits.HDUList([fits.PrimaryHDU()])
+    ex = dict(hdr_extra)
+    for name, key in (('FLUX', 'flux'), ('VEL', 'vel'), ('VELERR', 'vel_err'), ('SIGMA', 'sigma'), ('SIGERR', 'sigma_err'), ('SNR', 'snr')):
+        h = fits.ImageHDU(np.asarray(maps[key], np.float32), name=name)
+        for k, v in ex.items():
+            h.header[k] = v
+        hl.append(h)
+    if vf.get('ok'):
+        hl.append(fits.ImageHDU(np.asarray(vf['model'], np.float32), name='MODEL'))
+        hl.append(fits.ImageHDU(np.asarray(maps['vel'] - vf['model'], np.float32), name='RESID'))
+    hl.append(fits.ImageHDU(np.asarray(maps['bin'], np.int32), name='BIN'))
+    hl.writeto(path, overwrite=True)
+    base = path[:-len('_maps.fits')] if path.endswith('_maps.fits') else path[:-5]
+    for suffix, key in (('vel', 'vel'), ('sigma', 'sigma'), ('flux', 'flux')):       # single-HDU files for the ds9 frames
+        h = fits.PrimaryHDU(np.asarray(maps[key], np.float32))
+        for k, v in ex.items():
+            h.header[k] = v
+        h.writeto('%s_%s.fits' % (base, suffix), overwrite=True)
+
+
+def task_kin(a, cols, rows, W):
+    links = build_links(a, rows)
+    out, results = [], {}
+    nfit = 0
+    wu = None if a.wave_unit == 'auto' else a.wave_unit
+    if a.kin_line not in sp.LINE_DICT:
+        raise SystemExit('spectra: unknown line %r (known: %s)' % (a.kin_line, ', '.join(sp.LINE_DICT)))
+    rest = sp.LINE_DICT[a.kin_line]
+    for r, lk in zip(rows, links):
+        d = {}
+        num = lk['NUMBER']
+        if lk['OK'] and lk['KIND'] in ('2d', 'cube'):
+            try:
+                z, how = kin_redshift(a, r, lk)
+                if z is None:
+                    results[num] = dict(error='no redshift (give kin-z, a redshift column or a spectrum with a blind redshift)')
+                    out.append((r['NUMBER'], d))
+                    continue
+                lam_sys = rest * (1 + z)
+                inc = a.kin_inc if a.kin_inc > 0 else None
+                if lk['KIND'] == '2d':
+                    t = sp.read_2d(lk['FILE'], wu)
+                    prof = kin.fit_slit_line(t['wave'], t['data'], t['err'], lam_sys, a.kin_window_kms, a.kin_bin_snr, a.kin_snr_pix, a.kin_inst_fwhm)
+                    rc = kin.fit_rotation_curve(prof['y'], prof['v'], prof['v_err'], inc_deg=inc, slit_offset_deg=a.kin_slit_psi, free_centre=True)
+                    sdisp = kin.dispersion_summary(prof['sigma'], prof['sigma_err'], prof['flux'])
+                    if rc.get('ok'):
+                        d.update(SP_KIN_VSYS=rc['vsys'], SP_KIN_VSINI=rc['vflat_obs'], SP_KIN_RT=rc['rt'], SP_KIN_CHI2R=rc['chi2r'], SP_KIN_N=len(prof['y']), SP_KIN_SIGMA=sdisp['mean'] if sdisp['n'] else None)
+                        if inc:
+                            d.update(SP_KIN_VC=abs(rc['vc']) if rc.get('vc') is not None else None, SP_KIN_VC_ERR=rc.get('vc_err'), SP_KIN_INC=inc)
+                        nfit += 1
+                    kin_plot_2d(os.path.join(W, 'kin_%s.png' % num), t, lam_sys, prof, rc, num)
+                    tsvio.write_table(os.path.join(W, 'kin_%s.tsv' % num), ['ROW', 'V', 'V_ERR', 'SIGMA', 'SIGMA_ERR', 'FLUX', 'FLUX_ERR', 'SNR', 'NROWS'],
+                                      [dict(ROW=prof['y'][i], V=prof['v'][i], V_ERR=prof['v_err'][i], SIGMA=prof['sigma'][i], SIGMA_ERR=prof['sigma_err'][i], FLUX=prof['flux'][i],
+                                            FLUX_ERR=prof['flux_err'][i], SNR=prof['snr'][i], NROWS=prof['nrows'][i]) for i in range(len(prof['y']))])
+                    results[num] = dict(kind='2d', z=z, z_source=how, line=a.kin_line, lam_sys=lam_sys, rotation_curve={k: v for k, v in rc.items()}, dispersion=sdisp, n_bins=int(len(prof['y'])))
+                else:
+                    c = sp.read_cube(lk['FILE'])
+                    maps = kin.fit_cube_line(c['data'], c['wave'], lam_sys, c['err'], a.kin_window_kms, a.kin_snr_pix, a.kin_bin_snr, a.kin_inst_fwhm)
+                    vf = kin.fit_velocity_field(maps['vel'], maps['vel_err'], inc_fixed=inc, free_centre=True)
+                    sdisp = kin.dispersion_summary(maps['sigma'], maps['sigma_err'], maps['flux'])
+                    if vf.get('ok'):
+                        d.update(SP_KIN_VSYS=vf['vsys'], SP_KIN_VSINI=vf['vsini'], SP_KIN_VC=vf['vc'], SP_KIN_VC_ERR=vf['errors'].get('vc'), SP_KIN_RT=vf['rt'], SP_KIN_PA=vf['pa'], SP_KIN_INC=vf['inc'],
+                                 SP_KIN_SIGMA=sdisp['mean'] if sdisp['n'] else None, SP_KIN_CHI2R=vf['chi2r'], SP_KIN_N=vf['n'])
+                        nfit += 1
+                    save_maps(os.path.join(W, 'kin_%s_maps.fits' % num), maps, vf, dict(LINE=a.kin_line, LAMSYS=lam_sys, BUNIT='km/s (VEL, SIGMA)'))
+                    kin_plot_cube(os.path.join(W, 'kin_%s.png' % num), maps, vf, num)
+                    results[num] = dict(kind='cube', z=z, z_source=how, line=a.kin_line, lam_sys=lam_sys, velocity_field={k: v for k, v in vf.items() if k != 'model'}, dispersion=sdisp,
+                                        n_fits=int(maps['n_fits']), n_spaxels=int(maps['n_spaxels']))
+            except Exception as ex:
+                results[num] = dict(error=str(ex))
+                sys.stderr.write('spectra kin: object %s: %s\n' % (num, ex))
+        out.append((r['NUMBER'], d))
+    return out, dict(n_fit=nfit, n_2d_or_cube=sum(1 for l in links if l['OK'] and l['KIND'] in ('2d', 'cube'))), links, results
+
+
 def task_link(a, cols, rows, W):
     links = build_links(a, rows)
     out = [(r['NUMBER'], dict(SP_FILE=os.path.basename(l['FILE']) if l['OK'] else None, SP_KIND=l['KIND'] if l['OK'] else None, SP_OK=l['OK'])) for r, l in zip(rows, links)]
@@ -212,7 +370,7 @@ def plot_object(a, rows, links, number, out_png, results=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--task', required=True, choices=['link', 'fit', 'plot'])
+    ap.add_argument('--task', required=True, choices=['link', 'fit', 'plot', 'kin'])
     ap.add_argument('--catalog', required=True)
     ap.add_argument('--work', default='.')
     ap.add_argument('--meta-out', default='')
@@ -234,6 +392,14 @@ def main(argv=None):
     ap.add_argument('--z-column', default='')
     ap.add_argument('--zmax', type=float, default=7.0)
     ap.add_argument('--fit-line', default='Ha')
+    ap.add_argument('--kin-line', default='Ha')
+    ap.add_argument('--kin-z', type=float, default=0.0)
+    ap.add_argument('--kin-window-kms', type=float, default=600.0)
+    ap.add_argument('--kin-snr-pix', type=float, default=3.0)
+    ap.add_argument('--kin-bin-snr', type=float, default=0.0)
+    ap.add_argument('--kin-inst-fwhm', type=float, default=0.0)
+    ap.add_argument('--kin-inc', type=float, default=0.0)
+    ap.add_argument('--kin-slit-psi', type=float, default=0.0)
     ap.add_argument('--number', default='')
     ap.add_argument('--out', default='')
     a = ap.parse_args(argv)
@@ -247,6 +413,10 @@ def main(argv=None):
         out, summ, links, results = task_fit(a, cols, rows, a.work)
         with open(os.path.join(a.work, 'spectra_results.json'), 'w') as fh:
             json.dump(results, fh, default=lambda o: None)
+    elif a.task == 'kin':
+        out, summ, links, results = task_kin(a, cols, rows, a.work)
+        with open(os.path.join(a.work, 'spectra_kin.json'), 'w') as fh:
+            json.dump(json_clean(results), fh)
     else:
         out, summ, links, _ = task_link(a, cols, rows, a.work)
     tsvio.write_table(os.path.join(a.work, 'spectra_links.tsv'), ['NUMBER', 'FILE', 'KIND', 'X', 'Y', 'ROW', 'OK'], links)
