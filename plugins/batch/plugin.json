@@ -1,0 +1,115 @@
+{
+ "schema": 1,
+ "id": "batch",
+ "name": "Batch processing (many fields)",
+ "short": "Batch",
+ "tab": "Measure",
+ "order": 36,
+ "description": "Run a recipe of plugin steps over many fields with parallel workers, resume, per-field logs and a summary table; progress window.",
+ "requires": {
+  "python": [
+   "numpy"
+  ]
+ },
+ "primary": "run",
+ "settings": "params",
+ "tcl": "batch.tcl",
+ "params": [
+  {
+   "name": "fields-file",
+   "label": "Fields list",
+   "type": "string",
+   "default": "",
+   "group": "Batch",
+   "help": "Text file, one field per line: NAME path/to/image.fits"
+  },
+  {
+   "name": "recipe-file",
+   "label": "Recipe (JSON)",
+   "type": "string",
+   "default": "",
+   "group": "Batch",
+   "help": "detect (ds9_sextract) or catalog, then steps of plugins that have a cli template. \"Write Example Recipe\" creates a starting point."
+  },
+  {
+   "name": "outdir",
+   "label": "Output directory",
+   "type": "string",
+   "default": "",
+   "group": "Batch",
+   "help": "Per field: catalog.tsv, state.json, field.log, work/; plus summary.tsv|json and status.json."
+  },
+  {
+   "name": "jobs",
+   "label": "Parallel workers (fields at a time)",
+   "type": "int",
+   "default": 2,
+   "group": "Batch",
+   "help": "",
+   "min": 1,
+   "max": 64
+  },
+  {
+   "name": "resume",
+   "label": "Resume (skip steps whose inputs and parameters are unchanged)",
+   "type": "bool",
+   "default": true,
+   "group": "Batch",
+   "help": ""
+  },
+  {
+   "name": "retries",
+   "label": "Retries per failed step",
+   "type": "int",
+   "default": 0,
+   "group": "Batch",
+   "help": "",
+   "min": 0,
+   "max": 5
+  },
+  {
+   "name": "step-timeout",
+   "label": "Step timeout (s, 0 = none)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Batch",
+   "help": "",
+   "min": 0,
+   "max": 86400
+  },
+  {
+   "name": "only",
+   "label": "Only these fields (comma separated)",
+   "type": "string",
+   "default": "",
+   "group": "Batch",
+   "help": "Empty = all fields."
+  }
+ ],
+ "steps": [
+  {
+   "id": "run",
+   "label": "Run Batch...",
+   "proc": "OGFBatchRun",
+   "session": "NONE"
+  },
+  {
+   "id": "progress",
+   "label": "Progress...",
+   "proc": "OGFBatchProgress",
+   "session": "NONE"
+  },
+  {
+   "id": "summary",
+   "label": "Summary Table...",
+   "proc": "OGFBatchSummary",
+   "session": "NONE"
+  },
+  {
+   "id": "example",
+   "label": "Write Example Recipe",
+   "proc": "OGFBatchExample",
+   "session": "NONE"
+  }
+ ]
+}
