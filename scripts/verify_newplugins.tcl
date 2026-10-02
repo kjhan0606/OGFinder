@@ -112,6 +112,41 @@ proc sec_psfex {} {
     R psfex_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_multifit {} {
+    set f0 [llength $::ds9(frames)]
+    ::ogf::params::put multifit max-objects 10
+    ::ogf::params::put multifit model sersic
+    ::ogf::params::put multifit neighbours fit
+    ::ogf::params::put multifit psf-fwhm 3.0
+    lassign [run_step multifit fit] ok recs
+    R multifit_ran $ok $recs
+    R multifit_recorded [expr {[lindex $recs 0 0] eq "analysis.multifit"}] $recs
+    set cols [::ogf::cat::columns]
+    R multifit_columns [expr {"GF_MAG" in $cols && "GF_RE" in $cols && "GF_N" in $cols && "GF_CHI2" in $cols && "GF_FLAG" in $cols && "GF_BT" in $cols}]
+    R multifit_rows_filled [expr {[nonempty GF_MAG] >= 8 && [nonempty GF_MAG] <= 10}] "rows=[nonempty GF_MAG]"
+    set w [file join [OGFSessWorkDir] multifit]
+    foreach f {results.tsv model.fits residual.fits montage.png psf.json} {
+	R multifit_file_$f [expr {[file exists [file join $w multifit_$f]] && [file size [file join $w multifit_$f]] > 50}]
+    }
+    R multifit_frames [expr {[llength $::ds9(frames)] == $f0 + 2}] "frames [llength $::ds9(frames)] (was $f0)"
+    R multifit_frame_restored [expr {$::current(frame) eq [lindex $::ds9(frames) 0]}] $::current(frame)
+    R multifit_keys [expr {[::ogf::cat::exists multifit,residual_file] && [file exists [::ogf::cat::get multifit,residual_file]]}]
+    set pw [OGFMultifitMontage]
+    R multifit_montage_window [expr {[winfo exists $pw] && [image width ogfmultifitimg] > 300}] "[image width ogfmultifitimg]x[image height ogfmultifitimg]"
+    destroy $pw
+    # selected rows only
+    set nums [lrange [::ogf::cat::values NUMBER] 20 22]
+    ::ogf::cat::select $nums replace 0
+    update
+    set s0 [llength [::ogf::session::steps]]
+    OGFMultifitSelected
+    wait_job
+    R multifit_selected_only [expr {[nonempty GF_MAG] == 3}] "rows=[nonempty GF_MAG]"
+    R multifit_selected_param [expr {[::ogf::params::get multifit objects] eq [join $nums \;]}] [::ogf::params::get multifit objects]
+    ::ogf::params::put multifit objects {}
+    R multifit_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -194,7 +229,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex} {
+    foreach sec {isophote completeness daophot psfex multifit} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
