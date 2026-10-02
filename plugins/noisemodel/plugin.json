@@ -1,0 +1,291 @@
+{
+ "schema": 1,
+ "id": "noisemodel",
+ "name": "Background and noise model",
+ "short": "Noise",
+ "tab": "Measure",
+ "order": 30,
+ "description": "Background model (mesh / polynomial / both) with source masking, local rms map, pixel autocorrelation, blank-aperture noise law sigma_N = sigma_pix alpha N^beta for correlated (drizzled) noise, flatness check, and catalog flux/magnitude errors that use the measured law instead of sqrt(N).",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy",
+   "sep"
+  ]
+ },
+ "primary": "model",
+ "settings": "params",
+ "tcl": "noisemodel.tcl",
+ "steps": [
+  {
+   "id": "model",
+   "label": "Measure Background and Noise",
+   "title": "Background and noise model",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.noisemodel",
+   "catalog_tmp": "noisemodel",
+   "done_status": "background / noise model done",
+   "after": "OGFNoiseAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/noisemodel.py",
+    "{image}",
+    "--work",
+    "{work}/noisemodel",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    "--model",
+    "{model}",
+    "--bw",
+    "{bw}",
+    "--fw",
+    "{fw}",
+    "--poly-order",
+    "{poly-order}",
+    "--mask-thresh",
+    "{mask-thresh}",
+    "--mask-minarea",
+    "{mask-minarea}",
+    "--mask-grow",
+    "{mask-grow}",
+    "--radii",
+    "{radii}",
+    "--n-aper",
+    "{n-aper}",
+    "--aperture",
+    "{aperture}",
+    "--aper-radius",
+    "{aper-radius}",
+    "--kron-fact",
+    "{kron-fact}",
+    "--gain",
+    "{gain}",
+    "--seed",
+    "{seed}",
+    {
+     "if": "correct",
+     "argv": [
+      "--correct"
+     ]
+    },
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "NM_SKY",
+     "NM_RMS",
+     "NM_NAPER",
+     "NM_CORR",
+     "NM_FLUXERR",
+     "NM_MAGERR",
+     "NM_SNR",
+     "NM_FLUX_AP",
+     "NM_MAG_AP",
+     "NM_MAGERR_AP"
+    ]
+   }
+  },
+  {
+   "id": "plot",
+   "label": "Noise Curve / Autocorrelation Plot...",
+   "proc": "OGFNoisePlot",
+   "session": "NONE"
+  },
+  {
+   "id": "summary",
+   "label": "Noise Summary...",
+   "proc": "OGFNoiseSummary",
+   "session": "NONE"
+  },
+  {
+   "id": "frames",
+   "label": "Show Background / RMS Frames",
+   "proc": "OGFNoiseFrames",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "model",
+   "label": "Background model",
+   "type": "choice",
+   "default": "mesh",
+   "group": "Background",
+   "help": "mesh = sigma-clipped mesh (sep) with source masking; poly = one polynomial surface (smooth gradient only); mesh+poly = polynomial first, mesh on the residual (follows a gradient and local structure).",
+   "choices": [
+    "mesh",
+    "poly",
+    "mesh+poly"
+   ]
+  },
+  {
+   "name": "bw",
+   "label": "Mesh size (px)",
+   "type": "int",
+   "default": 64,
+   "group": "Background",
+   "help": "Mesh cell size of the background / rms map. Smaller follows scattered light better but eats extended sources.",
+   "min": 8,
+   "max": 1024
+  },
+  {
+   "name": "fw",
+   "label": "Mesh filter (cells)",
+   "type": "int",
+   "default": 3,
+   "group": "Background",
+   "help": "Median filter width over mesh cells.",
+   "min": 1,
+   "max": 9
+  },
+  {
+   "name": "poly-order",
+   "label": "Polynomial order",
+   "type": "int",
+   "default": 2,
+   "group": "Background",
+   "help": "Total degree of the polynomial surface (poly and mesh+poly).",
+   "min": 0,
+   "max": 5
+  },
+  {
+   "name": "mask-thresh",
+   "label": "Source mask threshold (sigma)",
+   "type": "float",
+   "default": 2.0,
+   "group": "Background",
+   "help": "Pixels above this many sigma (connected, see min. area) are masked before estimating background and noise. A lower value masks noise peaks and biases the sky low.",
+   "min": 0.5,
+   "max": 10,
+   "expert": true
+  },
+  {
+   "name": "mask-minarea",
+   "label": "Source mask min. area (px)",
+   "type": "int",
+   "default": 8,
+   "group": "Background",
+   "help": "",
+   "min": 1,
+   "max": 200,
+   "expert": true
+  },
+  {
+   "name": "mask-grow",
+   "label": "Source mask growth (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Background",
+   "help": "Dilation of the detected sources.",
+   "min": 0,
+   "max": 20,
+   "expert": true
+  },
+  {
+   "name": "radii",
+   "label": "Aperture radii (px)",
+   "type": "string",
+   "default": "1,1.5,2,3,4,6,8,12",
+   "group": "Noise",
+   "help": "Radii of the blank apertures used to measure sigma_N(N) = sigma_pix alpha N^beta."
+  },
+  {
+   "name": "n-aper",
+   "label": "Blank apertures per radius",
+   "type": "int",
+   "default": 500,
+   "group": "Noise",
+   "help": "Number of source-free apertures per radius (statistical error of each sigma_N is 1/sqrt(2 n) before overlap).",
+   "min": 50,
+   "max": 20000
+  },
+  {
+   "name": "aperture",
+   "label": "Catalog aperture",
+   "type": "choice",
+   "default": "auto",
+   "group": "Catalog errors",
+   "help": "auto = Kron-like ellipse of the catalog (kron-fact x KRON_RADIUS x A, B) for FLUX_AUTO; fixed = circular aperture of the radius below, whose flux is also measured on the background-subtracted image (NM_FLUX_AP).",
+   "choices": [
+    "auto",
+    "fixed"
+   ]
+  },
+  {
+   "name": "aper-radius",
+   "label": "Fixed aperture radius (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Catalog errors",
+   "help": "",
+   "min": 0.5,
+   "max": 200
+  },
+  {
+   "name": "kron-fact",
+   "label": "Kron factor",
+   "type": "float",
+   "default": 2.5,
+   "group": "Catalog errors",
+   "help": "Aperture = kron-fact x KRON_RADIUS x (A, B) (SExtractor convention).",
+   "min": 1,
+   "max": 6,
+   "expert": true
+  },
+  {
+   "name": "gain",
+   "label": "Gain (e-/ADU, 0 = none)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Catalog errors",
+   "help": "Adds the Poisson term flux / gain to the error. 0 = sky noise only (use for background-limited faint sources or when the image is not in electrons).",
+   "min": 0,
+   "max": 1000000000.0,
+   "expert": true
+  },
+  {
+   "name": "correct",
+   "label": "Write background-subtracted image",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Write noisemodel_sub.fits (image - background model) to the work directory."
+  },
+  {
+   "name": "show-frames",
+   "label": "Open background / rms in frames",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Load the background model and rms map into new frames after the run."
+  },
+  {
+   "name": "seed",
+   "label": "Random seed",
+   "type": "int",
+   "default": 1,
+   "group": "Noise",
+   "help": "Seed of the blank-aperture positions.",
+   "min": 0,
+   "max": 2147483647,
+   "expert": true
+  }
+ ]
+}
