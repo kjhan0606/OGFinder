@@ -864,3 +864,19 @@ proc CatalogPanelICLLoadProfile {} {
     ::ogf::cat::set status "ICL: Profile loaded from $fname"
 }
 
+
+# hooks of the headless ICL steps (::ogf::step::run icl STEP headless); files live in the work directory like the legacy ones
+proc OGFIclBkgHeadlessAfter {} {
+    CatalogPanelICLUpdateFiles [CatalogPanelGetFITS]
+    ::ogf::cat::set icl,has_bkg 1
+    set _bgsub [file join [OGFSessWorkDir] icl_bgsub_[CatalogPanelFitsBaseName [CatalogPanelGetFITS]].fits]
+    if {[file exists $_bgsub]} {
+	CreateFrame
+	if {![catch {LoadFitsFile $_bgsub {} {}}]} {global scale; set scale(mode) zscale; ChangeScaleMode}
+    }
+    ::ogf::cat::set status "ICL: Background model ([::ogf::params::get icl bkg-method]) complete"
+}
+proc OGFIclProfileHeadlessAfter {} {
+    ::ogf::cat::set icl,has_profile 1
+    catch {CatalogPanelICLDrawAnnuli}
+}

@@ -83,7 +83,62 @@
       "ICL > 2. Background Model > SEP Large Mesh"
      ]
     }
-   ]
+   ],
+   "headless": {
+    "title": "ICL background model",
+    "record": "icl.background",
+    "requires": "",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "after": "OGFIclBkgHeadlessAfter",
+    "cli": [
+     "{python}",
+     "{script:ds9_icl.py}",
+     "{image}",
+     "--mode",
+     "background",
+     "--bkg-method",
+     "{bkg-method}",
+     "--bkg-order",
+     "{bkg-order}",
+     "--bkg-sigma-clip",
+     "{bkg-sigma-clip}",
+     "--bkg-sep-mesh",
+     "{bkg-sep-mesh}",
+     "--bkg-output",
+     "{work}/icl_background_{base}.fits",
+     "--bgsub-output",
+     "{work}/icl_bgsub_{base}.fits",
+     {
+      "if_file": "{work}/mask_{base}_bool.fits",
+      "argv": [
+       "--mask",
+       "{work}/mask_{base}_bool.fits"
+      ]
+     },
+     {
+      "if": "bkg-iterative",
+      "argv": [
+       "--iterative",
+       "--interp-method",
+       "{interp-method}",
+       "--bkg-n-iterations",
+       "{bkg-n-iterations}",
+       "--bkg-convergence-tol",
+       "{bkg-convergence-tol}",
+       "--bkg-refine-thresh",
+       "{bkg-refine-thresh}",
+       "--mask-output",
+       "{work}/mask_{base}_iclrefined.fits"
+      ]
+     }
+    ],
+    "output": {
+     "mode": "capture"
+    }
+   }
   },
   {
    "id": "view_bkg",
@@ -113,7 +168,60 @@
    "session": "AUTO",
    "records": [
     "icl.profile"
-   ]
+   ],
+   "headless": {
+    "title": "ICL surface-brightness profile",
+    "record": "icl.profile",
+    "requires": "extract_catalog",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "done_status": "ICL: SB profile measured",
+    "after": "OGFIclProfileHeadlessAfter",
+    "cli": [
+     "{python}",
+     "{script:ds9_icl.py}",
+     {
+      "if_file": "{work}/icl_bgsub_{base}.fits",
+      "argv": [
+       "{work}/icl_bgsub_{base}.fits"
+      ]
+     },
+     {
+      "if_not_file": "{work}/icl_bgsub_{base}.fits",
+      "argv": [
+       "{image}"
+      ]
+     },
+     "--mode",
+     "profile",
+     "--center",
+     "{center-x},{center-y}",
+     "--rmin",
+     "{rmin}",
+     "--rmax",
+     "{rmax}",
+     "--nsteps",
+     "{nsteps}",
+     "--spacing",
+     "{spacing}",
+     "--ellipticity",
+     "{ellipticity}",
+     "--pa",
+     "{pa}",
+     "--mag-zeropoint",
+     "{mag-zeropoint}",
+     "--pixel-scale",
+     "{pixel-scale}",
+     "--profile-output",
+     "{work}/icl_profile_{base}.tsv"
+    ],
+    "output": {
+     "mode": "set",
+     "name": "icl_profile"
+    }
+   }
   },
   {
    "id": "sector",
@@ -134,7 +242,36 @@
    "session": "AUTO",
    "records": [
     "icl.measure"
-   ]
+   ],
+   "headless": {
+    "title": "ICL measurements",
+    "record": "icl.measure",
+    "requires": "",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "done_status": "ICL: Measurements complete",
+    "cli": [
+     "{python}",
+     "{script:ds9_icl.py}",
+     "{image}",
+     "--mode",
+     "measure",
+     "--profile-file",
+     "{work}/icl_profile_{base}.tsv",
+     "--mu-threshold",
+     "{mu-threshold}",
+     "--mu-levels",
+     "{mu-levels}",
+     "--pixel-scale",
+     "{pixel-scale}"
+    ],
+    "output": {
+     "mode": "set",
+     "name": "icl_measurements"
+    }
+   }
   },
   {
    "id": "measure_multi",
@@ -475,6 +612,37 @@
    "min": 1,
    "max": 1000000.0,
    "unit": "pix"
+  },
+  {
+   "name": "bkg-method",
+   "label": "Background method (cli/batch)",
+   "type": "choice",
+   "default": "polynomial",
+   "group": "Background",
+   "help": "Method of the headless Background Model step (the GUI menu entries select it directly).",
+   "choices": [
+    "polynomial",
+    "chebyshev",
+    "sep_large"
+   ]
+  },
+  {
+   "name": "center-x",
+   "label": "BCG centre x (cli/batch)",
+   "type": "string",
+   "default": "",
+   "group": "Profile",
+   "help": "BCG centre, image pixel (0-based, as ICL > Set BCG Center stores it).",
+   "key": "icl,center_x"
+  },
+  {
+   "name": "center-y",
+   "label": "BCG centre y (cli/batch)",
+   "type": "string",
+   "default": "",
+   "group": "Profile",
+   "help": "BCG centre, image pixel (0-based).",
+   "key": "icl,center_y"
   }
  ],
  "store": {
