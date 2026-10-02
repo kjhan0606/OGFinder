@@ -339,6 +339,7 @@ namespace eval ::ogf::cat {
         {multifit,*             any    multifit  rw   "multifit plugin: output files (results_file, model_file, residual_file, montage_file)"}
         {morphext,*             any    morph_ext rw  "extended morphology plugin: output files (growth_file, plot_file)"}
         {noisemodel,*           any    noisemodel rw  "background & noise model plugin: output files (bkg_file, rms_file, sub_file, json_file, plot_file, curve_file)"}
+        {stacking,*             any    stacking   rw  "stacking plugin: output files (stack_file, err_file, cube_file, profile_file, json_file, plot_file) and the last result (n_stacked, aperture_sum, aperture_err)"}
         {sedcodes,*             any    sedcodes rw    "SED codes plugin: results_file (JSON of the last run), profile_file (ai_bridge profiles written by the plugin)"}
         {cluster,*              any    cluster    rw  "cluster / lensing plugin: output files (rs_png, density_file, peaks_file, json_file)"}
         {spectra,*               any    spectra rw  "spectroscopy plugin: links_file, results_file"}

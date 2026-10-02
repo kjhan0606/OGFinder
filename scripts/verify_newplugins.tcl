@@ -197,6 +197,36 @@ proc sec_noisemodel {} {
     R noisemodel_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_stacking {} {
+    ::ogf::params::put stacking half 15
+    ::ogf::params::put stacking n-boot 30
+    ::ogf::params::put stacking null 30
+    ::ogf::params::put stacking subtract-null 1
+    ::ogf::params::put stacking ap-r 4
+    ::ogf::params::put stacking isolate 12
+    ::ogf::params::put stacking mask-catalog 0.6
+    ::ogf::params::put stacking show-stack 1
+    set f0 [llength $::ds9(frames)]
+    lassign [run_step stacking stack] ok recs
+    R stacking_ran $ok $recs
+    R stacking_recorded [expr {[lindex $recs 0 0] eq "analysis.stacking"}] $recs
+    R stacking_columns [expr {"ST_USED" in [::ogf::cat::columns] && "ST_APFLUX" in [::ogf::cat::columns]}]
+    R stacking_rows_filled [expr {[nonempty ST_APFLUX] >= 5}] "rows=[nonempty ST_APFLUX]"
+    set w [file join [OGFSessWorkDir] stacking]
+    foreach f {stacking_stack.fits stacking_err.fits stacking_profile.tsv stacking_summary.json stacking_plot.png} {
+	R stacking_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 100}]
+    }
+    R stacking_keys [expr {[::ogf::cat::exists stacking,stack_file] && [::ogf::cat::exists stacking,n_stacked]}]
+    R stacking_frame [expr {[llength $::ds9(frames)] == $f0 + 1}] "frames [llength $::ds9(frames)] (was $f0)"
+    catch {GotoFrame [lindex $::ds9(frames) 0]}
+    set pw [OGFStackPlot]
+    R stacking_plot_window [expr {[winfo exists $pw] && [image width ogfstackimg] > 300}] "[image width ogfstackimg]x[image height ogfstackimg]"
+    destroy $pw
+    OGFStackTable; update
+    R stacking_argv_templated [expr {[string match {*@{WORK}/stacking*} [dict get [lindex [::ogf::session::steps] end] argv_t]]}]
+    R stacking_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_sedcodes {} {
     set root [file normalize [file join [::ogf::step::plugin_dir sedcodes] .. ..]]
     set mock [file join $root sed_adapters mocks]
@@ -577,7 +607,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster spectra xmatch lightcurves batch repro} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel stacking sedcodes cluster spectra xmatch lightcurves batch repro} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

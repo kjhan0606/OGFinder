@@ -109,6 +109,8 @@ chk_morphext_tests() { "$PY" -m pytest -q plugins/morph_ext/tests 2>&1 | tail -3
 EXTRA="$EXTRA morphext_tests"
 chk_noisemodel_tests() { "$PY" -m pytest -q plugins/noisemodel/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA noisemodel_tests"
+chk_stacking_tests() { "$PY" -m pytest -q plugins/stacking/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA stacking_tests"
 chk_sedcodes_tests() { "$PY" -m pytest -q plugins/sedcodes/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA sedcodes_tests"
 chk_cluster_tests() { "$PY" -m pytest -q plugins/cluster/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }

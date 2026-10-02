@@ -1,0 +1,555 @@
+{
+ "schema": 1,
+ "id": "stacking",
+ "name": "Stacking and mean profiles",
+ "short": "Stack",
+ "tab": "Measure",
+ "order": 27,
+ "description": "Stack aligned cutouts at a position list or catalog selection: sub-pixel alignment, optional rotation / rescaling, background, mask handling (input mask, catalog neighbours, per-cutout detections), mean / median / weighted / clipped combination with bootstrap errors over the sources, radial surface-brightness profile, aperture flux, and a null stack of random blank positions for the residual bias. For faint-source stacks (mean flux below the detection limit) and low-surface-brightness halos.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy",
+   "matplotlib"
+  ]
+ },
+ "primary": "stack",
+ "settings": "params",
+ "tcl": "stacking.tcl",
+ "steps": [
+  {
+   "id": "stack",
+   "label": "Stack Sources / Mean Profile",
+   "title": "Stacking and mean profile",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.stacking",
+   "catalog_tmp": "stacking",
+   "done_status": "stack done",
+   "after": "OGFStackAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/stacking.py",
+    "{image}",
+    "--work",
+    "{work}/stacking",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--numbers",
+    "{numbers}",
+    "--sel-col",
+    "{sel-col}",
+    "--sel-min={sel-min}",
+    "--sel-max={sel-max}",
+    {
+     "if_file": "{positions}",
+     "argv": [
+      "--positions",
+      "{positions}"
+     ]
+    },
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if_file": "{bkg-file}",
+     "argv": [
+      "--bkg-file",
+      "{bkg-file}"
+     ]
+    },
+    "--isolate",
+    "{isolate}",
+    "--half",
+    "{half}",
+    "--align",
+    "{align}",
+    "--scale-col",
+    "{scale-col}",
+    "--scale-unit",
+    "{scale-unit}",
+    "--angle-col",
+    "{angle-col}",
+    "--bkg",
+    "{bkg}",
+    "--bkg-in",
+    "{bkg-in}",
+    "--mask-catalog",
+    "{mask-catalog}",
+    "--mask-min",
+    "{mask-min}",
+    "--mask-detect",
+    "{mask-detect}",
+    "--protect-r",
+    "{protect-r}",
+    "--min-valid",
+    "{min-valid}",
+    "--method",
+    "{method}",
+    "--norm",
+    "{norm}",
+    "--norm-r",
+    "{norm-r}",
+    "--norm-col",
+    "{norm-col}",
+    "--weights",
+    "{weights}",
+    "--weight-col",
+    "{weight-col}",
+    "--n-boot",
+    "{n-boot}",
+    "--null",
+    "{null}",
+    "--q",
+    "{q}",
+    "--pa",
+    "{pa}",
+    "--ap-r",
+    "{ap-r}",
+    "--estimator",
+    "{estimator}",
+    "--rlin",
+    "{rlin}",
+    "--rfac",
+    "{rfac}",
+    "--seed",
+    "{seed}",
+    {
+     "if": "subtract-null",
+     "argv": [
+      "--subtract-null"
+     ]
+    },
+    {
+     "if": "save-cube",
+     "argv": [
+      "--save-cube"
+     ]
+    },
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--pixel-scale",
+    "{extract:pixel-scale}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "ST_USED",
+     "ST_BKG",
+     "ST_NORM",
+     "ST_APFLUX",
+     "ST_MASKFRAC"
+    ]
+   }
+  },
+  {
+   "id": "plot",
+   "label": "Stack and Profile Plot...",
+   "proc": "OGFStackPlot",
+   "session": "NONE"
+  },
+  {
+   "id": "table",
+   "label": "Profile Table...",
+   "proc": "OGFStackTable",
+   "session": "NONE"
+  },
+  {
+   "id": "show",
+   "label": "Show Stack Image",
+   "proc": "OGFStackShow",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "positions",
+   "label": "Position list (optional)",
+   "type": "file",
+   "default": "",
+   "group": "Sources",
+   "help": "Text/TSV/CSV file with X_IMAGE,Y_IMAGE (1-based), x,y, or RA,DEC (deg) columns; empty = use the catalog rows selected below."
+  },
+  {
+   "name": "numbers",
+   "label": "Catalog NUMBERs",
+   "type": "string",
+   "default": "",
+   "group": "Sources",
+   "help": "Restrict to these catalog objects, e.g. 1,5,7-9 (empty = all)."
+  },
+  {
+   "name": "sel-col",
+   "label": "Selection column",
+   "type": "string",
+   "default": "MAG_AUTO",
+   "group": "Sources",
+   "help": "Catalog column used by the range below (e.g. MAG_AUTO, FLUX_RADIUS). Ignored when the range is open."
+  },
+  {
+   "name": "sel-min",
+   "label": "Selection minimum",
+   "type": "float",
+   "default": -1e+30,
+   "group": "Sources",
+   "help": "Keep rows with column >= this value.",
+   "min": -1e+30,
+   "max": 1e+30
+  },
+  {
+   "name": "sel-max",
+   "label": "Selection maximum",
+   "type": "float",
+   "default": 1e+30,
+   "group": "Sources",
+   "help": "Keep rows with column <= this value.",
+   "min": -1e+30,
+   "max": 1e+30
+  },
+  {
+   "name": "isolate",
+   "label": "Isolation radius (px, 0 = off)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Sources",
+   "help": "Reject sources that have another catalog object closer than this.",
+   "min": 0,
+   "max": 1000
+  },
+  {
+   "name": "half",
+   "label": "Cutout half size (px)",
+   "type": "int",
+   "default": 30,
+   "group": "Cutouts",
+   "help": "Cutouts are (2 half + 1)^2 pixels; with a size column they are in units of size/scale-unit.",
+   "min": 3,
+   "max": 500
+  },
+  {
+   "name": "align",
+   "label": "Alignment",
+   "type": "choice",
+   "default": "sub",
+   "group": "Cutouts",
+   "help": "sub = spline resampling on the true sub-pixel position (sharp stack, correlates the noise: bootstrap errors include it); int = integer shift (no resampling, centre smeared by up to 0.5 px).",
+   "choices": [
+    "sub",
+    "int"
+   ]
+  },
+  {
+   "name": "scale-col",
+   "label": "Size column (rescale)",
+   "type": "string",
+   "default": "",
+   "group": "Cutouts",
+   "help": "Catalog column (px) used to rescale each cutout to a common size (e.g. FLUX_RADIUS); empty = no rescaling. Surface brightness is conserved."
+  },
+  {
+   "name": "scale-unit",
+   "label": "Output px per size",
+   "type": "float",
+   "default": 5.0,
+   "group": "Cutouts",
+   "help": "With a size column, one size unit = this many output pixels.",
+   "min": 0.5,
+   "max": 100
+  },
+  {
+   "name": "angle-col",
+   "label": "Angle column (rotate)",
+   "type": "string",
+   "default": "",
+   "group": "Cutouts",
+   "help": "Catalog column with the position angle in degrees from +x (e.g. THETA_IMAGE); the cutouts are rotated so the major axes line up. Empty = no rotation."
+  },
+  {
+   "name": "bkg",
+   "label": "Background",
+   "type": "choice",
+   "default": "annulus",
+   "group": "Masks and background",
+   "help": "annulus = sigma-clipped median in the outer ring of each cutout (do not use for halos reaching the cutout edge); none = image already sky-subtracted; image = subtract the background map below.",
+   "choices": [
+    "annulus",
+    "none",
+    "image"
+   ]
+  },
+  {
+   "name": "bkg-in",
+   "label": "Annulus inner fraction",
+   "type": "float",
+   "default": 0.7,
+   "group": "Masks and background",
+   "help": "Inner radius of the background ring as a fraction of the half size.",
+   "min": 0.2,
+   "max": 0.95,
+   "expert": true
+  },
+  {
+   "name": "bkg-file",
+   "label": "Background map (optional)",
+   "type": "file",
+   "default": "",
+   "group": "Masks and background",
+   "help": "FITS background map (e.g. the noise-model background) subtracted when Background = image."
+  },
+  {
+   "name": "mask-catalog",
+   "label": "Mask catalog neighbours (x extent, 0 = off)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Masks and background",
+   "help": "Masks every other catalog object with a circle of radius max(min, factor x A_IMAGE x KRON_RADIUS).",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "mask-min",
+   "label": "Neighbour mask minimum (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Masks and background",
+   "help": "",
+   "min": 0,
+   "max": 100,
+   "expert": true
+  },
+  {
+   "name": "mask-detect",
+   "label": "Mask detections per cutout (sigma, 0 = off)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Masks and background",
+   "help": "Masks (grown) smoothed peaks above this many sigma in each cutout outside the protected core: removes unlisted neighbours so that faint halos remain; biases the level low - use the null stack to correct.",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "protect-r",
+   "label": "Protected core radius (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Masks and background",
+   "help": "Detections touching this radius around the target are never masked.",
+   "min": 0,
+   "max": 50,
+   "expert": true
+  },
+  {
+   "name": "min-valid",
+   "label": "Minimum valid fraction",
+   "type": "float",
+   "default": 0.6,
+   "group": "Masks and background",
+   "help": "Cutouts with more masked pixels than this are rejected.",
+   "min": 0.05,
+   "max": 1,
+   "expert": true
+  },
+  {
+   "name": "method",
+   "label": "Combination",
+   "type": "choice",
+   "default": "mean",
+   "group": "Stack",
+   "help": "mean | median | wmean (inverse-variance or column weights) | clipmean (sigma clipped).",
+   "choices": [
+    "mean",
+    "median",
+    "wmean",
+    "clipmean"
+   ]
+  },
+  {
+   "name": "norm",
+   "label": "Normalisation",
+   "type": "choice",
+   "default": "none",
+   "group": "Stack",
+   "help": "none | flux (aperture flux within the normalisation radius becomes 1) | peak | column.",
+   "choices": [
+    "none",
+    "flux",
+    "peak",
+    "column"
+   ]
+  },
+  {
+   "name": "norm-r",
+   "label": "Normalisation radius (px)",
+   "type": "float",
+   "default": 5.0,
+   "group": "Stack",
+   "help": "",
+   "min": 0.5,
+   "max": 200
+  },
+  {
+   "name": "norm-col",
+   "label": "Normalisation column",
+   "type": "string",
+   "default": "",
+   "group": "Stack",
+   "help": "Catalog column multiplied into each cutout when Normalisation = column.",
+   "expert": true
+  },
+  {
+   "name": "weights",
+   "label": "Weights",
+   "type": "choice",
+   "default": "none",
+   "group": "Stack",
+   "help": "invvar = inverse variance from the cutout ring; column = weight column (use with Combination = wmean).",
+   "choices": [
+    "none",
+    "invvar",
+    "column"
+   ],
+   "expert": true
+  },
+  {
+   "name": "weight-col",
+   "label": "Weight column",
+   "type": "string",
+   "default": "",
+   "group": "Stack",
+   "help": "",
+   "expert": true
+  },
+  {
+   "name": "n-boot",
+   "label": "Bootstrap resamples",
+   "type": "int",
+   "default": 200,
+   "group": "Stack",
+   "help": "Resamplings of the source list for the errors of the stack, profile and aperture flux (the median is slow for thousands of sources).",
+   "min": 0,
+   "max": 5000
+  },
+  {
+   "name": "null",
+   "label": "Null stack positions (0 = off)",
+   "type": "int",
+   "default": 200,
+   "group": "Stack",
+   "help": "Number of random blank-sky positions stacked with exactly the same pipeline: measures the residual background / mask bias.",
+   "min": 0,
+   "max": 20000
+  },
+  {
+   "name": "subtract-null",
+   "label": "Subtract the null stack",
+   "type": "bool",
+   "default": false,
+   "group": "Stack",
+   "help": "Profile and aperture flux are corrected by the null stack (errors in quadrature)."
+  },
+  {
+   "name": "q",
+   "label": "Profile axis ratio",
+   "type": "float",
+   "default": 1.0,
+   "group": "Output",
+   "help": "Elliptical annuli of the profile (use with rotation to the major axis).",
+   "min": 0.05,
+   "max": 1
+  },
+  {
+   "name": "pa",
+   "label": "Profile position angle (deg)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Output",
+   "help": "",
+   "min": -180,
+   "max": 180,
+   "expert": true
+  },
+  {
+   "name": "ap-r",
+   "label": "Aperture radius (px)",
+   "type": "float",
+   "default": 5.0,
+   "group": "Output",
+   "help": "Radius of the aperture flux of the stack.",
+   "min": 0.5,
+   "max": 500
+  },
+  {
+   "name": "estimator",
+   "label": "Profile estimator",
+   "type": "choice",
+   "default": "mean",
+   "group": "Output",
+   "help": "Mean or median of the stack pixels in each annulus.",
+   "choices": [
+    "mean",
+    "median"
+   ],
+   "expert": true
+  },
+  {
+   "name": "rlin",
+   "label": "Linear bins up to (px)",
+   "type": "float",
+   "default": 6.0,
+   "group": "Output",
+   "help": "1-px bins up to this radius, then geometric bins.",
+   "min": 1,
+   "max": 200,
+   "expert": true
+  },
+  {
+   "name": "rfac",
+   "label": "Geometric bin factor",
+   "type": "float",
+   "default": 1.25,
+   "group": "Output",
+   "help": "",
+   "min": 1.02,
+   "max": 3,
+   "expert": true
+  },
+  {
+   "name": "save-cube",
+   "label": "Save the aligned cutouts",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Write stacking_cutouts.fits (N x S x S)."
+  },
+  {
+   "name": "show-stack",
+   "label": "Open the stack in a frame",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Load stacking_stack.fits into a new frame after the run."
+  },
+  {
+   "name": "seed",
+   "label": "Random seed",
+   "type": "int",
+   "default": 1,
+   "group": "Output",
+   "help": "Bootstrap and null positions.",
+   "min": 0,
+   "max": 2147483647,
+   "expert": true
+  }
+ ]
+}
