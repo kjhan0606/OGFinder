@@ -179,7 +179,7 @@ def _apply(comps, free, tie_map, vec):
 
 
 # ------------------------------------------------------------------------------------------------------------------ the fit
-def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, gain=None, zp=25.0, tie=None, max_nfev=200, reweight=1, ftol=1e-8, sky_grad=None):
+def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, gain=None, zp=25.0, tie=None, max_nfev=200, reweight=1, ftol=1e-8, sky_grad=None, ls_kw=None):
     """Fit `comps` to `data` (2-D array, usually a cutout) with a common sky.
 
     comps    list of component dicts (see module doc); `fixed` (iterable of names), `bounds` ({name: (lo, hi)}) per component.
@@ -249,7 +249,9 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
     v = x0
     res = None
     for it in range(1 + (reweight if gain else 0)):
-        res = least_squares(resid_fn, v, args=(sigma,), bounds=(lo, hi), x_scale=xs, method='trf', max_nfev=max_nfev, ftol=ftol, xtol=ftol, gtol=ftol)
+        kw_ls = dict(x_scale=xs, method='trf', max_nfev=max_nfev, ftol=ftol, xtol=ftol, gtol=ftol, jac='3-point')      # '2-point' crawled along flat valleys on real data (GALFIT example: 150 evaluations, not converged; 3-point: 20, converged)
+        kw_ls.update(ls_kw or {})
+        res = least_squares(resid_fn, v, args=(sigma,), bounds=(lo, hi), **kw_ls)
         v = res.x
         if gain and it < reweight:
             cs, s, g = unpack(v)
@@ -316,6 +318,37 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
 
 
 # ------------------------------------------------------------------------------------------------------------------ presets
+def fit_multistart(data, comps, restarts=2, **kw):
+    """fit() from the given start and `restarts` alternative starts (R_e x 0.6 / x 1.6 [/ x 0.35 / x 2.5], Sersic n x 1.3 / x 0.75 [...] of the free extended components); the lowest chi2 wins.
+    Trust-region fits of steep profiles can end in a wide, shallow local minimum (seen on GALFIT's own example); one extra start is cheap compared with a wrong answer.
+    The result carries `starts_chi2` (chi2 of every start, the first is the given one) and `start_used` (index of the winner)."""
+    base = [dict(c) for c in comps]
+    res0 = fit(data, [dict(c) for c in base], **kw)
+    best, k_best, chis = res0, 0, [res0['chi2']]
+    facs = [(0.6, 1.3), (1.6, 0.75), (0.35, 1.0), (2.5, 1.0)]
+    for k in range(1, restarts + 1):
+        fr, fn = facs[(k - 1) % len(facs)]
+        alt = []
+        for c in base:
+            d = dict(c)
+            if d.get('kind', 'sersic') != 'psf':
+                if 're' in d and 're' not in d.get('fixed', ()):
+                    d['re'] = max(0.5, d['re'] * fr)
+                if d.get('kind', 'sersic') == 'sersic' and 'n' in d and 'n' not in d.get('fixed', ()):
+                    d['n'] = min(max(d['n'] * fn, 0.4), 7.0)
+            alt.append(d)
+        try:
+            r = fit(data, alt, **kw)
+        except Exception:
+            continue
+        chis.append(r['chi2'])
+        if r['chi2'] < best['chi2'] - 1e-6:
+            best, k_best = r, k
+    best['starts_chi2'] = [float(v) for v in chis]
+    best['start_used'] = k_best
+    return best
+
+
 def preset(name, x, y, flux, re, q=0.8, pa=0.0, n=2.0, zp=25.0, psf_frac=0.1):
     """Starting components for a catalog object.  Names: sersic, exp, dev, psf, bulge+disk, psf+sersic."""
     f = flux

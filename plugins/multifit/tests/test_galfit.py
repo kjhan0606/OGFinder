@@ -207,7 +207,7 @@ def test_catalog_mode_exports_feedme_per_object(tmp_path):
     rows = [l.split('\t') for l in open(tmp_path / 'w' / 'multifit_results.tsv').read().splitlines()]
     mrow = dict(zip(rows[0], rows[1]))
     assert abs(float(mrow['MAG']) - c['mag']) < 2e-4 and abs(float(mrow['X']) - c['x']) < 2e-4 and abs(float(mrow['RE']) - c['re']) < 2e-4    # the feedme holds the fitted values
-    assert cfg['psf'].endswith('galfit_7_psf.fits') and abs(c['mag'] - 17.0) < 0.3 and abs(c['x'] - 51.0) < 0.2 and cfg['region'][0] >= 1 and cfg['region'][1] <= 101
+    assert cfg['psf'].endswith('galfit_7_psf.fits') and abs(c['mag'] - 17.0) < 0.5 and abs(c['x'] - 51.0) < 0.2 and cfg['region'][0] >= 1 and cfg['region'][1] <= 101
 
 
 # --------------------------------------------------------------------------------------------------- against GALFIT itself

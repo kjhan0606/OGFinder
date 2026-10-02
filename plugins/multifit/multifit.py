@@ -286,13 +286,13 @@ def run_config(a, data, mask, cfg, hdr=None):
     if rms is None:
         rms = imageio.robust_sigma(cut, cm)
     g0 = cfg.get('sky_grad') or [0.0, 0.0]
-    res = mf.fit(cut, comps, psf=psf, rms=rms, mask=cm, sky=cfg.get('sky', 'const'), sky_value=cfg.get('sky_value'), gain=cfg.get('gain') or a.gain or None,
-                 zp=cfg.get('zp', a.mag_zeropoint), tie=cfg.get('tie'), max_nfev=a.max_nfev, sky_grad=g0)
+    res = mf.fit_multistart(cut, comps, restarts=a.restarts, psf=psf, rms=rms, mask=cm, sky=cfg.get('sky', 'const'), sky_value=cfg.get('sky_value'), gain=cfg.get('gain') or a.gain or None,
+                            zp=cfg.get('zp', a.mag_zeropoint), tie=cfg.get('tie'), max_nfev=a.max_nfev, sky_grad=g0)
     full_m = np.zeros(data.shape, np.float32); full_r = np.zeros(data.shape, np.float32)
     full_m[y0:y1, x0:x1] = res['model']; full_r[y0:y1, x0:x1] = res['residual']
     imageio.save_fits(os.path.join(a.work, 'multifit_model.fits'), full_m)
     imageio.save_fits(os.path.join(a.work, 'multifit_residual.fits'), full_r)
-    lines = ['multi-component fit of %s, PSF: %s' % (os.path.basename(a.image), desc),
+    lines = ['multi-component fit of %s, PSF: %s' % (os.path.basename(a.image), desc) + (' (start %d of %d won: chi2 %s)' % (res['start_used'], len(res['starts_chi2']), ', '.join('%.1f' % v for v in res['starts_chi2'])) if len(res.get('starts_chi2', ())) > 1 else ''),
              'chi2/dof = %.3f (dof %d), BIC %.1f, sky %.4g +- %.2g, flags %d, converged %s, nfev %d' % (res['chi2_red'], res['dof'], res['bic'], res['sky'], res['sky_err'], res['flags'], res['converged'], res['nfev'])]
     recs = []
     for k, c in enumerate(res['components']):
@@ -355,6 +355,7 @@ def main(argv=None):
     ap.add_argument('--n-workers', type=int, default=0)
     ap.add_argument('--montage', type=int, default=6)
     ap.add_argument('--no-residual', action='store_true')
+    ap.add_argument('--restarts', type=int, default=2, help='config / feedme fits: number of extra starts (R_e and n rescaled) tried after the given one; the lowest chi2 is kept (0 = fit only from the given start)')
     ap.add_argument('--export-feedme', default='', help='write the fitted model as a GALFIT feedme (file; with --config) or into this directory (catalog mode: one galfit_<NUMBER>.feedme per fitted object)')
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
