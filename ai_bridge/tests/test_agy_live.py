@@ -1,6 +1,6 @@
 """LIVE test of the agy profile (`agent_agy`) against the real `agy` CLI on a tiny star/galaxy task.
 
-Skipped unless `claude` is installed and logged in (`claude auth status` shows an OAuth token exists after the one-time interactive `agy` login)
+Skipped unless `agy` is installed and logged in (an OAuth token exists after the one-time interactive `agy` login)
 and OGF_AI_OFFLINE is not 1.  Costs a few hundred tokens.
 Run:  python -m pytest ai_bridge/tests/test_agy_live.py -v -rs
 """
