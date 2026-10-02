@@ -1,0 +1,217 @@
+{
+ "schema": 1,
+ "id": "isophote",
+ "name": "Isophote ellipse fitting",
+ "short": "Isophote",
+ "tab": "Measure",
+ "order": 15,
+ "description": "IRAF-ellipse style isophote fitting (photutils.isophote): per-galaxy radial profiles of intensity / surface brightness, ellipticity, PA, centre, A3/B3/A4/B4 (boxy/disky), growth curve; cmodel and residual images in new frames; honours the shared mask; profile table and plot window.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "photutils"
+  ]
+ },
+ "primary": "fit",
+ "settings": "params",
+ "tcl": "isophote.tcl",
+ "steps": [
+  {
+   "id": "fit",
+   "label": "Fit Isophotes",
+   "title": "Isophote ellipse fitting",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.isophote",
+   "catalog_tmp": "isophote",
+   "done_status": "Isophote fitting complete (model and residual in new frames)",
+   "after": "OGFIsophoteAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/isophote.py",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--numbers",
+    "{numbers}",
+    "--max-objects",
+    "{max-objects}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--pixel-scale",
+    "{extract:pixel-scale}",
+    "--maxsma-scale",
+    "{maxsma-scale}",
+    "--step",
+    "{step}",
+    "--mask-neighbours",
+    "{mask-neighbours}",
+    "--n-workers",
+    "{extract:n-workers}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if": "linear",
+     "argv": [
+      "--linear"
+     ]
+    },
+    {
+     "if": "fix-center",
+     "argv": [
+      "--fix-center"
+     ]
+    },
+    {
+     "if": "no-harmonics",
+     "argv": [
+      "--no-harmonics"
+     ]
+    },
+    "--model-out",
+    "{work}/isophote_model.fits",
+    "--resid-out",
+    "{work}/isophote_resid.fits",
+    "--table-out",
+    "{work}/isophote_profiles.tsv",
+    "--json-out",
+    "{work}/isophote_profiles.json",
+    "--plot-out",
+    "{work}/isophote_plot.png"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "ISO_NISO",
+     "ISO_RMAX",
+     "ISO_X0",
+     "ISO_Y0",
+     "ISO_R50",
+     "ISO_R80",
+     "ISO_MAG_TOT",
+     "ISO_EPS_HL",
+     "ISO_PA_HL",
+     "ISO_EPS_OUT",
+     "ISO_PA_OUT",
+     "ISO_B4_HL",
+     "ISO_A4_HL",
+     "ISO_SHAPE",
+     "ISO_RCONV",
+     "ISO_FLAG"
+    ]
+   }
+  },
+  {
+   "id": "plot",
+   "label": "Profile Plot...",
+   "proc": "OGFIsophotePlot",
+   "session": "NONE"
+  },
+  {
+   "id": "table",
+   "label": "Profile Table...",
+   "proc": "OGFIsophoteTable",
+   "session": "NONE"
+  },
+  {
+   "id": "frames",
+   "label": "Show Model and Residual",
+   "proc": "OGFIsophoteShowFrames",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "max-objects",
+   "label": "Max. galaxies",
+   "type": "int",
+   "default": 10,
+   "min": 1,
+   "max": 500,
+   "group": "Selection",
+   "help": "Fit the N brightest catalog objects (by MAG_AUTO) when no NUMBER list is given."
+  },
+  {
+   "name": "numbers",
+   "label": "NUMBER list",
+   "type": "string",
+   "default": "",
+   "group": "Selection",
+   "help": "Comma list / ranges of catalog NUMBERs to fit (e.g. 3,7-9); empty = the brightest ones."
+  },
+  {
+   "name": "maxsma-scale",
+   "label": "Max. SMA (x KRON*A)",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 20,
+   "group": "Fit",
+   "help": "Outer limit of the fit in units of KRON_RADIUS * A_IMAGE."
+  },
+  {
+   "name": "step",
+   "label": "SMA step",
+   "type": "float",
+   "default": 0.1,
+   "min": 0.01,
+   "max": 1.0,
+   "group": "Fit",
+   "help": "Geometric step (fraction of SMA) between isophotes; linear step in pixels with 'Linear steps'."
+  },
+  {
+   "name": "linear",
+   "label": "Linear steps",
+   "type": "bool",
+   "default": false,
+   "group": "Fit",
+   "help": "Use a linear (pixel) step instead of a geometric one.",
+   "expert": true
+  },
+  {
+   "name": "fix-center",
+   "label": "Fix centre",
+   "type": "bool",
+   "default": false,
+   "group": "Fit",
+   "help": "Keep the isophote centre at the catalog position.",
+   "expert": true
+  },
+  {
+   "name": "no-harmonics",
+   "label": "Model without harmonics",
+   "type": "bool",
+   "default": false,
+   "group": "Model",
+   "help": "Build the model image from the elliptical isophotes only (no A3/B3/A4/B4 terms)."
+  },
+  {
+   "name": "mask-neighbours",
+   "label": "Mask neighbours (x A,B)",
+   "type": "float",
+   "default": 2.5,
+   "min": 0,
+   "max": 10,
+   "group": "Mask",
+   "help": "Mask the other catalog objects out to this multiple of their A_IMAGE/B_IMAGE (0 = off). The shared mask (Mask tab) is always used when it exists."
+  },
+  {
+   "name": "show-frames",
+   "label": "Open model/residual in frames",
+   "type": "bool",
+   "default": true,
+   "group": "Model",
+   "help": "Load the model (cmodel) and the residual image in new frames when the fit is done."
+  }
+ ]
+}
