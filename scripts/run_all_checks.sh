@@ -48,7 +48,11 @@ chk_click_xevent() { need_x || { echo "no X server"; return 77; }; command -v xd
 chk_session_replay() { T=1800; "$HERE/verify_session_replay.sh" --workdir "$OUT/replay_work" 2>&1 | tail -400 > "$OUT/replay_tail.txt"
   grep -E "checks,|ALL CHECKS|FAIL" "$OUT/replay_tail.txt" | tail -5; grep -q "ALL CHECKS PASSED\|0 failed" "$OUT/replay_tail.txt" && ! grep -q "^FAIL" "$OUT/replay_tail.txt"; }
 chk_link_bench() { [ -f /workspace/work/inj1.json.pkl ] || { echo "injection sets /workspace/work/inj*.json.pkl missing"; return 77; }
-  (cd moving/validation && "$PY" link_bench.py /workspace/work/inj{1,2,3,4,5,6}.json.pkl 2>&1 | tail -12); }
+  # regenerated + relabelled sets (validation/inject.py, incl. the CR-heavy inj9-12) when present, else the original inj1-6
+  local D=/workspace/work/inj; [ -f /workspace/work/i1/sets/inj12.json.pkl ] && D=/workspace/work/i1/sets/inj
+  local L="${D}1.json.pkl ${D}2.json.pkl ${D}3.json.pkl ${D}4.json.pkl ${D}5.json.pkl ${D}6.json.pkl"
+  [ "$D" != /workspace/work/inj ] && L="$L ${D}7.json.pkl ${D}8.json.pkl ${D}9.json.pkl ${D}10.json.pkl ${D}11.json.pkl ${D}12.json.pkl"
+  (cd moving/validation && "$PY" link_bench.py $L 2>&1 | tail -16); }
 chk_moving_session() { [ -n "$OGF_MOVING_SESSION" ] || { echo "set OGF_MOVING_SESSION=session.py REF=dir FIELD=... (needs network, MAST cache)"; return 77; }
   "$HERE/verify_moving_session.sh" "$OGF_MOVING_SESSION" "$OGF_MOVING_REF" "$OGF_MOVING_FIELD"; }
 chk_cat_api() { need_x || { echo "no X server"; return 77; }

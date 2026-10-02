@@ -1,6 +1,6 @@
 """Injection benchmark for the tracklet linker.
 
-usage: link_bench.py injN.json.pkl [...] [--legacy] [--no-rescore] [--no-veto] [--no-bound] [--max-tracklets 400]
+usage: link_bench.py injN.json.pkl [...] [--groups] [--legacy] [--no-rescore] [--no-veto] [--no-bound] [--max-tracklets 400]
 (--no-rescore = the chi2-like first-stage ranking without the logistic score / bound-orbit cut / clustering)
 
 The .pkl files come from validation/inject.py (HST ACS BB89 field with synthetic movers).  An injected object is "recovered"
@@ -10,6 +10,13 @@ import sys, os, time, pickle
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 import numpy as np
 from moving import pipeline as P, tracklet as T
+
+
+def GROUPS(n):
+    """Set groups used for the summary: inj1-6 were used to fit the BASE tracklet score (in-sample), inj7-8 are held out from it,
+    inj9-12 are the cosmic-ray-heavy sets (no archive CR flag and/or 3000 extra synthetic CR tracks per chip, see validation/inject.py).
+    The real/bogus model and the real/bogus tracklet score never saw any of these (BB89 is excluded from their training)."""
+    return "inj1-6 (base fit in-sample)" if n <= 6 else "inj7-8 (held out)" if n <= 8 else "inj9+ (CR-heavy)"
 
 
 def _near(pos, e, ra, dec, tol=1.0):
@@ -85,8 +92,15 @@ if __name__ == "__main__":
     mt = 400
     if "--max-tracklets" in sys.argv:
         mt = int(sys.argv[sys.argv.index("--max-tracklets") + 1]); a = [x for x in a if x != str(mt)]
-    tot = 0; totn = 0
+    tot = 0; totn = 0; grp = {}
+    import re
     for pk in a:
         r = run(pk, legacy, mt, **kw); tot += r["recovered"]; totn += r["n_inj"]
         print(("legacy " if legacy else "stage1 " if not kw.get("rescore", True) else "new    ") + str(r), flush=True)
+        m = re.match(r"inj(\d+)", os.path.basename(pk))
+        g = GROUPS(int(m.group(1))) if m else "other"
+        G = grp.setdefault(g, [0, 0, 0, 0]); G[0] += r["recovered"]; G[1] += r["ceiling"]; G[2] += r["n_inj"]; G[3] += r["in_top50"]
     print("TOTAL recovered %d / %d" % (tot, totn))
+    if len(grp) > 1 or "--groups" in sys.argv:
+        for g, (rc, ce, ni, t50) in sorted(grp.items()):
+            print("GROUP %-30s recovered %3d  ceiling %3d  injected %3d  in-top50 %3d" % (g, rc, ce, ni, t50))
