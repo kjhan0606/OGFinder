@@ -106,7 +106,7 @@ proc CatalogPanelPSFPhotometry {} {
 }
 
 proc CatalogPanelMultiBand {} {
-    global ds9
+    global ds9 ed
 
     set w {.multibandphot}
     set ed(ok) 0
@@ -415,3 +415,18 @@ proc CatalogPanelCompleteness {} {
     ::ogf::cat::set status "Completeness simulation complete"
 }
 
+
+# after-hook of the headless segmentation-map step: the driver prints "OK N_SOURCES OUTPUT_PATH"; load the map in a new frame (as CatalogPanelSegmentationMap)
+proc OGFSegmapAfter {} {
+    set data $::ogf::step::last(photometry.segmap)
+    set parts [split $data]
+    if {[llength $parts] >= 3 && [lindex $parts 0] eq "OK"} {
+	if {[catch {CreateFrame; LoadFitsFile [lindex $parts 2] {} {}} err2]} {
+	    ::ogf::cat::set status "Error loading segmap: $err2"
+	    return
+	}
+	::ogf::cat::set status "Segmentation map: [lindex $parts 1] sources"
+    } else {
+	::ogf::cat::set status "Segmentation map: unexpected output"
+    }
+}

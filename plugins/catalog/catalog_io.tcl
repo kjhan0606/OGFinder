@@ -300,8 +300,9 @@ proc CatalogPanelSaveTempCatalog {suffix} {
 proc CatalogPanelAddColumnsFromTSV {result_data col_names} {
     catch {OGFSessOnAddColumns $result_data $col_names}
 
-    # Parse result
-    set rlines [split $result_data \n]
+    # Parse result.  Drivers such as ds9_photo_z.py / ds9_sed_fit.py print a "#NAME<TAB>N_...=" summary line before the TSV header: skip comment lines
+    # (before this fix the header was that line, no NUMBER column was found and the step silently added nothing).
+    set rlines [lmap l [split $result_data \n] {if {[string index $l 0] eq "#"} continue; set l}]
     set rheaders [split [lindex $rlines 0] "\t"]
 
     # Find NUMBER column in results
