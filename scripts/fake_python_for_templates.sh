@@ -18,6 +18,8 @@ case "$(basename "$1")" in
   ds9_segmap.py) printf 'OK 7 /workspace/fits/m51.fits\n'; exit 0;;
   ds9_completeness.py|ds9_dual_extract.py) printf 'NUMBER\tMAG_AUTO\tFRAC\n1\t21.5\t0.99\n2\t22.5\t0.95\n'; exit 0;;
   ds9_psf_deconv.py) exit 0;;
+  ds9_icl.py) case "$*" in *--mode\ profile*|*--mode\ measure*) printf 'R_PIX\tSB\tSBERR\n1\t20.1\t0.1\n2\t21.3\t0.1\n'; exit 0;; *) exit 0;; esac;;
+  ds9_lsbg.py) printf 'NUMBER\tMU_EFF\tR_EFF\tSERSIC_N\n1\t25.5\t6.1\t0.9\n2\t26.1\t8.3\t1.2\n'; exit 0;;
   *) cols="";;
 esac
 [ -n "$cat" ] || exit 0

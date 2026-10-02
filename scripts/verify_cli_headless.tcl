@@ -35,10 +35,13 @@ proc rec_sig {from {title 1}} {
     }
     return $out
 }
+proc back_to_image {} {
+    for {set i 0} {$i < 6 && [file tail [CatalogPanelGetFITS]] ne "m51.fits"} {incr i} {catch {DeleteCurrentFrame}; wait_idle 150}
+}
 proc wait_job {} {set t [clock milliseconds]; while {[::ogf::job::busy] && [clock milliseconds]-$t < 60000} {update; after 50}; wait_idle 200}
 
 # name legacy-script filler-script plugin step ?title-compare? ?kind?   kind: cat (add columns / set catalog) | none (no catalog change expected)
-proc compare {name legacy filler plugin step {title 1} {kind cat}} {
+proc compare {name legacy filler plugin step {title 1} {kind cat} {cmpstatus 1}} {
     global catpanel
     set snap $::BASE
     ::ogf::cat::load_tsv $snap restored; update; wait_idle 100
@@ -48,6 +51,7 @@ proc compare {name legacy filler plugin step {title 1} {kind cat}} {
     set rc [catch {uplevel #0 $legacy} err]
     update; wait_idle 300; set ::STUB 0
     set A_argv [lrange $::EXEC $e0 end]; set A_rec [rec_sig $s0 $title]; set A_tsv $catpanel(alldata); set A_status $catpanel(status)
+    back_to_image
     R ${name}_legacy_ran [expr {!$rc && [llength [::ogf::session::steps]] == $s0 + 1}] "rc=$rc $err steps+=[expr {[llength [::ogf::session::steps]]-$s0}]"
     # ---- B: headless block
     ::ogf::cat::load_tsv $snap restored
@@ -61,6 +65,7 @@ proc compare {name legacy filler plugin step {title 1} {kind cat}} {
     set B_argv {}
     catch {set f [open $fl r]; set B_argv [lrange [split [string trim [read $f]] \n] $n0 end]; close $f}
     set B_rec [rec_sig $s1 $title]; set B_tsv $catpanel(alldata); set B_status $catpanel(status)
+    back_to_image
     R ${name}_step_started [expr {$ok == 1 && [llength [::ogf::session::steps]] == $s1 + 1}] "ok=$ok"
     if {[llength $A_argv] == 1} {
 	set a_line [join [lrange [lindex $A_argv 0] 1 end] { }]; set b_line [lindex $B_argv 0]
@@ -68,7 +73,7 @@ proc compare {name legacy filler plugin step {title 1} {kind cat}} {
     }
     R ${name}_record_identical [expr {$A_rec eq $B_rec}] "\n   A: [norm $A_rec]\n   B: [norm $B_rec]"
     if {$kind eq "cat"} {R ${name}_catalog_identical [expr {$A_tsv eq $B_tsv && $A_tsv ne $snap}] "cols=[llength [split [lindex [split $B_tsv \n] 0] \t]]"}
-    R ${name}_status_identical [expr {$A_status eq $B_status}] "A='$A_status' B='$B_status'"
+    if {$cmpstatus} {R ${name}_status_identical [expr {$A_status eq $B_status}] "A='$A_status' B='$B_status'"}
 }
 
 proc run {} {
@@ -125,6 +130,26 @@ proc run {} {
 	::ogf::params::put deconv algorithm $alg
 	compare deconv_$alg [list CatalogPanelDeconvolve $alg] {} deconv deconvolve 0 none
     }
+    # ---- ICL: background (no shared mask yet), profile on the raw image (no bgsub file), measurements (profile file prepared)
+    ::ogf::cat::set icl,center_x 150.5; ::ogf::cat::set icl,center_y 120.0; ::ogf::cat::set icl,param,bkg-method chebyshev; ::ogf::cat::set icl,param,bkg-order 4
+    compare icl_background {CatalogPanelICLBackground chebyshev} {} icl background 1 none
+    compare icl_background_iter {::ogf::cat::set icl,param,bkg-iterative 1; CatalogPanelICLBackground chebyshev} {} icl background 1 none
+    ::ogf::cat::set icl,param,bkg-iterative 0
+    compare icl_profile CatalogPanelICLProfile {} icl profile 1 cat
+    set d [file join $::HOME .ds9]; set fd [open [file join $d icl_profile_m51.tsv] w]; puts $fd "R\tSB"; close $fd; ::ogf::cat::set icl,has_profile 1
+    compare icl_measure CatalogPanelICLMeasure {} icl measure 1 cat
+    # ---- shared Auto Mask (legacy: CatalogPanelMaskAuto 0 with the ogfmask(p,*) values) and the LSBG full pipeline
+    foreach {k v} {p,detect-thresh 4.0 p,minarea 7 p,expand-factor 1.8 p,max-dilate-radius 25 p,bright-star-mag-limit 17.5 p,bright-star-radius-scale 11.0 p,mag-threshold 23.5 p,lsb-protect 1} {set ::ogfmask($k) $v}
+    foreach {n v} {auto-detect-thresh 4.0 auto-minarea 7 auto-expand-factor 1.8 auto-max-dilate-radius 25 auto-bright-star-mag-limit 17.5 auto-bright-star-radius-scale 11.0 auto-mag-threshold 23.5 auto-lsb-protect 1} {::ogf::params::put mask $n $v}
+    R mask_param_keys [expr {$::ogfmask(p,detect-thresh) == 4.0 && [::ogf::params::get mask auto-lsb-protect] == 1}]
+    compare mask_auto {CatalogPanelMaskAuto 0} {} mask auto 1 none 0
+    set d [file join $::HOME .ds9]; file mkdir $d
+    foreach f {mask_m51.fits mask_m51_bool.fits} {set fd [open [file join $d $f] w]; puts $fd x; close $fd}
+    file copy -force /workspace/fits/m51.fits [file join $d lsbg_cleaned_m51.fits]; file copy -force /workspace/fits/m51.fits [file join $d lsbg_cleaned.fits]     ;# so that LoadFitsFile of the 'cleaned image' does not raise a dialog
+    ::ogf::cat::set lsbg,param,svm-classify 1; ::ogf::cat::set lsbg,param,svm-checkpoint /nonexistent_ckpt.pt; ::ogf::cat::set lsbg,param,lsb-protect 0; ::ogf::cat::set lsbg,param,sersic-fit 0
+    compare lsbg_run CatalogPanelLSBGRunAll {} lsbg run_all 1
+    ::ogf::cat::set lsbg,param,svm-classify 0; ::ogf::cat::set lsbg,param,lsb-protect 1; ::ogf::cat::set lsbg,param,sersic-fit 1; ::ogf::cat::set lsbg,param,multiscale 0
+    compare lsbg_run_defaultsvm CatalogPanelLSBGRunAll {} lsbg run_all 1
     # preconditions
     ::ogf::params::put photometry mb-bands {}
     R geometry_after [expr {[geom] eq "181 769 154 1300x950"}] [geom]

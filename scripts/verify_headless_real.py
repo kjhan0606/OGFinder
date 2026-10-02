@@ -108,6 +108,20 @@ if not a.no_network:
     out, h = cmp('sed', [P('photometry', 'crossmatch', **{'xm-catalog': 'GAIA_DR3', 'xm-radius': 2.0}),
                          P('photoz_sed', 'photoz', **{'photoz-bands': 'g,r', 'photoz-mag-columns': 'MAG_AUTO,MAG_APER'}),
                          P('photoz_sed', 'sed', **{'sed-bands': 'g,r', 'sed-mag-columns': 'MAG_AUTO,MAG_APER', 'sed-photoz-column': 'PHOTO_Z', 'sed-backend': 'auto'})])
+# LSBG: shared mask (LSBG preset) + full pipeline; GUI = CatalogPanelLSBGRunAll (which ensures the mask itself)
+LS = {'lsbg:sersic-fit': 0, 'lsbg:multiscale': 0, 'lsbg:pixel-scale': 0.05}
+out, h = cmp('lsbg', [dict(plugin='mask', step='auto', params={'auto-detect-thresh': 1.5, 'auto-minarea': 5, 'auto-expand-factor': 1.5, 'auto-max-dilate-radius': 30, 'auto-bright-star-mag-limit': 18.0,
+                                                               'auto-bright-star-radius-scale': 12.0, 'auto-mag-threshold': 22.0, 'auto-lsb-protect': 1, 'extract:mag-zeropoint': 25.0, 'extract:n-workers': 1, 'lsbg:pixel-scale': 0.05}),
+                      dict(plugin='lsbg', step='run_all', params={'sersic-fit': 0, 'multiscale': 0, 'pixel-scale': 0.05, 'extract:n-workers': 1, 'mu-eff-min': 5, 'mu-eff-max': 40, 'r-eff-min': 0.01, 'r-eff-max': 5000, 'ellipticity-max': 1.0, 'min-snr': 0, 'sersic-n-filter-min': 0, 'sersic-n-filter-max': 50, 'sersic-chi2-max': 1e9})])
+if h:
+    n = h.rstrip('\n').count('\n')
+    R('lsbg_candidates', True, 'catalog rows %d, columns %d' % (n, len(h.split('\n')[0].split('\t'))))
+for gname, hp in (('gui_mask_bool.fits', out + '/m51/work/mask_m51_bool.fits'), ('gui_lsbg_cleaned.fits', out + '/m51/work/lsbg_cleaned_m51.fits')):
+    if os.path.exists(W + '/' + gname) and os.path.exists(hp):
+        A = fits.getdata(W + '/' + gname).astype(float); B = fits.getdata(hp).astype(float)
+        R('lsbg_' + gname.replace('gui_', '').replace('.fits', '') + '_identical', A.shape == B.shape and np.array_equal(A, B, equal_nan=True), 'max|diff| %.3g, sum %.6g' % (np.nanmax(np.abs(A - B)), np.nansum(A)))
+    else:
+        R('lsbg_' + gname + '_present', False, 'missing %s' % [q for q in (W + '/' + gname, hp) if not os.path.exists(q)])
 # deconvolution and segmentation map: images
 rec = {'steps': [P('deconv', 'deconvolve', **{'rl-iterations': 6, 'algorithm': 'rl'})], 'detect': {'args': []}, 'psf': W + '/psf.fits'}
 out = W + '/hl_deconv'
@@ -127,5 +141,23 @@ res = batchrun.run_batch(fields, rec, out, ROOT, a.python, 1, False, 0, 300, [])
 R('segmap_headless_ran', res[0]['status'] == 'ok', res[0].get('message', ''))
 txt = [f for f in os.listdir(out + '/m51/work') if 'segmap' in f.lower()]
 print('  segmap work files:', txt)
+# ICL chain headless only (the legacy GUI chain re-derives its file base from the bgsub file name, so a GUI-vs-headless
+# file comparison is not meaningful): background -> profile (reads the bgsub file) -> measure, on m51 with the galaxy centre
+cx, cy = 'center-x', 'center-y'
+rec = {'steps': [P('icl', 'background', **{'bkg-method': 'polynomial', 'bkg-order': 2}),
+                 P('icl', 'profile', **{cx: 225, cy: 190, 'rmin': 3.0, 'rmax': 150.0, 'nsteps': 25, 'pixel-scale': 0.5}),
+                 P('icl', 'measure', **{'pixel-scale': 0.5, 'mu-threshold': 24.0, 'mu-levels': '22.0,23.0,24.0'})], 'detect': {'args': []}}
+out = W + '/hl_icl'
+res = batchrun.run_batch(fields, rec, out, ROOT, a.python, 1, False, 0, 300, [])
+R('icl_chain_headless_ran', res[0]['status'] == 'ok', res[0].get('message', ''))
+wk = out + '/m51/work'
+fl = sorted(os.listdir(wk)) if os.path.isdir(wk) else []
+R('icl_files_written', all(f in fl for f in ('icl_background_m51.fits', 'icl_bgsub_m51.fits', 'icl_profile_m51.tsv')), str([f for f in fl if 'icl' in f]))
+if 'icl_profile_m51.tsv' in fl:
+    rows = [l for l in open(wk + '/icl_profile_m51.tsv') if l.strip() and not l.startswith('#')]
+    R('icl_profile_rows', len(rows) > 10, 'lines=%d' % len(rows))
+if 'icl_bgsub_m51.fits' in fl and 'icl_background_m51.fits' in fl:
+    I = fits.getdata(FITS + '/m51.fits').astype(float); Bk = fits.getdata(wk + '/icl_background_m51.fits'); S = fits.getdata(wk + '/icl_bgsub_m51.fits')
+    R('icl_bgsub_equals_image_minus_model', np.allclose(S, I - Bk, atol=1e-3, equal_nan=True), 'max|diff| %.3g' % np.nanmax(np.abs(S - (I - Bk))))
 print('SUMMARY failures=%d' % nfail)
 sys.exit(1 if nfail else 0)

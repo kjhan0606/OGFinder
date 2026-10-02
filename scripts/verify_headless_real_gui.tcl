@@ -6,6 +6,7 @@ set ::D $::env(OGF_HLREAL_DIR)
 set ::fh [open $::D/gui.log w]
 proc L {m} {puts $::fh $m; flush $::fh}
 proc bgerror {m} {L "BGERROR $m"}
+proc tk_messageBox {args} {L "MESSAGEBOX $args"; return ok}
 proc wait_idle {ms} {set t [clock milliseconds]; while {[clock milliseconds]-$t < $ms} {update; after 20}}
 proc save {name} {L "status: $::catpanel(status)";set fd [open $::D/gui_$name.tsv w]; fconfigure $fd -translation lf; puts -nonewline $fd $::catpanel(alldata); close $fd; L "saved $name rows=[::ogf::cat::nrows]"}
 proc restore {} {::ogf::cat::load_tsv $::BASE restored; update; wait_idle 100}
@@ -35,6 +36,13 @@ proc run {} {
     CatalogPanelPhotoZ; set d .catphotoz; $d.bands delete 0 end; $d.bands insert 0 g,r; $d.mags delete 0 end; $d.mags insert 0 MAG_AUTO,MAG_APER; CatalogPanelPhotoZRun $d; wait_idle 300; save photoz
     CatalogPanelSEDFit; set d .catsedfit; $d.backend set auto; $d.bands delete 0 end; $d.bands insert 0 g,r; $d.mags delete 0 end; $d.mags insert 0 MAG_AUTO,MAG_APER; $d.pzcol delete 0 end; $d.pzcol insert 0 PHOTO_Z; CatalogPanelSEDFitRun $d; wait_idle 300; save sed
     restore
+    # LSBG full pipeline (ensures the shared mask with the LSBG preset first), real ds9_mask.py / ds9_lsbg.py
+    set catpanel(lsbg,param,sersic-fit) 0; set catpanel(lsbg,param,multiscale) 0; set catpanel(lsbg,param,pixel-scale) 0.05
+    foreach {k v} {mu-eff-min 5 mu-eff-max 40 r-eff-min 0.01 r-eff-max 5000 ellipticity-max 1.0 min-snr 0 sersic-n-filter-min 0 sersic-n-filter-max 50 sersic-chi2-max 1e9} {set catpanel(lsbg,param,$k) $v}
+    CatalogPanelLSBGRunAll; wait_idle 500; save lsbg
+    foreach {src dst} [list [file join [OGFSessWorkDir] mask_m51_bool.fits] gui_mask_bool.fits [file join [OGFSessWorkDir] lsbg_cleaned_m51.fits] gui_lsbg_cleaned.fits] {catch {file copy -force $src $::D/$dst}}
+    for {set i 0} {$i < 4 && [file tail [CatalogPanelGetFITS]] ne "m51.fits"} {incr i} {catch {DeleteCurrentFrame}; wait_idle 200}
+    L "image after lsbg: [CatalogPanelGetFITS]"
     # deconvolution (Richardson-Lucy, 6 iterations) with a Gaussian PSF file prepared by the Python half
     set catpanel(psf,file) $::D/psf.fits; set catpanel(psf,has_psf) 1; set catpanel(psf,param,rl-iterations) 6
     file delete -force [file join [OGFSessWorkDir] deconv_result.fits]
