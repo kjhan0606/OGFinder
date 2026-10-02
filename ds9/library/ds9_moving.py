@@ -159,17 +159,26 @@ def m_align(a):
         print("%-34s gaia n=%s rms=%s mas | rel n=%s rms=%s mas" % (r["chip"], r["gaia_n"], None if r["gaia_rms_mas"] is None else round(r["gaia_rms_mas"], 1), r["rel_n"], None if r["rel_rms_mas"] is None else round(r["rel_rms_mas"], 1)))
 
 
+def _detect_opts(a):
+    """Detection-stage options (item 1).  The defaults are ON and need no argv; the flags below turn single parts off (recorded in the session argv only when used)."""
+    o = {}
+    if getattr(a, "no_cr_reject", False): o["cr_reject"] = False
+    if getattr(a, "no_trail_fit", False): o["trail_fit"] = False
+    if getattr(a, "no_realbogus", False): o["realbogus"] = False
+    return o
+
+
 def m_difference(a):
     from moving import pipeline as P
     wd = _wd(a)
     chips = _load_all(a)
     center = (a.ra, a.dec) if a.ra is not None and a.dec is not None else None
     dets, infos = P.detect_in_region(chips, center=center, half_pix=a.half_pix, snr_det=a.snr, save_diff_dir=os.path.join(wd, "diff"),
-                                     progress=lambda m: print(m, flush=True))
+                                     progress=lambda m: print(m, flush=True), **_detect_opts(a))
     rows = []
     for i, d in enumerate(dets):
         r = {k: d[k] for k in ("ex", "chip", "file", "t", "ra", "dec", "x_chip", "y_chip", "sign", "snr", "flux_e_s", "flux_err", "a_pix", "b_pix",
-                               "elong", "pa_deg", "sharp", "tpl_snr", "neg_frac", "on_cr", "near_bad", "channel", "cls", "zp_ab", "pixscale", "filter", "texp") if k in d}
+                               "elong", "pa_deg", "sharp", "tpl_snr", "neg_frac", "on_cr", "near_bad", "channel", "cls", "zp_ab", "pixscale", "filter", "texp", "rb", "lac3", "lac_n7", "trail_fit", "trail_len_pix", "theta_pix") if k in d}
         r["id"] = i; r["why"] = "; ".join(d.get("why", [])); r["trail_len_arcsec"] = d.get("trail_len_arcsec", "")
         r["sig_pos_arcsec"] = d.get("sig_pos_arcsec", "")
         rows.append(r)
@@ -450,6 +459,9 @@ def main(argv=None):
     ap.add_argument("--filter"); ap.add_argument("--obsids")
     ap.add_argument("--half-pix", type=int, default=700)
     ap.add_argument("--snr", type=float, default=8.0)
+    ap.add_argument("--no-cr-reject", action="store_true", help="difference: skip the L.A.Cosmic features")
+    ap.add_argument("--no-trail-fit", action="store_true", help="difference: skip the trailed-PSF centroid refit")
+    ap.add_argument("--no-realbogus", action="store_true", help="difference: skip the real/bogus score (the linker then orders its pool by S/N)")
     ap.add_argument("--tol", type=float, default=0.5)
     ap.add_argument("--min-exposures", type=int, default=3)
     ap.add_argument("--max-per-exposure", type=int, default=900)
