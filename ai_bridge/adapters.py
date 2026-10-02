@@ -641,6 +641,9 @@ ADAPTERS = {'https_json': GenericREST, 'https_multipart': GenericREST, 'local_co
 
 
 def make_adapter(profile, ctx):
+    if profile.get('transport') == 'agent_cli':       # lazy: agent_cli imports this module
+        from .agent_cli import AgentCLI
+        return AgentCLI(profile, ctx)
     cls = ADAPTERS.get(profile.get('transport'))
     if cls is None:
         raise ProfileError('unknown transport %r' % profile.get('transport'))

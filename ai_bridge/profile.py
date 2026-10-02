@@ -14,8 +14,12 @@ from . import CONTRACT_VERSION, contracts, templating
 from .errors import ProfileError
 
 DEFAULT_PROFILE_FILE = os.path.join('~', '.ds9', 'ai_services.json')
-TRANSPORTS = ('https_json', 'https_multipart', 'local_command', 'python_callable', 'tap_query', 'mock')
+TRANSPORTS = ('https_json', 'https_multipart', 'local_command', 'python_callable', 'tap_query', 'mock', 'agent_cli')
 NETWORK_TRANSPORTS = ('https_json', 'https_multipart', 'tap_query')
+# every transport whose data leaves the machine: the network ones, and agent CLIs (which forward the prompt to their
+# provider's cloud model under the CLI's own login).  agent_cli needs --allow-agent-cli instead of --allow-network.
+EXTERNAL_TRANSPORTS = NETWORK_TRANSPORTS + ('agent_cli',)
+AGENT_DEFAULTS = {'timeout_s': 300.0, 'batch_size': 10, 'retries': 2, 'backoff_s': 2.0}
 AUTH_SCHEMES = ('none', 'bearer_env', 'header_env', 'query_env')
 METHODS = ('GET', 'POST', 'PUT')
 NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')
@@ -78,11 +82,16 @@ def load_file(path=None):
 
 
 def all_services(path=None):
-    """Profiles from the file plus the built-in mock (unless the file defines its own 'mock')."""
+    """Profiles from the file plus the built-in mock and the four ready-made agent-CLI profiles (each unless the
+    file defines a service of the same name)."""
+    from . import agent_cli
     lst, p, err = load_file(path)
     names = [x.get('name') for x in lst]
     if 'mock' not in names:
         lst = lst + [builtin_mock()]
+    for b in agent_cli.builtin_profiles():
+        if b['name'] not in names:
+            lst = lst + [b]
     return lst, p, err
 
 
@@ -98,6 +107,9 @@ def find(name, path=None):
 
 def with_defaults(profile):
     p = copy.deepcopy(profile)
+    if p.get('transport') == 'agent_cli':          # a CLI call is slow and answers many rows: other defaults
+        for k, v in AGENT_DEFAULTS.items():
+            p.setdefault(k, v)
     for k, v in DEFAULTS.items():
         p.setdefault(k, copy.deepcopy(v))
     for k in ('request', 'response', 'cutouts', 'params', 'headers'):
@@ -124,8 +136,8 @@ def validate(profile, task=None):
     t = pr.get('task')
     if t != 'any' and t not in contracts.TASKS:
         errs.append('task: %r is not one of %s' % (t, ', '.join(contracts.TASK_NAMES)))
-    if t == 'any' and pr.get('transport') != 'mock':
-        errs.append('task "any" is only allowed for the mock transport')
+    if t == 'any' and pr.get('transport') not in ('mock', 'agent_cli'):
+        errs.append('task "any" is only allowed for the mock and agent_cli transports')
     if task and t not in ('any', task):
         errs.append('profile is for task %r, requested %r' % (t, task))
     tr = pr.get('transport')
@@ -189,6 +201,8 @@ def validate(profile, task=None):
         for e in pr.get('env_passthrough') or []:
             if not ENV_RE.match(str(e)):
                 errs.append('env_passthrough: %r is not an environment variable name' % (e,))
+    if tr == 'agent_cli':
+        errs += _validate_agent_cli(pr)
     if tr == 'python_callable':
         if not re.match(r'^[A-Za-z_][\w.]*:[A-Za-z_]\w*$', str(pr.get('callable', ''))):
             errs.append('callable: required, "module:function"')
@@ -217,7 +231,7 @@ def validate(profile, task=None):
     # response mapping
     rs = pr['response']
     fields = rs.get('fields')
-    default_fields = tr == 'mock' or (tr in ('local_command', 'python_callable') and not fields)
+    default_fields = tr in ('mock', 'agent_cli') or (tr in ('local_command', 'python_callable') and not fields)
     if not default_fields:
         if not isinstance(fields, dict) or not fields:
             errs.append('response.fields: required, {"COLUMN": {"path": "a.b", "type": "float"}}')
@@ -260,6 +274,46 @@ def validate(profile, task=None):
     if cu.get('format', 'png') not in ('png', 'fits', 'npy'):
         errs.append('cutouts.format: png|fits|npy')
     return errs, warns
+
+
+def _validate_agent_cli(pr):
+    """Rules for transport agent_cli.  No secrets: the CLI keeps its own login; only env-var NAMES may be listed."""
+    from . import agent_cli as ac
+    errs = []
+    be = pr.get('backend')
+    if be not in ac.BACKEND_NAMES:
+        errs.append('backend: %r is not one of %s' % (be, ', '.join(ac.BACKEND_NAMES)))
+    if (pr.get('auth') or {}).get('scheme', 'none') != 'none':
+        errs.append('auth: not used with agent_cli (the CLI uses its own login; list variable NAMES in env_passthrough)')
+    ex = pr.get('executable')
+    if ex is not None and (not isinstance(ex, str) or not ex.strip() or '\n' in ex):
+        errs.append('executable: a path or a command name (string)')
+    for k in ('extra_args', 'args'):
+        v = pr.get(k)
+        if v is None:
+            continue
+        if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
+            errs.append('%s: must be a list of strings (argv elements; no shell is ever used)' % k)
+            continue
+        for x in v:
+            if x in ac.DANGEROUS_ARGS or x.startswith('--dangerously'):
+                errs.append('%s: %r switches off the CLI sandbox / permission checks and is refused' % (k, x))
+            if re.search(r'(api[-_]?key|token|secret|password|bearer)\b', x, re.I) and '=' in x or \
+                    re.search(r'(Bearer\s+[A-Za-z0-9._~+/=-]{12,}|sk-[A-Za-z0-9]{16,}|xai-[A-Za-z0-9]{16,}|[A-Za-z0-9]{40,})', x):
+                errs.append('%s: %r looks like a credential; profiles never hold secrets (use the CLI login or an env var NAME in env_passthrough)' % (k, x[:12] + '...'))
+    for e in pr.get('env_passthrough') or []:
+        if not ENV_RE.match(str(e)):
+            errs.append('env_passthrough: %r is not an environment variable name' % (e,))
+    if be == 'custom' and not pr.get('args'):
+        errs.append('args: required for backend "custom" (the argv after the executable; {prompt_file} {workdir} {prompt} are replaced)')
+    if be == 'custom' and not pr.get('executable'):
+        errs.append('executable: required for backend "custom"')
+    if pr.get('prompt_via') not in (None, 'stdin', 'file', 'argv'):
+        errs.append('prompt_via: stdin | file | argv')
+    for k in ('command', 'base_url', 'callable'):
+        if pr.get(k):
+            errs.append('%s: not used with agent_cli' % k)
+    return errs
 
 
 KNOWN_PLACEHOLDERS = (

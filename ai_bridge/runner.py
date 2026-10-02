@@ -101,10 +101,15 @@ def run(profile, task, catalog, images, output=None, opts=None, log=None):
     for w in warns:
         log('warning: ' + w)
     network = prof['transport'] in profmod.NETWORK_TRANSPORTS
+    agent = prof['transport'] == 'agent_cli'
     dry = bool(opts.get('dry_run'))
     if network and not dry and not opts.get('allow_network'):
         raise BridgeError('service %r sends data over the network; re-run with --allow-network '
                           '(or use --mode dry-run to inspect the request)' % prof['name'])
+    if agent and not dry and not opts.get('allow_agent_cli'):
+        raise BridgeError('service %r hands catalog data to the agent CLI %r, which forwards it to its provider\'s cloud '
+                          'model; re-run with --allow-agent-cli (and --send-images only if images may leave the machine), '
+                          'or use --mode dry-run to see the exact prompt and argv' % (prof['name'], prof.get('backend')))
     id_col = opts.get('id_col') or 'NUMBER'
     header, rows = records.read_catalog(catalog)
     recs = records.build_records(header, rows, id_col=id_col, mag_columns=opts.get('mag_columns'),
@@ -160,7 +165,8 @@ def run(profile, task, catalog, images, output=None, opts=None, log=None):
         get_maker = None
     params = dict(prof.get('params') or {})
     params.update(opts.get('params') or {})
-    ctx = {'params': params, 'bands': bands, 'mock_fail_ids': set(opts.get('mock_fail_ids') or [])}
+    ctx = {'params': params, 'bands': bands, 'mock_fail_ids': set(opts.get('mock_fail_ids') or []),
+           'send_images': bool(opts.get('send_images'))}
     ad = adapters.make_adapter(prof, ctx)
     phash = profmod.profile_hash(prof)
 
@@ -318,7 +324,8 @@ def run(profile, task, catalog, images, output=None, opts=None, log=None):
             failures.append({'id': oid, 'error': e})
     return {'summary': summary, 'exit_code': exit_code, 'table': table, 'columns': columns, 'ids': ids,
             'id_col': id_col, 'failures': failures, 'profile': prof, 'profile_hash': phash, 'stats': stats,
-            'cache': cch, 'models': sorted(models), 't_start': t_start, 'network': network,
+            'cache': cch, 'models': sorted(models), 't_start': t_start, 'network': network or agent,
+            'send_images': bool(opts.get('send_images')),
             'catalog_header': header}
 
 
@@ -393,4 +400,13 @@ def write_outputs(res, out_path, args_record, catalog, images):
                   'misses': res['cache'].misses, 'stores': res['cache'].stores},
         'failures': res['failures'][:1000],
     }
+    if prof['transport'] == 'agent_cli':
+        from . import agent_cli
+        path, _t = agent_cli.find_executable(prof)
+        prov['agent_cli'] = {'backend': prof.get('backend'), 'flavor': agent_cli.flavor_of(prof, path),
+                             'executable': path, 'version': agent_cli.version_of(path) if path else None,
+                             'images_sent': bool(res.get('send_images')),
+                             'env_names_passed': [n for n, st in agent_cli.passthrough_names(prof) if st],
+                             'extra_args': list(prof.get('extra_args') or []),
+                             'note': 'no credentials are stored; the CLI used its own login'}
     return prov, text

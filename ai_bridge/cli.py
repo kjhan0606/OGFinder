@@ -5,7 +5,7 @@ import os
 import shutil
 import sys
 
-from . import CONTRACT_VERSION, __version__, adapters, contracts, profile as profmod, runner
+from . import CONTRACT_VERSION, __version__, adapters, agent_cli, contracts, profile as profmod, runner
 from .errors import BridgeError, ProfileError
 
 EXIT_OK, EXIT_USAGE, EXIT_TOTAL_FAILURE, EXIT_PARTIAL_STRICT = 0, 1, 2, 3
@@ -16,7 +16,7 @@ def build_parser():
         prog='ds9_ai_bridge.py',
         description='OGFinder AI bridge: send catalog objects / cutouts to a user-configured external service and '
                     'return new catalog columns (TSV on stdout or --output).  No models are included.')
-    ap.add_argument('--mode', required=True, choices=['list-services', 'check-service', 'run', 'dry-run', 'validate-profile', 'set-enabled'])
+    ap.add_argument('--mode', required=True, choices=['list-services', 'check-service', 'run', 'dry-run', 'validate-profile', 'set-enabled', 'detect-agents'])
     ap.add_argument('--service', help='service name in the profile file (or "mock")')
     ap.add_argument('--task', help='task type: ' + ', '.join(contracts.TASK_NAMES))
     ap.add_argument('--catalog', help='catalog TSV (OGFinder format; NUMBER column required)')
@@ -45,6 +45,11 @@ def build_parser():
     ap.add_argument('--resume', action='store_true', help='keep rows already completed (no error) in an existing --output')
     ap.add_argument('--allow-network', action='store_true',
                     help='required for services that send data over the network (like the session script)')
+    ap.add_argument('--allow-agent-cli', action='store_true',
+                    help='required for agent_cli services (Codex CLI, Claude Code, agy / Gemini CLI, Grok): the CLI forwards '
+                         'the prompt - catalog rows - to its provider\'s cloud model')
+    ap.add_argument('--send-images', action='store_true',
+                    help='agent_cli only: also give the CLI the image cutouts (default: NO image data leaves the machine)')
     ap.add_argument('--strict', action='store_true', help='exit 3 when some objects failed (default: 0 unless all failed)')
     ap.add_argument('--enabled', choices=['yes', 'no'], help='set-enabled: new state of --service in the profile file')
     ap.add_argument('--json', action='store_true', help='list-services / check-service: machine readable output')
@@ -87,12 +92,19 @@ def cmd_list(a, log):
         errs, warns = profmod.validate(profmod.with_defaults(p))
         tgt = p.get('base_url') or ((p.get('command') or [''])[0] if p.get('transport') == 'local_command' else '') or \
             p.get('callable') or ''
+        agent = None
+        if p.get('transport') == 'agent_cli':
+            path, tried = agent_cli.find_executable(p)
+            agent = {'backend': p.get('backend'), 'installed': bool(path), 'path': path or '', 'tried': tried,
+                     'login': agent_cli.BACKENDS.get(p.get('backend'), {}).get('login', '')}
+            tgt = path or 'NOT FOUND (%s)' % ','.join(tried)
         rows.append({'target': tgt, 'profile_sha256': profmod.profile_hash(profmod.with_defaults(p)),
                      'name': p.get('name'), 'task': p.get('task'), 'transport': p.get('transport'),
                      'enabled': bool(p.get('enabled', True)), 'template': bool(p.get('template', False)),
                      'network': p.get('transport') in profmod.NETWORK_TRANSPORTS,
                      'auth_env': env, 'auth_env_status': st, 'valid': not errs,
-                     'errors': errs, 'warnings': warns, 'description': p.get('description', '')})
+                     'errors': errs, 'warnings': warns, 'description': p.get('description', ''),
+                     'external': p.get('transport') in profmod.EXTERNAL_TRANSPORTS, 'agent': agent})
     if a.json:
         print(json.dumps({'profile_file': path, 'file_error': err, 'services': rows}, indent=1))
     else:
@@ -102,10 +114,25 @@ def cmd_list(a, log):
         print('name\ttask\ttransport\tenabled\tvalid\tauth_env\tenv_status\ttarget\tprofile_sha256\tnote')
         for r in rows:
             note = 'TEMPLATE' if r['template'] else ('MOCK (FAKE VALUES)' if r['transport'] == 'mock' else '')
+            if r['agent']:
+                note = 'AGENT CLI %s' % ('installed' if r['agent']['installed'] else 'not found')
             print('\t'.join([str(r['name']), str(r['task']), str(r['transport']), 'yes' if r['enabled'] else 'no',
                              'yes' if r['valid'] else 'NO', r['auth_env'] or '-', r['auth_env_status'],
                              r['target'] or '-', r['profile_sha256'], note]))
     return EXIT_USAGE if err else EXIT_OK
+
+
+def cmd_detect(a, log):
+    rows = agent_cli.detect_all()
+    if a.json:
+        for r in rows:
+            r['version'] = agent_cli.version_of(r['path']) if r['installed'] else None
+        print(json.dumps({'agent_clis': rows}, indent=1))
+    else:
+        print('service\tbackend\tinstalled\tpath\tlogin')
+        for r in rows:
+            print('\t'.join([r['service'], r['backend'], 'yes' if r['installed'] else 'no', r['path'] or '-', r['login']]))
+    return EXIT_OK
 
 
 def cmd_set_enabled(a, log):
@@ -217,6 +244,7 @@ def cmd_run(a, log, dry):
                 cutout_dir=a.cutout_dir, bands=(a.bands.split(',') if a.bands else None), pixel_scale=a.pixel_scale,
                 psf_fwhm=a.psf_fwhm, params=_parse_params(a.param), dry_run=dry, no_cache=a.no_cache, cache_dir=a.cache_dir,
                 resume=a.resume, allow_network=a.allow_network, max_objects=a.max_objects,
+                allow_agent_cli=a.allow_agent_cli, send_images=a.send_images,
                 mock_fail_ids=(a.mock_fail_ids.split(',') if a.mock_fail_ids else None))
     try:
         res = runner.run(prof, a.task, a.catalog, images, a.output, opts, log)
@@ -264,6 +292,8 @@ def main(argv=None):
     try:
         if a.mode == 'list-services':
             return cmd_list(a, log)
+        if a.mode == 'detect-agents':
+            return cmd_detect(a, log)
         if a.mode == 'validate-profile':
             return cmd_validate(a, log)
         if a.mode == 'set-enabled':
