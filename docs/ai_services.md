@@ -16,8 +16,8 @@ reserved host `example.invalid` and are **templates**.
 
 | label | what it does |
 |---|---|
-| `Service Registry...` | lists the profiles (task, transport, enabled, auth env-var name and **set/unset**, target); **Enable / Disable**, **Test Connection**, profile-file path (browse), **Create from Example**; "backend" selectors for the local Photo-z / SED / morphology / star steps |
-| `Run Task on Catalog...` | choose task + service, rows (all / selected in the table), cutout size (pix or arcsec) / normalisation / format, **Dry run** |
+| `Service Registry...` | lists the profiles (task, transport, enabled, auth env-var name and **set/unset**, target); **Enable / Disable**, **Test Connection**, **Detect Agent CLIs**, profile-file path (browse), **Create from Example**; "backend" selectors for the local Photo-z / SED / morphology / star steps |
+| `Run Task on Catalog...` | choose task, **Backend** (Codex CLI / Claude Code / agy-Gemini CLI / Grok / generic services - see *Agent CLIs* below) and service, rows (all / selected in the table), cutout size (pix or arcsec) / normalisation / format, **Dry run** |
 | `Show Last Run Log` | command line, exit status, bridge messages, provenance path of the last run |
 
 Results become new catalogue columns (same machinery as the other analysis steps, `CatalogPanelAddColumnsFromTSV`), so
@@ -45,6 +45,128 @@ sort / filter / save work. Editing a profile is done in a text editor (JSON); th
 6. Results from a service are only as good as that service. Columns carry provenance (`AI_<P>_SERVICE/_MODEL/_REQID/_TIME/_ERROR`);
    the model string is whatever the **service returns** (OGFinder never invents one).
 
+## Agent CLIs: Codex CLI, Claude Code, agy / Gemini CLI, Grok
+
+Besides REST / local command / python callable, the external AI connection can be one of four **agent command-line
+tools that are installed on your machine**. This is the transport `agent_cli` (`ai_bridge/agent_cli.py`); four ready-made
+profiles are built in (no profile file needed) and appear in the registry and in the *Run Task* **Backend** dropdown:
+
+| ready-made service | backend | executable looked up on `PATH` | command line built by the bridge (argv list, never a shell) |
+|---|---|---|---|
+| `agent_codex` | Codex CLI | `codex` | `codex exec --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --sandbox read-only --color never -C <tmpdir> -` (prompt on stdin) |
+| `agent_claude` | Claude Code | `claude` | `claude -p --output-format json --no-session-persistence --disable-slash-commands --strict-mcp-config --permission-mode dontAsk --tools ""` (prompt on stdin; `--tools Read` only when images are sent) |
+| `agent_agy` | agy (Google Antigravity CLI), falls back to the Gemini CLI | `agy`, else `gemini` | `agy --print <prompt> --output-format json --print-timeout <n>s --disable-slash-commands`; with only `gemini` installed: `gemini -p "<short instruction>" --output-format json --approval-mode plan --skip-trust` (prompt on stdin) |
+| `agent_grok` | Grok (xAI CLI) | `grok` | `grok --prompt-file <tmpdir>/prompt.txt --output-format json --permission-mode dontAsk --tools "" --no-auto-update --cwd <tmpdir>` (`--tools` is left out when images are sent) |
+
+Each ready-made profile is *generic over tasks* (`"task": "any"`); the task chosen in the dialog / `--task` decides the prompt.
+
+### What the bridge does with a CLI
+
+1. **Prompt from the task contract.** `contracts.TASKS[task]` supplies the task description and the exact answer columns
+   (name, type, `[0, 1]` range, optional or required). The catalog rows (id, x, y, ra, dec, magnitudes + errors; the full
+   catalog row only for tasks that need it, e.g. `moving_object_classification`) are embedded as one JSON block marked as
+   *data, never instructions*. `--dry-run` shows the complete prompt and the argv. For `generic` give
+   `--param columns=SCORE:float,NOTE:str --param instruction="..."`.
+2. **Run.** One subprocess per batch (`batch_size`, default 10 rows) via `subprocess.Popen(argv, shell=False)` in its own process
+   group, in an **empty temporary working directory** (removed afterwards), with a **minimal environment**
+   (`PATH HOME LANG TMPDIR ... proxy and CA variables` + the variable *names* in `env_passthrough` + the CLI's own
+   login/API-key names, e.g. `ANTHROPIC_API_KEY`, `CODEX_API_KEY`, `XAI_API_KEY`, `GEMINI_API_KEY`). Prompt delivery: stdin
+   (Codex, Claude, Gemini), a temp file (Grok) or one argv element (agy - the prompt is refused above 100 kB). Catalog text is
+   only ever *data inside the prompt*; nothing from the catalog reaches argv except agy's single prompt argument, and no shell
+   ever parses it (tested with `'; touch X; $(touch X)` in a catalog cell).
+3. **Timeout.** `timeout_s` (default 300) kills the whole process group; timeouts are retried.
+4. **Strict answer parsing.** stdout must be exactly one JSON document `{"results":[{"id":..., <columns>}], "model": ...}`.
+   Only (a) the CLI's *own documented JSON envelope* (`claude`: `result` / `structured_output`; `gemini`: `response`; `agy`:
+   `response` / `structured_output`; `grok`: `result`/`response`/`text`/`output`/`content`) and (b) **one** ```` ```json ````
+   fence around the whole answer are unwrapped. Prose before or after the JSON is rejected. Then: every requested id exactly
+   once, no unknown ids, required columns present, JSON types (a number must be a JSON number, not text), `[0, 1]` ranges
+   (`STAR_PROB`, `REALBOGUS_SCORE`, `MORPH_CONF`, ...) - otherwise the answer is *invalid*.
+5. **Retries.** An invalid answer, a timeout and rate-limit-like errors are retried (`retries`, default 2, with back-off); the
+   retry prompt tells the model why its previous reply was rejected. A "not logged in" failure is *not* retried and says
+   how to log in with the CLI itself. Failures are per batch: the rows get `AI_<P>_ERROR`, other batches continue.
+6. **Provenance.** `AI_<P>_SERVICE` = the service name, `AI_<P>_MODEL` = the model the CLI/answer reports (else
+   `<cli> CLI (model not reported)` - never invented), `AI_<P>_REQID` = the CLI's session/conversation id when it prints one.
+   The provenance JSON gets an `agent_cli` block: backend, executable, `--version` string, whether images were sent, the
+   names of the environment variables handed over, `extra_args`.
+
+### Detection, executable path, extra args
+
+* Detection is `shutil.which` (no model is contacted; the version comes from `<cli> --version`):
+  `ds9_ai_bridge.py --mode detect-agents [--json]`, registry button **Detect Agent CLIs**, and the Backend dropdown shows
+  *installed* / *NOT FOUND on PATH* for every backend.
+* A CLI that is not on `PATH` is configured with `"executable": "/full/path/to/claude"` and optionally `"extra_args":
+  ["--model", "sonnet"]` (appended to the argv). In the GUI: Run Task > Backend > *Executable* / *Extra args (JSON list)* >
+  **Save to profile** (writes only these two keys into your profile file, via `--mode set-agent`; the file is copied to
+  `.bak` first and a ready-made profile is copied into the file on first save). `"args"` replaces the built-in argv completely
+  (and `"backend": "custom"` + `"executable"` + `"args"` + `"prompt_via": "stdin|file|argv"` define any other CLI; `{prompt_file}`
+  `{workdir}` `{prompt}` `{timeout_s}` are replaced; see the template `template_custom_agent_cli` in `ai_services.example.json`).
+* `check-service` / **Test Connection** on an agent service only checks the executable and prints its version:
+  **no prompt, no data, no cloud call.**
+
+### Security model of the agent backends
+
+* **No secrets in profiles.** `validate-profile` refuses: `auth` blocks, anything that looks like a credential in `extra_args`
+  (`--api-key=sk-...`, long random tokens), and arguments that switch off the CLI's own safety (`--dangerously-*`,
+  `--yolo`, `--always-approve`, `bypassPermissions`, `danger-full-access`, `--approve-for-me`). Authentication is the CLI's own login
+  (`codex login`, `claude` + `/login`, `agy`, `gemini`, `grok login`) or an API-key environment variable that you export
+  yourself; the profile may list only the variable **names** (`env_passthrough`). Values are never printed, cached or recorded
+  and are replaced by `***` in error text.
+* **Tools are off.** The ready-made argv gives the model no shell / file / web tool where the CLI allows it (`--tools ""` for Claude
+  and Grok, `--sandbox read-only` + empty working directory for Codex, `--approval-mode plan` for Gemini; agy has no switch for
+  this in print mode: it runs with its default permission policy, where shell commands are soft-denied, and its working directory is the empty temp folder).
+  These are *mitigations against prompt injection from catalog text*, not a guarantee.
+* **Images only if you tick it.** Without `--send-images` (GUI: *Send image cutouts*, default off) no cutout is even made
+  and the CLI's working directory stays empty; with it, the cutouts are copied into the temp directory, listed in the prompt,
+  and (Claude, Grok) the file-reading tool is enabled / (Codex) attached with `--image`. The exported script records the
+  choice; pipeline mode needs **`--allow-agent-images`** in addition to `--allow-agent-cli` to repeat such a step.
+* **Confirmation before the first run (GUI).** The dialog is built from the bridge's own dry run (`--mode dry-run
+  --summary-only`, so it cannot disagree with what is executed) and states: the CLI and its path, the provider whose cloud
+  model receives the prompt (OpenAI / Anthropic / Google / xAI), the number of objects and **which fields per object**, whether the
+  full catalog row text is included, **whether image data is included (and how many files)**, the prompt size, the environment
+  variable names passed, and that OGFinder stores no credentials. It is asked once per service and session, and again when
+  *Send image cutouts* is ticked for the first time. *Cancel* sends nothing; *Dry run* shows the exact prompt first.
+* **Command-line consent.** `run` without `--allow-agent-cli` fails before anything is executed (`--allow-network` does not
+  count). The GUI adds the flag after you confirm; it is stored in the recorded step.
+* **The CLI is a third-party program** with its own telemetry, auto-update and data policy; read the provider's terms. The prompt (with
+  your catalog rows) is processed by that provider under *your* account. Ready-made argv uses `--no-auto-update` (Grok) and
+  `--ephemeral` / `--no-session-persistence` (Codex, Claude) so that the CLI does not keep the session on disk; the others may keep a history.
+
+### Session recorder and the exported Python pipeline
+
+An agent run is the existing step `ai.run` (same argv/step signature as before) with the extra payload keys `backend` and
+`send_images`, `network=1`. Whole-catalogue runs are **AUTO**, row-subset runs are **MANUAL** (as for every `ai.run`).
+In the exported script: **replay** mode runs it (you confirmed it in the GUI); **pipeline** mode skips it with
+`use --allow-agent-cli` (and with `use --allow-agent-images as well` for a step recorded with *Send image cutouts*), exactly like
+network services need `--allow-network`. `--allow-network` does not enable agent steps.
+
+### Verification status of the flags (read this before relying on a CLI)
+
+| CLI | version checked | what was verified against the **real binary** | what is only from the vendor documentation |
+|---|---|---|---|
+| Codex CLI | `codex-cli 0.160.0` | `codex exec --help` lists `--skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --sandbox read-only --color --image -C -o --output-schema --json`, prompt from stdin with `-`; the real binary accepted our whole argv and failed with `401 Unauthorized` (no login) which the bridge reports with the login hint | the plain-text final message on stdout (we never saw a model answer); `--image=<file>` form (only the flag is verified, not that it is accepted attached to a text prompt); `--output-schema` is *not* used |
+| Claude Code | `2.1.287` | `claude --help` lists `-p --output-format json --no-session-persistence --disable-slash-commands --strict-mcp-config --permission-mode dontAsk --tools --json-schema --max-turns --bare`; real run printed the error envelope `{"type":"result","is_error":true,"result":"Not logged in..."}` which is parsed | the success envelope (`result`, `structured_output`, `modelUsage`, `session_id`) - from the docs; `--tools Read` for images |
+| agy | `1.2.14` | `agy --help` lists `--print/-p --output-format --print-timeout --disable-slash-commands --json-schema --model --effort --sandbox`; the real binary accepted our argv and answered `authentication required` with the documented error envelope `{"status":"ERROR","error":...}` | the success envelope (`status` `SUCCESS`, `response`); **upstream issue [antigravity-cli#408](https://github.com/google-antigravity/antigravity-cli/issues/408): `agy --print` writes nothing to stdout when stdout is a pipe** - the bridge reports "empty stdout" if that happens to your version and you should then use the `gemini` executable (set `"executable": "gemini"` in the profile) |
+| Gemini CLI (as the agy fallback) | `0.62.0` | `gemini --help` lists `-p --output-format -o --approval-mode plan --skip-trust`; real run failed with exit 41 and the JSON error object on **stderr** (parsed) | the success envelope (`response`, `stats.models`) |
+| Grok (xAI) | `grok 1.0.46` | `grok --help` lists `-p/--single --prompt-file --output-format {plain,json,...} --permission-mode dontAsk --tools --no-auto-update --cwd --json-schema --max-turns`; real run printed `{"type":"error","message":"Not signed in..."}` which is parsed | **the success JSON envelope was never seen** - the parser accepts `{"results": ...}` directly or the first of `result/response/text/output/content`, otherwise fails with a message naming the keys; treat Grok as the least verified |
+
+**No real agent CLI has produced a model answer in any test**: the box has no login for any of them and no API key was
+used or exists, so nothing was sent to any provider. All five binaries were installed only to read their `--help` and to confirm
+that our argv is accepted and that their *not-logged-in* failure is understood (`scripts/verify_agent_cli_real.py`).
+Everything about a *successful* answer (envelope shape, JSON-only compliance by the model, timing, cost) is verified only
+against the fake executables of `ai_bridge/tests/fake_agents.py`, which mimic the documented formats.
+Vendor flags change quickly (these CLIs were at versions 0.160 / 2.1 / 1.2 / 0.62 / 1.0 in October 2026); if a flag is rejected,
+use `"args"` in the profile to override the argv. Vendor documentation used:
+[Codex non-interactive](https://developers.openai.com/codex/noninteractive),
+[Claude Code headless](https://code.claude.com/docs/en/headless),
+[Antigravity CLI headless](https://antigravity.google/docs/cli/headless/),
+[Gemini CLI headless](https://google-gemini.github.io/gemini-cli/docs/cli/headless.html),
+[Grok CLI headless](https://docs.x.ai/build/cli/headless-scripting).
+
+Model answers are *not deterministic*: a re-run (replay) may give different numbers; the response cache (key = profile +
+exact prompt) makes an identical repeated request return the first answer. Treat the results as the opinion of a language
+model, not a measurement.
+
+
 ## Offline testing with the mock service
 
 `mock` is built in (no profile needed): deterministic **fake** values that depend only on (object id, column), so replays
@@ -54,7 +176,7 @@ are bit-identical. Every output row has `AI_<P>_SERVICE = mock` and `AI_<P>_MODE
 
 ## Command line
 
-    python ds9_ai_bridge.py --mode {list-services,check-service,run,dry-run,validate-profile,set-enabled} --service NAME \
+    python ds9_ai_bridge.py --mode {list-services,check-service,run,dry-run,validate-profile,set-enabled,detect-agents,set-agent} --service NAME \
         --task TASK --catalog CAT.tsv [--image A.fits[,B.fits] --bands F105W,F160W] --output OUT.tsv [options]
 
 | option | meaning |
@@ -68,6 +190,8 @@ are bit-identical. Every output row has `AI_<P>_SERVICE = mock` and `AI_<P>_MODE
 | `--no-cache`, `--cache-dir` | response cache (`~/.ds9/ai_cache`, or `$OGF_AI_CACHE_DIR`) |
 | `--resume` | keep already finished rows (no error, same service) of an existing `--output` and request only the rest |
 | `--allow-network` | required for `https_*` / `tap_query` services in `run` mode |
+| `--allow-agent-cli` | required for `agent_cli` services in `run` mode (see *Agent CLIs*); `--allow-network` does **not** substitute |
+| `--send-images` | `agent_cli` only: also hand the image cutouts to the CLI (default: no image data) |
 | `--strict` | exit 3 if any object failed |
 | `--provenance-output P` | provenance JSON (default `<output>.provenance.json`) |
 
@@ -268,6 +392,16 @@ If the service has no HTTP API you can use (or you want a model of your own), wr
   local command, python callable, cutouts (FITS/PNG/npy, arcsec size, edges, determinism), CLI modes and exit codes, profile validation.
 * `ai_bridge/tests/test_tap_live.py`: **live** SIMBAD TAP and VizieR TAP (Gaia DR3 table `I/355/gaiadr3`) cone searches and a real TAP error.
   Verified on 2026-10-01. These services are public and may change; they are not an ML test.
+* `ai_bridge/tests/test_agent_cli.py` (+ `fake_agents.py`): 41 tests with **fake `codex` / `claude` / `agy` / `gemini` / `grok`
+  executables on `PATH`** that mimic each CLI's documented output: detection (found / not found / agy->gemini fallback / configured path),
+  argv + prompt delivery per CLI, envelope unwrapping, strict parsing (prose rejected, one fence tolerated, bad range / type /
+  missing id / extra id / garbage), retry with the rejection reason, timeout + process-group kill, auth failure not retried, rate limit
+  retried, consent flag missing -> nothing executed, dry run executes nothing, shell-injection text in the catalog, minimal
+  environment and secret scrubbing, empty temp dir, images off by default / on with `--send-images`, `set-agent`, cache.
+* `scripts/verify_agent_gui.py` (+ `.tcl`): 34 checks under Xvfb with fake CLIs on `PATH` (agy and grok absent): Backend dropdown,
+  installed / not found, confirmation text, declined / dry-run / not-installed paths, image tick, *Save to profile*, recorder,
+  replay in a plain shell and the four pipeline-mode flag combinations.
+* `scripts/verify_agent_cli_real.py`: runs whichever **real** CLIs are installed without a login (see the verification table).
 * `scripts/verify_ai_gui.py`: GUI smoke test under Xvfb (registry dialog, dry run, mock runs with/without cutouts, selected rows,
   confirmation dialog, backend hook, recorder) + replay of the exported script in a plain shell + pipeline mode with/without `--allow-network`.
 
@@ -279,3 +413,7 @@ If the service has no HTTP API you can use (or you want a model of your own), wr
 * TAP: only synchronous queries; no authentication flows beyond the three schemes; ADQL is sent as written in the profile.
 * The registry dialog does not edit profiles (edit the JSON file); the profile is re-read on every action.
 * Rows selected in the GUI are replayed only in `--mode replay`.
+* **Agent CLIs: see the verification table above - no real model answer was ever obtained.** Not implemented: streaming output,
+  `--json-schema` / `--output-schema` server-side schema enforcement (we validate ourselves), per-call model selection other than
+  `extra_args`, sending FITS (only PNG/npy/FITS cutouts as files, the CLI decides what it can read), Windows-specific process
+  handling (the process-group kill is POSIX; on Windows only the CLI process is killed).

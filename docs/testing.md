@@ -10,6 +10,8 @@
 | `ai_bridge_tests` | `pytest ai_bridge/tests` | venv | yes |
 | `moving_tests` | `pytest moving/tests` | venv | yes |
 | `ai_gui` | `scripts/verify_ai_gui.py` (AI panels under Xvfb) | Xvfb | yes |
+| `agent_gui` | `scripts/verify_agent_gui.py`: Backend dropdown, detection, confirmation text, consent flags, recorder, replay and pipeline mode of the agent-CLI backends, **with fake CLIs on PATH** (34 checks) | Xvfb | yes |
+| `agent_real` | `scripts/verify_agent_cli_real.py`: runs the *real* `codex` / `claude` / `agy` / `gemini` / `grok` binaries if installed, in an empty HOME without any login: every flag is accepted, the not-logged-in error is parsed. **No model answer is obtained.** SKIP (77) when none is installed | any installed CLI | yes |
 | `icl_export` | `scripts/verify_icl_export.tcl` smoke on m51 | Xvfb, `/workspace/fits/m51.fits` | yes |
 | `click_chooser` | `scripts/verify_click_chooser.tcl` (click procs called directly, layout geometry) | Xvfb | yes |
 | `click_xevent` | `scripts/verify_click_xevent.tcl` (real X events with xdotool; SKIP if xdotool absent) | Xvfb, xdotool | yes |
