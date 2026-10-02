@@ -161,7 +161,18 @@ proc CatalogPanelSaveCatalogTo {fn} {
 
     set nlines [llength [split [::ogf::cat::tsv] \n]]
     set nobj [expr {$nlines - 1}]
+    catch {OGFCatalogMetaSidecar $fn $nobj}
     ::ogf::cat::set status "Saved $nobj sources to [file tail $fn]"
+}
+
+# Catalog metadata (limiting magnitudes etc., see ogfkit/meta.py): <work dir>/catalog_meta.json belongs to the catalog when its "nrows"
+# equals the number of rows; Save Catalog then writes it next to the table as <name>.meta.json.
+proc OGFCatalogMetaSidecar {fn nobj} {
+    set mp [file join [OGFSessWorkDir] catalog_meta.json]
+    if {![file exists $mp]} return
+    set fd [open $mp r]; set txt [read $fd]; close $fd
+    if {![regexp {"nrows":\s*(\d+)} $txt -> n] || $n != $nobj} return
+    set fd [open $fn.meta.json w]; puts -nonewline $fd $txt; close $fd
 }
 
 proc CatalogPanelLoadCatalog {} {

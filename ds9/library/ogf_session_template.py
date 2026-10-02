@@ -624,6 +624,14 @@ def native_catalog_save(field, rec):
     else:
         write_text(dest, cat)
     field.log('  saved catalog -> ' + dest)
+    mp = os.path.join(field.work, 'catalog_meta.json')       # catalog metadata of the plugins (see ogfkit/meta.py), as in the GUI's Save Catalog
+    if os.path.exists(mp):
+        try:
+            if int(json.load(open(mp)).get('nrows', -1)) == len([l for l in cat.split('\n') if l.strip()]) - 1:
+                shutil.copyfile(mp, dest + '.meta.json')
+                field.log('  catalog metadata -> ' + dest + '.meta.json')
+        except Exception:
+            pass
     return 'ok', ''
 
 

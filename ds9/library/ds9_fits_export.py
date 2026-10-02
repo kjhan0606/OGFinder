@@ -69,6 +69,25 @@ def main():
     hdu = fits.BinTableHDU.from_columns(coldefs)
     hdu.header['EXTNAME'] = 'CATALOG'
 
+    # catalog metadata (plugins/completeness etc.): <dir of the input>/catalog_meta.json is copied into the table header
+    # as HIERARCH OGF <key> cards when it belongs to this catalog (same number of rows)
+    try:
+        import json
+        mp = os.path.join(os.path.dirname(os.path.abspath(args.input)), 'catalog_meta.json')
+        if os.path.exists(mp):
+            md = json.load(open(mp))
+            if int(md.get('nrows', -1)) == len(lines) - 1:
+                def flat(d, pre=''):
+                    for k, v in d.items():
+                        if isinstance(v, dict):
+                            yield from flat(v, pre + k + '.')
+                        elif isinstance(v, (int, float, str, bool)) and not (isinstance(v, float) and v != v):
+                            yield pre + k, v
+                for k, v in flat({k: v for k, v in md.items() if k != 'nrows'}):
+                    hdu.header['HIERARCH OGF ' + k] = v
+    except Exception as exc:
+        print('WARNING: catalog metadata not written: %s' % exc, file=sys.stderr)
+
     hdulist = fits.HDUList([fits.PrimaryHDU(), hdu])
     hdulist.writeto(args.output, overwrite=True)
 
