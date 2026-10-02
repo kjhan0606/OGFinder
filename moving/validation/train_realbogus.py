@@ -18,7 +18,12 @@ FIELDS = {   # field -> exposures (MAST cache); none overlaps the BB89 visit j8p
     "f1": "j8pu1stiq_flc,j8pu1stmq_flc,j8pu1stpq_flc,j8pu1sttq_flc",
     "f2": "j8pu09rbq_flc,j8pu09rsq_flc,j8pu09rvq_flc,j8pu09s0q_flc",
     "f3": "j8pu33blq_flc,j8pu33btq_flc,j8pu33bwq_flc,j8pu33c0q_flc",
-    "f4": "j8pu3oqmq_flc,j8pu3oqqq_flc,j8pu3oqtq_flc,j8pu3oqxq_flc"}
+    "f4": "j8pu3oqmq_flc,j8pu3oqqq_flc,j8pu3oqtq_flc,j8pu3oqxq_flc",
+    # added in round 2 (item 2): more cached COSMOS ACS visits (different pointings/epochs than BB89; jbhm43 = 4 x 120 s, jboa* = 3 x 340-460 s)
+    "f5": "jbhm43uzq_flc,jbhm43viq_flc,jbhm43waq_flc,jbhm43wsq_flc",
+    "f6": "jboa40aeq_flc,jboa40aiq_flc,jboa40alq_flc",
+    "f7": "jboa41xpq_flc,jboa41xtq_flc,jboa41xwq_flc",
+    "f8": "jboa84quq_flc,jboa84qyq_flc,jboa84r4q_flc"}
 SETS = [("a", 1000, ""), ("b", 1010, ""), ("c", 1020, "--nodq --cr-extra 3000")]
 
 

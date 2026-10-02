@@ -197,7 +197,7 @@ if __name__ == "__main__":
     for k, tk in enumerate(truth):
         pos = tk['pos']
         det_hit = []
-        for ci in range(4):
+        for ci in range(len(pos)):
             px, py, ra, de = pos[ci]
             best = None
             for d in dets:
