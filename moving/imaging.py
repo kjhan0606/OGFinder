@@ -42,8 +42,18 @@ def mid_mjd(h0, h1):
     else:
         es = h1.get("EXPSTART", h0.get("EXPSTART")); ee = h1.get("EXPEND", h0.get("EXPEND"))
         return 0.5 * (es + ee), es, ee
+    ex = float(h0.get("EXPTIME", h1.get("EXPTIME", 0)) or 0)
+    g = lambda k: h1.get(k, h0.get(k))
+    if g("MJD-BEG") is not None and g("MJD-END") is not None:                 # Rubin/LSST and other FITS-standard headers
+        b, e = float(g("MJD-BEG")), float(g("MJD-END"))
+        return 0.5 * (b + e), b, e
+    if "TIME-OBS" not in h0 and g("MJD-OBS") is not None:                       # MJD-OBS = start of exposure (FITS standard)
+        t = float(g("MJD-OBS"))
+        return t + 0.5 * ex / 86400.0, t, t + ex / 86400.0
+    if "TIME-OBS" not in h0 and g("DATE-OBS") is not None:
+        t = Time(str(g("DATE-OBS")), scale="utc").mjd
+        return t + 0.5 * ex / 86400.0, t, t + ex / 86400.0
     t = Time(h0["DATE-OBS"] + "T" + h0["TIME-OBS"], scale="utc").mjd
-    ex = float(h0.get("EXPTIME", 0))
     return t + 0.5 * ex / 86400.0, t, t + ex / 86400.0
 
 
@@ -84,6 +94,11 @@ def load_chips(path, align_dir=None, apply_pam=True, max_chips=None):
     inst = str(h0.get("INSTRUME", "")).strip()
     tel = str(h0.get("TELESCOP", "")).strip()
     sci = [i for i, h in enumerate(hdul) if h.name == "SCI" and h.data is not None]
+    names = [str(h.name).upper() for h in hdul]
+    # Rubin/LSST calexp-style file: IMAGE + MASK (+ VARIANCE) extensions; only IMAGE is a science chip (MASK/VARIANCE are 2-D too)
+    lsst = (not sci) and "IMAGE" in names and ("MASK" in names or "VARIANCE" in names) and hdul[names.index("IMAGE")].data is not None
+    if lsst:
+        sci = [names.index("IMAGE")]
     if not sci:                                   # plain image (PS1 cutout, drizzle product, ...)
         sci = [i for i, h in enumerate(hdul) if h.data is not None and h.data.ndim == 2]
     for n, i in enumerate(sci):
@@ -115,10 +130,24 @@ def load_chips(path, align_dir=None, apply_pam=True, max_chips=None):
                 err = np.array(hh.data, np.float32)
             if hh.name == "DQ" and hh.header.get("EXTVER", 1) == c.extver and hh.data is not None:
                 dq = np.array(hh.data)
+        lsst_mask = None
+        if lsst:
+            if "VARIANCE" in names and hdul[names.index("VARIANCE")].data is not None:
+                err = np.sqrt(np.maximum(np.array(hdul[names.index("VARIANCE")].data, np.float32), 0))
+            if "MASK" in names and hdul[names.index("MASK")].data is not None:
+                mh = hdul[names.index("MASK")]
+                lsst_mask = np.array(mh.data).astype(np.int64)
+                bit = lambda nm: (1 << int(mh.header[nm])) if nm in mh.header else 0
+                lsst_bad = sum(bit("MP_" + n) for n in ("BAD", "NO_DATA", "EDGE", "UNMASKEDNAN", "INTRP"))
+                lsst_sat = bit("MP_SAT"); lsst_cr = bit("MP_CR")
         data *= fac
         err = err * fac if err is not None else None
         bad = ~np.isfinite(data)
-        if dq is not None:
+        if lsst_mask is not None:
+            bad |= (lsst_mask & lsst_bad) != 0
+            c.saturated = (lsst_mask & lsst_sat) != 0
+            c.cr = (lsst_mask & lsst_cr) != 0
+        elif dq is not None:
             bad |= (dq.astype(np.int64) & HST_BAD_DQ) != 0
             c.saturated = (dq.astype(np.int64) & SATURATED) != 0
             c.cr = (dq.astype(np.int64) & CR_DQ) != 0
@@ -145,6 +174,8 @@ def load_chips(path, align_dir=None, apply_pam=True, max_chips=None):
             c.zp_ab = -2.5 * np.log10(float(c.photflam)) - 5 * np.log10(float(c.photplam)) - 2.408
         if tel == "HST" and "ELECTRON" in bunit:
             c.gain = float(h0.get("CCDGAIN", 1.0) or 1.0)
+        if lsst and bunit.replace(" ", "") in ("NJY", "NANOJANSKY"):
+            c.zp_ab = 31.4                            # AB zero point of nJy
         chips.append(c)
     return chips
 
