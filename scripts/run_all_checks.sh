@@ -86,7 +86,12 @@ chk_cli_templates() { need_x || { echo "no X server"; return 77; }
   HOME=$H OGF_CLITPL_OUT="$OUT/clitpl.txt" FAKE_LOG="$OUT/clitpl_fake.log" OGFINDER_PYTHON="$ROOT/scripts/fake_python_for_templates.sh" \
     gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_cli_templates.tcl > "$OUT/clitpl_raw.txt" 2>&1
   tclsum "$OUT/clitpl.txt"; local rc=$?; rm -rf "$H"; return $rc; }
-EXTRA="$EXTRA manifests cli_templates"
+chk_cli_headless() { need_x || { echo "no X server"; return 77; }
+  local H; H=$(mktemp -d /tmp/ogf_clihl_home.XXXXXX); rm -f "$OUT/clihl_fake.log"
+  HOME=$H OGF_CLIHL_OUT="$OUT/clihl.txt" FAKE_LOG="$OUT/clihl_fake.log" OGFINDER_PYTHON="$ROOT/scripts/fake_python_for_templates.sh" \
+    gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_cli_headless.tcl > "$OUT/clihl_raw.txt" 2>&1
+  tclsum "$OUT/clihl.txt"; local rc=$?; rm -rf "$H"; return $rc; }
+EXTRA="$EXTRA manifests cli_templates cli_headless"
 chk_newplugins() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_newplugins.sh" "$OUT/newplugins_work" 2>&1 | tail -8; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA newplugins"
