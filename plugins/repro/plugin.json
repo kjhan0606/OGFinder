@@ -1,0 +1,89 @@
+{
+ "schema": 1,
+ "id": "repro",
+ "name": "Reproducibility bundle",
+ "short": "Repro",
+ "tab": "Measure",
+ "order": 37,
+ "description": "Write a zip with software versions, git state, parameters, input checksums, the recorded steps, the session script and the final catalog; verify a bundle by checking inputs and versions and re-running the processing.",
+ "requires": {
+  "python": [
+   "numpy"
+  ]
+ },
+ "primary": "bundle",
+ "settings": "params",
+ "tcl": "repro.tcl",
+ "params": [
+  {
+   "name": "bundle-file",
+   "label": "Bundle file (.zip)",
+   "type": "string",
+   "default": "",
+   "group": "Bundle",
+   "help": "Where \"Create Bundle\" writes and \"Verify\" reads. Empty = ogf_bundle.zip in the session work directory."
+  },
+  {
+   "name": "include-inputs",
+   "label": "Include copies of the input images",
+   "type": "bool",
+   "default": false,
+   "group": "Bundle",
+   "help": "Off: only checksums and paths are stored (small bundle). On: verify works without the original files."
+  },
+  {
+   "name": "note",
+   "label": "Note",
+   "type": "string",
+   "default": "",
+   "group": "Bundle",
+   "help": "Free text stored in the manifest."
+  },
+  {
+   "name": "rerun",
+   "label": "Re-run the processing when verifying",
+   "type": "bool",
+   "default": false,
+   "group": "Verify",
+   "help": "Session bundles re-run the exported script in replay mode (minutes); off = integrity checks only (inputs, bundled files, software versions)."
+  },
+  {
+   "name": "rtol",
+   "label": "Relative tolerance for numbers",
+   "type": "float",
+   "default": 0.0,
+   "group": "Verify",
+   "help": "0 = the re-run must be byte-identical; a small value accepts numerical noise from other library versions.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "inputs-dir",
+   "label": "Directory with the input files",
+   "type": "string",
+   "default": "",
+   "group": "Verify",
+   "help": "Searched first (by file name) when the recorded paths do not exist any more."
+  }
+ ],
+ "steps": [
+  {
+   "id": "bundle",
+   "label": "Create Bundle",
+   "proc": "OGFReproBundle",
+   "session": "NONE"
+  },
+  {
+   "id": "verify",
+   "label": "Verify Bundle...",
+   "proc": "OGFReproVerify",
+   "session": "NONE"
+  },
+  {
+   "id": "info",
+   "label": "Bundle Info...",
+   "proc": "OGFReproInfo",
+   "session": "NONE"
+  }
+ ]
+}
