@@ -243,3 +243,21 @@ def test_rendering_matches_galfit_pixelwise(tmp_path):
         worst.append((name, rel, np.abs(m.sum() - g.sum()) / g.sum()))
         sys.stderr.write('GALFIT render %-8s max|dmodel|/peak %.4f  total-flux diff %.2e\n' % (name, rel, worst[-1][2]))
     assert max(w[1] for w in worst) < 0.02 and max(w[2] for w in worst) < 0.005             # measured: 1.4 % of peak (de Vaucouleurs cusp pixel), 0.36 % flux
+
+
+def test_steep_profile_centred_on_a_pixel_is_not_overweighted():
+    """Regression: an odd sub-pixel grid sampled the cusp at r = 0 exactly: n = 5 centred on a pixel had +16 % peak, +4 % flux (found against GALFIT)."""
+    c = MF._normalise(dict(kind='sersic', x=40.0, y=40.0, mag=15.0, re=2.9, n=5.0, q=0.85, pa=110.0), 26.0)
+    shape = (81, 81)
+    img = M.render_sersic(shape, 40.0, 40.0, M.sersic_Ie_from_flux(c['flux'], 2.9, 5.0, 0.85), 2.9, 5.0, 0.85, 110.0)
+    ns = 120
+    o = (np.arange(ns) + 0.5) / ns - 0.5
+    oy, ox = np.meshgrid(o, o, indexing='ij')
+    Ie = M.sersic_Ie_from_flux(c['flux'], 2.9, 5.0, 0.85)
+    y, x = np.mgrid[:81, :81].astype(float)
+    ref = M._sersic_eval(x, y, 40.0, 40.0, Ie, 2.9, 5.0, 0.85, 110.0, 0.0)
+    for j in range(34, 47):
+        for i in range(34, 47):
+            ref[j, i] = M._sersic_eval(i + ox.ravel(), j + oy.ravel(), 40.0, 40.0, Ie, 2.9, 5.0, 0.85, 110.0, 0.0).mean()
+    sel = (np.abs(x - 40) <= 6) & (np.abs(y - 40) <= 6)
+    assert np.abs(img - ref)[sel].max() / ref.max() < 0.01 and abs(img[sel].sum() / ref[sel].sum() - 1) < 0.005

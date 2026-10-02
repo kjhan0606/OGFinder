@@ -54,7 +54,7 @@ def render_sersic(shape, xc, yc, Ie, re, n, q, pa_deg, c=0.0, nsub=7, rsub=None,
     x += origin[1]
     img = _sersic_eval(x, y, xc, yc, Ie, re, n, q, pa_deg, c)
     rs = rsub if rsub is not None else max(3.0, 0.5 * re) if n > 1.5 else 3.0
-    for rad, ns in ((rs, nsub), (1.5, 41 if n > 2.5 else 21)):       # steep cusps (n >~ 3) need a much finer grid in the last 1.5 px
+    for rad, ns in ((rs, nsub), (1.5, 40 if n > 2.5 else 21)):       # steep cusps (n >~ 3) need a much finer grid in the last 1.5 px; EVEN count: an odd grid samples r = 0 exactly (the cusp value) and overweights it (+16 % peak, +4 % flux for n = 5 centred on a pixel)
         if ns <= 1 or (rad == 1.5 and n <= 1.5):
             continue
         sel = (x - xc) ** 2 + (y - yc) ** 2 < (rad + 1.0) ** 2
