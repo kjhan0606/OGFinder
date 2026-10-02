@@ -197,6 +197,45 @@ proc sec_noisemodel {} {
     R noisemodel_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_sedcodes {} {
+    set root [file normalize [file join [::ogf::step::plugin_dir sedcodes] .. ..]]
+    set mock [file join $root sed_adapters mocks]
+    ::ogf::params::put sedcodes mag-columns {MAG_AUTO:F606W,MAG_ISOCOR:F775W,MAG_APER:F850LP,MAG_APER_2:F105W,MAG_APER_3:F125W,MAG_APER_5:F160W}
+    ::ogf::params::put sedcodes max-objects 40
+    ::ogf::params::put sedcodes engine external
+    ::ogf::params::put sedcodes command "[OGFPython] [file join $mock mock_eazy.py]"
+    ::ogf::params::put sedcodes filters-res [file join $mock FILTER.RES.toy]
+    ::ogf::params::put sedcodes z-step 0.05
+    ::ogf::params::put sedcodes z-max 4.0
+    lassign [run_step sedcodes photoz] ok recs
+    R sedcodes_photoz_ran $ok $recs
+    R sedcodes_photoz_recorded [expr {[lindex $recs 0 0] eq "analysis.sedcodes_photoz"}] $recs
+    set cols [::ogf::cat::columns]
+    R sedcodes_photoz_columns [expr {"EZ_Z" in $cols && "EZ_Z16" in $cols && "EZ_Z84" in $cols && "EZ_CHI2" in $cols}]
+    R sedcodes_photoz_rows [expr {[nonempty EZ_Z] >= 30}] "filled=[nonempty EZ_Z]"
+    set zs [lsearch -all -inline -not [col_values EZ_Z] {}]
+    R sedcodes_photoz_range [expr {[tcl::mathfunc::min {*}$zs] >= 0.0 && [tcl::mathfunc::max {*}$zs] <= 4.0}] "[tcl::mathfunc::min {*}$zs] .. [tcl::mathfunc::max {*}$zs]"
+    ::ogf::params::put sedcodes sed-code cigale
+    ::ogf::params::put sedcodes z-column EZ_Z
+    ::ogf::params::put sedcodes command "[OGFPython] [file join $mock mock_cigale.py]"
+    lassign [run_step sedcodes sedfit] ok recs
+    R sedcodes_sedfit_ran $ok $recs
+    R sedcodes_sedfit_recorded [expr {[lindex $recs 0 0] eq "analysis.sedcodes_sedfit"}] $recs
+    set cols [::ogf::cat::columns]
+    R sedcodes_sedfit_columns [expr {"SC_LOGM" in $cols && "SC_AV" in $cols && "SC_CHI2" in $cols}]
+    R sedcodes_sedfit_rows [expr {[nonempty SC_LOGM] >= 30}] "filled=[nonempty SC_LOGM]"
+    set lm [lsearch -all -inline -not [col_values SC_LOGM] {}]
+    R sedcodes_logm_finite [expr {[tcl::mathfunc::min {*}$lm] > 0 && [tcl::mathfunc::max {*}$lm] < 20}] "[tcl::mathfunc::min {*}$lm] .. [tcl::mathfunc::max {*}$lm]"
+    R sedcodes_file [expr {[file exists [file join [OGFSessWorkDir] sedcodes sedcodes_results.json]] && [::ogf::cat::exists sedcodes,results_file]}]
+    R sedcodes_work_files [expr {[file exists [file join [OGFSessWorkDir] sedcodes cigale pcigale.ini]] && [file exists [file join [OGFSessWorkDir] sedcodes eazy catalog.cat]]}]
+    OGFSedcodesCheck; update
+    R sedcodes_check_window [expr {[winfo exists .ogftext] && [string match "*== eazy ==*== prospector ==*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    OGFSedcodesProfiles; update
+    R sedcodes_profiles [expr {[file exists [::ogf::cat::get sedcodes,profile_file {}]]}]
+    R sedcodes_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -286,7 +325,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
