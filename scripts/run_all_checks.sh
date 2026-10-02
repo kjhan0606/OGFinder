@@ -100,6 +100,8 @@ chk_psfex_tests() { "$PY" -m pytest -q plugins/psfex/tests 2>&1 | tail -3; [ ${P
 EXTRA="$EXTRA psfex_tests"
 chk_multifit_tests() { "$PY" -m pytest -q plugins/multifit/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA multifit_tests"
+chk_morphext_tests() { "$PY" -m pytest -q plugins/morphology/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA morphext_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc

@@ -147,6 +147,28 @@ proc sec_multifit {} {
     R multifit_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_morphext {} {
+    ::ogf::params::put morphology mx-max-sources 60
+    ::ogf::params::put morphology mx-curves 3
+    lassign [run_step morphology morph_ext] ok recs
+    R morphext_ran $ok $recs
+    R morphext_recorded [expr {[lindex $recs 0 0] eq "analysis.morph_ext"}] $recs
+    set cols [::ogf::cat::columns]
+    R morphext_columns [expr {"MX_RP" in $cols && "MX_KRON_MAG" in $cols && "MX_SMOOTH" in $cols && "MX_GINI_P" in $cols && "MX_CONC" in $cols}]
+    R morphext_rows_filled [expr {[nonempty MX_RP] >= 10 && [nonempty MX_KRON_R] >= 30}] "rp=[nonempty MX_RP] kron=[nonempty MX_KRON_R]"
+    set rp [lsearch -all -inline -not [col_values MX_RP] {}]
+    R morphext_rp_sane [expr {[tcl::mathfunc::min {*}$rp] > 1.0 && [tcl::mathfunc::max {*}$rp] < 200}] "[tcl::mathfunc::min {*}$rp] .. [tcl::mathfunc::max {*}$rp]"
+    set w [file join [OGFSessWorkDir] morph_ext]
+    foreach f {morph_ext_growth.tsv morph_ext_curves.png} {
+	R morphext_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 200}]
+    }
+    R morphext_keys [expr {[::ogf::cat::exists morphext,growth_file]}]
+    set pw [OGFMorphExtCurves]
+    R morphext_plot_window [expr {[winfo exists $pw] && [image width ogfmorphextimg] > 300}] "[image width ogfmorphextimg]x[image height ogfmorphextimg]"
+    destroy $pw
+    R morphext_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -229,7 +251,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit} {
+    foreach sec {isophote completeness daophot psfex multifit morphext} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
