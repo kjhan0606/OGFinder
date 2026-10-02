@@ -36,7 +36,7 @@ unchanged.
 | Fetch | MAST (astroquery, public), Pan-STARRS cutouts, SkyBoT, Horizons | see LSST table below |
 | Align | Gaia DR3 (TAP) matching when stars exist, else relative chain with a polynomial/shift+rotation model between exposures | in the test field no Gaia stars matched; result is relative only (4–19 mas rms), the anchor exposure has no absolute tie |
 | Difference | ZOGY (Zackay, Ofek & Gal-Yam 2016) in Fourier space; template = median of the other aligned exposures. `zogy.zogy` also returns `alpha_new`/`sigma_alpha_new` = flux in the *target exposure's* flux scale (alpha * Fn / Fr), which `difference_chip` uses. **Optional, off by default** (see "Difference-image quality" below): source-noise variance maps `Vn`/`Vr` (eqs. 26-33 of the paper), astrometric-registration variance `astrom_n`/`astrom_r` (`S_corr`, `V_S`), per-tile empirical PSF (`imaging.measure_psf_field`, `zogy.zogy_tiled`), separate target/template PSFs | default call = sky-noise-only normalisation exactly as before; one PSF per chip unless a `PSFField` is passed; on the BB89 data the PSF field falls back to a constant PSF (see below). A PSF 20% too narrow gives ~22% low flux (`moving/tests/test_zogy.py`) |
-| Detect | thresholding on the S/N image, trail (elongated) channel, classes `point trail artefact_cr artefact_edge artefact_static artefact_dipole negative faint` | the archive CR mask is dense and mislabels real detections as `artefact_cr`; `artefact_static` = non-trail detection with template S/N > 8 |
+| Detect | thresholding on the S/N image (since 2026-10-02 + L.A.Cosmic features, trailed-Gaussian centroid refit, real/bogus score - see "Detection stage" below), trail (elongated) channel, classes `point trail artefact_cr artefact_edge artefact_static artefact_dipole negative faint` | the archive CR mask is dense and mislabels real detections as `artefact_cr`; `artefact_static` = non-trail detection with template S/N > 8 |
 | Link | triplet seeds (first / middle / last exposure) with an analytic parallax factor k from the middle exposure (k grid when the baseline is degenerate), KD-tree extension to the other exposures, vectorised 5-parameter weighted least squares (position, rate, k), rate and k gates, chi2-like score (stage 1). **Precision stage (2026-10):** detection veto masks before the pool cap (`pipeline.detection_veto`: stationary in all other exposures, template residual, chip edge), a tracklet-level logistic score (`tracklet.LLR_MODEL`: log rate, members, archive-CR fraction, sharpness, trail members, min S/N, chi2) that becomes `score` (= minus logit) with `prob`, a Sun-bound-orbit cut (`bound_orbit_ratio`), and clustering of near-identical (position, apparent velocity) candidates; a candidate sharing >= 2 detections with a better one is still dropped. The previous pair-based linker is kept as `tracklet.link_exposures_legacy`; `rescore=False` reproduces the stage-1 ranking. **Still no multi-night heliocentric clustering** (`helio_linc` exists but is not wired into the linker) | see the injection benchmark below |
 | Identify | SkyBoT candidates re-checked with Horizons using the true HST observer (`500@-48`) | |
 | Orbit | statistical ranging over the admissible region (Granvik et al. 2009 / Muinonen et al. 2010 style, simplified), 2-body polish, then ASSIST/REBOUND differential correction (DE440 + 16 massive asteroids + GR) with Carpino et al. (2003) outlier rejection, Eggl et al. (2020) star-catalogue debiasing, default station sigmas | no classical Gauss IOD (not implemented); station weights are defaults, not the Veres et al. (2017) table; solar light deflection and stellar aberration neglected; `mcmc_posterior` (emcee) exists but is untested; arcs shorter than ~1 day are flagged `determined=False`: elements are blanked, only class probabilities and ranging quantiles are shown; **classification is arc-aware** (below) |
@@ -185,6 +185,70 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
   * Same 4-day window through the shipped CLI (`--mode orbit --designation 25153 --mjd-min 58495 --mjd-max 58499`, all 115 observations, 37 used, no thinning): rms 0.56 arcsec, χ²_red 1.46; deviations +1.2 σ (a), +1.3 (e), −2.3 (i), +1.7 (Ω), +1.9 (ω), +2.4 (M), i.e. 2σ-level offsets with 78 observations rejected; this short arc is marginal.
   * A bug was found and fixed in the ASSIST propagator wrapper (one simulation reused for forward and backward sweeps): before the fix
     a differential correction started from the JPL state gave 57 arcsec rms, after the fix 1.76 arcsec (χ²_red 0.51) with default weights.
+
+## Detection stage (item 1, 2026-10-02): cosmic rays, trail centroids, real/bogus
+
+What changed (all in `moving/`, all ON by default in `detect.difference_chip`; `cr_reject=False, trail_fit=False, realbogus=False`
+reproduces the previous detections; CLI: `--no-cr-reject --no-trail-fit --no-realbogus`, default argv unchanged):
+
+* `crrej.py` - L.A.Cosmic (van Dokkum 2001) through `astroscrappy` (optional dependency, `pip install astroscrappy`; without it the numpy
+  `imaging.lacosmic_mask` is used).  The result is a **feature** (`lac3`, `lac_n7`, trail `lac_frac`), not a veto: on a BB89 chip the LAC mask covers 1.1 %
+  of the pixels (archive flag 1.13 %), 87 % of LAC pixels coincide with archive flags and 84-87 % of archive-flagged pixels are found by LAC.
+  On inj4, 124 of 191 injected non-trail detections lie on LAC pixels, so a hard veto would delete most faint movers.
+* `centroid.py` - trailed-Gaussian model (closed form, soft-L1 least squares, CR / bad-pixel mask) re-fits the position and length of trail
+  detections up to `trail_fit_max=40` per chip.  Median centroid error against the injected truth (inj4): trails < 25 px
+  0.28 -> 0.08 px; 25-50 px 5.8 -> 1.6 px; **> 50 px (> 2.5 arcsec) 18.9 -> 17.7 px: no improvement, 5 of 10 are still off by > 14 px**.
+* `realbogus.py` + `data/realbogus_model.json` (21.9 KB, 60 depth-3 trees, evaluated in pure numpy, `export_sklearn` for inspection) - a
+  gradient-boosted real/bogus score `rb` from 32 shape / ring / PSF-chi2 / LAC / trail features.  **Trained only on four non-BB89 COSMOS
+  visits with injected movers** (101516 detections: 890 real, 100626 bogus); leave-one-field-out AUC 0.965 / 0.986 / 0.985 / 0.992, recall at 0.2 % bogus kept
+  0.70 / 0.73 / 0.74 / 0.80, at 2 % bogus kept 0.80 / 0.89 / 0.88 / 0.89.  Top features: `lac_n7`, `trail_peak_frac`, `n_hi`, `lac_frac`, `snr`.
+  Reproduce: `moving/validation/train_realbogus.py --make-sets DIR` then fit (`--oof` writes out-of-fold scores).
+* `pipeline.link_detections(use_rb, rb_min, rb_snr_min=6, use_lac_cr)`: with `rb` present the per-exposure pool is ordered by `rb` then S/N and the
+  pool S/N floor drops to 6; without it the old S/N order is used.  `tracklet.LLR_MODEL_RB` (base features + mean / min member real/bogus
+  logit) replaces the base logistic score when `rb` is present; fitted on out-of-fold `rb` of the non-BB89 training sets.
+  A pinv fallback prevents a crash on degenerate (identical-epoch) fits.
+* `detections.tsv` gained the columns `rb lac3 lac_n7 theta_pix trail_fit trail_len_pix` (appended; existing columns unchanged).
+* `validation/inject.py` now writes exact `real` / `inj_box` labels and trail truth, supports `--nodq --cr-extra N` (CR-heavy sets: no archive CR flag
+  and N synthetic CR tracks per chip), `--chips`/`--save-chips`; with no options its output is bit-identical to the old script for inj3-8
+  (inj1/inj2 regenerate slightly differently, so the "before" numbers of those two differ from the older table above).
+  `link_bench.py` prints per-group totals.
+
+Benchmark on the regenerated sets (same box, `link_bench.py`, top 400, tolerance 1.0 arcsec; "before" = the unchanged pipeline on the same
+chips, "after" = this commit).  inj1-6 are the sets the **base** tracklet score was fitted on (in-sample for that part), inj7-8 are held out from it, inj9-12 are new
+CR-heavy sets (inj9-11 `--nodq --cr-extra 3000`, inj12 `--cr-extra 3000`).  The real/bogus model and `LLR_MODEL_RB` never saw any of them.
+
+| set | injected | ceiling | recovered | top-10 | top-50 | precision | time before / after |
+|---|---|---|---|---|---|---|---|
+| inj1 | 10 | 6 -> 7 | 5 -> 5 | 4 -> 5 | 5 -> 5 | .013 -> .013 | 13.7 / 12.1 s |
+| inj2 | 30 | 19 -> 22 | 10 -> 13 | 7 -> 7 | 9 -> 10 | .025 -> .033 | 15.9 / 11.6 s |
+| inj3 | 30 | 16 -> 22 | 7 -> 10 | 4 -> 6 | 7 -> 9 | .018 -> .028 | 14.5 / 12.8 s |
+| inj4 | 30 | 20 -> 21 | 8 -> 13 | 4 -> 8 | 8 -> 13 | .025 -> .035 | 14.6 / 11.2 s |
+| inj5 | 30 | 21 -> 21 | 15 -> 19 | 6 -> 9 | 13 -> 19 | .040 -> .050 | 14.8 / 12.0 s |
+| inj6 | 30 | 18 -> 21 | 12 -> 17 | 9 -> 9 | 11 -> 16 | .033 -> .045 | 14.4 / 14.4 s |
+| inj7 | 30 | 20 -> 22 | 10 -> 16 | 5 -> 9 | 8 -> 15 | .030 -> .045 | 12.7 / 14.6 s |
+| inj8 | 30 | 18 -> 25 | 10 -> 17 | 7 -> 9 | 9 -> 14 | .025 -> .045 | 13.5 / 11.5 s |
+| inj9 | 30 | 6 -> 14 | 1 -> 5 | 0 -> 1 | 0 -> 2 | .003 -> .013 | 20.1 / 21.2 s |
+| inj10 | 30 | 7 -> 14 | 0 -> 1 | 0 -> 0 | 0 -> 1 | .000 -> .003 | 18.5 / 22.6 s |
+| inj11 | 30 | 7 -> 19 | 0 -> 4 | 0 -> 3 | 0 -> 3 | .000 -> .010 | 18.5 / 24.5 s |
+| inj12 | 30 | 9 -> 16 | 0 -> 3 | 0 -> 1 | 0 -> 1 | .000 -> .007 | 18.9 / 21.4 s |
+| **inj1-6** (160) | | 100 -> 114 | **57 -> 77** | 34 -> 44 | 53 -> 72 | | |
+| **inj7-8** held out (60) | | 38 -> 47 | **20 -> 33** | 12 -> 18 | 17 -> 29 | | |
+| **inj9-12** CR-heavy (120) | | 29 -> 63 | **1 -> 13** | 0 -> 5 | 0 -> 7 | | |
+
+Honest reading: ranking and recovery improve on every group, but precision stays low (3-5 % of the 400 returned tracklets are true) and the CR-heavy
+sets remain poor (13 / 120).  On those sets the per-exposure cap of 600 limits what is reachable (6 reachable at cap 600, 24 at 1200, 27 at 5000 in inj9)
+and the median real/bogus score of real detections is only 0.09 there, i.e. the classifier is not reliable when the archive CR flag is absent *and*
+thousands of CR tracks are added.  inj1-6 gains are partly shared with the in-sample fit of the base score; inj7-8 and inj9-12 are the cleaner evidence.
+On inj1-8, 215 of 220 injected objects had >= 3 pool-eligible detections within 1 arcsec when the cap is removed: the remaining loss is cap and ranking.
+
+Run time (4 chips of 1240 x 1240): detection 76 s -> 82 s with the CR features -> about 100 s with trail fits (320 fits, ~59 ms each); linking 11-15 s
+(20-25 s on the CR-heavy sets).
+
+**Real BB89 check (the known mover, 2015 BB89, CLI as above, `--max-per-exposure 900`):** before: rank 0 of 400, prob 0.24; after: rank 0 of 400, prob 0.98 (3 members within 1 arcsec,
+0.056-0.095 arcsec from the ephemeris positions; the 4th exposure's detection (0.07 arcsec away) has rb 0.016 and lies on a LAC pixel, so only 3 of
+4 exposures enter the pool).  Nearest detection to the ephemeris position in exposures 0-3, before -> after: 0.049 -> 0.081, 0.166 -> 0.056, 0.268 -> 0.095, 0.071 -> 0.071 arcsec;
+S/N unchanged (751 / 655 / 591 / 194).  One real object: this shows no regression, not a statistically meaningful gain.  Detection stage 164 s, link 38 s, identify 22 s;
+the linker still reports `seed limit 4000000 reached` on this crowded field.
 
 ## Difference-image quality (ZOGY extensions)
 
