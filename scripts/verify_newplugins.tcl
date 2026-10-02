@@ -81,6 +81,37 @@ proc sec_completeness {} {
     R completeness_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_psfex {} {
+    ::ogf::params::put psfex snr-min 8
+    ::ogf::params::put psfex fwhm 2.2
+    ::ogf::params::put psfex order 1
+    lassign [run_step psfex build] ok recs
+    R psfex_ran $ok $recs
+    R psfex_recorded [expr {[lindex $recs 0 0] eq "analysis.psfex"}] $recs
+    set cols [::ogf::cat::columns]
+    R psfex_columns [expr {"PSFM_FWHM" in $cols && "PSFM_E" in $cols && "PSFM_PA" in $cols && "PSFM_NSTAR" in $cols}]
+    R psfex_rows_filled [expr {[nonempty PSFM_FWHM] > 100}] "rows=[nonempty PSFM_FWHM]"
+    set fw [lsearch -all -inline -not [col_values PSFM_FWHM] {}]
+    R psfex_fwhm_range [expr {[tcl::mathfunc::min {*}$fw] > 1.0 && [tcl::mathfunc::max {*}$fw] < 8.0}] "[tcl::mathfunc::min {*}$fw] .. [tcl::mathfunc::max {*}$fw]"
+    set w [file join [OGFSessWorkDir] psfex]
+    foreach f {model.json model.fits center.fits stars.tsv maps.tsv info.json diag.png} {
+	R psfex_file_$f [expr {[file exists [file join $w psfex_$f]] && [file size [file join $w psfex_$f]] > 50}]
+    }
+    R psfex_keys [expr {[::ogf::cat::exists psfex,model_file] && [file exists [::ogf::cat::get psfex,model_file]]}] [::ogf::cat::get psfex,model_file ?]
+    set pw [OGFPsfexDiag]
+    R psfex_plot_window [expr {[winfo exists $pw] && [image width ogfpsfeximg] > 300}] "[image width ogfpsfeximg]x[image height ogfpsfeximg]"
+    destroy $pw
+    run_step psfex use
+    R psfex_use [expr {[::ogf::cat::get psf,model ?] eq [::ogf::cat::get psfex,model_file ?] && [file exists [::ogf::cat::get psf,file ?]]}] [::ogf::cat::get psf,model ?]
+    # PSF photometry now carries --psf-model (argv unchanged when unset)
+    set argv [::ogf::step::build_argv photometry [::ogf::reg::step photometry psf_phot] [::ogf::step::context photometry psfphot]]
+    R psfex_photometry_argv [expr {[lsearch $argv --psf-model] >= 0}] [lrange $argv end-1 end]
+    ::ogf::cat::set psf,model {}
+    set argv [::ogf::step::build_argv photometry [::ogf::reg::step photometry psf_phot] [::ogf::step::context photometry psfphot]]
+    R psfex_photometry_argv_unset [expr {[lsearch $argv --psf-model] < 0}]
+    R psfex_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -163,7 +194,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot} {
+    foreach sec {isophote completeness daophot psfex} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

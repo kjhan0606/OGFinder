@@ -1,0 +1,209 @@
+{
+ "schema": 1,
+ "id": "psfex",
+ "name": "PSF model (PSFEx-like)",
+ "short": "PSF model",
+ "tab": "Measure",
+ "order": 28,
+ "description": "Spatially varying PSF from the field stars (polynomial of order 0-3, analytic base + pixel lookup table); graceful fallback with few stars; FWHM/ellipticity/PA maps and catalog columns; the model can be used by PSF photometry, crowded photometry, DAOPHOT, multi-component fits and tiled ZOGY.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy",
+   "sep"
+  ]
+ },
+ "primary": "build",
+ "settings": "params",
+ "tcl": "psfex.tcl",
+ "steps": [
+  {
+   "id": "build",
+   "label": "Build PSF Model",
+   "title": "PSF model (PSFEx-like)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.psfex",
+   "catalog_tmp": "psfex",
+   "done_status": "PSF model built",
+   "after": "OGFPsfexAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/psfex.py",
+    "{image}",
+    "--work",
+    "{work}/psfex",
+    "--catalog",
+    "{catalog}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    "--kind",
+    "{kind}",
+    "--order",
+    "{order}",
+    "--oversample",
+    "{oversample}",
+    "--size",
+    "{size}",
+    "--fwhm",
+    "{fwhm}",
+    "--snr-min",
+    "{snr-min}",
+    "--max-stars",
+    "{max-stars}",
+    "--saturation",
+    "{saturation}",
+    "--grid",
+    "{grid}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "PSFM_FWHM",
+     "PSFM_E",
+     "PSFM_PA",
+     "PSFM_NSTAR"
+    ]
+   }
+  },
+  {
+   "id": "use",
+   "label": "Use Model as Catalog PSF",
+   "proc": "OGFPsfexUse",
+   "session": "NONE"
+  },
+  {
+   "id": "diag",
+   "label": "PSF Maps Plot...",
+   "proc": "OGFPsfexDiag",
+   "session": "NONE"
+  },
+  {
+   "id": "stars",
+   "label": "PSF Star Table...",
+   "proc": "OGFPsfexStars",
+   "session": "NONE"
+  },
+  {
+   "id": "maps",
+   "label": "PSF Map Table...",
+   "proc": "OGFPsfexMaps",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "kind",
+   "label": "PSF function",
+   "type": "choice",
+   "default": "empirical",
+   "group": "Model",
+   "help": "empirical = pixel lookup table; gaussian / moffat / lorentz / penny = analytic base (+ lookup table).",
+   "choices": [
+    "empirical",
+    "gaussian",
+    "moffat",
+    "lorentz",
+    "penny"
+   ]
+  },
+  {
+   "name": "order",
+   "label": "Spatial order",
+   "type": "int",
+   "default": 2,
+   "group": "Model",
+   "help": "Polynomial order of the variation across the image (0-3); reduced automatically with few stars (< 20 stars: constant, < 60: linear, < 150: quadratic).",
+   "min": 0,
+   "max": 3
+  },
+  {
+   "name": "oversample",
+   "label": "Oversampling",
+   "type": "choice",
+   "default": "auto",
+   "group": "Model",
+   "help": "Sampling of the model grid; auto = 2 with >= 25 stars (accurate sub-pixel shifts), else 1.",
+   "choices": [
+    "auto",
+    "1",
+    "2",
+    "3"
+   ]
+  },
+  {
+   "name": "size",
+   "label": "Stamp size (px, 0 = auto)",
+   "type": "int",
+   "default": 0,
+   "group": "Model",
+   "help": "Odd stamp size; auto = 2*ceil(3.2*FWHM)+1.",
+   "min": 0,
+   "max": 201,
+   "expert": true
+  },
+  {
+   "name": "fwhm",
+   "label": "FWHM prior (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Model",
+   "help": "Prior FWHM: stamp size, isolation distance and the Gaussian fallback when no star is found.",
+   "min": 0.8,
+   "max": 30
+  },
+  {
+   "name": "snr-min",
+   "label": "Min. peak S/N",
+   "type": "float",
+   "default": 20.0,
+   "group": "Stars",
+   "help": "Peak signal-to-noise a PSF star needs.",
+   "min": 3,
+   "max": 1000
+  },
+  {
+   "name": "max-stars",
+   "label": "Max. stars",
+   "type": "int",
+   "default": 300,
+   "group": "Stars",
+   "help": "Maximum number of PSF stars (brightest first).",
+   "min": 3,
+   "max": 5000
+  },
+  {
+   "name": "saturation",
+   "label": "Saturation level (0 = none)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Stars",
+   "help": "Peak value above which a star is excluded.",
+   "min": 0,
+   "max": 1000000000.0
+  },
+  {
+   "name": "grid",
+   "label": "Map grid",
+   "type": "int",
+   "default": 7,
+   "group": "Stars",
+   "help": "Grid size of the FWHM / ellipticity maps in the info file and plot.",
+   "min": 2,
+   "max": 25,
+   "expert": true
+  }
+ ]
+}

@@ -96,6 +96,8 @@ chk_completeness_tests() { "$PY" -m pytest -q plugins/completeness/tests 2>&1 | 
 EXTRA="$EXTRA completeness_tests"
 chk_daophot_tests() { "$PY" -m pytest -q plugins/daophot/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA daophot_tests"
+chk_psfex_tests() { "$PY" -m pytest -q plugins/psfex/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA psfex_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
