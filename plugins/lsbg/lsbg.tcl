@@ -860,3 +860,28 @@ proc CatalogPanelLSBGForcedPhot {} {
     ::ogf::cat::set status "LSBG: Forced photometry ($band_name) complete — columns added"
 }
 
+
+# hooks of the headless "full pipeline" step (::ogf::step::run lsbg run_all headless)
+proc OGFLsbgHeadlessBefore {} {
+    set fn [CatalogPanelGetFITS]
+    CatalogPanelLSBGUpdateFiles $fn
+    OGFMaskEnsure lsbg
+    ::ogf::cat::set lsbg,cmdlog {}
+}
+proc OGFLsbgHeadlessAfter {} {
+    foreach k {has_mask has_clean has_detect has_catalog} {::ogf::cat::set lsbg,$k 1}
+    set result [::ogf::cat::tsv]       ;# the step runner has loaded the catalog; a new frame clears the table, so (like CatalogPanelLSBGRunAll) load it again afterwards
+    CreateFrame
+    set cleaned [file join [OGFSessWorkDir] lsbg_cleaned_[CatalogPanelFitsBaseName [CatalogPanelGetFITS]].fits]
+    if {![file exists $cleaned] || [catch {LoadFitsFile $cleaned {} {}} err]} {
+	::ogf::cat::set status "LSBG: Warning \u2014 could not load cleaned image"
+    } else {
+	global scale
+	set scale(mode) zscale
+	ChangeScaleMode
+    }
+    ::ogf::cat::set alldata $result
+    CatalogPanelLoadTSV [::ogf::cat::tsv] "lsbg"
+    CatalogPanelMarkAll
+    ::ogf::cat::set status "LSBG: Pipeline complete \u2014 [::ogf::cat::nrows] candidates"
+}

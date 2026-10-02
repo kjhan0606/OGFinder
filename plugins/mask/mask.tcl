@@ -523,3 +523,18 @@ proc OGFMaskOverlayApplied {} {
     global ogfmask current
     if {$ogfmask(overlay)} {OGFMaskApplyStyle $current(frame)}
 }
+
+# hooks of the headless Auto Mask step (::ogf::step::run mask auto headless)
+proc OGFMaskHeadlessBefore {} {
+    global ogfsess
+    set p [OGFMaskPaths]
+    if {$p ne {} && [info exists ogfsess(maskfiles)]} {lappend ogfsess(maskfiles) [file normalize [dict get $p mask]]}
+    ::ogf::cat::set status "Mask: running Auto Mask..."
+}
+proc OGFMaskHeadlessAfter {} {
+    global ogfmask
+    foreach line [split $::ogf::step::last(mask.auto) \n] {
+	if {[string match "#MASK_STATS*" $line]} {OGFMaskParseStats $line; break}
+    }
+    OGFMaskAfterEdit
+}

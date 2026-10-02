@@ -203,7 +203,177 @@
    "session": "AUTO",
    "records": [
     "lsbg.run"
-   ]
+   ],
+   "headless": {
+    "title": "LSBG full pipeline",
+    "record": "lsbg.run",
+    "requires": "",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "before": "OGFLsbgHeadlessBefore",
+    "after": "OGFLsbgHeadlessAfter",
+    "cli": [
+     "{python}",
+     "{script:ds9_lsbg.py}",
+     "{image}",
+     "--mode",
+     "run",
+     "--mask-detect-thresh",
+     "{mask-detect-thresh}",
+     "--mask-detect-minarea",
+     "{mask-detect-minarea}",
+     "--mask-expand-factor",
+     "{mask-expand-factor}",
+     "--max-dilate-radius",
+     "{max-dilate-radius}",
+     "--bright-star-mag-limit",
+     "{bright-star-mag-limit}",
+     "--bright-star-radius-scale",
+     "{bright-star-radius-scale}",
+     "--mask-mag-threshold",
+     "{mask-mag-threshold}",
+     "--interp-method",
+     "{interp-method}",
+     "--lsb-mu-threshold",
+     "{lsb-mu-threshold}",
+     "--bkg-method",
+     "{bkg-method}",
+     "--bkg-mesh-size",
+     "{bkg-mesh-size}",
+     "--bkg-poly-order",
+     "{bkg-poly-order}",
+     "--bkg-sigma-clip",
+     "{bkg-sigma-clip}",
+     "--bkg-n-iterations",
+     "{bkg-n-iterations}",
+     "--bkg-refine-thresh",
+     "{bkg-refine-thresh}",
+     "--bkg-rms-quantile",
+     "{bkg-rms-quantile}",
+     "--bkg-convergence-tol",
+     "{bkg-convergence-tol}",
+     "--detect-thresh",
+     "{detect-thresh}",
+     "--detect-minarea",
+     "{detect-minarea}",
+     "--detect-filter-kernel",
+     "{detect-filter-kernel}",
+     "--deblend-nthresh",
+     "{deblend-nthresh}",
+     "--deblend-mincont",
+     "{deblend-mincont}",
+     "--multiscale-factors",
+     "{multiscale-factors}",
+     "--sersic-n-min",
+     "{sersic-n-min}",
+     "--sersic-n-max",
+     "{sersic-n-max}",
+     "--sersic-re-min",
+     "{sersic-re-min}",
+     "--sersic-cutout-scale",
+     "{sersic-cutout-scale}",
+     "--sersic-max-nfev",
+     "{sersic-max-nfev}",
+     "--phot-apertures",
+     "{phot-apertures}",
+     "--mag-zeropoint",
+     "{mag-zeropoint}",
+     "--pixel-scale",
+     "{pixel-scale}",
+     "--mu-eff-min",
+     "{mu-eff-min}",
+     "--mu-eff-max",
+     "{mu-eff-max}",
+     "--r-eff-min",
+     "{r-eff-min}",
+     "--r-eff-max",
+     "{r-eff-max}",
+     "--ellipticity-max",
+     "{ellipticity-max}",
+     "--min-snr",
+     "{min-snr}",
+     "--sersic-n-filter-min",
+     "{sersic-n-filter-min}",
+     "--sersic-n-filter-max",
+     "{sersic-n-filter-max}",
+     "--sersic-chi2-max",
+     "{sersic-chi2-max}",
+     "--mask-input",
+     "{work}/mask_{base}_bool.fits",
+     "--mask-output",
+     "{work}/mask_{base}_lsbgrefined.fits",
+     "--masked-output",
+     "{work}/mask_{base}_masked.fits",
+     "--bkg-output",
+     "{work}/lsbg_background_{base}.fits",
+     "--cleaned-output",
+     "{work}/lsbg_cleaned_{base}.fits",
+     "--segmap-output",
+     "{work}/lsbg_segmap_{base}.fits",
+     "--catalog-output",
+     "{work}/lsbg_catalog_{base}.tsv",
+     "--n-workers",
+     "{extract:n-workers}",
+     {
+      "if": "lsb-protect",
+      "argv": [
+       "--lsb-protect"
+      ]
+     },
+     {
+      "if_not": "lsb-protect",
+      "argv": [
+       "--no-lsb-protect"
+      ]
+     },
+     {
+      "if": "multiscale",
+      "argv": [
+       "--multiscale"
+      ]
+     },
+     {
+      "if_not": "multiscale",
+      "argv": [
+       "--no-multiscale"
+      ]
+     },
+     {
+      "if": "sersic-fit",
+      "argv": [
+       "--sersic-fit"
+      ]
+     },
+     {
+      "if_not": "sersic-fit",
+      "argv": [
+       "--no-sersic-fit"
+      ]
+     },
+     {
+      "if": "svm-classify",
+      "argv": [
+       "--svm-classify",
+       "--svm-threshold",
+       "{svm-threshold}"
+      ]
+     },
+     {
+      "if": "svm-classify svm-checkpoint",
+      "argv": [
+       "--svm-checkpoint",
+       "{svm-checkpoint}"
+      ]
+     }
+    ],
+    "output": {
+     "mode": "set",
+     "name": "lsbg",
+     "force": 1
+    }
+   }
   },
   {
    "id": "export_script",

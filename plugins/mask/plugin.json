@@ -19,7 +19,66 @@
    ],
    "needs": [
     "image"
-   ]
+   ],
+   "headless": {
+    "title": "Auto Mask",
+    "record": "mask.auto",
+    "requires": "",
+    "needs": [
+     "image"
+    ],
+    "session": "AUTO",
+    "catalog_tmp": "mask",
+    "before": "OGFMaskHeadlessBefore",
+    "after": "OGFMaskHeadlessAfter",
+    "cli": [
+     "{python}",
+     "{script:ds9_mask.py}",
+     "{image}",
+     "--mode",
+     "auto",
+     "--mask",
+     "{work}/mask_{base}.fits",
+     "--detect-thresh",
+     "{auto-detect-thresh}",
+     "--minarea",
+     "{auto-minarea}",
+     "--expand-factor",
+     "{auto-expand-factor}",
+     "--max-dilate-radius",
+     "{auto-max-dilate-radius}",
+     "--bright-star-mag-limit",
+     "{auto-bright-star-mag-limit}",
+     "--bright-star-radius-scale",
+     "{auto-bright-star-radius-scale}",
+     "--mag-threshold",
+     "{auto-mag-threshold}",
+     "--mag-zeropoint",
+     "{extract:mag-zeropoint}",
+     "--n-workers",
+     "{extract:n-workers}",
+     "--pixel-scale",
+     "{lsbg:pixel-scale}",
+     "--lsb-mu-threshold",
+     "{lsbg:lsb-mu-threshold}",
+     {
+      "if": "auto-lsb-protect",
+      "argv": [
+       "--lsb-protect"
+      ]
+     },
+     {
+      "if_file": "{catalog}",
+      "argv": [
+       "--catalog",
+       "{catalog}"
+      ]
+     }
+    ],
+    "output": {
+     "mode": "capture"
+    }
+   }
   },
   {
    "id": "overlay",
@@ -195,6 +254,82 @@
    "min": 0,
    "max": 100,
    "unit": "%"
+  },
+  {
+   "name": "auto-detect-thresh",
+   "label": "Detection threshold",
+   "type": "float",
+   "default": 5.0,
+   "group": "Auto mask (shared)",
+   "help": "Auto Mask detection threshold (sigma).",
+   "key": "p,detect-thresh",
+   "min": 0.1,
+   "max": 100
+  },
+  {
+   "name": "auto-minarea",
+   "label": "Min area",
+   "type": "int",
+   "default": 5,
+   "group": "Auto mask (shared)",
+   "help": "Minimum connected pixels.",
+   "key": "p,minarea",
+   "min": 1,
+   "max": 100000
+  },
+  {
+   "name": "auto-expand-factor",
+   "label": "Expansion factor",
+   "type": "float",
+   "default": 1.5,
+   "group": "Auto mask (shared)",
+   "help": "Source ellipse expansion factor.",
+   "key": "p,expand-factor"
+  },
+  {
+   "name": "auto-max-dilate-radius",
+   "label": "Max dilate radius",
+   "type": "int",
+   "default": 20,
+   "group": "Auto mask (shared)",
+   "help": "Maximum dilation radius in pixels.",
+   "key": "p,max-dilate-radius"
+  },
+  {
+   "name": "auto-bright-star-mag-limit",
+   "label": "Bright-star mag limit",
+   "type": "float",
+   "default": 18.0,
+   "group": "Auto mask (shared)",
+   "help": "Stars brighter than this get a larger mask.",
+   "key": "p,bright-star-mag-limit"
+  },
+  {
+   "name": "auto-bright-star-radius-scale",
+   "label": "Bright-star radius scale",
+   "type": "float",
+   "default": 10.0,
+   "group": "Auto mask (shared)",
+   "help": "Bright-star mask radius scale.",
+   "key": "p,bright-star-radius-scale"
+  },
+  {
+   "name": "auto-mag-threshold",
+   "label": "Mask only brighter than mag",
+   "type": "float",
+   "default": 99.0,
+   "group": "Auto mask (shared)",
+   "help": "99 = mask everything detected.",
+   "key": "p,mag-threshold"
+  },
+  {
+   "name": "auto-lsb-protect",
+   "label": "Protect LSB structures",
+   "type": "bool",
+   "default": false,
+   "group": "Auto mask (shared)",
+   "help": "Do not mask low-surface-brightness structures.",
+   "key": "p,lsb-protect"
   }
  ],
  "store": {
