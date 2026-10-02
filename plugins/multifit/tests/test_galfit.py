@@ -86,15 +86,15 @@ def test_parse_feedme_fields_and_conversions(tmp_path):
     assert abs(25.0 - 2.5 * math.log10(f_hi) - (17.0 - 2.5)) < 1e-9 and abs(25.0 - 2.5 * math.log10(f_lo) - (19.5 - 2.5)) < 1e-9
 
 
-def test_unsupported_objects_and_unequal_ties(tmp_path):
-    bad = FEED.replace(' 0) expdisk', ' 0) moffat')
+def test_unsupported_objects_and_offset_ratio_ties(tmp_path):
+    bad = FEED.replace(' 0) expdisk', ' 0) fits')
     with pytest.raises(GI.FeedmeError):
         GI.parse_feedme(bad, base_dir=str(tmp_path))
     cfg = GI.parse_feedme(bad, strict=False, base_dir=str(tmp_path))
     assert len(cfg['components']) == 1 and any('skipped' in w for w in cfg['warnings'])
     (tmp_path / 'cons.txt').write_text('1_2 re offset\n1_2 pa ratio\n')
     cfg = GI.parse_feedme(FEED, base_dir=str(tmp_path))
-    assert not cfg.get('tie') and len(cfg['warnings']) == 2
+    assert cfg['tie'] == [['1.re', '0.re', 'offset'], ['1.pa', '0.pa', 'ratio']] and not cfg['warnings']          # GALFIT semantics: offset / ratio of the start values
     with pytest.raises(GI.FeedmeError):
         GI.parse_feedme(FEED.replace(' 3) 17.5     1', ' 3)'), base_dir=str(tmp_path))
 
