@@ -1,0 +1,214 @@
+{
+ "schema": 1,
+ "id": "lightcurves",
+ "name": "Transient light curves (classification, SN score)",
+ "short": "Light curves",
+ "tab": "Measure",
+ "order": 35,
+ "description": "Classify transient light curves (SN Ia / Ibc / II, fast transient, AGN, periodic variable, static residual) with a random forest trained on a synthetic library, give a calibrated SN score, optionally using the host offset; link the results to catalog objects. Works on a light-curve table or on the Moving-objects light curves.",
+ "requires": {
+  "python": [
+   "numpy",
+   "scipy",
+   "astropy"
+  ]
+ },
+ "primary": "classify",
+ "settings": "params",
+ "tcl": "lightcurves.tcl",
+ "params": [
+  {
+   "name": "source",
+   "label": "Light curves from",
+   "type": "choice",
+   "default": "file",
+   "group": "Input",
+   "help": "file = long-form table (id, mjd, flux or mag, error; optional number, ra, dec, host_offset_re); moving = the Moving-objects work directory (lightcurves.json + transients.tsv).",
+   "choices": [
+    "file",
+    "moving"
+   ]
+  },
+  {
+   "name": "lc-file",
+   "label": "Light-curve table",
+   "type": "string",
+   "default": "",
+   "group": "Input",
+   "help": "TSV or CSV; several light curves in one file, grouped by the id column."
+  },
+  {
+   "name": "moving-dir",
+   "label": "Moving-objects work directory",
+   "type": "string",
+   "default": "",
+   "group": "Input",
+   "help": "Directory with lightcurves.json (Light Curve step) and transients.tsv."
+  },
+  {
+   "name": "flux-unit",
+   "label": "Table values",
+   "type": "choice",
+   "default": "auto",
+   "group": "Input",
+   "help": "auto = flux if a flux column exists, else magnitudes (AB).",
+   "choices": [
+    "auto",
+    "flux",
+    "mag"
+   ]
+  },
+  {
+   "name": "zp",
+   "label": "Flux zero point (AB)",
+   "type": "float",
+   "default": 25.0,
+   "group": "Input",
+   "help": "Fluxes are put on the zero point 25 scale used by the classifier.",
+   "min": 0,
+   "max": 40
+  },
+  {
+   "name": "link",
+   "label": "Link light curves to catalog objects",
+   "type": "choice",
+   "default": "auto",
+   "group": "Linking",
+   "help": "number = number / host_id column (or numeric id); position = nearest catalog object to ra/dec; auto = number first, then position.",
+   "choices": [
+    "auto",
+    "number",
+    "position"
+   ]
+  },
+  {
+   "name": "link-radius-arcsec",
+   "label": "Position link radius (arcsec)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Linking",
+   "help": "",
+   "min": 0.1,
+   "max": 60
+  },
+  {
+   "name": "min-prob",
+   "label": "Minimum class probability",
+   "type": "float",
+   "default": 0.5,
+   "group": "Classification",
+   "help": "Below it the class is \"unclassified\" (the best guess stays in the results table).",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "min-points",
+   "label": "Minimum number of points",
+   "type": "int",
+   "default": 5,
+   "group": "Classification",
+   "help": "",
+   "min": 3,
+   "max": 100
+  },
+  {
+   "name": "min-snr",
+   "label": "Minimum peak S/N",
+   "type": "float",
+   "default": 3.0,
+   "group": "Classification",
+   "help": "",
+   "min": 0,
+   "max": 50
+  },
+  {
+   "name": "no-host",
+   "label": "Ignore the host offset",
+   "type": "bool",
+   "default": false,
+   "group": "Classification",
+   "help": "By default light curves that carry host_offset_re / offset_re (offset in R_e) use the host-offset model (nuclear offsets favour AGN)."
+  }
+ ],
+ "steps": [
+  {
+   "id": "classify",
+   "label": "Classify Light Curves",
+   "title": "Classify transient light curves",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.lightcurves",
+   "catalog_tmp": "lightcurves",
+   "done_status": "light curves classified",
+   "after": "OGFLcAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/lightcurves.py",
+    "--task",
+    "classify",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/lightcurves",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--source",
+    "{source}",
+    "--lc-file",
+    "{lc-file}",
+    "--moving-dir",
+    "{moving-dir}",
+    "--flux-unit",
+    "{flux-unit}",
+    "--zp",
+    "{zp}",
+    "--link",
+    "{link}",
+    "--link-radius-arcsec",
+    "{link-radius-arcsec}",
+    "--min-prob",
+    "{min-prob}",
+    "--min-points",
+    "{min-points}",
+    "--min-snr",
+    "{min-snr}",
+    {
+     "if": "no-host",
+     "argv": [
+      "--no-host"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "LC_ID",
+     "LC_N",
+     "LC_CLASS",
+     "LC_PCLASS",
+     "LC_PSN",
+     "LC_PEAK_MJD",
+     "LC_PEAK_MAG",
+     "LC_RISE_D",
+     "LC_DECL",
+     "LC_CHI2R"
+    ]
+   }
+  },
+  {
+   "id": "viewer",
+   "label": "Light-curve Viewer...",
+   "proc": "OGFLcViewer",
+   "session": "NONE"
+  },
+  {
+   "id": "table",
+   "label": "Result Table...",
+   "proc": "OGFLcTable",
+   "session": "NONE"
+  }
+ ]
+}
