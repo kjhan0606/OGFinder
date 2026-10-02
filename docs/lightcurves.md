@@ -28,7 +28,34 @@ The library (`lcsynth.py`) is a set of parametric caricatures: SN Ia / Ibc (Bazi
 * Readers (flux/mag, zero point), link modes (number, position), plot PNG (640×340), reproducible training: tested.
 
 ## Limits
-* Trained on synthetic caricatures, **not on real survey light curves**: the numbers above are self-consistent but real SNe have colour evolution, diversity (91bg, IIn, IIb, SLSN, TDE, novae, …) and non-Gaussian errors that are not represented; expect lower real-world accuracy. Retrain with `train.py` after replacing `lcsynth.py` by real templates (e.g. SNANA/PLAsTiCC-style) or labelled data.
+* The shipped default `model_lc.json` is trained on synthetic caricatures, **not on real survey light curves** (real-data validation and an optional ZTF-trained model: section "Real ZTF validation" below): the numbers above are self-consistent but real SNe have colour evolution, diversity (91bg, IIn, IIb, SLSN, TDE, novae, …) and non-Gaussian errors that are not represented; expect lower real-world accuracy. Retrain with `train.py` after replacing `lcsynth.py` by real templates (e.g. SNANA/PLAsTiCC-style) or labelled data.
 * Single band only (no colour); no redshift prior or absolute-magnitude consistency check; host information is only the offset in R_e; AGN vs SN confusion remains for sparse light curves.
 * Non-detections are not used (only the forced-photometry fluxes); errors from the Moving-objects step contain background scatter only (no Poisson term) — fine for difference images, optimistic otherwise.
 * P_SN is calibrated on the training library; with a different cadence/depth mix the calibration will drift.
+
+## Real ZTF validation (round 2, item 3)
+Data: `fetch_ztf.py` (network; public services only) downloads real ZTF alert-detection light curves (ALeRCE API, difference-image PSF photometry, one band per
+object = the one with more detections, cut to a 220-day window so that the duration is not a class feature).  Labels: **SNe = SPECTROSCOPIC types** of the
+ZTF Bright Transient Survey (VizieR J/ApJ/895/32, Fremling et al. 2020; Ia/91T/91bg/02cx... -> SNIa, II/IIb/IIn/87A -> SNII, Ib/Ic/Ib-c/Ic-BL/Ibn -> SNIbc; SLSN and
+"ambiguous" skipped).  **AGN and periodic variables are labelled by the ALeRCE lc_classifier at p >= 0.9 (a machine classifier, not spectroscopy)**, so those two
+classes measure agreement with ALeRCE, not truth.  1186 objects requested, 941 light curves with >= 8 detections, 770 with peak S/N >= 3 (SNIa 307, SNII 99, SNIbc 20, AGN 67, variable 277).
+`train_real.py ZTF_LCS.json` evaluates on those objects only (5-fold stratified CV, `real_validation_report.json`):
+
+| model | accuracy | balanced accuracy | SN-vs-rest AUC | SN completeness / purity (P_SN >= 0.5) |
+|---|---|---|---|---|
+| A shipped synthetic-trained `model_lc.json` (no retraining) | **0.604** | 0.541 | 0.964 | 0.967 / 0.920 |
+| B random forest on real training folds only | 0.848 | 0.709 | 0.992 | 0.984 / 0.931 |
+| C synthetic library (400/class) + real folds (weight 5) | 0.851 | 0.643 | 0.989 | 0.969 / 0.941 |
+| B / C with `n_obs`, `log_baseline` removed (cadence/duration confound check) | 0.832 / 0.838 | 0.692 / 0.633 | 0.986 / 0.986 | 0.979 / 0.925, 0.967 / 0.934 |
+
+Reading: the synthetic model transfers well for **SN vs. not-SN** (AUC 0.96, similar to its synthetic 0.92/0.95 completeness/purity) but the 7-class accuracy drops
+from 0.78 (synthetic hold-out) to 0.60 on real data: SNIa -> SNIbc (127 of 307), SNII -> SNIa/SNIbc (64 of 99), AGN with low amplitude -> "static" (17 of 67);
+accuracy grows with peak S/N (0.41 below 10, 0.64 for 10-30, 0.70 above 30).  Training on real objects raises accuracy to 0.85, but the gain is mostly the majority classes: SNIbc
+(20 objects) is recognised 3 times of 20 even with real training data, and the SNIa-vs-SNII split (B: 28 SNIa called SNII, 25 SNII called SNIa) stays uncertain.
+Limits: one band, ALeRCE detections only (no non-detection / forced photometry), BTS is magnitude-limited (r < 18.5 peak) and therefore biased to bright, low-redshift
+SNe (the plugin's targets are fainter), class labels for non-SNe are ALeRCE's, no `fast`/`static` real examples (their real recall is untested), small SNIbc sample.
+`ztf/model_lc.json` (model C trained on all 770 + synthetic library, 7 classes kept; use `lightcurves.py ... --model-dir plugins/lightcurves/ztf`; no host model) is
+**not the default**: its numbers above are cross-validated, but BTS-like bright SNe are not the typical input of the Moving/Transient steps; the default stays the synthetic model so
+existing golden outputs do not change.  `tests/data/ztf_sample.json` holds 20 of the real objects for the loader tests.
+Reproduce: `python3 plugins/lightcurves/fetch_ztf.py DIR && python3 plugins/lightcurves/train_real.py DIR/ztf_lcs.json [--write-model M.json]`.  Other surveys: any JSON list with
+`label, t, mag, err[, sign]` or `label, t, flux, err` is accepted by `train_real.py`; PLAsTiCC-style tables must be converted to that layout (not done: PLAsTiCC is simulated data).

@@ -233,3 +233,42 @@ def test_training_is_reproducible(tmp_path):
     rep = json.load(open(PLUG + '/training_report.json'))
     print('shipped models: held-out accuracy lc %.3f host %.3f (seed %d, %d per class)' % (rep['lc']['accuracy'], rep['host']['accuracy'], rep['seed'], rep['per_class']))
     assert rep['lc']['accuracy'] > 0.7
+
+
+# ---- real ZTF light curves (round 2, item 3): 20 objects fetched with fetch_ztf.py (BTS spectroscopic SNe; ALeRCE-labelled AGN / variables)
+def test_real_ztf_sample_loader_and_models():
+    sys.path.insert(0, PLUG)
+    import train_real, fetch_ztf
+    objs = json.load(open(os.path.join(HERE, 'data', 'ztf_sample.json')))
+    assert len(objs) == 20 and {o['label'] for o in objs} == {'SNIa', 'SNII', 'SNIbc', 'AGN', 'variable'}
+    t, f, e = train_real.to_flux(objs[0])
+    assert len(t) == len(f) == len(e) and np.all(e > 0)
+    o = dict(objs[0]); o['sign'] = [-1] * len(o['t'])
+    assert np.allclose(train_real.to_flux(o)[1], -f * np.array(objs[0]['sign']))           # negative difference flux for isdiffpos = -1
+    assert fetch_ztf.MAP['Ia-91T'] == 'SNIa' and fetch_ztf.MAP['Ic-BL'] == 'SNIbc' and 'SLSN-I' not in fetch_ztf.MAP
+    shipped = lcclass.load_model(os.path.join(PLUG, 'model_lc.json'))
+    ztf = lcclass.load_model(os.path.join(PLUG, 'ztf', 'model_lc.json'))
+    assert ztf['classes'] == shipped['classes'] and ztf['meta']['real_weight'] > 0
+    X = []
+    for o in objs:
+        t, f, e = train_real.to_flux(o)
+        F, aux = lcclass.features(t, f, e)
+        X.append([F[k] for k in lcclass.FEATURES])
+    y = [shipped['classes'].index(o['label']) for o in objs]
+    acc = lambda m: float((lcclass.predict(m, X).argmax(1) == np.array(y)).mean())
+    # in-sample for the ZTF model (these 20 may be in its training set): only guard against a broken model; the honest numbers are in real_validation_report.json
+    assert acc(ztf) >= 0.6
+    rep = json.load(open(os.path.join(PLUG, 'real_validation_report.json')))
+    assert rep['B_real_only_cv']['accuracy'] > rep['A_shipped_synthetic_model']['accuracy'] + 0.1
+
+
+def test_train_real_runs_on_flux_format(tmp_path):
+    sys.path.insert(0, PLUG)
+    import train_real
+    lcs = lcsynth.make_set(14, 5, classes=['SNIa', 'SNII', 'AGN', 'variable'])
+    p = tmp_path / 'lcs.json'
+    json.dump([dict(label=l['cls'], t=list(map(float, l['t'])), flux=list(map(float, l['flux'])), err=list(map(float, l['err']))) for l in lcs], open(p, 'w'))
+    out = tmp_path / 'rep.json'
+    train_real.main([str(p), '--folds', '2', '--synthetic', '6', '--jobs', '2', '--out', str(out), '--write-model', str(tmp_path / 'm.json')])
+    r = json.load(open(out))
+    assert r['n_real'] >= 20 and 0 <= r['B_real_only_cv']['accuracy'] <= 1 and (tmp_path / 'm.json').exists()
