@@ -1,0 +1,579 @@
+{
+ "schema": 1,
+ "id": "lensmodel",
+ "name": "Strong-lens model (SIE + shear, critical curves, magnification, delays)",
+ "short": "Lens",
+ "tab": "Measure",
+ "order": 33,
+ "description": "Parametric strong-lens model of multiply imaged sources: SIE + external shear (optional fixed NFW halo and cluster-member PIEMD perturbers), image-plane chi2 fit with fitted source position, Einstein radius and mass, critical curves and caustics, magnification map, predicted counter-images, time delays and a source-plane reconstruction. numpy/scipy; lenstronomy only as an optional cross-check.",
+ "requires": {
+  "python": [
+   "numpy",
+   "scipy",
+   "astropy"
+  ]
+ },
+ "primary": "fit",
+ "settings": "params",
+ "tcl": "lensmodel.tcl",
+ "params": [
+  {
+   "name": "image-numbers",
+   "label": "Image NUMBERs",
+   "type": "string",
+   "default": "",
+   "group": "Images",
+   "help": "Catalog NUMBERs of the multiple images of one source, e.g. 12,15,18,21 (Use selection fills this from the table)."
+  },
+  {
+   "name": "positions",
+   "label": "Image positions (x,y;x,y;...)",
+   "type": "string",
+   "default": "",
+   "group": "Images",
+   "help": "1-based pixel coordinates, used only when the NUMBER list is empty.",
+   "expert": true
+  },
+  {
+   "name": "lens-number",
+   "label": "Lens galaxy NUMBER",
+   "type": "int",
+   "default": 0,
+   "group": "Images",
+   "help": "Catalog NUMBER of the lens galaxy; its X_IMAGE/Y_IMAGE is the lens centre (0 = use Lens x/y).",
+   "min": 0,
+   "max": 100000000
+  },
+  {
+   "name": "lens-x",
+   "label": "Lens x (pixel)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Images",
+   "help": "1-based lens-centre pixel when no lens NUMBER is given.",
+   "min": 0,
+   "max": 1000000,
+   "expert": true
+  },
+  {
+   "name": "lens-y",
+   "label": "Lens y (pixel)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Images",
+   "help": "1-based lens-centre pixel when no lens NUMBER is given.",
+   "min": 0,
+   "max": 1000000,
+   "expert": true
+  },
+  {
+   "name": "sigma-pos",
+   "label": "Position uncertainty (arcsec)",
+   "type": "float",
+   "default": 0.01,
+   "group": "Images",
+   "help": "Gaussian error of the image positions; sets chi2.",
+   "min": 0.0001,
+   "max": 10,
+   "unit": "arcsec"
+  },
+  {
+   "name": "pixscale",
+   "label": "Pixel scale (arcsec/pixel)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Images",
+   "help": "0 = from the FITS WCS.",
+   "min": 0,
+   "max": 100,
+   "unit": "arcsec",
+   "expert": true
+  },
+  {
+   "name": "z-lens",
+   "label": "Lens redshift",
+   "type": "float",
+   "default": 0.0,
+   "group": "Redshifts",
+   "help": "Needed for the mass, velocity dispersion and time delays (0 = skip the physical quantities).",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "name": "z-source",
+   "label": "Source redshift",
+   "type": "float",
+   "default": 0.0,
+   "group": "Redshifts",
+   "help": "Must exceed the lens redshift.",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "h0",
+   "label": "H0 (km/s/Mpc)",
+   "type": "float",
+   "default": 70.0,
+   "group": "Redshifts",
+   "help": "Flat LCDM.",
+   "min": 20,
+   "max": 120,
+   "expert": true
+  },
+  {
+   "name": "omega-m",
+   "label": "Omega_m",
+   "type": "float",
+   "default": 0.3,
+   "group": "Redshifts",
+   "help": "Flat LCDM.",
+   "min": 0.01,
+   "max": 1,
+   "expert": true
+  },
+  {
+   "name": "free",
+   "label": "Free parameters",
+   "type": "string",
+   "default": "auto",
+   "group": "Model",
+   "help": "auto: theta_E (2 images), theta_E q phi (3), theta_E q phi gamma phi_g (4+); or a comma list of theta_E,q,phi,gamma,phi_g,x0,y0. The source position is always fitted."
+  },
+  {
+   "name": "fixed",
+   "label": "Fixed values",
+   "type": "string",
+   "default": "",
+   "group": "Model",
+   "help": "Values of parameters that are not free, e.g. q=1,gamma=0.",
+   "expert": true
+  },
+  {
+   "name": "n-starts",
+   "label": "Starting points",
+   "type": "int",
+   "default": 8,
+   "group": "Model",
+   "help": "Number of multi-start optimisations (first = analytic guess, others random).",
+   "min": 1,
+   "max": 100,
+   "expert": true
+  },
+  {
+   "name": "flux-column",
+   "label": "Flux column",
+   "type": "string",
+   "default": "",
+   "group": "Model",
+   "help": "Optional catalog column with the image fluxes: adds a magnification-ratio term ln(mu_i/mu_0) to chi2."
+  },
+  {
+   "name": "flux-sigma",
+   "label": "Flux-ratio sigma (ln)",
+   "type": "float",
+   "default": 0.3,
+   "group": "Model",
+   "help": "Natural-log uncertainty of the flux ratios (microlensing, extinction, variability).",
+   "min": 0.001,
+   "max": 5,
+   "expert": true
+  },
+  {
+   "name": "nfw-kappa-s",
+   "label": "Fixed NFW halo kappa_s",
+   "type": "float",
+   "default": 0.0,
+   "group": "Perturbers",
+   "help": "Adds a fixed spherical NFW halo at the lens centre (0 = off). Not fitted.",
+   "min": 0,
+   "max": 10
+  },
+  {
+   "name": "nfw-theta-s",
+   "label": "NFW scale radius (arcsec)",
+   "type": "float",
+   "default": 20.0,
+   "group": "Perturbers",
+   "help": "",
+   "min": 0.1,
+   "max": 1000,
+   "unit": "arcsec"
+  },
+  {
+   "name": "member-column",
+   "label": "Member flag column",
+   "type": "string",
+   "default": "",
+   "group": "Perturbers",
+   "help": "Catalog column > 0 marks cluster members that perturb the lens (e.g. CL_MEMBER from the Cluster plugin). Empty = no perturbers."
+  },
+  {
+   "name": "member-mag-column",
+   "label": "Member magnitude column",
+   "type": "string",
+   "default": "MAG_AUTO",
+   "group": "Perturbers",
+   "help": "Scales each member with L = 10^(-0.4 (m - m*))."
+  },
+  {
+   "name": "member-mag-star",
+   "label": "Member m*",
+   "type": "float",
+   "default": 20.0,
+   "group": "Perturbers",
+   "help": "Magnitude of an L* member.",
+   "min": -10,
+   "max": 40
+  },
+  {
+   "name": "member-b-star",
+   "label": "Member b0* (arcsec)",
+   "type": "float",
+   "default": 0.1,
+   "group": "Perturbers",
+   "help": "PIEMD strength of an L* member, scaled as L^0.5 (sigma ~ L^0.25). Fixed, not fitted.",
+   "min": 0,
+   "max": 20,
+   "unit": "arcsec"
+  },
+  {
+   "name": "member-core",
+   "label": "Member core (arcsec)",
+   "type": "float",
+   "default": 0.05,
+   "group": "Perturbers",
+   "help": "",
+   "min": 0.001,
+   "max": 5,
+   "unit": "arcsec",
+   "expert": true
+  },
+  {
+   "name": "member-cut",
+   "label": "Member cut radius (arcsec)",
+   "type": "float",
+   "default": 10.0,
+   "group": "Perturbers",
+   "help": "",
+   "min": 0.1,
+   "max": 500,
+   "unit": "arcsec",
+   "expert": true
+  },
+  {
+   "name": "source-pix",
+   "label": "Source-plane pixel (arcsec)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Outputs",
+   "help": "0 = half the image pixel.",
+   "min": 0,
+   "max": 10,
+   "unit": "arcsec"
+  },
+  {
+   "name": "cutout",
+   "label": "Source reconstruction radius (arcsec)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Outputs",
+   "help": "Image cutout radius around the lens (0 = 2.5 theta_E + 0.5).",
+   "min": 0,
+   "max": 1000,
+   "unit": "arcsec"
+  },
+  {
+   "name": "lens-mask",
+   "label": "Mask lens light radius (arcsec)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Outputs",
+   "help": "Pixels closer than this to the lens centre are ignored in the source reconstruction (subtract or mask the lens galaxy first).",
+   "min": 0,
+   "max": 100,
+   "unit": "arcsec"
+  },
+  {
+   "name": "max-mu",
+   "label": "Magnification map clip",
+   "type": "float",
+   "default": 100.0,
+   "group": "Outputs",
+   "help": "|mu| is clipped to this value in the FITS map.",
+   "min": 1,
+   "max": 100000,
+   "expert": true
+  },
+  {
+   "name": "grid",
+   "label": "Lens-equation grid",
+   "type": "int",
+   "default": 401,
+   "group": "Outputs",
+   "help": "Grid size of the image finder (larger = finds faint close images).",
+   "min": 101,
+   "max": 2001,
+   "expert": true
+  },
+  {
+   "name": "show-overlay",
+   "label": "Draw critical curves and predicted images",
+   "type": "bool",
+   "default": true,
+   "group": "Outputs",
+   "help": "Loads lens_overlay.reg into the current frame after a fit."
+  },
+  {
+   "name": "check-lenstronomy",
+   "label": "Cross-check deflection with lenstronomy",
+   "type": "bool",
+   "default": false,
+   "group": "Outputs",
+   "help": "Only when lenstronomy is installed.",
+   "expert": true
+  }
+ ],
+ "steps": [
+  {
+   "id": "fit",
+   "label": "Fit Lens Model",
+   "title": "Strong-lens model (SIE + shear)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.lens_fit",
+   "catalog_tmp": "lens_fit",
+   "done_status": "lens model fitted",
+   "after": "OGFLensAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/lensmodel.py",
+    "--task",
+    "fit",
+    "--work",
+    "{work}/lensmodel",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--image",
+    "{image}",
+    "--image-numbers",
+    "{image-numbers}",
+    "--positions",
+    "{positions}",
+    "--lens-number",
+    "{lens-number}",
+    "--lens-x",
+    "{lens-x}",
+    "--lens-y",
+    "{lens-y}",
+    "--sigma-pos",
+    "{sigma-pos}",
+    "--z-lens",
+    "{z-lens}",
+    "--z-source",
+    "{z-source}",
+    "--h0",
+    "{h0}",
+    "--omega-m",
+    "{omega-m}",
+    "--free",
+    "{free}",
+    "--fixed",
+    "{fixed}",
+    "--n-starts",
+    "{n-starts}",
+    "--flux-column",
+    "{flux-column}",
+    "--flux-sigma",
+    "{flux-sigma}",
+    "--nfw-kappa-s",
+    "{nfw-kappa-s}",
+    "--nfw-theta-s",
+    "{nfw-theta-s}",
+    "--member-column",
+    "{member-column}",
+    "--member-mag-column",
+    "{member-mag-column}",
+    "--member-mag-star",
+    "{member-mag-star}",
+    "--member-b-star",
+    "{member-b-star}",
+    "--member-core",
+    "{member-core}",
+    "--member-cut",
+    "{member-cut}",
+    "--grid",
+    "{grid}",
+    "--pixscale",
+    "{pixscale}",
+    {
+     "if": "check-lenstronomy",
+     "argv": [
+      "--check-lenstronomy"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "LENS_ROLE",
+     "LENS_MU",
+     "LENS_RES",
+     "LENS_DT",
+     "LENS_PARITY"
+    ]
+   }
+  },
+  {
+   "id": "curves",
+   "label": "Critical Curves and Caustics",
+   "title": "Lens critical curves",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "analysis.lens_curves",
+   "done_status": "critical curves updated",
+   "after": "OGFLensAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/lensmodel.py",
+    "--task",
+    "curves",
+    "--work",
+    "{work}/lensmodel",
+    "--image",
+    "{image}"
+   ],
+   "output": {
+    "mode": "capture"
+   }
+  },
+  {
+   "id": "predict",
+   "label": "Predict Images / Delays",
+   "title": "Lens predictions (counter-images, delays)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "analysis.lens_predict",
+   "done_status": "lens predictions updated",
+   "after": "OGFLensAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/lensmodel.py",
+    "--task",
+    "predict",
+    "--work",
+    "{work}/lensmodel",
+    "--image",
+    "{image}",
+    "--z-lens",
+    "{z-lens}",
+    "--z-source",
+    "{z-source}",
+    "--h0",
+    "{h0}",
+    "--omega-m",
+    "{omega-m}",
+    "--grid",
+    "{grid}"
+   ],
+   "output": {
+    "mode": "text"
+   }
+  },
+  {
+   "id": "magmap",
+   "label": "Magnification Map",
+   "title": "Lens magnification map",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "analysis.lens_magmap",
+   "done_status": "magnification map written",
+   "after": "OGFLensMagFrame",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/lensmodel.py",
+    "--task",
+    "magmap",
+    "--work",
+    "{work}/lensmodel",
+    "--image",
+    "{image}",
+    "--max-mu",
+    "{max-mu}"
+   ],
+   "output": {
+    "mode": "capture"
+   }
+  },
+  {
+   "id": "source",
+   "label": "Source-plane Reconstruction",
+   "title": "Lens source-plane reconstruction",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "analysis.lens_source",
+   "done_status": "source plane reconstructed",
+   "after": "OGFLensSourceFrame",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/lensmodel.py",
+    "--task",
+    "source",
+    "--work",
+    "{work}/lensmodel",
+    "--image",
+    "{image}",
+    "--source-pix",
+    "{source-pix}",
+    "--cutout",
+    "{cutout}",
+    "--lens-mask",
+    "{lens-mask}"
+   ],
+   "output": {
+    "mode": "capture"
+   }
+  },
+  {
+   "id": "results",
+   "label": "Lens Model Results...",
+   "proc": "OGFLensDialog",
+   "session": "NONE"
+  },
+  {
+   "id": "overlay",
+   "label": "Draw Overlay (critical curves, images)",
+   "proc": "OGFLensOverlay",
+   "session": "NONE"
+  },
+  {
+   "id": "pick",
+   "label": "Use Selected Rows as Images",
+   "proc": "OGFLensPickImages",
+   "session": "NONE"
+  },
+  {
+   "id": "pick_lens",
+   "label": "Use Selected Row as Lens",
+   "proc": "OGFLensPickLens",
+   "session": "NONE"
+  }
+ ]
+}
