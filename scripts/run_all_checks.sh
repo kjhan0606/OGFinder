@@ -94,6 +94,8 @@ chk_isophote_tests() { "$PY" -m pytest -q plugins/isophote/tests 2>&1 | tail -3;
 EXTRA="$EXTRA isophote_tests"
 chk_completeness_tests() { "$PY" -m pytest -q plugins/completeness/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA completeness_tests"
+chk_daophot_tests() { "$PY" -m pytest -q plugins/daophot/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA daophot_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc

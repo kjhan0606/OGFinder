@@ -81,6 +81,80 @@ proc sec_completeness {} {
     R completeness_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_daophot {} {
+    set f0 [llength $::ds9(frames)]
+    ::ogf::params::put daophot fwhm 3.5
+    ::ogf::params::put daophot n-iter 2
+    ::ogf::params::put daophot neighbour-iter 1
+    ::ogf::params::put daophot psf-order 1
+    # manual PSF-star list editing from the catalog selection (recorded parameters)
+    set nums [lrange [::ogf::cat::values NUMBER] 0 2]
+    ::ogf::cat::select $nums replace 0
+    update
+    OGFDaophotAddPsf
+    R daophot_psf_add_param [expr {[llength [split [::ogf::params::get daophot psf-add] \;]] == 3}] [::ogf::params::get daophot psf-add]
+    OGFDaophotRemPsf
+    R daophot_psf_swap [expr {[::ogf::params::get daophot psf-add] eq {} && [llength [split [::ogf::params::get daophot psf-remove] \;]] == 3}] "[::ogf::params::get daophot psf-add] | [::ogf::params::get daophot psf-remove]"
+    ::ogf::params::put daophot psf-remove {}
+    foreach st {find phot pickpsf psf} {
+	lassign [run_step daophot $st] ok recs
+	R daophot_${st}_ran $ok $recs
+	R daophot_${st}_recorded [expr {[lindex $recs 0 0] eq "analysis.daophot_$st"}] $recs
+    }
+    set w [OGFSessWorkDir]
+    foreach f {daophot_find.tsv daophot_phot.tsv daophot_psfstars.tsv daophot_psf.json daophot_psf.fits} {
+	R daophot_file_$f [expr {[file exists [file join $w daophot $f]] && [file size [file join $w daophot $f]] > 50}]
+    }
+    lassign [run_step daophot fit] ok recs
+    R daophot_fit_ran $ok $recs
+    R daophot_fit_recorded [expr {[lindex $recs 0 0] eq "analysis.daophot_fit"}] $recs
+    set cols [::ogf::cat::columns]
+    R daophot_columns [expr {"DAO_MAG" in $cols && "DAO_CHI" in $cols && "DAO_FLAG" in $cols && "DAO_MAG_APC" in $cols}]
+    R daophot_rows_filled [expr {[nonempty DAO_MAG] > 30}] "rows=[nonempty DAO_MAG]"
+    foreach f {daophot_stars.tsv daophot_resid.fits daophot_diag.png daophot_result.json} {
+	R daophot_file_$f [expr {[file exists [file join $w daophot $f]] && [file size [file join $w daophot $f]] > 100}]
+    }
+    R daophot_frames [expr {[llength $::ds9(frames)] == $f0 + 1}] "frames [llength $::ds9(frames)] (was $f0)"
+    R daophot_frame_restored [expr {$::current(frame) eq [lindex $::ds9(frames) 0]}] $::current(frame)
+    foreach st {substar apcorr} {
+	lassign [run_step daophot $st] ok recs
+	R daophot_${st}_ran $ok $recs
+    }
+    R daophot_sub_file [file exists [file join $w daophot daophot_sub.fits]]
+    OGFDaophotDiag; update
+    R daophot_diag_window [expr {[winfo exists .ogfdaodiag] && [image width .ogfdaodiag_img] > 300 && [image height .ogfdaodiag_img] > 200}] "[image width .ogfdaodiag_img]x[image height .ogfdaodiag_img]"
+    destroy .ogfdaodiag
+    OGFDaophotTable; update
+    R daophot_argv_templated [expr {[string match {*@{WORK}*} [dict get [lindex [::ogf::session::steps] end] argv_t]]}]
+    R daophot_cat_key [file exists [::ogf::cat::get daophot,stars_file {}]]
+    R daophot_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
+# every tab's chip row must fit into the panel width (chips that do not fit live in the "More" menu)
+proc chips_fit {} {
+    global ogfui
+    set cur $ogfui(tab)
+    set cw [winfo width $ogfui(content)]
+    set bad {}
+    set more {}
+    foreach t $::ogf::tabs {
+	OGFUIShowTab $t; update
+	set right 0
+	foreach c [winfo children $ogfui(tabframe,$t)] {
+	    if {[winfo ismapped $c]} {set r [expr {[winfo x $c] + [winfo reqwidth $c]}]; if {$r > $right} {set right $r}}
+	}
+	if {$right > $cw} {lappend bad "$t:$right>$cw"}
+	if {[info exists ogfui(overflow,$t)]} {lappend more "$t=[join $ogfui(overflow,$t) /]"}
+    }
+    OGFUIShowTab $cur; update
+    R chips_fit [expr {$bad eq {}}] "content=$cw overflow-menus: $more $bad"
+    # the plugin that moved into a More menu is still reachable through the cascade
+    if {[info exists ogfui(more,Measure)]} {
+	set m [$ogfui(more,Measure) cget -menu]
+	R chips_more_menu [expr {[$m index end] >= 0 && [string match *daophot* [lindex [$m entryconfigure 0 -menu] end]]}] [$m entryconfigure 0 -menu]
+    }
+}
+
 proc run {} {
     global catpanel
     set only [expr {[info exists ::env(OGF_NP_ONLY)] ? [split $::env(OGF_NP_ONLY) ,] : {}}]
@@ -89,7 +163,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness} {
+    foreach sec {isophote completeness daophot} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
@@ -99,6 +173,7 @@ proc run {} {
     CatalogPanelSessionSave $sp
     set fd [open [file join $::dir gui_catalog.tsv] w]; puts -nonewline $fd [::ogf::cat::tsv]; close $fd
     R session_exported [file exists $sp]
+    chips_fit
     R final_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
     puts $::fh "SUMMARY failures=$::nf"; close $::fh
 }
