@@ -2,7 +2,6 @@
 # Loaded through the "tcl" field of plugins/catalog/plugin.json.
 
 proc CatalogPanelFilter {} {
-    global catpanel
 
     # time-domain views filter their own rows
     if {[catch {::ogf::td::active} _tda]} {set _tda 0}
@@ -11,11 +10,8 @@ proc CatalogPanelFilter {} {
 
     set pattern [::ogf::cat::get search_var]
 
-    global [::ogf::cat::get tbldb]
-
     # Unbind table while modifying
-    [::ogf::cat::get tbl] configure -variable {}
-    unset -nocomplain [::ogf::cat::get tbldb]
+    ::ogf::cat::table_begin
 
     set data [::ogf::cat::tsv]
     set lines [split $data \n]
@@ -24,10 +20,7 @@ proc CatalogPanelFilter {} {
     set headers [split [lindex $lines 0] "\t"]
     set ncols [llength $headers]
 
-    for {set c 0} {$c < $ncols} {incr c} {
-	set ${catpanel(tbldb)}(0,[expr {$c+1}]) \
-	    [string trim [lindex $headers $c]]
-    }
+    ::ogf::cat::table_put 0 $headers $ncols
 
     # Filter data rows
     set row 1
@@ -39,16 +32,12 @@ proc CatalogPanelFilter {} {
 	if {$pattern ne {} && ![string match -nocase "*${pattern}*" $line]} continue
 	set fields [split $line "\t"]
 	if {[llength $fspecs] && ![::ogf::cat::filter_row_ok $fspecs $fields]} continue
-	for {set c 0} {$c < $ncols} {incr c} {
-	    set ${catpanel(tbldb)}($row,[expr {$c+1}]) \
-		[string trim [lindex $fields $c]]
-	}
+	::ogf::cat::table_put $row $fields $ncols
 	incr row
     }
 
     # Rebind table to trigger full refresh
-    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
-	-cols $ncols -rows $row
+    ::ogf::cat::table_end $ncols $row
 
     catch {OGFTDAppendKindColumn $ncols $row}
     ::ogf::cat::_table_filled
@@ -64,17 +53,15 @@ proc CatalogPanelFilter {} {
 
 # Show key columns of the selected catalog row in the info area
 proc CatalogPanelUpdateSelInfo {row} {
-    global catpanel
     if {![catch {::ogf::td::selinfo $row} _tds] && $_tds} return
-    global [::ogf::cat::get tbldb]
 
     set want {NUMBER X_IMAGE Y_IMAGE ALPHA_J2000 DELTA_J2000 MAG_AUTO
 	FWHM_IMAGE ELLIPTICITY CLASS_STAR}
     set idx {}
-    set ncols [[::ogf::cat::get tbl] cget -cols]
+    set ncols [::ogf::cat::table_ncols]
     for {set c 1} {$c <= $ncols} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
-	    dict set idx [set ${catpanel(tbldb)}(0,$c)] $c
+	if {[::ogf::cat::cell_exists 0 $c]} {
+	    dict set idx [::ogf::cat::cell 0 $c] $c
 	}
     }
     set v {}
@@ -82,8 +69,8 @@ proc CatalogPanelUpdateSelInfo {row} {
 	set val {-}
 	if {[dict exists $idx $k]} {
 	    set c [dict get $idx $k]
-	    if {[info exists ${catpanel(tbldb)}($row,$c)]} {
-		set val [set ${catpanel(tbldb)}($row,$c)]
+	    if {[::ogf::cat::cell_exists $row $c]} {
+		set val [::ogf::cat::cell $row $c]
 	    }
 	}
 	if {[string is double -strict $val] && $k ne {NUMBER}} {
@@ -119,7 +106,6 @@ proc CatalogPanelSelectCmd {prev cur} {
 }
 
 proc CatalogPanelGotoSource {row {pan 1}} {
-    global catpanel
     global current
     global ds9
 
@@ -128,10 +114,9 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
-    global [::ogf::cat::get tbldb]
 
     # Find column indices from header row
-    set ncols [[::ogf::cat::get tbl] cget -cols]
+    set ncols [::ogf::cat::table_ncols]
     set col_x -1
     set col_y -1
     set col_a -1
@@ -140,8 +125,8 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     set col_ir -1
     set col_reff -1
     for {set c 1} {$c <= $ncols} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
-	    set hdr [set ${catpanel(tbldb)}(0,$c)]
+	if {[::ogf::cat::cell_exists 0 $c]} {
+	    set hdr [::ogf::cat::cell 0 $c]
 	    switch -- $hdr {
 		X_IMAGE     { set col_x $c }
 		Y_IMAGE     { set col_y $c }
@@ -157,9 +142,9 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     if {$col_x < 0 || $col_y < 0} return
 
     # Get coordinates from selected row
-    if {![info exists ${catpanel(tbldb)}($row,$col_x)]} return
-    set x [set ${catpanel(tbldb)}($row,$col_x)]
-    set y [set ${catpanel(tbldb)}($row,$col_y)]
+    if {![::ogf::cat::cell_exists $row $col_x]} return
+    set x [::ogf::cat::cell $row $col_x]
+    set y [::ogf::cat::cell $row $col_y]
 
     if {![string is double -strict $x] || ![string is double -strict $y]} return
 
@@ -169,29 +154,29 @@ proc CatalogPanelGotoSource {row {pan 1}} {
     set b_image 0
     set theta 0
 
-    if {$col_ir >= 0 && [info exists ${catpanel(tbldb)}($row,$col_ir)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_ir)]
+    if {$col_ir >= 0 && [::ogf::cat::cell_exists $row $col_ir]} {
+	set val [::ogf::cat::cell $row $col_ir]
 	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
 	    set iso_radius $v
 	}
     }
-    if {$col_a >= 0 && [info exists ${catpanel(tbldb)}($row,$col_a)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_a)]
+    if {$col_a >= 0 && [::ogf::cat::cell_exists $row $col_a]} {
+	set val [::ogf::cat::cell $row $col_a]
 	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set a_image $v }
     }
-    if {$col_b >= 0 && [info exists ${catpanel(tbldb)}($row,$col_b)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_b)]
+    if {$col_b >= 0 && [::ogf::cat::cell_exists $row $col_b]} {
+	set val [::ogf::cat::cell $row $col_b]
 	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} { set b_image $v }
     }
-    if {$col_theta >= 0 && [info exists ${catpanel(tbldb)}($row,$col_theta)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_theta)]
+    if {$col_theta >= 0 && [::ogf::cat::cell_exists $row $col_theta]} {
+	set val [::ogf::cat::cell $row $col_theta]
 	if {[catch {set v [expr {$val + 0.0}]}] == 0} { set theta $v }
     }
 
     # Get R_EFF_PIX if available (for LSBG circle display)
     set r_eff_pix 0
-    if {$col_reff >= 0 && [info exists ${catpanel(tbldb)}($row,$col_reff)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_reff)]
+    if {$col_reff >= 0 && [::ogf::cat::cell_exists $row $col_reff]} {
+	set val [::ogf::cat::cell $row $col_reff]
 	if {[catch {set v [expr {$val + 0.0}]}] == 0 && $v > 0} {
 	    set r_eff_pix $v
 	}
@@ -246,7 +231,6 @@ proc CatalogPanelGotoSource {row {pan 1}} {
 }
 
 proc CatalogPanelTableClick {x y} {
-    global catpanel
 
     set tbl [::ogf::cat::get tbl]
     set idx [$tbl index @$x,$y]
@@ -257,9 +241,8 @@ proc CatalogPanelTableClick {x y} {
 
     set col [lindex [split $idx ,] 1]
 
-    global [::ogf::cat::get tbldb]
-    if {![info exists ${catpanel(tbldb)}(0,$col)]} return
-    set colname [set ${catpanel(tbldb)}(0,$col)]
+    if {![::ogf::cat::cell_exists 0 $col]} return
+    set colname [::ogf::cat::cell 0 $col]
 
     # Toggle direction if same column clicked again
     if {[::ogf::cat::get sort,col] eq $colname} {

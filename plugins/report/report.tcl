@@ -143,16 +143,14 @@ proc ::ogf::review::colorize {} {
         catch {$tbl tag delete rv_$s}
         $tbl tag configure rv_$s -background $c -foreground black
     }
-    set rc [OGFTableCol REVIEW]
+    set rc [::ogf::cat::table_col REVIEW]
     if {$rc < 0} return
-    set nc [OGFTableCol NUMBER]
-    set db [::ogf::cat::get tbldb]
-    global $db
+    set nc [::ogf::cat::table_col NUMBER]
     set cells [dict create accept {} reject {} uncertain {}]
-    set nr [$tbl cget -rows]
+    set nr [expr {[::ogf::cat::table_nrows] + 1}]
     for {set r 1} {$r < $nr} {incr r} {
-        if {![info exists ${db}($r,$rc)]} continue
-        set v [set ${db}($r,$rc)]
+        if {![::ogf::cat::cell_exists $r $rc]} continue
+        set v [::ogf::cat::cell $r $rc]
         if {[dict exists $cells $v]} {
             dict lappend cells $v $r,$rc
             if {$nc > 0} {dict lappend cells $v $r,$nc}

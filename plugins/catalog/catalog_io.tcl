@@ -3,21 +3,15 @@
 
 # Load tab-separated catalog data into the panel
 proc CatalogPanelLoadTSV {data source_name} {
-    global catpanel
-
-    global [::ogf::cat::get tbldb]
-
     # Unbind table from variable while modifying
-    [::ogf::cat::get tbl] configure -variable {}
-
-    unset -nocomplain [::ogf::cat::get tbldb]
+    ::ogf::cat::table_begin
 
     set lines [split $data \n]
     set nlines [llength $lines]
 
     if {$nlines < 2} {
 	::ogf::cat::set status "No sources detected"
-	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb]
+	::ogf::cat::table_end [::ogf::cat::table_ncols] [expr {[::ogf::cat::table_nrows] + 1}]
 	return
     }
 
@@ -31,27 +25,19 @@ proc CatalogPanelLoadTSV {data source_name} {
     set ncols [llength $headers]
 
     # Fill header row
-    for {set c 0} {$c < $ncols} {incr c} {
-	set ${catpanel(tbldb)}(0,[expr {$c+1}]) \
-	    [string trim [lindex $headers $c]]
-    }
+    ::ogf::cat::table_put 0 $headers $ncols
 
     # Fill data rows
     set row 1
     for {set i 1} {$i < $nlines} {incr i} {
 	set line [lindex $lines $i]
 	if {[string trim $line] eq {}} continue
-	set fields [split $line "\t"]
-	for {set c 0} {$c < $ncols} {incr c} {
-	    set ${catpanel(tbldb)}($row,[expr {$c+1}]) \
-		[string trim [lindex $fields $c]]
-	}
+	::ogf::cat::table_put $row [split $line "\t"] $ncols
 	incr row
     }
 
     # Rebind table and configure dimensions to trigger full refresh
-    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
-	-cols $ncols -rows $row -state disabled
+    ::ogf::cat::table_end $ncols $row -state disabled
 
     set nobj [expr {$row - 1}]
     ::ogf::cat::set status "$source_name: $nobj sources extracted"
@@ -73,11 +59,7 @@ proc CatalogPanelClear {} {
     }
 
     catch {OGFSessLog catalog.clear manual {} -tool native -title "Clear catalog"}
-    global [::ogf::cat::get tbldb]
-    [::ogf::cat::get tbl] configure -variable {}
-    unset -nocomplain [::ogf::cat::get tbldb]
-    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
-	-cols 19 -rows 20
+    ::ogf::cat::table_reset
 
     ::ogf::cat::set status {Ready}
     catch {CatalogPanelClearSelection}
@@ -545,8 +527,6 @@ proc CatalogPanelExportFITS {} {
 }
 
 proc CatalogPanelSaveFrameState {frame} {
-    global catpanel_fdata
-
     if {$frame eq {}} return
     if {![::ogf::cat::exists alldata]} return
 
@@ -565,26 +545,24 @@ proc CatalogPanelSaveFrameState {frame} {
 	status search_var
     } {
 	if {[::ogf::cat::exists $key]} {
-	    set catpanel_fdata($frame,$key) [::ogf::cat::get $key]
+	    ::ogf::cat::frame_set $frame $key [::ogf::cat::get $key]
 	}
     }
 
     # Morph data: save map + per-source entries
     if {[::ogf::cat::exists morph,map]} {
-	set catpanel_fdata($frame,morph,map) [::ogf::cat::get morph,map]
+	::ogf::cat::frame_set $frame morph,map [::ogf::cat::get morph,map]
 	foreach src_num [::ogf::cat::get morph,map] {
 	    if {[::ogf::cat::exists morph,$src_num]} {
-		set catpanel_fdata($frame,morph,$src_num) [::ogf::cat::get morph,$src_num]
+		::ogf::cat::frame_set $frame morph,$src_num [::ogf::cat::get morph,$src_num]
 	    }
 	}
     } else {
-	set catpanel_fdata($frame,morph,map) {}
+	::ogf::cat::frame_set $frame morph,map {}
     }
 }
 
 proc CatalogPanelRestoreFrameState {frame} {
-    global catpanel_fdata
-
     if {$frame eq {}} return
 
     # Unbind AI keys if active
@@ -593,13 +571,9 @@ proc CatalogPanelRestoreFrameState {frame} {
     }
 
     # Check if we have saved data for this frame
-    if {![info exists catpanel_fdata($frame,alldata)]} {
+    if {![::ogf::cat::frame_exists $frame alldata]} {
 	# No saved state — initialize to empty (without deleting markers)
-	global [::ogf::cat::get tbldb]
-	[::ogf::cat::get tbl] configure -variable {}
-	unset -nocomplain [::ogf::cat::get tbldb]
-	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
-	    -cols 19 -rows 20
+	::ogf::cat::table_reset
 
 	::ogf::cat::set alldata {}
 	::ogf::cat::set filename {}
@@ -671,8 +645,8 @@ proc CatalogPanelRestoreFrameState {frame} {
 	lsbg,segmap_file lsbg,catalog_file
 	status search_var
     } {
-	if {[info exists catpanel_fdata($frame,$key)]} {
-	    ::ogf::cat::set $key $catpanel_fdata($frame,$key)
+	if {[::ogf::cat::frame_exists $frame $key]} {
+	    ::ogf::cat::set $key [::ogf::cat::frame_get $frame $key]
 	}
     }
 
@@ -684,11 +658,11 @@ proc CatalogPanelRestoreFrameState {frame} {
 	}
     }
     ::ogf::cat::set morph,map {}
-    if {[info exists catpanel_fdata($frame,morph,map)]} {
-	::ogf::cat::set morph,map $catpanel_fdata($frame,morph,map)
+    if {[::ogf::cat::frame_exists $frame morph,map]} {
+	::ogf::cat::set morph,map [::ogf::cat::frame_get $frame morph,map]
 	foreach src_num [::ogf::cat::get morph,map] {
-	    if {[info exists catpanel_fdata($frame,morph,$src_num)]} {
-		::ogf::cat::set morph,$src_num $catpanel_fdata($frame,morph,$src_num)
+	    if {[::ogf::cat::frame_exists $frame morph,$src_num]} {
+		::ogf::cat::set morph,$src_num [::ogf::cat::frame_get $frame morph,$src_num]
 	    }
 	}
     }
@@ -697,11 +671,7 @@ proc CatalogPanelRestoreFrameState {frame} {
     if {[::ogf::cat::tsv] ne {}} {
 	CatalogPanelLoadTSV [::ogf::cat::tsv] [file tail [::ogf::cat::get filename]]
     } else {
-	global [::ogf::cat::get tbldb]
-	[::ogf::cat::get tbl] configure -variable {}
-	unset -nocomplain [::ogf::cat::get tbldb]
-	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
-	    -cols 19 -rows 20
+	::ogf::cat::table_reset
     }
 }
 
@@ -719,23 +689,15 @@ proc CatalogPanelFrameChanged {old_frame new_frame} {
 }
 
 proc CatalogPanelDeleteFrameState {frame} {
-    global catpanel_fdata
-
     # Remove all saved state for the deleted frame
-    foreach key [array names catpanel_fdata "$frame,*"] {
-	unset catpanel_fdata($key)
-    }
+    ::ogf::cat::frame_delete $frame
 }
 
 proc CatalogPanelClearAll {} {
 
     # Clear table
     if {[::ogf::cat::exists tbldb] && [::ogf::cat::exists tbl]} {
-	global [::ogf::cat::get tbldb]
-	[::ogf::cat::get tbl] configure -variable {}
-	unset -nocomplain [::ogf::cat::get tbldb]
-	[::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] \
-	    -cols 19 -rows 20
+	::ogf::cat::table_reset
     }
 
     ::ogf::cat::set alldata {}

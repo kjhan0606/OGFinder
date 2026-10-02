@@ -467,6 +467,11 @@ Migrated plugin code no longer touches the `catpanel` global.  It goes through `
 | `::ogf::cat::trace add\|remove\|info KEY CMD` | `CMD KEY NEWVALUE` after every write of KEY, including writes by legacy code |
 | `::ogf::cat::has` / `tsv` / `selection` | catalog loaded? / the whole catalog TSV / NUMBERs of the selected rows |
 | `::ogf::cat::registry` / `describe KEY` | the documented key registry (below) |
+| `::ogf::cat::cell ROW COL ?default?` / `cell_exists` / `header COL` / `table_col NAME` | one cell of the table now shown (row 0 = header; 1-based like Tk) |
+| `::ogf::cat::table_ncols` / `table_nrows` / `row_of NUMBER` / `number_of ROW` | table size (data rows) and NUMBER <-> table row |
+| `::ogf::cat::table_begin` / `table_put ROW FIELDS ?ncols?` / `table_end NCOLS NROWS ?opts?` / `table_reset` | the only way to (re)fill the table: unbind, store, rebind |
+| `::ogf::cat::bind_var KEY` / `bump KEY ?n?` | variable name for a Tk `-variable` option; integer counter keys |
+| `::ogf::cat::frame_get FRAME KEY ?default?` / `frame_set` / `frame_exists` / `frame_delete` | the per-frame snapshots (`catpanel_fdata`) |
 
 KEY is exactly the old array subscript (`param,detect-thresh`, `icl,center_x`, ...), and the storage is still the global
 `catpanel(KEY)`.  That is deliberate: unmigrated code (`layout.tcl`, `ogf_link`, `ogf_td`, `ogf_tile`, `ogf_session`) and migrated
@@ -490,13 +495,13 @@ code).  A key that matches no entry logs one WARN per key; `OGF_CAT_STRICT=1` tu
    `lappend`, `unset`, `array unset`, and dropping `catpanel` from `global` lines that no longer need it);
 3. `make`, run the golden test (must be byte-identical), commit.
 
-Result (82 features, 748 golden lines; `scripts/verify_cat_api.tcl` 19 checks, `verify_session_replay.py` 78/0 unchanged):
+Result (82 features, 748 golden lines, identical before and after the table-cell stage; `scripts/verify_cat_api.tcl` 40 checks, `verify_session_replay.py` 78/0 unchanged):
 
 | scope | `catpanel(` occurrences at the start (`f400f8fc9`) | now |
 |---|---|---|
-| `plugins/*.tcl` (all 16 plugins) | 1557 | 52 (47 `catpanel(tbldb)`, 5 table/plot widget bindings) |
+| `plugins/*.tcl` (all 16 plugins) | 1557 | 0 code references (52 before the table-cell stage: 47 `catpanel(tbldb)`, 5 widget bindings; `catpanel_fdata` 24 -> 0; `global catpanel` 15 -> 0; two comments say "catalog keys" now) |
 | `ds9/library/layout.tcl` (panel construction, defaults) | 198 | 198 (not migrated) |
-| `ogf_link.tcl` 68, `ogf_td.tcl` 35, `ogf_session.tcl` 12, `ogf_tile.tcl` 6, others <=2 | - | not migrated |
+| `ogf_link.tcl` 68 (its three table helpers `OGFTableCol/OGFRowOfNumber/OGFNumberOfRow` now call `::ogf::cat`), `ogf_td.tcl` 35, `ogf_session.tcl` 12, `ogf_tile.tcl` 6, others <=2 | - | not migrated |
 | `::ogf::cat::` calls in plugins | 0 | 1572 |
 
 Migrated plugins: moving, photoz_sed, morphology, deconv, galaxy_model, bands, ai_services, mask, photometry, extract, star_psf,
@@ -506,17 +511,17 @@ instead of `catpanel(lsbg,tmp_bandname|band_dialog_done)` (nothing else read tho
 
 **Left entangled (the residual list):**
 
-* `catpanel(tbl)` / `catpanel(tbldb)` - the tktable widget path and the name of its data array.  Code such as
-  `global $catpanel(tbldb)` followed by `set ${catpanel(tbldb)}($row,$col)` (47 places in `catalog_table`, `catalog_io`,
-  `separate`, `merge`) reads cells directly.  `::ogf::cat::get tbldb` hides the name only; a real fix needs a row/cell accessor
-  (`::ogf::cat::cell ROW COL`, `::ogf::cat::rows`) and a decision about the widget, which is outside this item.
-* `-textvariable catpanel(...)` / `-variable catpanel(...)` bindings of the panel widgets in `layout.tcl` and of the plot dialog
-  (`plot,logx`, `plot,logy`, `plot,counter`): Tk needs a variable name.  Their storage must stay `catpanel` until the widgets are
-  built through a different mechanism.
+* `catpanel(tbl)` / `catpanel(tbldb)` - the tktable widget path and the name of its data array stay in `catpanel` and are read only by
+  the core (`layout.tcl` builds the widget, `ogf_td.tcl`, `ogf_link.tcl`, `ogf_core.tcl`).  Plugins no longer see the array: cells go
+  through `::ogf::cat::cell` and the table is refilled through `table_begin/put/end` (done in the table-cell stage; the golden file
+  did not change).  `plugins/report/report.tcl`'s tint reads cells through the same accessor.
+* The plot dialog's `-variable` bindings (`plot,logx`, `plot,logy`) use `::ogf::cat::bind_var`, which returns `::catpanel(KEY)`: Tk
+  needs a variable name, so the storage is still the `catpanel` array.  The `-textvariable catpanel(...)` bindings of the panel
+  widgets in `layout.tcl` are unchanged.
 * `layout.tcl` (198) defines the defaults of all keys in `CreateCatalogPanel`; `ogf_link` (selection, 68), `ogf_td` (time-domain
   table, 35), `ogf_session` (recorder reads parameter keys, 12), `ogf_tile`.  These are core, not plugins; they were left alone so
   that the load order and the layout invariants (181/769/154) are not touched.
-* `catpanel_fdata(FRAME,KEY)` (per-frame snapshots of the keys) is still read directly by `plugins/icl/icl.tcl` (8 lines).
+* `catpanel_fdata(FRAME,KEY)` is now reached only through `::ogf::cat::frame_*` (catalog_io, icl); the array itself is still global.
 * The `ed()` dialog globals (not catpanel) remain in `extract` (`CatalogPanelParamDefaults`, dual extract, trim), `icl`
   (sector / colour-profile dialogs), `photometry` (multi-band, cross-match, completeness) and `star_psf` (extended PSF, WebbPSF,
   TinyTim dialogs).  They are dialog-local state; migrating them to `OGFParamDialog` (section 6, stage 6) would remove them.

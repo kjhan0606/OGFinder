@@ -122,37 +122,9 @@ proc OGFFrameIsDetGrid {which} {
 }
 
 # ---- table helpers ----
-proc OGFTableCol {name} {
-    global catpanel
-    global $catpanel(tbldb)
-    set nc [$catpanel(tbl) cget -cols]
-    for {set c 1} {$c <= $nc} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)] &&
-	    [set ${catpanel(tbldb)}(0,$c)] eq $name} {return $c}
-    }
-    return -1
-}
-
-proc OGFRowOfNumber {num} {
-    global catpanel
-    global $catpanel(tbldb)
-    set cn [OGFTableCol NUMBER]
-    if {$cn < 0} {return -1}
-    set nr [$catpanel(tbl) cget -rows]
-    for {set r 1} {$r < $nr} {incr r} {
-	if {[info exists ${catpanel(tbldb)}($r,$cn)] &&
-	    [set ${catpanel(tbldb)}($r,$cn)] eq $num} {return $r}
-    }
-    return -1
-}
-
-proc OGFNumberOfRow {row} {
-    global catpanel
-    global $catpanel(tbldb)
-    set cn [OGFTableCol NUMBER]
-    if {$cn < 0 || ![info exists ${catpanel(tbldb)}($row,$cn)]} {return {}}
-    return [set ${catpanel(tbldb)}($row,$cn)]
-}
+proc OGFTableCol {name} {return [::ogf::cat::table_col $name]}
+proc OGFRowOfNumber {num} {return [::ogf::cat::row_of $num]}
+proc OGFNumberOfRow {row} {return [::ogf::cat::number_of $row]}
 
 # ---- summary text (selected-source block + optional hover line) ----
 proc OGFRefreshSelText {} {

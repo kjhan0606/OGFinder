@@ -206,6 +206,83 @@ proc ::ogf::cat::temp_file {suffix} {return [CatalogPanelSaveTempCatalog $suffix
 proc ::ogf::cat::image_file {} {return [CatalogPanelGetFITS]}
 proc ::ogf::cat::status {msg} {::ogf::status $msg}
 
+# ---------------------------------------------------------------- table cells / per-frame snapshots  (docs/architecture.md section 7)
+# The catalog table is a tktable bound to an array (name in the registry key "tbldb").  Plugins read and fill it through these procs
+# instead of `global [::ogf::cat::get tbldb]` + `set ${db}($row,$col)`.  Row 0 is the header row, rows/columns are 1-based like Tk.
+#   ::ogf::cat::table_ncols / table_nrows        columns / DATA rows now shown (the header row is not counted)
+#   ::ogf::cat::header COL                       column title ("" if unset)
+#   ::ogf::cat::table_col NAME                   column index of the title NAME (first match), -1 if absent
+#   ::ogf::cat::cell ROW COL ?default?           value of one cell (default "" ; use cell_exists to tell empty from absent)
+#   ::ogf::cat::cell_exists ROW COL
+#   ::ogf::cat::row_of NUMBER / number_of ROW    table row of a source NUMBER (-1 if filtered out) and back ("" if unknown)
+#   ::ogf::cat::table_begin                      unbind the table and clear its data (before filling)
+#   ::ogf::cat::table_put ROW FIELDS ?ncols?     store the fields (trimmed) of ROW in columns 1..; with ncols the list is cut/padded with "" to that width
+#   ::ogf::cat::table_end NCOLS NROWS ?opts?     rebind the table with -cols NCOLS -rows NROWS (+ opts, e.g. -state disabled)
+#   ::ogf::cat::table_reset ?cols rows?          empty table (default 19 x 20, the size at start-up)
+#   ::ogf::cat::bind_var KEY                     name to give a Tk -variable/-textvariable option for the catalog key KEY
+#   ::ogf::cat::bump KEY ?n?                     integer increment of a key (the counter keys)
+# Per-frame snapshots (CatalogPanelSaveFrameState/RestoreFrameState keep one copy of the catalog keys for every frame):
+#   ::ogf::cat::frame_get FRAME KEY ?default? / frame_exists FRAME KEY / frame_set FRAME KEY VALUE / frame_delete FRAME
+proc ::ogf::cat::_db {} {return [::set ::catpanel(tbldb)]}
+proc ::ogf::cat::table_ncols {} {return [[get tbl] cget -cols]}
+proc ::ogf::cat::table_nrows {} {return [expr {[[get tbl] cget -rows] - 1}]}
+proc ::ogf::cat::cell_exists {row col} {upvar #0 [_db] t; return [info exists t($row,$col)]}
+proc ::ogf::cat::cell {row col {default {}}} {
+    upvar #0 [_db] t
+    if {[info exists t($row,$col)]} {return $t($row,$col)}
+    return $default
+}
+proc ::ogf::cat::header {col} {return [cell 0 $col]}
+proc ::ogf::cat::table_col {name} {
+    upvar #0 [_db] t
+    ::set nc [table_ncols]
+    for {::set c 1} {$c <= $nc} {incr c} {
+        if {[info exists t(0,$c)] && $t(0,$c) eq $name} {return $c}
+    }
+    return -1
+}
+proc ::ogf::cat::row_of {num} {
+    ::set cn [table_col NUMBER]
+    if {$cn < 0} {return -1}
+    upvar #0 [_db] t
+    ::set nr [table_nrows]
+    for {::set r 1} {$r <= $nr} {incr r} {
+        if {[info exists t($r,$cn)] && $t($r,$cn) eq $num} {return $r}
+    }
+    return -1
+}
+proc ::ogf::cat::number_of {row} {
+    ::set cn [table_col NUMBER]
+    if {$cn < 0} {return {}}
+    return [cell $row $cn]
+}
+proc ::ogf::cat::table_begin {} {
+    [get tbl] configure -variable {}
+    ::unset -nocomplain ::[_db]
+}
+proc ::ogf::cat::table_put {row fields {ncols {}}} {
+    upvar #0 [_db] t
+    if {$ncols eq {}} {::set ncols [llength $fields]}
+    for {::set c 0} {$c < $ncols} {incr c} {::set t($row,[expr {$c+1}]) [string trim [lindex $fields $c]]}
+}
+proc ::ogf::cat::table_end {ncols nrows args} {
+    [get tbl] configure -variable [_db] -cols $ncols -rows $nrows {*}$args
+}
+proc ::ogf::cat::table_reset {{cols 19} {rows 20}} {
+    table_begin
+    table_end $cols $rows
+}
+proc ::ogf::cat::bind_var {key} {_check $key; return ::catpanel($key)}
+proc ::ogf::cat::bump {key {n 1}} {_check $key; return [::incr ::catpanel($key) $n]}
+proc ::ogf::cat::frame_get {frame key args} {
+    if {[info exists ::catpanel_fdata($frame,$key)]} {return $::catpanel_fdata($frame,$key)}
+    if {[llength $args]} {return [lindex $args 0]}
+    error "::ogf::cat::frame_get: no saved \"$key\" for frame $frame"
+}
+proc ::ogf::cat::frame_exists {frame key} {return [info exists ::catpanel_fdata($frame,$key)]}
+proc ::ogf::cat::frame_set {frame key val} {return [::set ::catpanel_fdata($frame,$key) $val]}
+proc ::ogf::cat::frame_delete {frame} {array unset ::catpanel_fdata $frame,*}
+
 # ---------------------------------------------------------------- key accessor  (docs/architecture.md section 7)
 #   ::ogf::cat::get KEY ?default?   value of a catalog-panel key; error if it is unset and no default is given
 #   ::ogf::cat::set KEY VALUE       store; returns VALUE

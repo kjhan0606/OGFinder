@@ -135,5 +135,5 @@ See `docs/architecture.md` section 6.  All feature procs now live in `plugins/<i
 and the recorder call their procs unconditionally.  Parameter dialogs generated from the manifest
 (`"settings": "params"`): extract, deconv, morphology (bulge+disk), star-psf, objects, ICL, LSBG, mask overlay,
 AI services, example_hello.  Plugin Tcl reads and writes catalog-panel state through `::ogf::cat::get|set|exists|trace KEY` (key registry in
-`docs/architecture.md` section 7; 52 `catpanel(` references remain, almost all `catpanel(tbldb)`); the `ed()` dialog globals of a few
+`docs/architecture.md` section 7; no `catpanel(` or `catpanel_fdata` reference is left in plugin code; table cells are read with `::ogf::cat::cell ROW COL`, per-frame snapshots with `::ogf::cat::frame_get`); the `ed()` dialog globals of a few
 hand-written dialogs remain.  New plugins: use the accessor and register new keys in `::ogf::cat::registry`.

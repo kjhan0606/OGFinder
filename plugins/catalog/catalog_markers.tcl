@@ -1,7 +1,7 @@
 # catalog/catalog_markers.tcl -- moved from ds9/library/layout.tcl (procs unchanged; see docs/architecture.md section 6).
 # Loaded through the "tcl" field of plugins/catalog/plugin.json.
 
-# Build region string and create sextract_all markers from catpanel(alldata).
+# Build region string and create sextract_all markers from the catalog TSV (::ogf::cat::tsv).
 # This is the single source of truth for marker creation.
 # Called by: CatalogPanelMarkAll, CatalogPanelMergeSources, AI merge, GotoSource.
 proc CatalogPanelCreateAllMarkers {} {
@@ -151,42 +151,14 @@ proc CatalogPanelClearMarkers {} {
 }
 
 proc CatalogPanelMarkerCB {num_str id} {
-    global catpanel
     global current
 
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
-    global [::ogf::cat::get tbldb]
-
-    # Find NUMBER column index
-    set ncols [[::ogf::cat::get tbl] cget -cols]
-    set col_num -1
-    for {set c 1} {$c <= $ncols} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
-	    set hdr [set ${catpanel(tbldb)}(0,$c)]
-	    if {$hdr eq "NUMBER"} {
-		set col_num $c
-		break
-	    }
-	}
-    }
 
     # Find table row matching this source NUMBER
-    set nrows [[::ogf::cat::get tbl] cget -rows]
-    set target_row -1
-
-    if {$col_num >= 0} {
-	for {set r 1} {$r < $nrows} {incr r} {
-	    if {[info exists ${catpanel(tbldb)}($r,$col_num)]} {
-		set val [set ${catpanel(tbldb)}($r,$col_num)]
-		if {$val eq $num_str} {
-		    set target_row $r
-		    break
-		}
-	    }
-	}
-    }
+    set target_row [::ogf::cat::row_of $num_str]
 
     if {$target_row < 0} return
 
@@ -382,7 +354,6 @@ proc CatalogPanelMarkerCtrlClick {which x y} {
 }
 
 proc CatalogPanelShowVisible {} {
-    global catpanel
     global current
     global ds9
 
@@ -390,7 +361,7 @@ proc CatalogPanelShowVisible {} {
     if {$current(frame) == {}} return
     if {![$current(frame) has fits]} return
 
-    # checkbutton already toggled catpanel(visible_mode) before calling us
+    # checkbutton already toggled the visible_mode key before calling us
     if {![::ogf::cat::get visible_mode]} {
 	CatalogPanelLoadTSV [::ogf::cat::tsv] "all"
 	::ogf::cat::set status "Showing all sources"

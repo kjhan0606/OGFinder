@@ -2,7 +2,6 @@
 # Loaded through the "tcl" field of plugins/objects/plugin.json.
 
 proc CatalogPanelMergeSources {} {
-    global catpanel
     global current
 
     if {![::ogf::cat::get merge,active]} return
@@ -246,31 +245,7 @@ proc CatalogPanelMergeSources {} {
     CatalogPanelCreateAllMarkers
 
     # Find merged source row and auto-select/navigate
-    global [::ogf::cat::get tbldb]
-    set ncols [[::ogf::cat::get tbl] cget -cols]
-    set nrows [[::ogf::cat::get tbl] cget -rows]
-    set col_num -1
-    for {set c 1} {$c <= $ncols} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
-	    set hdr [set ${catpanel(tbldb)}(0,$c)]
-	    if {$hdr eq "NUMBER"} {
-		set col_num $c
-		break
-	    }
-	}
-    }
-    set merged_row -1
-    if {$col_num >= 0} {
-	for {set r 1} {$r < $nrows} {incr r} {
-	    if {[info exists ${catpanel(tbldb)}($r,$col_num)]} {
-		set val [set ${catpanel(tbldb)}($r,$col_num)]
-		if {$val eq $new_num} {
-		    set merged_row $r
-		    break
-		}
-	    }
-	}
-    }
+    set merged_row [::ogf::cat::row_of $new_num]
     if {$merged_row >= 0} {
 	[::ogf::cat::get tbl] selection set $merged_row,1
 	[::ogf::cat::get tbl] see $merged_row,1

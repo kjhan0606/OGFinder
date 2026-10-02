@@ -174,15 +174,14 @@ proc CatalogPanelICLViewBkg {} {
 }
 
 proc CatalogPanelICLSetCenter {} {
-    global catpanel_fdata ds9 current
+    global ds9 current
 
     # Use the first frame's catalog (original image SExtractor result)
     set catalog_data {}
     set first_frame [lindex $ds9(frames) 0]
     if {$first_frame ne {} &&
-	[info exists catpanel_fdata($first_frame,alldata)] &&
-	$catpanel_fdata($first_frame,alldata) ne {}} {
-	set catalog_data $catpanel_fdata($first_frame,alldata)
+	[::ogf::cat::frame_get $first_frame alldata {}] ne {}} {
+	set catalog_data [::ogf::cat::frame_get $first_frame alldata]
     } elseif {[::ogf::cat::has]} {
 	set catalog_data [::ogf::cat::tsv]
     }
@@ -635,7 +634,7 @@ proc CatalogPanelICLMeasureMulti {} {
 }
 
 proc CatalogPanelICLDecompose {} {
-    global ds9 catpanel_fdata
+    global ds9
 
     if {[::ogf::cat::get icl,center_x] eq {} || [::ogf::cat::get icl,center_y] eq {}} {
 	::ogf::cat::set status "ICL: Set BCG center first"
@@ -647,9 +646,8 @@ proc CatalogPanelICLDecompose {} {
     set fn {}
     set first_frame [lindex $ds9(frames) 0]
     if {$first_frame ne {}} {
-	if {[info exists catpanel_fdata($first_frame,filename)] &&
-	    $catpanel_fdata($first_frame,filename) ne {}} {
-	    set fn $catpanel_fdata($first_frame,filename)
+	if {[::ogf::cat::frame_get $first_frame filename {}] ne {}} {
+	    set fn [::ogf::cat::frame_get $first_frame filename]
 	}
     }
     if {$fn eq {}} {

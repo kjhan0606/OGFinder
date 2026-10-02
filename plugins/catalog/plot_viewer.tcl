@@ -2,7 +2,6 @@
 # Loaded through the "tcl" field of plugins/catalog/plugin.json.
 
 proc CatalogPanelPlotDialog {} {
-    global catpanel
 
     if {![::ogf::cat::has]} {
 	::ogf::cat::set status "Extract sources first"
@@ -42,8 +41,8 @@ proc CatalogPanelPlotDialog {} {
     # Log scale
     ::ogf::cat::set plot,logx 0
     ::ogf::cat::set plot,logy 0
-    ttk::checkbutton $w.logx -text "Log X" -variable catpanel(plot,logx)
-    ttk::checkbutton $w.logy -text "Log Y" -variable catpanel(plot,logy)
+    ttk::checkbutton $w.logx -text "Log X" -variable [::ogf::cat::bind_var plot,logx]
+    ttk::checkbutton $w.logy -text "Log Y" -variable [::ogf::cat::bind_var plot,logy]
 
     # Histogram bins
     ttk::label $w.ltbins -text "Hist Bins:"
@@ -65,7 +64,6 @@ proc CatalogPanelPlotDialog {} {
 }
 
 proc CatalogPanelPlotRun {dlg} {
-    global catpanel
 
     set ptype [$dlg.ptype get]
     set xcol  [$dlg.xcol get]
@@ -124,7 +122,7 @@ proc CatalogPanelPlotRun {dlg} {
     }
 
     # Create plot window
-    incr catpanel(plot,counter)
+    ::ogf::cat::bump plot,counter
     set n [::ogf::cat::get plot,counter]
     set w .catplot_$n
     toplevel $w

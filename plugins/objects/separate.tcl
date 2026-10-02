@@ -13,7 +13,6 @@ proc CatalogPanelSeparateGetScript {} {
 
 # Get the currently selected source NUMBER from the table
 proc CatalogPanelGetSelectedSource {} {
-    global catpanel
 
     if {![::ogf::cat::exists tbl]} { return {} }
     if {![::ogf::cat::has]} { return {} }
@@ -25,15 +24,14 @@ proc CatalogPanelGetSelectedSource {} {
     set row [lindex [split [lindex $sel 0] ","] 0]
     if {$row <= 0} { return {} }
 
-    global [::ogf::cat::get tbldb]
-    set ncols [[::ogf::cat::get tbl] cget -cols]
+    set ncols [::ogf::cat::table_ncols]
 
     # Find column indices
     set col_num -1; set col_x -1; set col_y -1
     set col_a -1; set col_b -1; set col_theta -1; set col_ir -1
     for {set c 1} {$c <= $ncols} {incr c} {
-	if {[info exists ${catpanel(tbldb)}(0,$c)]} {
-	    switch -- [set ${catpanel(tbldb)}(0,$c)] {
+	if {[::ogf::cat::cell_exists 0 $c]} {
+	    switch -- [::ogf::cat::cell 0 $c] {
 		NUMBER      { set col_num $c }
 		X_IMAGE     { set col_x $c }
 		Y_IMAGE     { set col_y $c }
@@ -49,29 +47,29 @@ proc CatalogPanelGetSelectedSource {} {
     set result [dict create]
     dict set result row $row
 
-    if {$col_num >= 0 && [info exists ${catpanel(tbldb)}($row,$col_num)]} {
-	dict set result number [set ${catpanel(tbldb)}($row,$col_num)]
+    if {$col_num >= 0 && [::ogf::cat::cell_exists $row $col_num]} {
+	dict set result number [::ogf::cat::cell $row $col_num]
     } else {
 	dict set result number $row
     }
-    dict set result x [set ${catpanel(tbldb)}($row,$col_x)]
-    dict set result y [set ${catpanel(tbldb)}($row,$col_y)]
+    dict set result x [::ogf::cat::cell $row $col_x]
+    dict set result y [::ogf::cat::cell $row $col_y]
 
     set a 10.0; set b 10.0; set theta 0.0; set ir 10.0
-    if {$col_a >= 0 && [info exists ${catpanel(tbldb)}($row,$col_a)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_a)]
+    if {$col_a >= 0 && [::ogf::cat::cell_exists $row $col_a]} {
+	set val [::ogf::cat::cell $row $col_a]
 	if {[string is double -strict $val] && $val > 0} { set a $val }
     }
-    if {$col_b >= 0 && [info exists ${catpanel(tbldb)}($row,$col_b)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_b)]
+    if {$col_b >= 0 && [::ogf::cat::cell_exists $row $col_b]} {
+	set val [::ogf::cat::cell $row $col_b]
 	if {[string is double -strict $val] && $val > 0} { set b $val }
     }
-    if {$col_theta >= 0 && [info exists ${catpanel(tbldb)}($row,$col_theta)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_theta)]
+    if {$col_theta >= 0 && [::ogf::cat::cell_exists $row $col_theta]} {
+	set val [::ogf::cat::cell $row $col_theta]
 	if {[string is double -strict $val]} { set theta $val }
     }
-    if {$col_ir >= 0 && [info exists ${catpanel(tbldb)}($row,$col_ir)]} {
-	set val [set ${catpanel(tbldb)}($row,$col_ir)]
+    if {$col_ir >= 0 && [::ogf::cat::cell_exists $row $col_ir]} {
+	set val [::ogf::cat::cell $row $col_ir]
 	if {[string is double -strict $val] && $val > 0} { set ir $val }
     }
     dict set result a $a

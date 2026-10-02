@@ -102,7 +102,7 @@ proc CatalogPanelTrimDialog {} {
     destroy $w
 
     if {$ed(ok)} {
-	# Copy trim values from ed to catpanel
+	# Copy trim values from ed to the catalog keys
 	foreach colname $ed(trim,cols) {
 	    ::ogf::cat::set trim,$colname,min $ed(trim,$colname,min)
 	    ::ogf::cat::set trim,$colname,max $ed(trim,$colname,max)
