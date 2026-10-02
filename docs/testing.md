@@ -19,6 +19,7 @@
 | `review_gui` | `scripts/verify_review_gui.tcl` (review columns, table filter and tint, session steps, save/load round trip, export job, layout invariants; 51 checks) | Xvfb | yes |
 | `session_replay` | `scripts/verify_session_replay.sh`: record GUI sessions, export scripts, replay, compare (78 checks) | Xvfb, venv, ~10+ min | no |
 | `link_bench` | `moving/validation/link_bench.py` on the injected sets `/workspace/work/inj1-6.json.pkl` (SKIP when missing); when the regenerated sets `/workspace/work/i1/sets/inj1..12.json.pkl` exist (incl. CR-heavy 9-12, held-out 7-8) all twelve run and per-group totals are printed | venv | no |
+| `moving_options` | `scripts/verify_moving_options.tcl` (Xvfb): ZOGY parameters of the moving plugin -> CLI flags, default argv unchanged, recorded argv, layout invariants | X server | yes |
 | `moving_session` | `scripts/verify_moving_session.sh` replay of a Moving Objects session; needs `OGF_MOVING_SESSION`, `OGF_MOVING_REF`, `OGF_MOVING_FIELD`; network + MAST cache | network | no |
 
 Test data location: `OGF_TEST_FITS` (default `/workspace/fits`).  `docs/windows_macos_build.md` lists what is *not* verified on

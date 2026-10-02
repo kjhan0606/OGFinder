@@ -257,8 +257,7 @@ Code: `moving/zogy.py` (`zogy(..., Vn, Vr, astrom_n, astrom_r)`, `zogy_tiled`), 
 astrom_sigma=, psf_field_t=, psf_field_r=, template_psf=, tile=, astrom_template_sigma=)`).  Every new argument defaults to the old
 behaviour: `zogy()` called as before returns exactly the old keys and values.  With variance maps / astrometric sigmas it adds
 `S_corr` (the corrected score image), `V_S`, `sigma_alpha_map`, `sigma_alpha_new_map`.  `astrom_sigma=True` takes the per-chip
-registration rms from the alignment sidecar (`chip.align['rms_mas']`).  **Not yet wired into `pipeline.detect_in_region` or the CLI**
-(the CLI argv is unchanged); use from Python.
+registration rms from the alignment sidecar (`chip.align['rms_mas']`).  Since item 2 (2026-10-02) the options are wired into `pipeline.detect_in_region`, the CLI and the GUI (below); all default OFF, default argv unchanged.
 
 Measured on synthetic Poisson star fields (bright stars + 25 injected 300-count transients, 4 seeds; `moving/tests/test_zogy.py` has the
 corresponding assertions):
@@ -297,6 +296,54 @@ FWHM 1.13 px, below the 0.085" (~1.7 px) floor, i.e. it is probably contaminated
 term helps negatives (20 -> 7) but not positives here.  The synthetic gains for a varying PSF are therefore *not* demonstrated on real
 data.
 
+### ZOGY options in the CLI / GUI and the measured registration error (item 2, 2026-10-02)
+
+* CLI (`--mode difference`; none of these appear in the default argv): `--source-noise`, `--astrom off|sidecar|measure|<sigma_pix>`, `--psf-tile N`,
+  `--template-psf target|measure`.  GUI: *Tools > Plugin settings > Moving* (group "Difference (ZOGY)": Source-noise term, Registration error,
+  PSF tile size and Template PSF as expert options); `OGFMovDifference` appends only non-default values, so the argv recorded by the session recorder
+  is identical to the old one unless an option is changed (checked by `scripts/verify_moving_options.tcl`, 17 checks, part of `run_all_checks.sh` as `moving_options`).
+* `--astrom measure` = `regerr.measure_registration`: sources bright in both the target and the template (stars and compact galaxies, CRs and
+  movers drop out) are re-centred with the same windowed centroid on both images; sigma_x/y^2 = (median offset)^2 + (1.4826 MAD)^2 - centroid noise^2
+  (centroid noise from size / S/N, template included).  It replaces the typed or sidecar number by a measurement for **each exposure/template pair**
+  (the anchor exposure, which has no sidecar rms, gets one too).  If fewer than 8 usable sources it falls back to the sidecar value, else to no
+  astrometric term (`info["registration"]` records what happened).  Synthetic test: known 0.30 px x-offset recovered (`moving/tests/test_regerr.py`, 6 tests).
+* `--psf-tile N`: `pipeline.detect_in_region(psf_tile=N)` measures the PSF per tile from the stars of all exposures of that detector and runs `zogy_tiled`.
+
+Real BB89 data (same four chips, 4 x 1240 px cutouts, template = median of the other three; script `/workspace/work/i2_eval.py`, not in the repo; the
+detection-stage extras of item 1 are off in this table so the rows are comparable with the table above; the Gaussian PSF of FWHM 1.70 px is used because the
+empirical one is unusable on this field).  Registration error measured per exposure (pixels, 0.05"/px): exposure 1: 0.23 (x) / 0.07 (y); exposure 2: 0.21 / 0.25;
+exposure 3: no estimate (too few sources -> sidecar value 4.4 mas = 0.09 px); exposure 4: 0.0 / 0.14 (8 sources).  The sidecar says 19.4 / 4.4 / 3.7 mas =
+0.39 / 0.09 / 0.07 px, i.e. the measured error on the *template pair* is larger than the alignment-fit rms for two exposures.
+
+| configuration | pos (S/N>=8, not the mover) | negative >= 5 | mover hits (of 7) | static-star residuals |
+|---|---|---|---|---|
+| classic | 7707 | 26 | 7 | 151 |
+| source noise | 7972 | 10 | 7 (S/N 760 -> 741 ... 193 -> 81) | 148 |
+| source noise + astrometry from sidecar | 6654 | 6 | 4 | 116 |
+| **source noise + astrometry measured** | 7427 | 6 | **5** | 133 |
+| source noise + 0.15 px | 6965 | 4 | 4 | 125 |
+| tiled PSF (256 px tiles; 0 tiles had >= 5 stars -> constant PSF) | 7714 | 25 | 7 | 148 |
+
+The measured registration error does what it was meant to: it keeps 5 of 7 mover hits where the sidecar value keeps 4 (and a typed 0.15 px keeps 4) while still
+removing the negative residuals (26 -> 6) and some of the static residuals (151 -> 133).  It does **not** recover all 7: the mover passes near stars and any
+astrometric term that is large enough to reduce residuals also lowers S/N near sources.  The mover S/N drops from 193/193/187/89 to 70/57 in the faint exposures.
+The pos(S/N>=8) proxy changes by only 4 % (it is dominated by CR residuals and unmasked sources, not by registration).
+Linking benchmark with the options at detection time (`link_bench.py`, regenerated sets, defaults of item 1 otherwise; recovered / ceiling, top-50):
+
+| set | default | source noise | source noise + measured astrometry |
+|---|---|---|---|
+| inj2 | 13/22, 10 | 15/22, 13 | 14/19, 14 |
+| inj4 | 13/21, 13 | 11/20, 10 | 15/19, 15 |
+| inj7 | 16/22, 15 | 13/19, 12 | 15/20, 13 |
+| total | 42/65 | 39/61 | 44/58 |
+
+Honest reading: 44 vs 42 recovered is within the set-to-set noise (3 sets, single noise realisation); the ceiling drops (65 -> 58) because the
+astrometric term lowers S/N of real faint movers near sources, while top-50 is similar.  **Defaults therefore stay OFF**: the evidence supports "measured
+beats sidecar / typed" for the astrometric term, not "on beats off" for movers.  Source noise alone does not help the linking benchmark (39 vs 42).
+The tiled-PSF and separate template-PSF options again changed nothing on BB89 (no tile has enough stars); they stay untested on real data with a varying PSF.
+Real BB89 end-to-end with `--source-noise --astrom measure` (CLI, as the earlier real run): the known 2015 BB89 tracklet is still rank 0 of 400, prob 0.995 (default: 0.983),
+3 members 0.056-0.095 arcsec from the ephemeris; the fourth exposure's detection falls to S/N 44 (default 194) and is not linked; 8906 detections instead of 9808.
+
 ### Remaining limits
 
 * Spatial PSF variation needs enough isolated stars per tile (default `min_stars` per tile); sparse fields fall back to one PSF.
@@ -306,7 +353,7 @@ data.
   (smoothed) image, which is biased for the template of a median stack (correlated across exposures).
 * Per-tile ZOGY (`zogy_tiled`) is seam-free only within the `margin` overlap; very strong PSF gradients across one tile are unmodelled.
 * No colour term, no differential chromatic refraction, no handling of correlated noise from drizzle/resampling.
-* Not yet exposed in the GUI/CLI, so session scripts do not record these options.
+* The options are exposed in the CLI/GUI (next section) and are recorded in the session argv only when they differ from the default.
 
 ## Session recorder: Moving Objects steps
 
