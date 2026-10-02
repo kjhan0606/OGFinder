@@ -61,14 +61,29 @@ def test_real_bagpipes(tmp_path):
     assert np.all(np.isfinite(dm)) and np.max(np.abs(dm)) < 0.5 and 'Bagpipes' in model
 
 
+PR_SPS = os.environ.get('SPS_HOME', '/workspace/fsps_master')      # FSPS data matching python-fsps 0.5 (cconroy20/fsps master: MIST with 13 metallicities)
+
+
 def _prospector_ok():
     py = os.environ.get('OGF_PROSPECTOR_PYTHON', BP_PY)
-    if not os.path.exists(py):
+    if not os.path.exists(py) or not os.path.isdir(PR_SPS):
         return False
     code = 'import prospect, fsps; fsps.StellarPopulation(zcontinuous=1)'
-    return subprocess.run([py, '-c', code], capture_output=True, env=dict(os.environ, SPS_HOME=os.environ.get('SPS_HOME', ''))).returncode == 0
+    return subprocess.run([py, '-c', code], capture_output=True, env=dict(os.environ, SPS_HOME=PR_SPS)).returncode == 0
 
 
-@pytest.mark.skipif(not _prospector_ok(), reason='working python-fsps (SPS_HOME) + prospector not available')
-def test_real_prospector(tmp_path):
-    pytest.skip('not exercised: no verified FSPS installation in the development environment')
+@pytest.mark.skipif(not _prospector_ok(), reason='working python-fsps (SPS_HOME = FSPS master data) + prospector not available')
+def test_real_prospector(tmp_path, monkeypatch):
+    env = dict(os.environ, SPS_HOME=PR_SPS, MPLBACKEND='Agg')
+    p = subprocess.run([BP_PY, os.path.join(HERE, 'make_prospector_truth.py'), '3'], capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    assert p.returncode == 0, p.stderr[-500:]
+    objs = json.loads(p.stdout[p.stdout.index('['):])
+    recs = [dict(id=o['id'], mags=o['mags'], mag_errs=o['mag_errs'], catalog_row={'Z_SPEC': '%.5f' % o['z']}) for o in objs]
+    monkeypatch.setenv('SPS_HOME', PR_SPS)
+    res, model = prospector_adapter.process(recs, dict(python=BP_PY, workdir=str(tmp_path / 'w'), n_live=250, min_mag_err=0.0, z_column='Z_SPEC'), 'sed_fit')
+    assert all('error' not in r for r in res), res
+    dm = np.array([r['LOG_MASS'] - o['logm'] for r, o in zip(res, objs)])
+    pull = np.array([(r['LOG_MASS'] - o['logm']) / max(r['LOG_MASS_ERR'], 0.03) for r, o in zip(res, objs)])
+    print('REAL %s: logM - truth = %s (pull %s) ; Av - truth = %s ; logAge - truth = %s' % (model, np.round(dm, 3), np.round(pull, 2), np.round([r['AV'] - o['av'] for r, o in zip(res, objs)], 2),
+                                                                                         np.round([r['LOG_AGE'] - o['logage'] for r, o in zip(res, objs)], 2)))
+    assert 'rospector' in model and np.all(np.abs(dm) < 0.4) and np.all(np.isfinite([r['SED_CHI2'] for r in res]))
