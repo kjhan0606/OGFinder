@@ -22,6 +22,7 @@
 | `mouse` | `scripts/verify_mouse.tcl` (real xdotool events: notebook tab, chip menu + entry, cascade submenu, table row click, header-click sort, wheel, Tools-menu detach/reattach; 25 checks) | Xvfb, xdotool | yes |
 | `newplugins` | `scripts/verify_newplugins.sh`: GUI check of the analysis plugins added after the restructuring (`scripts/verify_newplugins.tcl`: real m51 extraction, each step through `::ogf::step::run`, outputs/frames/windows, layout invariants) **and** headless replay of the exported session script, requiring identical stdout and catalog CRCs per step | Xvfb | yes |
 | `isophote_tests` | `pytest plugins/isophote/tests` (synthetic Sersic e/PA/intensity/growth curve/boxy-disky/mask, CLI, M51 smoke) | venv + photutils | yes |
+| `completeness_tests` | `pytest plugins/completeness/tests` (analytic SEP recovery curve, false positives, flux conservation, mask, callback loading, logistic fit, FITS metadata, CLI) | venv + sep | yes |
 | `review_td` | `scripts/verify_review_td.tcl` (review on moving / transient / detection rows and the All view: columns, filters, tint, steps, save/load, re-run pruning, report from a time-domain view; 55 checks) | Xvfb | yes |
 | `review_gui` | `scripts/verify_review_gui.tcl` (review columns, table filter and tint, session steps, save/load round trip, export job, layout invariants; 51 checks) | Xvfb | yes |
 | `session_replay` | `scripts/verify_session_replay.sh`: record GUI sessions, export scripts, replay, compare (78 checks) | Xvfb, venv, ~10+ min | no |

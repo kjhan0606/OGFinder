@@ -51,6 +51,36 @@ proc sec_isophote {} {
     R isophote_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_completeness {} {
+    ::ogf::params::put completeness n-bins 5
+    ::ogf::params::put completeness per-bin 12
+    ::ogf::params::put completeness per-image 6
+    ::ogf::params::put completeness mag-min 12.5
+    ::ogf::params::put completeness mag-max 17.5
+    ::ogf::params::put completeness crop-size 400
+    lassign [run_step completeness measure] ok recs
+    R completeness_ran $ok $recs
+    R completeness_recorded [expr {[lindex $recs 0 0] eq "analysis.completeness_sim"}] $recs
+    set cols [::ogf::cat::columns]
+    R completeness_columns [expr {"COMPL_FRAC" in $cols && "COMPL_LIM50" in $cols && "COMPL_LIM90" in $cols}]
+    R completeness_rows_filled [expr {[nonempty COMPL_FRAC] > 50}] "rows=[nonempty COMPL_FRAC]"
+    set fr [lsearch -all -inline -not [col_values COMPL_FRAC] {}]
+    R completeness_fraction_range [expr {[tcl::mathfunc::min {*}$fr] >= 0 && [tcl::mathfunc::max {*}$fr] <= 1}] "[tcl::mathfunc::min {*}$fr] .. [tcl::mathfunc::max {*}$fr]"
+    set w [OGFSessWorkDir]
+    foreach f {completeness.json completeness_curve.tsv completeness_plot.png catalog_meta.json} {
+	R completeness_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 50}]
+    }
+    R completeness_keys [expr {[::ogf::cat::exists completeness,lim50] && [string is double -strict [::ogf::cat::get completeness,lim50]]}] [::ogf::cat::get completeness,lim50 ?]
+    set pw [OGFCompletenessPlot]
+    R completeness_plot_window [expr {[winfo exists $pw] && [image width ogfcompimg] > 300}] "[image width ogfcompimg]x[image height ogfcompimg]"
+    destroy $pw
+    # catalog metadata travels with a saved catalog
+    set sv [file join $::dir saved.tsv]
+    CatalogPanelSaveCatalogTo $sv
+    R completeness_meta_sidecar [file exists $sv.meta.json] $sv.meta.json
+    R completeness_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc run {} {
     global catpanel
     set only [expr {[info exists ::env(OGF_NP_ONLY)] ? [split $::env(OGF_NP_ONLY) ,] : {}}]
@@ -59,7 +89,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote} {
+    foreach sec {isophote completeness} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

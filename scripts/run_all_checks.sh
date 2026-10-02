@@ -92,6 +92,8 @@ chk_newplugins() { need_x || { echo "no X server"; return 77; }
 EXTRA="$EXTRA newplugins"
 chk_isophote_tests() { "$PY" -m pytest -q plugins/isophote/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA isophote_tests"
+chk_completeness_tests() { "$PY" -m pytest -q plugins/completeness/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA completeness_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc

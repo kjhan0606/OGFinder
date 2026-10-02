@@ -17,6 +17,9 @@ if [ -f "$W/gui/ogfinder_session.py" ]; then
   nid=$(grep -c 'catalog after step identical' "$W/replay.txt"); nsd=$(grep -c 'stdout identical' "$W/replay.txt")
   nw=$(grep -c 'WARNING: .*differs' "$W/replay.txt")
   echo "replay: rc=$rc steps=$nst stdout-identical=$nsd catalog-identical=$nid differ-warnings=$nw"
+  if [ -f "$W/gui/saved.tsv.meta.json" ]; then
+    if [ -f "$W/replay/m51/outputs/saved.tsv.meta.json" ]; then echo "replay: catalog metadata sidecar written"; else echo "replay: catalog metadata sidecar MISSING"; ok=0; fi
+  fi
   [ $rc = 0 ] && [ "$nw" = 0 ] && [ "$nid" -ge 1 ] || ok=0
 else echo "no exported session script"; ok=0; fi
 [ $ok = 1 ]
