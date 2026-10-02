@@ -169,6 +169,34 @@ proc sec_morphext {} {
     R morphext_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_noisemodel {} {
+    ::ogf::params::put noisemodel n-aper 300
+    ::ogf::params::put noisemodel radii 2,4,6,8
+    ::ogf::params::put noisemodel aperture fixed
+    ::ogf::params::put noisemodel aper-radius 4
+    ::ogf::params::put noisemodel correct 1
+    lassign [run_step noisemodel model] ok recs
+    R noisemodel_ran $ok $recs
+    R noisemodel_recorded [expr {[lindex $recs 0 0] eq "analysis.noisemodel"}] $recs
+    set cols [::ogf::cat::columns]
+    R noisemodel_columns [expr {"NM_RMS" in $cols && "NM_FLUXERR" in $cols && "NM_CORR" in $cols && "NM_MAGERR_AP" in $cols}]
+    R noisemodel_rows_filled [expr {[nonempty NM_FLUXERR] >= 20 && [nonempty NM_RMS] >= 20}] "err=[nonempty NM_FLUXERR] rms=[nonempty NM_RMS]"
+    set corr [lsearch -all -inline -not [col_values NM_CORR] {}]
+    R noisemodel_corr_sane [expr {[tcl::mathfunc::min {*}$corr] > 0.5 && [tcl::mathfunc::max {*}$corr] < 20}] "[tcl::mathfunc::min {*}$corr] .. [tcl::mathfunc::max {*}$corr]"
+    set w [file join [OGFSessWorkDir] noisemodel]
+    foreach f {noisemodel_bkg.fits noisemodel_rms.fits noisemodel_sub.fits noisemodel_summary.json noisemodel_curve.tsv noisemodel_noise_curve.png} {
+	R noisemodel_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 100}]
+    }
+    R noisemodel_keys [expr {[::ogf::cat::exists noisemodel,rms_file] && [::ogf::cat::exists noisemodel,plot_file]}]
+    set pw [OGFNoisePlot]
+    R noisemodel_plot_window [expr {[winfo exists $pw] && [image width ogfnoiseimg] > 300}] "[image width ogfnoiseimg]x[image height ogfnoiseimg]"
+    destroy $pw
+    set f0 [llength $::ds9(frames)]
+    set n [OGFNoiseFrames]
+    R noisemodel_frames [expr {$n == 2 && [llength $::ds9(frames)] == $f0 + 2}] "$n frames, $f0 -> [llength $::ds9(frames)]"
+    R noisemodel_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -258,7 +286,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

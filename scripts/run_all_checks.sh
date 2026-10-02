@@ -102,6 +102,8 @@ chk_multifit_tests() { "$PY" -m pytest -q plugins/multifit/tests 2>&1 | tail -3;
 EXTRA="$EXTRA multifit_tests"
 chk_morphext_tests() { "$PY" -m pytest -q plugins/morph_ext/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA morphext_tests"
+chk_noisemodel_tests() { "$PY" -m pytest -q plugins/noisemodel/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA noisemodel_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc

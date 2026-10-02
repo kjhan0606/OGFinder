@@ -329,6 +329,7 @@ namespace eval ::ogf::cat {
         {psfex,*                any    psfex     rw   "psfex plugin: last output files (model_file, center_file, stars_file, maps_file, plot_file)"}
         {multifit,*             any    multifit  rw   "multifit plugin: output files (results_file, model_file, residual_file, montage_file)"}
         {morphext,*             any    morph_ext rw  "extended morphology plugin: output files (growth_file, plot_file)"}
+        {noisemodel,*           any    noisemodel rw  "background & noise model plugin: output files (bkg_file, rms_file, sub_file, json_file, plot_file, curve_file)"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}
