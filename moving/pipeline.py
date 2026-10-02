@@ -14,10 +14,12 @@ from .util import log
 
 
 def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, snr_det=5.0, progress=None,
-                     save_diff_dir=None, extra=None, **diff_kw):
+                     save_diff_dir=None, extra=None, psf_tile=None, psf_min_stars=5, **diff_kw):
     """Difference every chip that covers `center` (ra, dec; or the whole chips if None) against the median of the
     other exposures and detect/classify.  `chips` must already be aligned.  Returns (dets, infos).
-    `diff_kw` goes to `detect.difference_chip` (cr_reject, trail_fit, realbogus, source_noise, astrom_sigma, ...)."""
+    `diff_kw` goes to `detect.difference_chip` (cr_reject, trail_fit, realbogus, source_noise, astrom_sigma, template_psf, ...).
+    `psf_tile=N` (pixels) measures a spatially varying PSF per N x N tile from the stars of all exposures of the same detector
+    (`imaging.measure_psf_field`, tiles with < `psf_min_stars` stars use the pooled PSF) and runs the tiled ZOGY (`zogy_tiled`); None = one PSF per chip (default)."""
     if psf is None:
         psf = I.estimate_psf(chips, snr_min=6.0)
     psf_t, fw, n = psf
@@ -51,7 +53,14 @@ def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, s
             continue
         if progress:
             progress("difference %s" % c.name)
-        out = D.difference_chip(cc, tpl, psf_t=psf_t, fw_t=fw, n_t=n, snr_det=snr_det, **diff_kw)
+        kw_c = dict(diff_kw)
+        if psf_tile:
+            same = [o for o in chips if getattr(o, "extver", None) == getattr(c, "extver", None)]
+            pf = I.measure_psf_field(same, cc.shape, tile=(int(psf_tile), int(psf_tile)), min_stars=psf_min_stars, snr_min=6.0, origin=getattr(cc, "origin", (0, 0)),
+                                     constant=(psf_t, fw), min_fwhm_pix=fw_floor)
+            kw_c["psf_field_t"] = pf; kw_c["psf_field_r"] = pf
+            log("psf field %s: %s" % (c.name, pf.summary()))
+        out = D.difference_chip(cc, tpl, nin=nin, psf_t=psf_t, fw_t=fw, n_t=n, snr_det=snr_det, **kw_c)
         info = out["info"]; infos[c.name] = info
         ex = exs.index(c.path)
         for d in out["dets"]:

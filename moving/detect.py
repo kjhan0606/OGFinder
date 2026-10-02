@@ -7,7 +7,7 @@ negative peaks -> per-detection features.  Positions are in the (aligned) chip W
 import numpy as np
 import sep
 from scipy import ndimage as ndi
-from . import imaging as I, zogy as Z
+from . import imaging as I, zogy as Z, regerr as RG
 from .util import log
 
 
@@ -85,7 +85,8 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
       source_noise    include the Poisson noise of the sources in N and R in the score variance (zogy `Vn`, `Vr`; image units are e-/s so
                       V = max(smoothed counts, 0) / t_exp; template: / (t_exp * n_inputs)).
       astrom_sigma    registration uncertainty of the target in pixels (float or (sx, sy)); True = take it from the chip's alignment sidecar
-                      (`chip.align['rms_mas']`).  The template term (`astrom_template_sigma`, default: the same value / sqrt(n_inputs)) is added
+                      (`chip.align['rms_mas']`); "measure" = estimate it for THIS target/template pair from the star offsets (`regerr.measure_registration`;
+                      falls back to the sidecar value, then to no astrometric term, when too few stars).  The template term (`astrom_template_sigma`, default: the same value / sqrt(n_inputs)) is added
                       too.  Enables the astrometric-error terms of ZOGY.
       psf_field_t / psf_field_r   `imaging.PSFField` (spatially varying PSF of the target / template); runs `zogy_tiled`.
       template_psf    "target" (default, as before) or "measure": measure the template PSF from the template's own stars (constant per chip,
@@ -157,6 +158,15 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
         if astrom_sigma is not None and astrom_sigma is not False:
             if astrom_sigma is True:
                 sg = _astrom_sigma_pix(target)
+            elif isinstance(astrom_sigma, str) and astrom_sigma == "measure":
+                nin_m = float(np.mean(nin[valid])) if nin is not None and valid.any() else 3.0
+                reg = RG.measure_registration(target, tplf, ~np.isfinite(tpl), bkg_t, bkg_r, rms_t=rms_t, nin_mean=nin_m)
+                if reg is not None:
+                    sg = (reg["sigma_x"], reg["sigma_y"]); info["registration"] = reg
+                else:
+                    sg = _astrom_sigma_pix(target); info["registration"] = "too few stars: sidecar value" if sg is not None else "too few stars: no astrometric term"
+                if astrom_template_sigma is None:
+                    astrom_template_sigma = 0.0              # the measurement is already the target-template difference
             else:
                 sg = astrom_sigma
             if sg is not None:

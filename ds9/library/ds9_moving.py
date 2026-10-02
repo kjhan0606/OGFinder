@@ -165,6 +165,13 @@ def _detect_opts(a):
     if getattr(a, "no_cr_reject", False): o["cr_reject"] = False
     if getattr(a, "no_trail_fit", False): o["trail_fit"] = False
     if getattr(a, "no_realbogus", False): o["realbogus"] = False
+    # ZOGY options (item 2): all default OFF, so the default argv and results are unchanged
+    if getattr(a, "source_noise", False): o["source_noise"] = True
+    am = getattr(a, "astrom", None)
+    if am not in (None, "", "off"):
+        o["astrom_sigma"] = True if am == "sidecar" else "measure" if am == "measure" else float(am)
+    if getattr(a, "psf_tile", None): o["psf_tile"] = int(a.psf_tile)
+    if getattr(a, "template_psf", None) not in (None, "target"): o["template_psf"] = a.template_psf
     return o
 
 
@@ -462,6 +469,11 @@ def main(argv=None):
     ap.add_argument("--no-cr-reject", action="store_true", help="difference: skip the L.A.Cosmic features")
     ap.add_argument("--no-trail-fit", action="store_true", help="difference: skip the trailed-PSF centroid refit")
     ap.add_argument("--no-realbogus", action="store_true", help="difference: skip the real/bogus score (the linker then orders its pool by S/N)")
+    ap.add_argument("--source-noise", action="store_true", help="difference: ZOGY source-noise variance terms (Vn, Vr; fewer negative/static residuals)")
+    ap.add_argument("--astrom", default="off", help="difference: ZOGY astrometric-registration term: off (default) | sidecar (alignment rms per chip) | "
+                    "measure (estimated from the star offsets of each target/template pair) | a number = sigma in pixels")
+    ap.add_argument("--psf-tile", type=int, default=0, help="difference: spatially varying PSF on tiles of N pixels (tiled ZOGY); 0 = one PSF per chip")
+    ap.add_argument("--template-psf", default="target", choices=["target", "measure"], help="difference: PSF of the template (default: the target PSF)")
     ap.add_argument("--tol", type=float, default=0.5)
     ap.add_argument("--min-exposures", type=int, default=3)
     ap.add_argument("--max-per-exposure", type=int, default=900)
