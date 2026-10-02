@@ -1,0 +1,59 @@
+"""LIVE test of the Claude profile (`agent_claude`) against the real `claude` CLI on a tiny star/galaxy task.
+
+Skipped unless `claude` is installed and logged in (`claude auth status` shows loggedIn true; `claude auth login` done beforehand)
+and OGF_AI_OFFLINE is not 1.  Costs a few hundred tokens.
+Run:  python -m pytest ai_bridge/tests/test_claude_live.py -v -rs
+"""
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+from ai_bridge import agent_cli, cli
+
+CAT = ("NUMBER\tX_IMAGE\tY_IMAGE\tALPHA_J2000\tDELTA_J2000\tMAG_AUTO\tCLASS_STAR\tFWHM_IMAGE\n"
+       "1\t10\t10\t202.4\t47.1\t18.0\t0.98\t2.1\n"
+       "2\t20\t20\t202.5\t47.2\t17.5\t0.02\t12.5\n")
+
+
+def logged_in():
+    exe = shutil.which('claude')
+    if not exe or os.environ.get('OGF_AI_OFFLINE') == '1':
+        return None
+    try:
+        out = subprocess.run([exe, 'auth', 'status'], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL); out = out.stdout + out.stderr
+    except Exception:
+        return None
+    return exe if '"loggedin": true' in out.lower() else None
+
+
+EXE = logged_in()
+
+
+@unittest.skipUnless(EXE, 'claude CLI not installed or not logged in (run `claude auth login`)')
+class ClaudeLive(unittest.TestCase):
+    def test_star_galaxy_roundtrip(self):
+        tmp = tempfile.mkdtemp(prefix='grok_live_')
+        try:
+            cat = os.path.join(tmp, 'cat.tsv'); open(cat, 'w').write(CAT)
+            prof = dict(agent_cli.builtin_agent('agent_claude'), name='live_claude', executable=EXE, retries=0, timeout_s=180)
+            sf = os.path.join(tmp, 'sf.json'); json.dump({'services': [prof]}, open(sf, 'w'))
+            out = os.path.join(tmp, 'out.tsv')
+            rc = cli.main(['--mode', 'run', '--service', 'live_claude', '--task', 'star_galaxy', '--catalog', cat, '--services-file', sf,
+                           '--allow-agent-cli', '--no-cache', '--output', out, '-q'])
+            txt = open(out).read() if os.path.exists(out) else ''
+            low = txt.lower()
+            if 'not signed in' in low or '401' in low or 'unauthor' in low or 'invalid api key' in low:
+                self.skipTest('claude is not really authenticated: %s' % txt.strip().splitlines()[-1][:200])
+            self.assertEqual(rc, 0, txt[:500])
+            rows = [l.split('\t') for l in txt.strip().splitlines()]
+            self.assertEqual(len(rows), 3, txt)                       # header + 2 objects
+            self.assertTrue(all('error' not in c.lower() for r in rows[1:] for c in r[-3:]), txt)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+if __name__ == '__main__':
+    unittest.main()
