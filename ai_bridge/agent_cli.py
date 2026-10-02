@@ -319,14 +319,14 @@ def unwrap(flavor, stdout):
         if env.get('structured_output') is not None:
             return env['structured_output'], None, rid, ['structured_output']
         return env.get('response'), None, rid, []
-    if kind == 'grok':          # success envelope NOT verified against a real answer: try the usual keys
+    if kind == 'grok':          # envelope verified live 2026-10-02: {text, stopReason, sessionId, usage, modelUsage}
         if env.get('type') == 'error' or env.get('error'):
             raise RequestFailed('grok reported an error: %s' % str(env.get('message') or env.get('error'))[:300], retryable=False)
         if 'results' in env:
             return env, env.get('model'), None, ['bare results object']
         for k in ('result', 'response', 'text', 'output', 'content', 'message'):
             if k in env and env[k] not in (None, ''):
-                return env[k], env.get('model'), env.get('session_id'), []
+                return env[k], env.get('model'), env.get('session_id') or env.get('sessionId'), []
         raise AnswerError('grok JSON has none of the keys result/response/text/output/content (unverified envelope); keys: %s'
                           % ','.join(sorted(env)[:8]))
     raise AnswerError('unknown output kind %s' % kind)
