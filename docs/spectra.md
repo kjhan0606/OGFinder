@@ -43,10 +43,49 @@ with the aperture), a NUMBER combobox, Prev / Next buttons; it starts at the sel
 | CLI: 12 x 1D + 1 x 2D + 1 x cube + 1 missing file | 14/14 redshifts, max abs dz 1.2e-4; missing file -> SP_OK 0; deterministic output; viewer PNGs 640x288 (1D), 640x416 (2D, cube) |
 | 10 real SDSS DR17 spectra (plate 266; 7 galaxies, 1 QSO, 1 star, ...) | quality >= 2 for 6, all within 94 km/s of the SDSS pipeline redshift (rms 44 km/s); the 4 others (absorption-line galaxies, star, weak emission) get quality 0 |
 
+## Kinematics: 2D rotation curves and IFU velocity / dispersion maps (`--task kin`, step "Fit Kinematics", viewer "Kinematics Viewer")
+
+`ogfkit/kinematics.py` (engine, no GUI dependencies), driven by `spectra.py --task kin` for objects linked to 2D spectra (long slit) or cubes.
+
+**2D (long slit).** The emission line (default Halpha, `--kin-line`; redshift from the catalog column `--z-column`, `--kin-z`, or the line-fit redshift) is fitted per spatial row with a Gaussian + local
+continuum in a +-`--kin-window-kms` window; rows are binned along the slit until the line S/N reaches `--kin-bin-snr` (1D adaptive binning). Velocity v(y), error and intrinsic sigma
+(instrument FWHM `--kin-inst-fwhm` A subtracted in quadrature) give an arctan rotation curve v(y) = vsys + v_obs (2/pi) arctan((y-y0)/r_t) by Levenberg-Marquardt with multi-start. With `--kin-inc` the
+observed amplitude is deprojected, v_c = v_obs / (sin i cos psi) (`--kin-slit-psi` = angle between slit and major axis; **no correction is made for psi unless it is given**).
+
+**Cubes.** Every spaxel (or accretion bin, `--kin-bin-snr`, otherwise spaxels with S/N > `--kin-snr-pix`) gets a Gaussian+continuum fit -> maps FLUX, VEL, VELERR, SIGMA, SIGERR, SNR, plus the best-fit
+disc MODEL, RESID and the BIN id (`kin_<N>_maps.fits`; `kin_<N>_vel/sigma/flux.fits` are single-HDU copies the viewer opens in frames). The velocity map is then fitted with a thin-disc model
+(vsys, v_c, r_t, PA, inclination, centre; inclination optionally fixed from `--kin-inc`), giving kinematic PA and inclination with errors from the Jacobian.
+Conventions: **PA = direction of the receding side, degrees counter-clockwise from +x** (image axes), v_c is the *deprojected* asymptotic speed, `SP_KIN_VSINI` = v_c sin i is what is observed. The flux-weighted mean intrinsic
+dispersion goes into `SP_KIN_SIGMA`. Columns: `SP_KIN_VSYS, SP_KIN_VSINI, SP_KIN_VC, SP_KIN_VC_ERR, SP_KIN_RT, SP_KIN_PA, SP_KIN_INC, SP_KIN_SIGMA, SP_KIN_CHI2R, SP_KIN_N`; details in `spectra_kin.json`.
+
+**Validation (all synthetic, `plugins/spectra/validation/run_kin_validation.py`, 20 random discs per configuration, report `kin_validation_report.json`; unit/CLI tests `tests/test_kinematics.py`, 9 tests).** Discs: vc 120-300 km/s,
+r_t 2-6 px, i 30-75 deg, random PA/centre, sigma 25-70 km/s, 41x41 spaxels, [NII] doublet included, instrument FWHM 2 A. Errors are fit - truth (median / std / max |.|):
+
+| configuration | PA (deg) | inclination (deg) | v_c rel. | r_t rel. | sigma ratio | notes |
+|---|---|---|---|---|---|---|
+| high S/N, inclination free | 0.02 / 0.11 / 0.23 | -0.02 / 0.86 / 2.9 | 0.0001 / 0.016 / 0.058 | 0.001 / 0.009 / 0.020 | 1.006 | corr(v_c, i) median -0.74 |
+| high S/N, inclination fixed | 0.01 / 0.12 / 0.35 | - | -0.0003 / 0.009 / 0.034 | -0.003 / 0.015 / 0.052 | 1.004 | |
+| low S/N, per-spaxel | -0.29 / 21 / 86 | 0.9 / 25 / 69 | 0.063 / 4.8 / 20 | 0.005 / 0.47 / 1.0 | 1.13 | **heavy tails: unusable** |
+| low S/N, binned to S/N 8 | -0.12 / 1.1 / 2.5 | -3.1 / 13.8 / 47 | -0.008 / 1.7 / 6.5 | -0.06 / 0.18 / 0.47 | 1.10 | PA good; inclination, v_c poorly constrained (corr -0.88) |
+| seeing 2.5 px FWHM | -0.01 / 0.13 / 0.35 | -2.4 / 2.0 / 5.3 | +0.053 / 0.045 / 0.19 | +0.20 / 0.07 / 0.33 | 1.05 | beam smearing, see below |
+| slit, psi = 0 | v_obs +0.0014 / 0.017 / 0.063 | - | - | 0.007 / 0.024 / 0.085 | 0.993 | centre 0.04 px |
+| slit, psi = 30 deg, uncorrected | v_obs -0.159 / 0.11 / 0.38 | - | - | - | 0.997 | expected cos 30 = 0.87 loss |
+| slit, noisy (psi 0) | v_obs -0.049 / 0.12 / 0.28 | - | - | -0.05 / 0.16 / 0.41 | 1.04 | |
+| slit, seeing 2.5 px | +0.055 / 0.042 / 0.19 | - | - | +0.20 / 0.09 / 0.44 | 1.04 | |
+
+What this says: with adequate S/N (noise-free-like) PA is recovered to 0.1 deg and v_c to ~1-2 %, the inclination to ~1 deg (it is degenerate with v_c; fixing it from imaging halves the v_c scatter).
+At low S/N per-spaxel fitting produces catastrophic outliers; binning fixes the PA but the inclination/v_c pair stays poorly determined, so quote `SP_KIN_VSINI` (well-constrained) rather than `SP_KIN_VC` in that regime,
+and look at `chi2r` and the errors. Seeing is **not corrected**: the velocity gradient inside the beam inflates sigma (by 5 % here, 4.6 km/s for a 40 km/s disc in the unit test), flattens the curve
+(r_t overestimated by 20 %) and biases v_c by ~5 %. The high-S/N cube fits have chi2r median 1.2 (mean 1.5, max 3.5), i.e. slightly above 1; the cause (line-profile mismatch from [NII] blending / seeing / error underestimate) was not investigated. Keep the window below ~700 km/s for Halpha so [NII] stays outside it.
+
+Limits specific to kinematics: validated **only on synthetic discs from a generator that shares the disc model with the fitter** (a fit of its own model family; no real IFU cube or long-slit data was fitted,
+so line-profile asymmetries, non-circular motions, warps, bars and real PSFs are untested); thin disc only; one Gaussian per spaxel; no PSF deconvolution / beam-smearing correction; the 2D path assumes a straight trace and
+a slit through the centre (psi must be supplied for the deprojection); instrument FWHM is a single number; air/vacuum wavelengths are not converted; adaptive/accretion binning is S/N-based, not Voronoi.
+
 ## Limits
 
 * Redshifts come from **emission lines only**: absorption-line galaxies, stars and featureless spectra give no answer (quality 0); a single emission line is never accepted unless the redshift
   is given. Without the ambiguity cut the first version returned wrong z for 4 of the 10 SDSS spectra (confidence 1.04-1.1); the cut removes them but also rejects marginal true detections.
 * The 22-line list is vacuum wavelengths; air-wavelength data are not converted. Line widths are not deconvolved from the instrument. Blended doublets are fitted line by line (the [OII] doublet as one line).
-* 2D extraction assumes a straight trace along a row (no curvature / tilt), no cosmic-ray rejection; cubes: no spatial smoothing or Voronoi binning; line maps are not a plugin output.
+* 2D extraction assumes a straight trace along a row (no curvature / tilt), no cosmic-ray rejection; the redshift fit does not use cubes (kinematics below do).
 * SDSS spectra are in 1e-17 erg/s/cm^2/A: fluxes are reported in the file's units.
