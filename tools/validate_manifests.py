@@ -22,9 +22,9 @@ SESSION = {"AUTO", "CONFIG", "MANUAL", "NONE"}
 STAGES = {"detect", "classify", "measure"}
 NEEDS = {"image", "catalog", "psf"}
 PTYPES = {"int", "float", "string", "bool", "choice", "file"}
-OUT_MODES = {"add_columns", "set", "text"}
+OUT_MODES = {"add_columns", "set", "text", "capture"}
 TOKEN = re.compile(r"\{([A-Za-z0-9_.:,-]+)\}")
-BUILTIN = {"python", "plugin_dir", "work", "root", "image", "catalog", "mask"}
+BUILTIN = {"python", "plugin_dir", "work", "root", "image", "catalog", "mask", "sextract", "image_tail", "base", "psf"}
 
 
 def procs_in(files):
@@ -49,7 +49,7 @@ def validate(pdir):
     # procs of any plugin file count too: plugins call each other's procs (e.g. lsbg -> catalog plugin's CatalogPanelSaveCatalog)
     libprocs = procs_in(glob.glob(os.path.join(ROOT, "ds9", "library", "*.tcl")) + glob.glob(os.path.join(pdir, "*", "*.tcl")))
     libprocs.add("OGFUIBandMenu")                    # dispatched by name prefix in ogf_ui.tcl (OGFUIAddDynamic / ::ogf::ui::band_menu)
-    stats = dict(plugins=len(plugs), steps=0, cli=0, params=0)
+    stats = dict(plugins=len(plugs), steps=0, cli=0, params=0, headless=0)
     for pid, (f, m) in plugs.items():
         P = lambda msg: problems.append("%s: %s" % (pid, msg))
         if m.get("id") != pid:
@@ -141,6 +141,23 @@ def validate(pdir):
             if "cli" in s:
                 stats["cli"] += 1
                 check_cli(s, sid)
+            if "headless" in s:
+                # a step with a GUI proc/dialog plus a cli template for headless / batch use (docs/plugins.md)
+                h = dict({k: v for k, v in s.items() if k not in ("proc", "variants", "headless")}, **s["headless"])
+                stats["headless"] = stats.get("headless", 0) + 1
+                if "cli" not in s["headless"]:
+                    P("step %s: headless block without cli" % sid)
+                else:
+                    check_cli(h, sid + "[headless]")
+                ho = h.get("output")
+                if ho:
+                    if ho.get("mode") not in OUT_MODES:
+                        P("step %s[headless]: output.mode %r" % (sid, ho.get("mode")))
+                    if ho.get("mode") == "add_columns" and not ho.get("columns"):
+                        P("step %s[headless]: add_columns without columns" % sid)
+                for key in ("before", "after"):
+                    if h.get(key) and h[key].split()[0] not in defined:
+                        P("step %s[headless]: %s proc %s is not defined" % (sid, key, h[key].split()[0]))
 
         def check_cli(s, sid):
             cli = s["cli"]
@@ -150,9 +167,11 @@ def validate(pdir):
             for e in cli:
                 if isinstance(e, str):
                     flat.append(e)
-                elif isinstance(e, dict) and "argv" in e and ("if" in e or "if_file" in e):
+                elif isinstance(e, dict) and "argv" in e and ("if" in e or "if_file" in e or "if_eq" in e):
                     if "if" in e and e["if"] not in params:
                         P("step %s: condition parameter %r does not exist" % (sid, e["if"]))
+                    if "if_eq" in e and (not isinstance(e["if_eq"], list) or len(e["if_eq"]) < 2 or e["if_eq"][0] not in params):
+                        P("step %s: bad if_eq %r (need [parameter, value, ...] with an existing parameter)" % (sid, e["if_eq"]))
                     if "if_file" in e:
                         flat.append(e["if_file"])
                         in_file.update(TOKEN.findall(e["if_file"]))
@@ -214,5 +233,5 @@ if __name__ == "__main__":
     probs, st = validate(pd)
     for p in probs:
         print("PROBLEM", p)
-    print("validated %(plugins)d plugins, %(steps)d steps (%(cli)d with a cli template), %(params)d parameters: %(n)d problem(s)" % dict(st, n=len(probs)))
+    print("validated %(plugins)d plugins, %(steps)d steps (%(cli)d with a cli template, %(headless)d with a headless block), %(params)d parameters: %(n)d problem(s)" % dict(st, n=len(probs)))
     sys.exit(1 if probs else 0)

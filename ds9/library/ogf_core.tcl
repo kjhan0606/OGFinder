@@ -467,12 +467,12 @@ proc ::ogf::job::elapsed {} {
 # steps do; ms / failed / stdout_crc are filled in at the end.
 proc ::ogf::job::run {argv args} {
     variable cur
-    array set o {-step {} -class auto -title {} -network 0 -outputs {} -payload {} -post {} -requires {} -done {} -plugin {}}
+    array set o {-step {} -class auto -title {} -network 0 -outputs {} -payload {} -post {} -requires {} -done {} -plugin {} -tool python}
     array set o $args
     if {$cur(busy)} {::ogf::status "another job is still running: $cur(title)"; return 0}
     set seq 0
     if {$o(-step) ne {}} {
-	set opts [list -title $o(-title) -network $o(-network) -outputs $o(-outputs) -tool python]
+	set opts [list -title $o(-title) -network $o(-network) -outputs $o(-outputs) -tool $o(-tool)]
 	if {$o(-payload) ne {}} {lappend opts -payload $o(-payload)}
 	if {$o(-post) ne {}} {lappend opts -post $o(-post)}
 	if {$o(-requires) ne {}} {lappend opts -requires $o(-requires)}
@@ -571,6 +571,9 @@ proc ::ogf::params::var {plugin name} {
     if {$st ne {}} {
 	set a [dict get $st array]
 	if {![string match ::* $a]} {set a ::$a}
+	# a parameter may name its own key ("key": "photoz,param,bands") when the legacy keys do not follow one pattern
+	set pk [::ogf::json::get [spec $plugin $name] key]
+	if {$pk ne {}} {return [list $a $pk]}
 	return [list $a [format [dict get $st key] $name]]
     }
     return [list ::ogfparam $plugin,$name]
@@ -913,6 +916,12 @@ proc ::ogf::step::context {id {catname {}}} {
     set m [::ogf::reg::get $id]
     set ctx [dict create python [OGFPython] plugin_dir [::ogf::step::plugin_dir $id] work [OGFSessWorkDir] root [OGFSessRoot]]
     dict set ctx image [CatalogPanelGetFITS]
+    # {sextract}: the ds9_sextract binary next to bin/ds9; {image_tail}: file name of the image; {base}: image name without .gz/.fits;
+    # {psf}: PSF file of the PSF builder / loader ("" when none)
+    dict set ctx sextract [file join [file dirname [info nameofexecutable]] [expr {$::tcl_platform(os) eq "Windows NT" ? "ds9_sextract.exe" : "ds9_sextract"}]]
+    dict set ctx image_tail [file tail [dict get $ctx image]]
+    dict set ctx base [CatalogPanelFitsBaseName [dict get $ctx image]]
+    dict set ctx psf [::ogf::cat::get psf,file {}]
     # {mask}: effective-mask FITS (0/1) of the shared mask manager for the current image, empty when there is none
     # (use inside {"if_file": "{mask}", "argv": ["--mask", "{mask}"]})
     dict set ctx mask {}
@@ -958,7 +967,11 @@ proc ::ogf::step::build_argv {id step ctx} {
     set argv {}
     foreach e [::ogf::json::get $step cli] {
 	if {[is_cond $e]} {
-	    if {[dict exists $e if_file]} {
+	    if {[dict exists $e if_eq]} {
+		# {"if_eq": ["PARAM", "v1", "v2"...], "argv": [...]}: included when the parameter equals one of the values
+		set ie [dict get $e if_eq]
+		if {[::ogf::params::get $id [lindex $ie 0]] ni [lrange $ie 1 end]} continue
+	    } elseif {[dict exists $e if_file]} {
 		set f [expand $id [dict get $e if_file] $ctx]
 		if {$f eq {} || ![file isfile $f]} continue
 	    } else {
@@ -989,10 +1002,16 @@ proc ::ogf::step::check_needs {step} {
 
 # run one step of plugin ID.  Tcl-proc steps run synchronously through the same procs the old menus called;
 # cli steps go through the job runner and the session recorder.
-proc ::ogf::step::run {id sid} {
+proc ::ogf::step::run {id sid {mode gui}} {
     set m [::ogf::reg::get $id]
     set step [::ogf::reg::step $id $sid]
     if {$step eq {}} {::ogf::log ERROR "no step $sid in plugin $id"; return 0}
+    # mode headless: run the step's "headless" block (a cli template for a step whose GUI path is a dialog / Tcl proc) through the
+    # job runner and the recorder instead of the proc; the batch runner uses the same block (docs/plugins.md)
+    if {$mode eq "headless"} {
+	if {![dict exists $step headless]} {::ogf::log ERROR "step $id.$sid has no headless block"; return 0}
+	set step [dict merge [dict remove $step proc variants headless] [dict get $step headless]]
+    }
     set why [check_needs $step]
     if {$why ne {}} {::ogf::status "[dict get $step label]: $why"; return 0}
     set miss [::ogf::reg::missing $id]
@@ -1012,6 +1031,8 @@ proc ::ogf::step::run {id sid} {
 	return 1
     }
     if {![dict exists $step cli]} {::ogf::log ERROR "step $id.$sid has neither cli nor proc"; return 0}
+    set bf [::ogf::json::get $step before]
+    if {$bf ne {}} {if {[catch {uplevel #0 $bf} berr]} {::ogf::status "[dict get $step label]: $berr"; return 0}}
     set catname [::ogf::json::get $step catalog_tmp]
     if {$catname eq {} && [lsearch -glob [::ogf::json::get $step cli] *\{catalog\}*] >= 0} {set catname $sid}
     if {[catch {
@@ -1028,31 +1049,40 @@ proc ::ogf::step::run {id sid} {
     set net [expr {[::ogf::json::get $step network [::ogf::json::get $m network 0]] ? 1 : 0}]
     set recname [::ogf::json::get $step record $id.$sid]       ;# "record": recorder step name when it must differ from <plugin>.<step> (kept for old session files)
     set opts [list -step $recname -class [expr {$cls eq "none" ? "auto" : $cls}] -title $title -network $net -plugin $id \
-	-done [list ::ogf::step::done $id $sid]]
+	-done [list ::ogf::step::done $id $sid $mode] -tool [::ogf::json::get $step tool python]]
     if {$out ne {} && [::ogf::json::get $out mode] eq "add_columns"} {
 	lappend opts -post [dict create kind add cols_list [::ogf::json::get $out columns]] -requires [::ogf::json::get $step requires catalog]
     } elseif {$out ne {} && [::ogf::json::get $out mode] eq "set"} {
 	lappend opts -post [dict create kind set]
+	if {[dict exists $step requires]} {lappend opts -requires [dict get $step requires]}
+    } elseif {[dict exists $step requires]} {
+	lappend opts -requires [dict get $step requires]
     }
     return [::ogf::job::run $argv {*}$opts]
 }
 
 # job finished: apply the declared output
-proc ::ogf::step::done {id sid ok output ms} {
+proc ::ogf::step::done {id sid mode ok output ms} {
     if {!$ok} return
     set step [::ogf::reg::step $id $sid]
+    if {$mode eq "headless"} {set step [dict merge [dict remove $step proc variants headless] [dict get $step headless]]}
     set out [::ogf::json::get $step output]
     set mode [::ogf::json::get $out mode]
     switch -- $mode {
 	add_columns {::ogf::cat::add_columns $output [::ogf::json::get $out columns]}
-	set {::ogf::cat::load_tsv $output "[dict get $step label]"}
+	set {
+	    set nm [::ogf::json::get $out name]
+	    if {$nm eq {}} {set nm [dict get $step label]} else {set nm [expand $id $nm [context $id]]}
+	    ::ogf::cat::load_tsv $output $nm
+	}
+	capture {set ::ogf::step::last($id.$sid) $output}
 	text {OGFTextWindow "[dict get $step label]" $output}
 	default {}
     }
     set ds [::ogf::json::get $step done_status]
-    if {$ds ne {}} {::ogf::status $ds}
+    if {$ds ne {}} {::ogf::status [expand $id $ds [context $id]]}
     set p [::ogf::json::get $step after]
-    if {$p ne {}} {catch {uplevel #0 $p}}
+    if {$p ne {}} {if {[catch {uplevel #0 $p} aerr]} {::ogf::log ERROR "after handler of $id.$sid: $aerr"}}
     return {}
 }
 

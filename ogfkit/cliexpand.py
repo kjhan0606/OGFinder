@@ -1,6 +1,6 @@
 """Headless expansion of plugin.json "cli" templates (the Python twin of ::ogf::step::build_argv in ds9/library/ogf_core.tcl).
 
-Tokens: {python} {plugin_dir} {work} {image} {catalog} {root} {mask} {PARAM} {OTHER:PARAM} {cat:KEY} (empty) {script:NAME};
+Tokens: {python} {plugin_dir} {work} {image} {catalog} {root} {mask} {sextract} {image_tail} {base} {psf} {PARAM} {OTHER:PARAM} {cat:KEY} (empty) {script:NAME};
 elements may be {"if": "param", "argv": [...]} (included when the parameter is true / non-empty / non-zero) or {"if_file": "{token}", "argv": [...]}.
 """
 import json
@@ -33,8 +33,12 @@ def defaults(manifest):
 
 
 def find_step(manifest, sid):
+    """The step object; a step whose GUI path is a Tcl proc / dialog and that has a "headless" block is returned with that block merged in
+    (cli, output, record, ... of the block replace the step's; proc and variants are dropped)."""
     for s in manifest.get('steps', []):
         if s['id'] == sid:
+            if 'headless' in s:
+                s = dict({k: v for k, v in s.items() if k not in ('proc', 'variants', 'headless')}, **s['headless'])
             return s
     raise KeyError('plugin %s has no step %s' % (manifest['id'], sid))
 
@@ -60,6 +64,8 @@ def expand_string(s, ctx, manifests, pid, params):
             return os.path.join(ctx['root'], 'ds9', 'library', mm.group(1))
         if key.startswith('cat:'):
             return ''
+        if ':' in key and key in params:                     # recipe override of another plugin's parameter, e.g. "extract:detect-thresh"
+            return param_text(params[key])
         mm = re.match(r'^([A-Za-z0-9_]+):([A-Za-z0-9_.-]+)$', key)
         if mm and mm.group(1) in manifests and mm.group(2) in defaults(manifests[mm.group(1)]):
             return param_text(defaults(manifests[mm.group(1)])[mm.group(2)])
@@ -80,10 +86,18 @@ def build_argv(manifests, pid, sid, ctx, overrides=None):
     ctx = dict(ctx)
     ctx.setdefault('plugin_dir', m['_dir'])
     ctx.setdefault('mask', '')
+    ctx.setdefault('psf', '')
+    ctx.setdefault('sextract', os.path.join(ctx['root'], 'bin', 'ds9_sextract'))
+    ctx.setdefault('image_tail', os.path.basename(ctx.get('image', '') or ''))
+    ctx.setdefault('base', re.sub(r'\.(fits|fit|fts)$', '', re.sub(r'\.gz$', '', ctx['image_tail'])))
     argv = []
     for e in step['cli']:
         if isinstance(e, dict) and 'argv' in e:
-            if 'if_file' in e:
+            if 'if_eq' in e:
+                ie = e['if_eq']
+                if param_text(params.get(ie[0])) not in [param_text(v) for v in ie[1:]]:
+                    continue
+            elif 'if_file' in e:
                 f = expand_string(e['if_file'], ctx, manifests, pid, params)
                 if not f or not os.path.isfile(f):
                     continue

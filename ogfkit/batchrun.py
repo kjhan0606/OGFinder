@@ -199,7 +199,7 @@ class Field:
                 raise FileNotFoundError('catalog file %s not found' % p)
             return hashlib.sha256((chain + p + sha_file(p)).encode()).hexdigest(), [p]
         spec = s['spec']
-        ctx = dict(python=self.python, work=os.path.join(self.dir, 'work'), image=self.image, catalog=os.path.join(self.dir, 'work', 'cat_in.tsv'), root=self.root)
+        ctx = dict(python=self.python, work=os.path.join(self.dir, 'work'), image=self.image, catalog=os.path.join(self.dir, 'work', 'cat_in.tsv'), root=self.root, psf=spec.get('psf') or self.recipe.get('psf', ''))
         argv = cliexpand.build_argv(self.manifests, spec['plugin'], spec['step'], ctx, spec.get('params'))
         return hashlib.sha256((chain + json.dumps(argv)).encode()).hexdigest(), argv
 
@@ -227,10 +227,11 @@ class Field:
         # plugin step
         spec = s['spec']
         step = cliexpand.find_step(self.manifests[spec['plugin']], spec['step'])
-        if not cols:
+        if not cols and 'catalog' in (step.get('needs') or ['catalog']):
             return False, 'no catalog yet (put detect/catalog first)', 0.0, cols, rows
         os.makedirs(os.path.join(self.dir, 'work'), exist_ok=True)
-        write_tsv(os.path.join(self.dir, 'work', 'cat_in.tsv'), cols, rows)
+        if cols:
+            write_tsv(os.path.join(self.dir, 'work', 'cat_in.tsv'), cols, rows)
         rc, out, err, dt = self.run_cmd(argv, lab)
         if rc != 0:
             return False, ('rc=%d: %s' % (rc, err.strip().splitlines()[-1] if err.strip() else '')), dt, cols, rows
@@ -244,7 +245,7 @@ class Field:
                 c, r = read_tsv_text(out)
                 write_tsv(cat_path, c, r)
                 return True, 'catalog replaced (%d rows)' % len(r), dt, c, r
-            if mode == 'text':
+            if mode in ('text', 'capture'):
                 open(os.path.join(self.dir, 'work', '%s_output.txt' % lab.replace('.', '_')), 'w').write(out)
         except Exception as e:
             return False, 'bad output: %s' % e, dt, cols, rows

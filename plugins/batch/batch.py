@@ -78,7 +78,7 @@ def main(argv=None):
             raise SystemExit('batch: %s' % e)
         if 'cli' not in st:
             raise SystemExit('batch: step %s.%s has no cli template and cannot run headless' % (s['plugin'], s['step']))
-        unknown = [k for k in (s.get('params') or {}) if k not in cliexpand.defaults(man[s['plugin']])]
+        unknown = [k for k in (s.get('params') or {}) if k not in cliexpand.defaults(man[s['plugin']]) and not (':' in k and k.split(':')[0] in man and k.split(':', 1)[1] in cliexpand.defaults(man[k.split(':')[0]]))]
         if unknown:
             raise SystemExit('batch: unknown parameter(s) %s for %s' % (', '.join(unknown), s['plugin']))
     only = [x for x in a.only.split(',') if x]
