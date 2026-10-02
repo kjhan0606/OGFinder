@@ -1,0 +1,422 @@
+{
+ "schema": 1,
+ "id": "multifit",
+ "name": "Multi-component fit (GALFIT-like)",
+ "short": "Multi-fit",
+ "tab": "Measure",
+ "order": 29,
+ "description": "PSF-convolved Sersic / exponential / de Vaucouleurs / PSF components with a shared sky, simultaneous fit of neighbours, bulge+disk and PSF+host presets, BIC model selection, constraints, parameter errors, residual images.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy"
+  ]
+ },
+ "primary": "fit",
+ "settings": "params",
+ "tcl": "multifit.tcl",
+ "steps": [
+  {
+   "id": "fit",
+   "label": "Fit Components",
+   "title": "Multi-component fit",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.multifit",
+   "catalog_tmp": "multifit",
+   "done_status": "multi-component fit done",
+   "after": "OGFMultifitAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/multifit.py",
+    "{image}",
+    "--work",
+    "{work}/multifit",
+    "--catalog",
+    "{catalog}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,model}",
+     "argv": [
+      "--psf-model",
+      "{cat:psf,model}"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,file}",
+     "argv": [
+      "--psf",
+      "{cat:psf,file}"
+     ]
+    },
+    "--psf-fwhm",
+    "{psf-fwhm}",
+    "--model",
+    "{model}",
+    "--neighbours",
+    "{neighbours}",
+    "--sky",
+    "{sky}",
+    "--objects",
+    "{objects}",
+    "--max-objects",
+    "{max-objects}",
+    "--max-neighbours",
+    "{max-neighbours}",
+    "--neighbour-radius",
+    "{neighbour-radius}",
+    "--size-scale",
+    "{size-scale}",
+    "--min-size",
+    "{min-size}",
+    "--max-size",
+    "{max-size}",
+    "--rms",
+    "{rms}",
+    "--gain",
+    "{gain}",
+    "--chi2-max",
+    "{chi2-max}",
+    "--bic-margin",
+    "{bic-margin}",
+    "--max-nfev",
+    "{max-nfev}",
+    "--montage",
+    "{montage}",
+    {
+     "if": "no-residual",
+     "argv": [
+      "--no-residual"
+     ]
+    },
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "GF_X",
+     "GF_Y",
+     "GF_MAG",
+     "GF_MAGERR",
+     "GF_RE",
+     "GF_REERR",
+     "GF_N",
+     "GF_NERR",
+     "GF_Q",
+     "GF_PA",
+     "GF_BT",
+     "GF_MAG2",
+     "GF_SKY",
+     "GF_CHI2",
+     "GF_NCOMP",
+     "GF_NNEIGH",
+     "GF_RESFRAC",
+     "GF_FLAG"
+    ]
+   }
+  },
+  {
+   "id": "fit_selected",
+   "label": "Fit Selected Rows",
+   "proc": "OGFMultifitSelected",
+   "session": "NONE"
+  },
+  {
+   "id": "config",
+   "label": "Fit From Config File",
+   "title": "Multi-component fit (config)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "analysis.multifit_config",
+   "done_status": "config fit done",
+   "after": "OGFMultifitAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/multifit.py",
+    "{image}",
+    "--work",
+    "{work}/multifit",
+    "--config",
+    "{config}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,model}",
+     "argv": [
+      "--psf-model",
+      "{cat:psf,model}"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,file}",
+     "argv": [
+      "--psf",
+      "{cat:psf,file}"
+     ]
+    },
+    "--psf-fwhm",
+    "{psf-fwhm}",
+    "--gain",
+    "{gain}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}"
+   ],
+   "output": {
+    "mode": "text"
+   }
+  },
+  {
+   "id": "frames",
+   "label": "Show Model / Residual Frames",
+   "proc": "OGFMultifitFrames",
+   "session": "NONE"
+  },
+  {
+   "id": "montage",
+   "label": "Montage...",
+   "proc": "OGFMultifitMontage",
+   "session": "NONE"
+  },
+  {
+   "id": "table",
+   "label": "Component Table...",
+   "proc": "OGFMultifitTable",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "model",
+   "label": "Components",
+   "type": "choice",
+   "default": "sersic",
+   "group": "Model",
+   "help": "sersic = free Sersic; exp / dev = exponential / de Vaucouleurs; psf = point source; bulge+disk = de Vaucouleurs + exponential with a common centre (B/T in GF_BT); psf+sersic = point source + host galaxy (common centre); auto = lowest BIC of psf / sersic / bulge+disk (a more complex model must win by the BIC margin).",
+   "choices": [
+    "sersic",
+    "exp",
+    "dev",
+    "psf",
+    "bulge+disk",
+    "psf+sersic",
+    "auto"
+   ]
+  },
+  {
+   "name": "neighbours",
+   "label": "Neighbours",
+   "type": "choice",
+   "default": "fit",
+   "group": "Model",
+   "help": "fit = fit the neighbouring catalog sources simultaneously (their parameters are free); mask = mask their elliptical area; ignore = leave them in the fit region.",
+   "choices": [
+    "fit",
+    "mask",
+    "ignore"
+   ]
+  },
+  {
+   "name": "sky",
+   "label": "Sky",
+   "type": "choice",
+   "default": "const",
+   "group": "Model",
+   "help": "Shared sky of the fit region: fitted constant, constant + gradient plane, or fixed to 0 (image already sky-subtracted).",
+   "choices": [
+    "const",
+    "plane",
+    "fixed"
+   ]
+  },
+  {
+   "name": "psf-fwhm",
+   "label": "PSF FWHM fallback (px, 0 = field stars)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Model",
+   "help": "Used only when neither a PSF model (PSF model plugin, Use Model as Catalog PSF) nor a PSF image is set: > 0 Gaussian of this FWHM, 0 builds a model from the field stars.",
+   "min": 0,
+   "max": 50
+  },
+  {
+   "name": "objects",
+   "label": "Object NUMBERs (empty = brightest)",
+   "type": "string",
+   "default": "",
+   "group": "Objects",
+   "help": "Semicolon separated catalog NUMBERs to fit (the \"Fit Selected Rows\" step fills this from the catalog selection)."
+  },
+  {
+   "name": "max-objects",
+   "label": "Max. objects",
+   "type": "int",
+   "default": 100,
+   "group": "Objects",
+   "help": "Number of brightest catalog objects fitted when no NUMBERs are given.",
+   "min": 1,
+   "max": 100000
+  },
+  {
+   "name": "max-neighbours",
+   "label": "Max. fitted neighbours",
+   "type": "int",
+   "default": 6,
+   "group": "Objects",
+   "help": "Brightest neighbours fitted per cutout (others are masked).",
+   "min": 0,
+   "max": 30,
+   "expert": true
+  },
+  {
+   "name": "neighbour-radius",
+   "label": "Neighbour mask radius (x A_IMAGE)",
+   "type": "float",
+   "default": 2.5,
+   "group": "Objects",
+   "help": "Semi-axis of the masked ellipse of a neighbour in units of its A_IMAGE / B_IMAGE.",
+   "min": 0.5,
+   "max": 10,
+   "expert": true
+  },
+  {
+   "name": "size-scale",
+   "label": "Cutout half-size (x A_IMAGE)",
+   "type": "float",
+   "default": 6.0,
+   "group": "Fit region",
+   "help": "Cutout half-size in units of A_IMAGE (limited by the min / max size).",
+   "min": 1,
+   "max": 40
+  },
+  {
+   "name": "min-size",
+   "label": "Min. cutout (px)",
+   "type": "int",
+   "default": 31,
+   "group": "Fit region",
+   "help": "Smallest cutout side.",
+   "min": 11,
+   "max": 401,
+   "expert": true
+  },
+  {
+   "name": "max-size",
+   "label": "Max. cutout (px)",
+   "type": "int",
+   "default": 121,
+   "group": "Fit region",
+   "help": "Largest cutout side (objects larger than this are fitted in the cutout only).",
+   "min": 31,
+   "max": 801,
+   "expert": true
+  },
+  {
+   "name": "rms",
+   "label": "Background sigma (0 = measure)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Noise / convergence",
+   "help": "Pixel noise of the sky; 0 measures it from the image.",
+   "min": 0,
+   "max": 1000000000.0
+  },
+  {
+   "name": "gain",
+   "label": "Gain e-/ADU (0 = off)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Noise / convergence",
+   "help": "> 0 adds the Poisson noise of the model to the pixel variance.",
+   "min": 0,
+   "max": 1000000.0
+  },
+  {
+   "name": "chi2-max",
+   "label": "Flag chi2/dof above",
+   "type": "float",
+   "default": 3.0,
+   "group": "Noise / convergence",
+   "help": "Fits with a larger reduced chi2 get the CHI2 flag (bit 4).",
+   "min": 1,
+   "max": 100
+  },
+  {
+   "name": "bic-margin",
+   "label": "BIC margin (auto)",
+   "type": "float",
+   "default": 10.0,
+   "group": "Noise / convergence",
+   "help": "A more complex model must lower the BIC by this much to be chosen in auto mode.",
+   "min": 0,
+   "max": 1000,
+   "expert": true
+  },
+  {
+   "name": "max-nfev",
+   "label": "Max. iterations",
+   "type": "int",
+   "default": 150,
+   "group": "Noise / convergence",
+   "help": "Maximum function evaluations of the least-squares fit.",
+   "min": 10,
+   "max": 2000,
+   "expert": true
+  },
+  {
+   "name": "montage",
+   "label": "Montage objects",
+   "type": "int",
+   "default": 6,
+   "group": "Output",
+   "help": "Number of objects in the data / model / residual montage plot (0 = none).",
+   "min": 0,
+   "max": 24
+  },
+  {
+   "name": "no-residual",
+   "label": "Skip model / residual images",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Do not write the full-frame model and residual images."
+  },
+  {
+   "name": "show-frames",
+   "label": "Open model / residual in frames",
+   "type": "bool",
+   "default": true,
+   "group": "Output",
+   "help": "Load the residual and model images into new frames after a fit."
+  },
+  {
+   "name": "config",
+   "label": "Config file (JSON)",
+   "type": "file",
+   "default": "",
+   "group": "Config file",
+   "help": "GALFIT-feedme-like JSON with explicit components, bounds, fixed parameters, ties, bbox and sky for one object (see docs/multifit.md)."
+  }
+ ]
+}
