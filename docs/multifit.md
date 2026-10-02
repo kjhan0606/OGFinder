@@ -48,8 +48,53 @@ Python: `from ogfkit import multifit as MF; MF.fit(cutout, comps, psf=..., rms=.
 | sky plane | gradient 0.0503 / -0.0295 (true 0.05 / -0.03), sky 99.98 (100); constant sky on the same image: chi2_red worse by > 0.2 |
 | spatially varying PSF (FWHM 4.21 px at the field edge) | re error with the PSF model at the galaxy -4.5 %, with the central PSF +18.4 % |
 | Poisson weights (gain 4) | dmag +0.028, dre/re -0.1 %, chi2_red 0.96 |
-| catalog CLI, 7 galaxies (one blend pair 16 px apart, n 1-4) + 1 star | median dmag -0.019, max 0.069; max dre/re 0.107; chi2_red median 0.96, max 0.99; blend pair |dmag| sum 0.071 simultaneous vs 2.496 neighbour ignored; star (psf model) dmag -0.010, position error 0.003 px; residual rms in an n=3 galaxy region 4.30 → 0.97 (noise 1.0) |
+| catalog CLI, 7 galaxies (one blend pair 16 px apart, n 1-4) + 1 star | median dmag -0.019, max 0.069; max dre/re 0.107; chi2_red median 0.96, max 0.99; blend pair |dmag| sum 0.071 simultaneous vs 2.408 neighbour ignored; star (psf model) dmag -0.010, position error 0.003 px; residual rms in an n=3 galaxy region 4.30 → 0.97 (noise 1.0) |
 | auto selection | star → psf, galaxy → sersic |
+
+## GALFIT interoperability (`ogfkit/galfitio.py`)
+* **Import**: `--config FILE` (step "Fit From Config File") accepts a **GALFIT feedme** as well as the JSON config (detected by content). With image `-` the data, PSF (D), mask (F), sigma image (C) and fitting region (H) named in
+  the feedme are used (paths relative to the feedme). Objects: `sersic`, `devauc`, `expdisk` (R_e = 1.67835 R_s), `psf`, `gaussian` (= Sersic n = 0.5, R_e = FWHM/2, exact) and `sky` (value, dsky/dx, dsky/dy with the free/fixed
+  flags -> constant / plane / fixed sky). Conventions are converted: GALFIT PA (up = 0, left = 90) = multifit PA - 90; positions are 1-based; magnitudes include the exposure time (`EXPTIME` of the image: m_multifit = m_GALFIT - 2.5 log10 t_exp);
+  the sky value is moved from the centre of the GALFIT region to multifit's array centre. Fix flags become `fixed`; a **constraints file** (G) gives bounds (`N param lo hi` relative, `N param lo to hi` absolute, for
+  x y mag re rs n q pa) and ties (`N_M param offset`, accepted when the start values are equal, i.e. common centres / PAs). Anything else (moffat, nuker, ferrer, king, edgedisk, Fourier modes, ratio / unequal-offset constraints, PSF fine
+  sampling E > 1, diffusion kernel) is reported (`ValueError` for objects, a warning for constraint lines) and not silently ignored. Config / feedme fits start from the given values and from `--restarts` (default 2) alternative
+  starts (R_e x 0.6 / x 1.6, n x 1.3 / x 0.75); the lowest chi2 wins (`starts_chi2` in the result JSON).
+* **Export**: `--export-feedme DIR` (parameter "Also write GALFIT feedme files") writes the *fitted* model as a feedme: config mode -> `galfit.feedme` (+ `galfit.constraints` when bounds / ties exist), catalog mode ->
+  `galfit_<NUMBER>.feedme` with the target and the fitted neighbours (masked neighbours are not exported), the PSF stamp at the object (`galfit_<NUMBER>_psf.fits`), region = cutout, sigma none (GALFIT builds its own), mask = your mask.
+  The file starts GALFIT from the multifit solution (set `P) 1` to render it, `P) 0` to refine it). `galfitio.parse_feedme` / `write_feedme` / `write_constraints` can be used from Python.
+* x / y **bounds** in a config are now given in image coordinates like `x` / `y` (before they were silently interpreted in cutout coordinates).
+
+## Head-to-head with GALFIT (`plugins/multifit/validation/`, GALFIT 3.0.5 Linux binary downloaded from the author's page for these tests only; it is not in the repository and may not be redistributed)
+Run with `GALFIT_BIN=/path/galfit [GALFIT_LD=dir with libncurses.so.5/libtinfo.so.5]`; without a binary the GALFIT-specific tests skip and everything else runs.
+1. **Rendering** (`tests/test_galfit.py::test_rendering_matches_galfit_pixelwise`; GALFIT P=1 vs `render_model` for the same feedme, 81x93, Gaussian PSF sigma 1.4 px, sky with gradient): max |difference| / peak =
+   0.9 % (Sersic n 2.7), 0.15 % (expdisk), 1.4 % (devauc, the cusp pixel), 0.17 % (gaussian), 0.37 % (psf), 0.47 % (all five + sky); total flux differs by 0.0006-0.36 %. Position, PA, R_s, exposure-time and sky-gradient conventions are therefore right.
+   **A bug was found and fixed this way**: `render_sersic` used an odd sub-pixel grid in the cusp that sampled r = 0 exactly; for n = 5 centred on a pixel the peak was +16 % and the flux +4 % (regression test added; golden
+   behaviour of other plugins unchanged: isophote 8, morph_ext 13, completeness 9, multifit tests pass). Against a brute-force 120x120 sub-sampled reference (pixel-integrated Sersic convolved with the PSF image) the multifit model is now accurate to
+   0.15 % of the peak (n = 5, R_e 2.9, real PSF, off-centre; 0.04 % for n = 4, R_e 6) while GALFIT's own rendering differs from that reference by 7.5 % (4.4 %) of the peak off-centre and 2.5 % on a pixel centre - GALFIT's
+   cusp sampling is the coarser one for steep profiles (the reference assumes the PSF image already includes the pixel response, as both programs do).
+2. **Fits on synthetic images** (`galfit_compare.py`, report `galfit_compare_report.json`; 30 random objects per case, 101x101, Moffat PSF FWHM 3.2 px, constant sigma 2 (sigma image given to both), sky 50, **images rendered by GALFIT itself**, both programs
+   fit the same start feedme (start values perturbed by up to +-1 px, +-0.4 mag, R_e +-30 %, n x 0.6-1.5, +-30 deg) with the same constraints file; chi^2 of every result is evaluated with GALFIT's renderer on the same data):
+
+   | case | chi2 difference multifit - GALFIT (median; fraction within 0.5 / multifit lower / GALFIT lower) | multifit - GALFIT, 90th percentile of the absolute difference | median time GALFIT / multifit CLI |
+   |---|---|---|---|
+   | A single Sersic (n 0.8-4, R_e 3.5-9, q 0.4-0.95) | +0.006; 0.97 / 0 / 0.03 (max 0.66) | x 0.025 px, mag 0.021, R_e 2.8 %, n 6.8 %, q 0.004, PA 0.23 deg | 0.24 s / 1.6 s |
+   | B devauc + expdisk, tied centre | +0.07; 0.50 / 0.17 / 0.33 (-14.3 ... +2.7) | bulge: mag 0.41, R_e up to 23x (degenerate); disc: mag 0.08, R_e 7 % | 5.0 s / 6.9 s |
+   | C psf + Sersic host, tied centre | -0.08; 0.63 / 0.30 / 0.07 (-1.6 ... +0.6) | host mag 0.17, R_e 9.8 %, n 48 %; psf mag 0.34 | 0.38 s / 1.6 s |
+   | D Sersic + Sersic neighbour (15-21 px away) | +0.11; 0.80 / 0 / 0.20 (max 1.8) | mag 0.024, R_e 3.8 %, n 5.5 %; neighbour mag 0.035 | 0.50 s / 3.4 s |
+   | E Sersic + free sky gradient | +0.007; 1.00 / 0 / 0 (max 0.29) | x 0.018 px, mag 0.017, R_e 2.5 %, n 3.6 % | 0.25 s / 1.6 s |
+
+   chi2 per degree of freedom: 0.994-1.006 for both programs in all cases. Equal chi2 means both reach the same minimum; the parameter differences in B and C are flat directions of chi2 (bulge/disc and PSF/host degeneracies), not different fit quality. Against the *truth*
+   both programs have the same, and large, errors in these deliberately faint/extended/free-n/free-sky cases (case A 90th percentile |error|: mag 0.44 GALFIT / 0.42 multifit, R_e 100 % / 97 %, n 70 % / 69 %), i.e. the comparison is about equivalence, not about
+   absolute accuracy. Timing: GALFIT is faster per object (multifit's number includes ~0.6 s Python/scipy start-up and a 3-point numerical Jacobian).
+3. **pysersic 0.1.5** (JAX, maximum a posteriori, flat sky; `pysersic_map.py`, `compare_pysersic.py`; case A only, priors centred on the same start values with widths 2 px / 50 % flux / 50 % R_e, uniform n 0.5-6): chi2 difference to GALFIT median +0.12 (90th
+   percentile +0.66, max +2.1; pysersic worse by more than 1 in 7 % of the objects); its priors suppress the large-R_e outliers (90th percentile |dR_e/R_e| 24 % vs 100 %), at the price of being prior-dependent; 3.3 s per object on CPU. imfit and galfitm have no pip package and were not tried.
+4. **GALFIT's own example** (`galfit_example.py`, the gal.fits/psf.fits/galfit.feedme of the GALFIT distribution; a real image, with a PSF image that has a 0.1 px off-centre centroid and negative noise pixels): GALFIT (own Poisson sigma) m = 22.976, R_e = 2.623, n = 4.110, q = 0.857, PA = -71.75;
+   multifit (constant sigma, same feedme): m = 22.931, R_e = 2.865, n = 4.993, q = 0.819, PA = -68.86 (positions agree to 0.015 / 0.056 px). With one constant sigma image given to both, chi2 (rendered by GALFIT) is 13663 for GALFIT and 13868 for multifit
+   (+204 on 8649 pixels, 1.5 %), whereas rendered by multifit's model the multifit solution has chi2 13630 and GALFIT's parameters 13742: on this steep profile (n = 5) with an undersampled, off-centre PSF the two programs' renderings differ at the 5-8 % level in the two brightest pixels
+   (see 1.), and each fit prefers its own model; which one is closer to the sky cannot be decided from this image. This example also exposed a weakness of the optimiser (2-point finite-difference Jacobian: 150 evaluations, not converged, wrong minimum n = 7.5, R_e = 23); the Jacobian is now 3-point (20 evaluations, converged) and config fits use multi-start.
+
+Not done: no comparison on real survey images with an independent truth; multi-component fits to real galaxies (bulge + disc + bar) not compared; GALFIT features not implemented above; the GALFIT result is a closed-source binary run on Linux only; the synthetic cases cover 150 fits each for two programs, not a statistically exhaustive survey of the parameter space.
+
 
 ## Limitations
 No analytic Moffat/Gaussian/Ferrers/Nuker/Fourier-mode/truncation components, no spiral/bar modes; the PSF of a component is evaluated at its start position (not re-evaluated while fitting);
