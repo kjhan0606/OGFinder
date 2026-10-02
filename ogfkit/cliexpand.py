@@ -101,8 +101,16 @@ def build_argv(manifests, pid, sid, ctx, overrides=None):
                 f = expand_string(e['if_file'], ctx, manifests, pid, params)
                 if not f or not os.path.isfile(f):
                     continue
+            elif 'if_not_file' in e:
+                f = expand_string(e['if_not_file'], ctx, manifests, pid, params)
+                if f and os.path.isfile(f):
+                    continue
+            elif 'if_not' in e:
+                if _truthy(params.get(e['if_not'])):
+                    continue
             else:
-                if not _truthy(params.get(e['if'])):
+                conds = e['if'].split() if isinstance(e['if'], str) else e['if']
+                if not all(_truthy(params.get(c)) for c in conds):
                     continue
             argv += [expand_string(a, ctx, manifests, pid, params) for a in e['argv']]
         else:

@@ -974,10 +974,23 @@ proc ::ogf::step::build_argv {id step ctx} {
 	    } elseif {[dict exists $e if_file]} {
 		set f [expand $id [dict get $e if_file] $ctx]
 		if {$f eq {} || ![file isfile $f]} continue
-	    } else {
-		set cond [::ogf::json::get $e if]
+	    } elseif {[dict exists $e if_not_file]} {
+		# {"if_not_file": "{token}", ...}: included when the expanded token does NOT name an existing file
+		set f [expand $id [dict get $e if_not_file] $ctx]
+		if {$f ne {} && [file isfile $f]} continue
+	    } elseif {[dict exists $e if_not]} {
+		# {"if_not": "PARAM", ...}: included when the parameter is false / empty / 0
+		set cond [dict get $e if_not]
 		set v [expr {[::ogf::params::spec $id $cond] ne {} ? [::ogf::params::get $id $cond] : 0}]
-		if {$v eq {} || $v eq "0" || [string is false -strict $v]} continue
+		if {!($v eq {} || $v eq "0" || [string is false -strict $v])} continue
+	    } else {
+		# "if" is one parameter name or a list of names that must all be true
+		set skip 0
+		foreach cond [::ogf::json::get $e if] {
+		    set v [expr {[::ogf::params::spec $id $cond] ne {} ? [::ogf::params::get $id $cond] : 0}]
+		    if {$v eq {} || $v eq "0" || [string is false -strict $v]} {set skip 1; break}
+		}
+		if {$skip} continue
 	    }
 	    foreach a [dict get $e argv] {lappend argv [expand $id $a $ctx]}
 	} else {
@@ -1053,7 +1066,9 @@ proc ::ogf::step::run {id sid {mode gui}} {
     if {$out ne {} && [::ogf::json::get $out mode] eq "add_columns"} {
 	lappend opts -post [dict create kind add cols_list [::ogf::json::get $out columns]] -requires [::ogf::json::get $step requires catalog]
     } elseif {$out ne {} && [::ogf::json::get $out mode] eq "set"} {
-	lappend opts -post [dict create kind set]
+	set pd [dict create kind set]
+	if {[::ogf::json::get $out force 0]} {dict set pd force 1}
+	lappend opts -post $pd
 	if {[dict exists $step requires]} {lappend opts -requires [dict get $step requires]}
     } elseif {[dict exists $step requires]} {
 	lappend opts -requires [dict get $step requires]

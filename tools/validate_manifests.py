@@ -167,11 +167,16 @@ def validate(pdir):
             for e in cli:
                 if isinstance(e, str):
                     flat.append(e)
-                elif isinstance(e, dict) and "argv" in e and ("if" in e or "if_file" in e or "if_eq" in e):
-                    if "if" in e and e["if"] not in params:
-                        P("step %s: condition parameter %r does not exist" % (sid, e["if"]))
+                elif isinstance(e, dict) and "argv" in e and ("if" in e or "if_file" in e or "if_eq" in e or "if_not" in e or "if_not_file" in e):
+                    for cn in (e["if"].split() if isinstance(e.get("if"), str) else []):
+                        if cn not in params:
+                            P("step %s: condition parameter %r does not exist" % (sid, cn))
+                    if "if_not" in e and e["if_not"] not in params:
+                        P("step %s: condition parameter %r does not exist" % (sid, e["if_not"]))
                     if "if_eq" in e and (not isinstance(e["if_eq"], list) or len(e["if_eq"]) < 2 or e["if_eq"][0] not in params):
                         P("step %s: bad if_eq %r (need [parameter, value, ...] with an existing parameter)" % (sid, e["if_eq"]))
+                    if "if_not_file" in e:
+                        flat.append(e["if_not_file"])
                     if "if_file" in e:
                         flat.append(e["if_file"])
                         in_file.update(TOKEN.findall(e["if_file"]))
@@ -199,7 +204,9 @@ def validate(pdir):
                             P("step %s: {%s}: plugin %s has no parameter %s" % (sid, tok, op, on))
                     elif tok not in params:
                         P("step %s: unknown token {%s}" % (sid, tok))
-            if "{catalog}" in text and "catalog" not in needs:
+            guarded = [e for e in cli if isinstance(e, dict) and "if_file" in e and "{catalog}" in e["if_file"]]       # optional catalog: {"if_file": "{catalog}", ...}
+            ucat = [a for e in cli for a in ([e] if isinstance(e, str) else ([] if e in guarded else e.get("argv", []))) if isinstance(a, str) and "{catalog}" in a]
+            if ucat and "catalog" not in needs:
                 P("step %s: uses {catalog} without needs: catalog" % sid)
             if "{image}" in text and "image" not in needs:
                 P("step %s: uses {image} without needs: image" % sid)
