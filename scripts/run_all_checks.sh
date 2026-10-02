@@ -23,7 +23,7 @@ need_x() { if ! DISPLAY=$DISP xdpyinfo >/dev/null 2>&1; then
 gui() { rm -rf ~/ds9.auto ~/ds9.auto.dir; DISPLAY=$DISP timeout -s KILL "${T:-240}" "$@"; }
 
 # ---- checks: each defines  chk_NAME  (print details on stdout, return 0 pass / 1 fail / 77 skip) and is registered in ALL / LONG
-ALL="tools_syntax ai_bridge_tests moving_tests ai_gui icl_export click_chooser click_xevent cat_api cat_behavior report_tests review_gui review_td"
+ALL="tools_syntax ai_bridge_tests moving_tests ai_gui icl_export click_chooser click_xevent cat_api cat_behavior report_tests review_gui review_td geometry mouse"
 LONG="session_replay link_bench moving_session"
 chk_tools_syntax() { local bad=0 f
   for f in tools/*.py scripts/*.py; do "$PY" -m py_compile "$f" 2>&1 || bad=1; done
@@ -53,8 +53,12 @@ chk_link_bench() { [ -f /workspace/work/inj1.json.pkl ] || { echo "injection set
   local L="${D}1.json.pkl ${D}2.json.pkl ${D}3.json.pkl ${D}4.json.pkl ${D}5.json.pkl ${D}6.json.pkl"
   [ "$D" != /workspace/work/inj ] && L="$L ${D}7.json.pkl ${D}8.json.pkl ${D}9.json.pkl ${D}10.json.pkl ${D}11.json.pkl ${D}12.json.pkl"
   (cd moving/validation && "$PY" link_bench.py $L 2>&1 | tail -16); }
-chk_moving_session() { [ -n "$OGF_MOVING_SESSION" ] || { echo "set OGF_MOVING_SESSION=session.py REF=dir FIELD=... (needs network, MAST cache)"; return 77; }
-  "$HERE/verify_moving_session.sh" "$OGF_MOVING_SESSION" "$OGF_MOVING_REF" "$OGF_MOVING_FIELD"; }
+chk_moving_session() {
+  # with OGF_MOVING_SESSION / _REF / _FIELD set: replay that recorded session against that reference (as before).  Otherwise the check is
+  # self-contained: verify_moving_session_auto.sh records a GUI session on the cached BB89 exposures and replays it (77 = skipped when
+  # the exposures, an X server or the network+cache are missing).
+  if [ -n "$OGF_MOVING_SESSION" ]; then "$HERE/verify_moving_session.sh" "$OGF_MOVING_SESSION" "$OGF_MOVING_REF" "$OGF_MOVING_FIELD"
+  else DISPLAY_OVERRIDE=$DISP "$HERE/verify_moving_session_auto.sh"; fi; }
 chk_cat_api() { need_x || { echo "no X server"; return 77; }
   OGF_CAT_API_OUT="$OUT/cat_api.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_cat_api.tcl > "$OUT/cat_api_raw.txt" 2>&1; tclsum "$OUT/cat_api.txt"; }
 chk_cat_behavior() { need_x || { echo "no X server"; return 77; }; DISPLAY_OVERRIDE=$DISP "$HERE/verify_cat_behavior.sh" 2>&1 | tail -8; [ ${PIPESTATUS[0]} = 0 ]; }
@@ -63,6 +67,10 @@ chk_review_gui() { need_x || { echo "no X server"; return 77; }
   OGF_REVIEW_OUT="$OUT/review.txt" OGF_REVIEW_DIR="$OUT/review_work" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_review_gui.tcl > "$OUT/review_raw.txt" 2>&1; tclsum "$OUT/review.txt"; }
 chk_review_td() { need_x || { echo "no X server"; return 77; }
   OGF_RVTD_OUT="$OUT/review_td.txt" OGF_RVTD_DIR="$OUT/review_td_work" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_review_td.tcl > "$OUT/review_td_raw.txt" 2>&1; tclsum "$OUT/review_td.txt"; }
+chk_geometry() { need_x || { echo "no X server"; return 77; }
+  OGF_GEO_OUT="$OUT/geometry.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_geometry.tcl > "$OUT/geometry_raw.txt" 2>&1; tclsum "$OUT/geometry.txt"; }
+chk_mouse() { need_x || { echo "no X server"; return 77; }; command -v xdotool >/dev/null || { echo "xdotool missing"; return 77; }
+  OGF_MOUSE_OUT="$OUT/mouse.txt" OGF_MOUSE_DIR="$OUT/mouse_work" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_mouse.tcl > "$OUT/mouse_raw.txt" 2>&1; tclsum "$OUT/mouse.txt"; }
 # ---- extra checks registered by later work (appended below by the feature that adds them)
 chk_moving_options() { need_x || { echo "no X server"; return 77; }
   OGF_MOVOPT_OUT="$OUT/movopt.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_moving_options.tcl > "$OUT/movopt_raw.txt" 2>&1; tclsum "$OUT/movopt.txt"; }

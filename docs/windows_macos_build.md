@@ -18,6 +18,21 @@ as a recipe known to work.
 The OGFinder additions (C/C++ packages in `sep_src/`, `star_finder/`, `psf_phot/`, `fickle/`, ... and the Tcl/Python layers) are
 wired into the top-level `Makefile`; only the Linux/X11 path of that Makefile has been exercised.
 
+## Where the code assumes POSIX (measured by `tools/portability_audit.py`)
+
+`python3 tools/portability_audit.py [--list]` greps 406 Tcl / Python / shell files for POSIX-only constructs.  It proves nothing about
+a port; it says where to look.  Result on this tree (hits, then the places that matter for the application as opposed to the tests):
+
+| construct | hits | where |
+|---|---|---|
+| `kill` | 2 | `ogf_core.tcl:491` (job Stop button: `kill $pid`), `analysis.tcl:704` (upstream ds9 `kill -9`) |
+| `fork` start method | 1 | `parallel/pool.py:52` `mp.get_context('fork')` - **explicit**: the parallel helper (morphometry, LSB-G ...) does not exist on Windows and is not the default on macOS (spawn); the worker functions were not audited for spawn |
+| process pool | 2 | the same two lines of `parallel/pool.py` |
+| `/tmp`, `/proc`, `/dev` | 3 + 4 | `iis.tcl` (upstream IIS fifos), `util.tcl:51` (`/proc/cpuinfo` for the CPU count; has a fallback), `star_psf.tcl` (`/dev/null` as a throw-away output), `tools/callgraph.py` (developer tool) |
+| literal `python3` | 3 | `cli_script.tcl` (the generated bash script) |
+| bash / X11 tooling | 12 + 7 | `scripts/*.sh`, `run_all_checks.sh` (Xvfb, xdotool, xdpyinfo) - the test harness, not the application |
+| `shell=True`, `os.system`, `.so` loading, `exec foo.py`, POSIX signals | 0 | - |
+
 ## Components that are Tcl only (should be portable in principle)
 
 `ds9/library/*.tcl` (layout, plugins, table, tile, click chooser, session recorder) is plain Tcl/Tk 8.6.  Points where the code
@@ -61,9 +76,19 @@ reproject 0.21.0, requests 2.32.3, PyYAML 6.0.2, pytest 9.1.1.  Likely trouble s
 * Process control (`kill`), line endings in `*.tcl`/`*.sh` (use `git config core.autocrlf false`), `exec` of `.py` files, console windows
   popping up for each helper process, path length limits for the `~/.ds9` cache.
 
+## What the Linux-only GUI checks cover, and what they cannot say about other platforms
+
+`scripts/run_all_checks.sh` has two checks whose numbers are tied to X11 on this box: `geometry` (`scripts/verify_geometry.tcl`: table y/h
+and info-area height 181/769/154 in 21 panel states, main-window width 1300 -> 736 -> 1300 on detach/reattach) and `mouse`
+(`scripts/verify_mouse.tcl`: real xdotool events on the notebook tabs, a chip menu and its cascade, table rows, header sort, wheel, the
+Tools-menu detach).  On macOS/Windows the same scripts would run only with an X server (XQuartz / the X11 build), and the 181/769/154 numbers
+would have to be re-measured because the default fonts differ.  Mouse-button numbering differs on macOS (see above); the wheel binding in
+`layout.tcl` uses X11 `Button-4/5` only, so wheel scrolling of the table is **not** expected to work on Windows/macOS Tk (`<MouseWheel>`).
+
 ## How to verify when a Windows/macOS machine is available
 
 1. Build ds9 with the platform procedure above; run `bin/ds9 /path/to/m51.fits`.
 2. `OGFINDER_PYTHON=<python> python -m pytest moving/tests ai_bridge/tests`.
 3. Open the Moving Objects and Catalog panels; run the menu-completeness check `tools/menudump.tcl` + `tools/compare_menus.py`.
 4. Record a session and replay it (`scripts/verify_session_replay.py`) - needs bash.
+5. `python3 tools/portability_audit.py --list` before and after any port work, to see which of the POSIX assumptions above were removed.
