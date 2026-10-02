@@ -63,19 +63,21 @@ def test_realbogus_model_file_is_small_and_valid():
     assert tuple(json.load(open(RB.MODEL_PATH))["features"]) == RB.FEATURES
 
 
-def test_realbogus_separates_cr_like_from_psf_like():
-    base = dict(sign=1, snr=12.0, channel="point", elong=1.2, a_pix=1.5, b_pix=1.3, npix=14, tpl_snr=0.5, neg_frac=0.0, pos_frac=0.1, sharp=0.5,
-                sharp_psf=0.45, on_cr=False, f_r1=0.5, f_r2=0.4, f_r3=0.1, pk_nb=0.6, psf_chi2=1.2, psf_amp=1.0, fine=1.0, lap=3.0, n_hi=6, asym=0.1,
-                lac3=0, lac_n7=0, arch3=0, n_near=0, near_bad=False)
-    cr = dict(base, sharp=0.95, f_r1=0.93, f_r2=0.07, f_r3=0.0, pk_nb=0.1, psf_chi2=40.0, psf_amp=1.8, fine=25.0, lap=40.0, n_hi=2, npix=3, a_pix=0.7,
-              lac3=1, lac_n7=5, arch3=1)
-    dets = [dict(base), dict(cr)]
-    RB.score_dets(dets)
-    assert dets[0]["rb"] > dets[1]["rb"]
-    # (only the ordering is asserted: hand-made feature dicts are not the training distribution; real separation is measured on the benchmark)
-    more_lac = dict(base, lac3=1, lac_n7=9, arch3=1)
-    d2 = [dict(base), more_lac]; RB.score_dets(d2)
-    assert d2[1]["rb"] < d2[0]["rb"]
+def test_realbogus_separates_real_from_bogus_on_heldout_sample():
+    """Regression on 60 real (injected) and 240 bogus detections of the BB89 fields, never used for training (moving/validation/make_rb_fixture.py).
+    Measured with the shipped 8-field model: AUC 0.989, recall 0.93 at 2 % bogus kept.  (The previous test ordered two hand-made feature dicts, which are outside the
+    training distribution: a 150-tree model legitimately scores them in any order.)"""
+    from sklearn.metrics import roc_auc_score
+    f = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "rb_heldout_sample.json")))
+    assert tuple(f["features"]) == RB.FEATURES
+    X = np.array(f["real"] + f["bogus"], float)
+    y = np.r_[np.ones(len(f["real"])), np.zeros(len(f["bogus"]))]
+    p = RB.predict(X, RB.load(force=True))[1]
+    assert roc_auc_score(y, p) > 0.97
+    assert np.mean(p[y == 1] > np.quantile(p[y == 0], 0.98)) > 0.8
+    d = [dict(sign=1, snr=12.0, channel="point")]
+    RB.score_dets(d)                       # incomplete feature dicts must still be scored (missing features are filled)
+    assert 0.0 <= d[0]["rb"] <= 1.0
 
 
 def test_realbogus_tree_walk_matches_sklearn():

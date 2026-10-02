@@ -198,14 +198,21 @@ reproduces the previous detections; CLI: `--no-cr-reject --no-trail-fit --no-rea
 * `centroid.py` - trailed-Gaussian model (closed form, soft-L1 least squares, CR / bad-pixel mask) re-fits the position and length of trail
   detections up to `trail_fit_max=40` per chip.  Median centroid error against the injected truth (inj4): trails < 25 px
   0.28 -> 0.08 px; 25-50 px 5.8 -> 1.6 px; **> 50 px (> 2.5 arcsec) 18.9 -> 17.7 px: no improvement, 5 of 10 are still off by > 14 px**.
-* `realbogus.py` + `data/realbogus_model.json` (21.9 KB, 60 depth-3 trees, evaluated in pure numpy, `export_sklearn` for inspection) - a
-  gradient-boosted real/bogus score `rb` from 32 shape / ring / PSF-chi2 / LAC / trail features.  **Trained only on four non-BB89 COSMOS
-  visits with injected movers** (101516 detections: 890 real, 100626 bogus); leave-one-field-out AUC 0.965 / 0.986 / 0.985 / 0.992, recall at 0.2 % bogus kept
-  0.70 / 0.73 / 0.74 / 0.80, at 2 % bogus kept 0.80 / 0.89 / 0.88 / 0.89.  Top features: `lac_n7`, `trail_peak_frac`, `n_hi`, `lac_frac`, `snr`.
-  Reproduce: `moving/validation/train_realbogus.py --make-sets DIR` then fit (`--oof` writes out-of-fold scores).
+* `realbogus.py` + `data/realbogus_model.json` (150 depth-3 trees, evaluated in pure numpy, `export_sklearn` for inspection) - a
+  gradient-boosted real/bogus score `rb` from 32 shape / ring / PSF-chi2 / LAC / trail features.  **Trained only on eight non-BB89 COSMOS
+  visits with injected movers** (169,840 detections: 1,493 real, 168,347 bogus; the first version used four fields and 60 trees); leave-one-field-out
+  AUC 0.975 / 0.986 / 0.981 / 0.994 / 0.997 / 0.990 / 0.982 / 0.982, recall at 0.2 % bogus kept 0.72-0.84.  Top features: `lac_n7`, `trail_peak_frac`, `n_hi`, `snr`, `b_pix`.
+  **Held-out BB89** (injected movers in the real BB89 chips, never trained on; `validation/eval_realbogus.py`): plain sets AUC 0.991, recall 0.77 at 0.2 % / 0.93 at 2 % bogus kept;
+  CR-heavy sets AUC 0.948 (0.41 / 0.65) - the old 4-field model gave 0.990 (0.78 / 0.91) and 0.942 (0.39 / 0.69), i.e. the gain from more fields is small.
+  Hyper-parameter sweep (trees, depth): (60,3) LOFO AUC 0.983 | (150,3) 0.986 | (100,5) 0.984 | (200,4) 0.982 - chosen on the LOFO numbers, not on BB89.  Optional ZOGY
+  improvements (source-noise, astrometric variance) gave no gain in this classifier and stay OFF.
+  **Caveats:** labels are *injections into real images*, not real asteroids; the only real mover available is 2015 BB89.  `moving/tests/data/rb_heldout_sample.json`
+  (60 real + 240 bogus held-out detections) backs a regression test (AUC 0.989, recall 0.93 at 2 %).  The previous unit test ordered two hand-made feature dicts,
+  which are outside the training distribution (the 150-tree model scores them 0.025 vs 0.073); it was replaced by the held-out-sample test.
+  Reproduce: `moving/validation/train_realbogus.py --make-sets DIR` then fit (`--trees N --depth D --seed S --out F`; `--oof` writes out-of-fold scores with the same settings).
 * `pipeline.link_detections(use_rb, rb_min, rb_snr_min=6, use_lac_cr)`: with `rb` present the per-exposure pool is ordered by `rb` then S/N and the
   pool S/N floor drops to 6; without it the old S/N order is used.  `tracklet.LLR_MODEL_RB` (base features + mean / min member real/bogus
-  logit) replaces the base logistic score when `rb` is present; fitted on out-of-fold `rb` of the non-BB89 training sets.
+  logit) replaces the base logistic score when `rb` is present; fitted on out-of-fold `rb` of the eight non-BB89 training sets (the constants in `LLR_MODEL_RB` were refitted with the 150-tree model).
   A pinv fallback prevents a crash on degenerate (identical-epoch) fits.
 * `detections.tsv` gained the columns `rb lac3 lac_n7 theta_pix trail_fit trail_len_pix` (appended; existing columns unchanged).
 * `validation/inject.py` now writes exact `real` / `inj_box` labels and trail truth, supports `--nodq --cr-extra N` (CR-heavy sets: no archive CR flag
@@ -244,7 +251,7 @@ On inj1-8, 215 of 220 injected objects had >= 3 pool-eligible detections within 
 Run time (4 chips of 1240 x 1240): detection 76 s -> 82 s with the CR features -> about 100 s with trail fits (320 fits, ~59 ms each); linking 11-15 s
 (20-25 s on the CR-heavy sets).
 
-**Real BB89 check (the known mover, 2015 BB89, CLI as above, `--max-per-exposure 900`):** before: rank 0 of 400, prob 0.24; after: rank 0 of 400, prob 0.98 (3 members within 1 arcsec,
+**Real BB89 check (the known mover, 2015 BB89, CLI as above, `--max-per-exposure 900`):** before: rank 0 of 400, prob 0.24; after (4-field model): rank 0 of 400, prob 0.98 (8-field/150-tree model: rank 0 of 400, prob 0.993, identified as known, max separation 1.58 arcsec; link benchmark over injected sets 122 -> 123 recovered, per set within +-1, top-10 sum 67 -> 66) (3 members within 1 arcsec,
 0.056-0.095 arcsec from the ephemeris positions; the 4th exposure's detection (0.07 arcsec away) has rb 0.016 and lies on a LAC pixel, so only 3 of
 4 exposures enter the pool).  Nearest detection to the ephemeris position in exposures 0-3, before -> after: 0.049 -> 0.081, 0.166 -> 0.056, 0.268 -> 0.095, 0.071 -> 0.071 arcsec;
 S/N unchanged (751 / 655 / 591 / 194).  One real object: this shows no regression, not a statistically meaningful gain.  Detection stage 164 s, link 38 s, identify 22 s;

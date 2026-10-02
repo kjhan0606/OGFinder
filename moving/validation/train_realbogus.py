@@ -67,10 +67,6 @@ def fit(X, y, trees, depth, seed, w=None):
 
 def main():
     a = sys.argv[1:]
-    if "--oof" in a:
-        a.remove("--oof"); score_out_of_fold([x for x in a if x.endswith(".pkl")]); return
-    if "--make-sets" in a:
-        make_sets(a[a.index("--make-sets") + 1]); return
     out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "realbogus_model.json")
     trees, depth, seed = 60, 3, 0
     if "--out" in a:
@@ -81,6 +77,10 @@ def main():
         i = a.index("--depth"); depth = int(a[i + 1]); del a[i:i + 2]
     if "--seed" in a:
         i = a.index("--seed"); seed = int(a[i + 1]); del a[i:i + 2]
+    if "--oof" in a:
+        a.remove("--oof"); score_out_of_fold([x for x in a if x.endswith(".pkl")], trees=trees, depth=depth, seed=seed); return
+    if "--make-sets" in a:
+        make_sets(a[a.index("--make-sets") + 1]); return
     paths = [x for x in a if x.endswith(".pkl")]
     X, y, g, snr = load(paths)
     print("training detections %d (real %d, bogus %d) from %d sets, fields %s" % (len(y), y.sum(), (1 - y).sum(), len(paths), sorted(set(g))))

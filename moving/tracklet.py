@@ -163,7 +163,7 @@ LLR_MODEL = dict(coef=(-0.828, 4.829, -10.173, -4.984, -1.728, 1.554, -0.116), i
 # the mean and the minimum of the members' clipped real/bogus logit.  Fitted on injection sets of fields OTHER than BB89
 # (`validation/fit_link_score.py --rb` on the out-of-fold `rb` of `validation/train_realbogus.py --oof`).
 LLR_FEATURES_RB = LLR_FEATURES + ("rb_mean", "rb_min")
-LLR_MODEL_RB = dict(coef=(-0.96, 6.003, -1.311, -8.994, -0.371, -0.634, -0.12, 0.597, -0.014), intercept=-18.44)
+LLR_MODEL_RB = dict(coef=(-0.912, 5.011, 1.357, -8.172, 0.067, -0.541, -0.115, 0.718, -0.034), intercept=-16.88)
 RB_LOGIT_CLIP = 8.0
 RESCORE_POOL = 50000
 
