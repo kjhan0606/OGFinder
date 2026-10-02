@@ -333,6 +333,7 @@ namespace eval ::ogf::cat {
         {sedcodes,*             any    sedcodes rw    "SED codes plugin: results_file (JSON of the last run), profile_file (ai_bridge profiles written by the plugin)"}
         {cluster,*              any    cluster    rw  "cluster / lensing plugin: output files (rs_png, density_file, peaks_file, json_file)"}
         {spectra,*               any    spectra rw  "spectroscopy plugin: links_file, results_file"}
+        {xmatch,*                any    xmatch rw  "cross-match plugin: summary_file, pairs_file"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}

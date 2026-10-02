@@ -312,6 +312,50 @@ proc sec_spectra {} {
     R spectra_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_xmatch {} {
+    set dir [file join [file dirname [OGFSessWorkDir]] xmatch_demo]
+    file mkdir $dir
+    set nn [::ogf::cat::values NUMBER]; set ra [::ogf::cat::values ALPHA_J2000]; set de [::ogf::cat::values DELTA_J2000]; set mg [::ogf::cat::values MAG_AUTO]
+    set ref [file join $dir ref.csv]
+    set fd [open $ref w]
+    puts $fd "objid,ra,dec,gmag"
+    set pi 3.141592653589793
+    set want {}
+    set i 0
+    foreach n $nn r $ra d $de m $mg {
+	incr i
+	if {$r eq {} || $d eq {} || $i % 2} continue
+	set r2 [expr {$r + 0.30 / 3600.0 / cos($d * $pi / 180.0)}]
+	set d2 [expr {$d - 0.20 / 3600.0}]
+	puts $fd [format "R%d,%.8f,%.8f,%s" $n $r2 $d2 $m]
+	dict set want $n R$n
+    }
+    close $fd
+    ::ogf::params::put xmatch source file
+    ::ogf::params::put xmatch ref-file $ref
+    ::ogf::params::put xmatch ref-id-col objid
+    ::ogf::params::put xmatch copy-columns gmag
+    ::ogf::params::put xmatch radius-arcsec 1.5
+    lassign [run_step xmatch match] ok recs
+    R xmatch_ran $ok $recs
+    R xmatch_recorded [expr {[lindex $recs 0 0] eq "analysis.xmatch"}] $recs
+    R xmatch_columns [expr {"XM_SEP" in [::ogf::cat::columns] && "XM_ID" in [::ogf::cat::columns] && "XM_V1" in [::ogf::cat::columns]}]
+    set good 0; set tot 0
+    foreach n [::ogf::cat::values NUMBER] id [::ogf::cat::values XM_ID] {
+	if {[dict exists $want $n]} {incr tot; if {$id eq [dict get $want $n]} {incr good}}
+    }
+    R xmatch_ids [expr {$tot > 20 && double($good) / $tot >= 0.95}] "correct $good of $tot"
+    set sf [file join [OGFSessWorkDir] xmatch xmatch_summary.json]
+    set fd [open $sf r]; set js [read $fd]; close $fd
+    set ok2 [regexp {"dra": ([-0-9.e]+)} $js -> dra]
+    regexp {"ddec": ([-0-9.e]+)} $js -> ddec
+    R xmatch_shift [expr {$ok2 && abs($dra - 0.30) < 0.05 && abs($ddec + 0.20) < 0.05}] "dra=$dra ddec=$ddec"
+    OGFXmatchSummary; update
+    R xmatch_summary_window [expr {[winfo exists .ogftext] && [string match "*n_matched*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    R xmatch_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -401,7 +445,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster spectra} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster spectra xmatch} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
