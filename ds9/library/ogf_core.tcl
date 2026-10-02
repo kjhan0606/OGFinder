@@ -792,9 +792,12 @@ proc ::ogf::reg::missing {id {check_python 0}} {
 }
 
 # ================================================================ step execution
-# argv template tokens:  {python} {plugin_dir} {work} {image} {catalog} {root}  and  {PARAM} (parameter store)
+# argv template tokens:  {python} {plugin_dir} {work} {image} {catalog} {root}  and  {PARAM} (parameter store of this plugin),
+#   {OTHER:PARAM}  parameter of another plugin (e.g. {extract:n-workers}; its store binding is honoured),
+#   {cat:KEY}      value of a catalog-panel key through ::ogf::cat::get ("" when unset), e.g. {cat:psf,file}
+#   {script:NAME}  path of the Python driver NAME next to bin/ds9 or in ds9/library (what CatalogPanelGetScript finds)
 # a "cli" element is a string, or an object {"if": "param", "argv": [...]} (included when the parameter is
-# true / non-empty / non-zero).
+# true / non-empty / non-zero), or {"if_file": "{token}", "argv": [...]} (included when the expanded token names an existing file).
 namespace eval ::ogf::step {}
 
 # CLI drivers must be real files: prefer <root>/plugins/<id> on disk; a plugin that only exists inside the
@@ -826,12 +829,18 @@ proc ::ogf::step::context {id {catname {}}} {
 proc ::ogf::step::expand {id str ctx} {
     set out {}
     set i 0
-    while {[regexp -start $i -indices {\{([A-Za-z0-9_.-]+)\}} $str m g]} {
+    while {[regexp -start $i -indices {\{([A-Za-z0-9_.:,-]+)\}} $str m g]} {
 	lassign $m a b; lassign $g c d
 	append out [string range $str $i [expr {$a-1}]]
 	set key [string range $str $c $d]
 	if {[dict exists $ctx $key]} {
 	    append out [dict get $ctx $key]
+	} elseif {[regexp {^script:(.+)$} $key -> sname]} {
+	    append out [CatalogPanelGetScript $sname]
+	} elseif {[regexp {^cat:(.+)$} $key -> ckey]} {
+	    append out [::ogf::cat::get $ckey {}]
+	} elseif {[regexp {^([A-Za-z0-9_]+):([A-Za-z0-9_.-]+)$} $key -> opl opn] && [::ogf::params::spec $opl $opn] ne {}} {
+	    append out [::ogf::params::get $opl $opn]
 	} elseif {[::ogf::params::spec $id $key] ne {}} {
 	    append out [::ogf::params::get $id $key]
 	} else {
@@ -852,9 +861,14 @@ proc ::ogf::step::build_argv {id step ctx} {
     set argv {}
     foreach e [::ogf::json::get $step cli] {
 	if {[is_cond $e]} {
-	    set cond [::ogf::json::get $e if]
-	    set v [expr {[::ogf::params::spec $id $cond] ne {} ? [::ogf::params::get $id $cond] : 0}]
-	    if {$v eq {} || $v eq "0" || [string is false -strict $v]} continue
+	    if {[dict exists $e if_file]} {
+		set f [expand $id [dict get $e if_file] $ctx]
+		if {$f eq {} || ![file isfile $f]} continue
+	    } else {
+		set cond [::ogf::json::get $e if]
+		set v [expr {[::ogf::params::spec $id $cond] ne {} ? [::ogf::params::get $id $cond] : 0}]
+		if {$v eq {} || $v eq "0" || [string is false -strict $v]} continue
+	    }
 	    foreach a [dict get $e argv] {lappend argv [expand $id $a $ctx]}
 	} else {
 	    lappend argv [expand $id $e $ctx]
@@ -870,6 +884,7 @@ proc ::ogf::step::check_needs {step} {
 	switch -- $n {
 	    image {if {[CatalogPanelGetFITS] eq {}} {return "load an image first"}}
 	    catalog {if {![::ogf::cat::has]} {return "extract sources first (no catalog)"}}
+	    psf {if {![::ogf::cat::exists psf,file] || ![file exists [::ogf::cat::get psf,file]]} {return "no PSF file - build or load a PSF first"}}
 	}
     }
     return {}
@@ -914,11 +929,11 @@ proc ::ogf::step::run {id sid} {
     set title [::ogf::json::get $step title [dict get $step label]]
     set out [::ogf::json::get $step output]
     set net [expr {[::ogf::json::get $step network [::ogf::json::get $m network 0]] ? 1 : 0}]
-    set recname $id.$sid
+    set recname [::ogf::json::get $step record $id.$sid]       ;# "record": recorder step name when it must differ from <plugin>.<step> (kept for old session files)
     set opts [list -step $recname -class [expr {$cls eq "none" ? "auto" : $cls}] -title $title -network $net -plugin $id \
 	-done [list ::ogf::step::done $id $sid]]
     if {$out ne {} && [::ogf::json::get $out mode] eq "add_columns"} {
-	lappend opts -post [dict create kind add cols_list [::ogf::json::get $out columns]] -requires catalog
+	lappend opts -post [dict create kind add cols_list [::ogf::json::get $out columns]] -requires [::ogf::json::get $step requires catalog]
     } elseif {$out ne {} && [::ogf::json::get $out mode] eq "set"} {
 	lappend opts -post [dict create kind set]
     }
@@ -937,6 +952,8 @@ proc ::ogf::step::done {id sid ok output ms} {
 	text {OGFTextWindow "[dict get $step label]" $output}
 	default {}
     }
+    set ds [::ogf::json::get $step done_status]
+    if {$ds ne {}} {::ogf::status $ds}
     set p [::ogf::json::get $step after]
     if {$p ne {}} {catch {uplevel #0 $p}}
 }
