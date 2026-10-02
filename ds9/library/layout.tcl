@@ -169,7 +169,6 @@ proc CreateCanvas {} {
 
 proc CreateCatalogPanel {} {
     global ds9
-    global catpanel
 
     set f $ds9(catalog_frame)
 
@@ -178,18 +177,18 @@ proc CreateCatalogPanel {} {
 
     # Info area: same height as the left pane header so the catalog
     # table lines up with the image display
-    set catpanel(detached) 0
-    set catpanel(infoarea) [ttk::frame $f.info -height 154]
+    ::ogf::cat::set detached 0
+    ::ogf::cat::set infoarea [ttk::frame $f.info -height 154]
     pack propagate $f.info 0
     OGFUIBuild $f
     ttk::separator $f.infosep -orient horizontal
-    set catpanel(hdrw) [expr {[info exists ds9(header)] ? $ds9(header) : {}}]
+    ::ogf::cat::set hdrw [expr {[info exists ds9(header)] ? $ds9(header) : {}}]
 
     # Search/Filter bar
-    set catpanel(searchbar) [ttk::frame $f.searchbar]
+    ::ogf::cat::set searchbar [ttk::frame $f.searchbar]
     ttk::label $f.searchbar.lbl -text "Filter:"
-    set catpanel(search_var) {}
-    ttk::entry $f.searchbar.entry -textvariable catpanel(search_var) -width 20
+    ::ogf::cat::set search_var {}
+    ttk::entry $f.searchbar.entry -textvariable [::ogf::cat::bind_var search_var] -width 20
     # Compact button so the Filter row has the same height (21 px) as
     # the File row in the left pane
     ttk::style configure CatApply.TButton -padding {2 0}
@@ -201,15 +200,15 @@ proc CreateCatalogPanel {} {
     bind $f.searchbar.entry <Return> CatalogPanelFilter
 
     # Table frame with scrollbars
-    set catpanel(tblframe) [ttk::frame $f.tblf]
+    ::ogf::cat::set tblframe [ttk::frame $f.tblf]
 
-    set catpanel(tbldb) catpaneltbldb
-    global $catpanel(tbldb)
+    ::ogf::cat::set tbldb catpaneltbldb
+    global [::ogf::cat::get tbldb]
 
-    set catpanel(tbl) [table $f.tblf.t \
+    ::ogf::cat::set tbl [table $f.tblf.t \
 			   -state disabled \
 			   -usecommand 0 \
-			   -variable $catpanel(tbldb) \
+			   -variable [::ogf::cat::get tbldb] \
 			   -colorigin 1 \
 			   -roworigin 0 \
 			   -cols 19 \
@@ -232,32 +231,32 @@ proc CreateCatalogPanel {} {
 			   -bg [ThemeTreeBackground] \
 			  ]
 
-    $catpanel(tbl) tag configure sel \
+    [::ogf::cat::get tbl] tag configure sel \
 	-fg [ThemeSelectedForeground] -bg [ThemeSelectedBackground]
-    $catpanel(tbl) tag configure title \
+    [::ogf::cat::get tbl] tag configure title \
 	-fg [ThemeForeground] -bg [ThemeBackground]
 
     ttk::scrollbar $f.tblf.yscroll \
-	-command [list $catpanel(tbl) yview] -orient vertical
+	-command [list [::ogf::cat::get tbl] yview] -orient vertical
     ttk::scrollbar $f.tblf.xscroll \
-	-command [list $catpanel(tbl) xview] -orient horizontal
+	-command [list [::ogf::cat::get tbl] xview] -orient horizontal
 
-    grid $catpanel(tbl) $f.tblf.yscroll -sticky news
+    grid [::ogf::cat::get tbl] $f.tblf.yscroll -sticky news
     grid $f.tblf.xscroll -sticky news
     grid rowconfigure $f.tblf 0 -weight 1
     grid columnconfigure $f.tblf 0 -weight 1
 
     # Status bar
-    set catpanel(status) {Ready - Load a FITS file to extract sources}
-    set catpanel(statusbar) [ttk::frame $f.statusbar]
-    ttk::label $f.statusbar.lbl -textvariable catpanel(status) \
+    ::ogf::cat::set status {Ready - Load a FITS file to extract sources}
+    ::ogf::cat::set statusbar [ttk::frame $f.statusbar]
+    ttk::label $f.statusbar.lbl -textvariable [::ogf::cat::bind_var status] \
 	-anchor w -relief sunken
     pack $f.statusbar.lbl -fill x -expand true -padx 2 -pady 0
 
     # Pack all into catalog frame
     # Selected source summary (Extract / Mark All / Clear moved to the workflow tabs)
-    set catpanel(sel,text) {No source selected}
-    ttk::label $f.selinfo -textvariable catpanel(sel,text) \
+    ::ogf::cat::set sel,text {No source selected}
+    ttk::label $f.selinfo -textvariable [::ogf::cat::bind_var sel,text] \
 	-anchor nw -justify left -relief groove -padding 4
 
     pack $f.menubar -fill x -side top
@@ -272,39 +271,39 @@ proc CreateCatalogPanel {} {
     pack $f.tblf -fill both -expand true -side top
 
     # Keep the info area height equal to the left header height
-    if {$catpanel(hdrw) ne {}} {
-	bind $catpanel(hdrw) <Configure> {+CatalogPanelSyncInfoHeight}
+    if {[::ogf::cat::get hdrw] ne {}} {
+	bind [::ogf::cat::get hdrw] <Configure> {+CatalogPanelSyncInfoHeight}
     }
 
     # Initialize state
-    set catpanel(alldata) {}
-    set catpanel(filename) {}
-    set catpanel(delim) "\t"
-    set catpanel(sort,col) {}
-    set catpanel(sort,dir) {}
+    ::ogf::cat::set alldata {}
+    ::ogf::cat::set filename {}
+    ::ogf::cat::set delim "\t"
+    ::ogf::cat::set sort,col {}
+    ::ogf::cat::set sort,dir {}
 
     # Feature B: visible mode
-    set catpanel(visible_mode) 0
+    ::ogf::cat::set visible_mode 0
 
     # Add Objects mode
-    set catpanel(add_objects_mode) 0
+    ::ogf::cat::set add_objects_mode 0
 
     # Mark All cached region string
-    set catpanel(markall,on) 0
+    ::ogf::cat::set markall,on 0
 
     # Feature C: merge state
-    set catpanel(merge,list) {}
-    set catpanel(merge,active) 0
+    ::ogf::cat::set merge,list {}
+    ::ogf::cat::set merge,active 0
 
     # Feature D: trim state
-    set catpanel(trim,active) 0
+    ::ogf::cat::set trim,active 0
 
     # AI Merge state
-    set catpanel(ai,groups) {}
-    set catpanel(ai,current) 0
-    set catpanel(ai,total) 0
-    set catpanel(ai,threshold) 0.7
-    set catpanel(ai,active) 0
+    ::ogf::cat::set ai,groups {}
+    ::ogf::cat::set ai,current 0
+    ::ogf::cat::set ai,total 0
+    ::ogf::cat::set ai,threshold 0.7
+    ::ogf::cat::set ai,active 0
 
     # Ensure ~/.ds9 directory exists
     set ds9dir [file join [file normalize ~] .ds9]
@@ -313,176 +312,176 @@ proc CreateCatalogPanel {} {
     }
 
     # PSF/Deconv state
-    set catpanel(psf,stars) {}
-    set catpanel(psf,star_indices) {}
-    set catpanel(psf,file) [file join [file normalize ~] .ds9 psf_current.fits]
-    set catpanel(psf,has_psf) 0
-    set catpanel(psf,param,class-star-thresh) 0.8
-    set catpanel(psf,param,max-ellipticity) 0.2
-    set catpanel(psf,param,fwhm-sigma) 2.0
-    set catpanel(psf,param,min-flux-snr) 10.0
-    set catpanel(psf,param,psf-size) 51
-    set catpanel(psf,param,rl-iterations) 30
-    set catpanel(psf,param,wiener-nsr) 0.01
-    set catpanel(psf,param,tikhonov-lambda) 0.001
-    set catpanel(psf,param,tv-lambda) 0.001
-    set catpanel(psf,param,clean-gain) 0.1
-    set catpanel(psf,param,clean-niter) 1000
-    set catpanel(psf,param,clean-threshold) 0.0
-    set catpanel(psf,param,mem-lambda) 0.1
-    set catpanel(psf,param,mem-niter) 100
+    ::ogf::cat::set psf,stars {}
+    ::ogf::cat::set psf,star_indices {}
+    ::ogf::cat::set psf,file [file join [file normalize ~] .ds9 psf_current.fits]
+    ::ogf::cat::set psf,has_psf 0
+    ::ogf::cat::set psf,param,class-star-thresh 0.8
+    ::ogf::cat::set psf,param,max-ellipticity 0.2
+    ::ogf::cat::set psf,param,fwhm-sigma 2.0
+    ::ogf::cat::set psf,param,min-flux-snr 10.0
+    ::ogf::cat::set psf,param,psf-size 51
+    ::ogf::cat::set psf,param,rl-iterations 30
+    ::ogf::cat::set psf,param,wiener-nsr 0.01
+    ::ogf::cat::set psf,param,tikhonov-lambda 0.001
+    ::ogf::cat::set psf,param,tv-lambda 0.001
+    ::ogf::cat::set psf,param,clean-gain 0.1
+    ::ogf::cat::set psf,param,clean-niter 1000
+    ::ogf::cat::set psf,param,clean-threshold 0.0
+    ::ogf::cat::set psf,param,mem-lambda 0.1
+    ::ogf::cat::set psf,param,mem-niter 100
 
     # Extended PSF params
-    set catpanel(psf,param,ext-core-mag-min)     18.0
-    set catpanel(psf,param,ext-core-mag-max)     22.0
-    set catpanel(psf,param,ext-wing-mag-max)     16.0
-    set catpanel(psf,param,ext-core-size)        51
-    set catpanel(psf,param,ext-wing-size)        201
-    set catpanel(psf,param,ext-blend-inner)      20.0
-    set catpanel(psf,param,ext-blend-outer)      30.0
-    set catpanel(psf,param,ext-saturation-limit) 60000.0
+    ::ogf::cat::set psf,param,ext-core-mag-min     18.0
+    ::ogf::cat::set psf,param,ext-core-mag-max     22.0
+    ::ogf::cat::set psf,param,ext-wing-mag-max     16.0
+    ::ogf::cat::set psf,param,ext-core-size        51
+    ::ogf::cat::set psf,param,ext-wing-size        201
+    ::ogf::cat::set psf,param,ext-blend-inner      20.0
+    ::ogf::cat::set psf,param,ext-blend-outer      30.0
+    ::ogf::cat::set psf,param,ext-saturation-limit 60000.0
 
     # Simulation PSF params
-    set catpanel(psf,param,sim-telescope)        auto
-    set catpanel(psf,param,sim-instrument)       auto
-    set catpanel(psf,param,sim-filter)           auto
-    set catpanel(psf,param,sim-psf-size)         201
-    set catpanel(psf,param,sim-oversample)       1
-    set catpanel(psf,param,sim-jitter-sigma)     0.007
-    set catpanel(psf,param,sim-focus-offset)     0.0
+    ::ogf::cat::set psf,param,sim-telescope        auto
+    ::ogf::cat::set psf,param,sim-instrument       auto
+    ::ogf::cat::set psf,param,sim-filter           auto
+    ::ogf::cat::set psf,param,sim-psf-size         201
+    ::ogf::cat::set psf,param,sim-oversample       1
+    ::ogf::cat::set psf,param,sim-jitter-sigma     0.007
+    ::ogf::cat::set psf,param,sim-focus-offset     0.0
 
     # Simulation availability flags (-1 = unchecked)
-    set catpanel(psf,sim_webbpsf_ok) -1
-    set catpanel(psf,sim_tinytim_ok) -1
+    ::ogf::cat::set psf,sim_webbpsf_ok -1
+    ::ogf::cat::set psf,sim_tinytim_ok -1
 
     CatalogPanelPSFParamLoad
 
     # ICL state (default paths; updated per-FITS by CatalogPanelICLUpdateFiles)
-    set catpanel(icl,fits_base)    {}
-    set catpanel(icl,mask_file)    [file join [file normalize ~] .ds9 icl_mask.fits]
-    set catpanel(icl,masked_file)  [file join [file normalize ~] .ds9 icl_masked.fits]
-    set catpanel(icl,bkg_file)     [file join [file normalize ~] .ds9 icl_background.fits]
-    set catpanel(icl,bgsub_file)   [file join [file normalize ~] .ds9 icl_bgsub.fits]
-    set catpanel(icl,profile_file) [file join [file normalize ~] .ds9 icl_profile.tsv]
-    set catpanel(icl,has_mask)     0
-    set catpanel(icl,has_bkg)      0
-    set catpanel(icl,has_profile)  0
-    set catpanel(icl,center_x)     {}
-    set catpanel(icl,center_y)     {}
-    set catpanel(icl,click_mode)   0
-    set catpanel(icl,cmdlog)       {}
-    set catpanel(icl,param,expand-factor)          1.5
-    set catpanel(icl,param,bright-star-mag-limit)  18.0
-    set catpanel(icl,param,bright-star-radius-scale) 10.0
-    set catpanel(icl,param,interp-method)          linear
-    set catpanel(icl,param,detect-thresh)          5.0
-    set catpanel(icl,param,max-dilate-radius)      20
-    set catpanel(icl,param,bkg-method)             polynomial
-    set catpanel(icl,param,bkg-order)              3
-    set catpanel(icl,param,bkg-sigma-clip)         3.0
-    set catpanel(icl,param,bkg-sep-mesh)           256
-    set catpanel(icl,param,rmin)                   5.0
-    set catpanel(icl,param,rmax)                   1000.0
-    set catpanel(icl,param,nsteps)                 80
-    set catpanel(icl,param,spacing)                log
-    set catpanel(icl,param,ellipticity)            0.0
-    set catpanel(icl,param,pa)                     0.0
-    set catpanel(icl,param,mag-zeropoint)          25.0
-    set catpanel(icl,param,pixel-scale)            0.06
-    set catpanel(icl,param,mu-threshold)           26.5
-    set catpanel(icl,param,mu-levels)              26.0,27.0,28.0
-    set catpanel(icl,param,measure-radius)         500.0
-    set catpanel(icl,param,bkg-iterative)          0
-    set catpanel(icl,param,bkg-n-iterations)       3
-    set catpanel(icl,param,bkg-convergence-tol)    0.01
-    set catpanel(icl,param,bkg-refine-thresh)      2.0
+    ::ogf::cat::set icl,fits_base    {}
+    ::ogf::cat::set icl,mask_file    [file join [file normalize ~] .ds9 icl_mask.fits]
+    ::ogf::cat::set icl,masked_file  [file join [file normalize ~] .ds9 icl_masked.fits]
+    ::ogf::cat::set icl,bkg_file     [file join [file normalize ~] .ds9 icl_background.fits]
+    ::ogf::cat::set icl,bgsub_file   [file join [file normalize ~] .ds9 icl_bgsub.fits]
+    ::ogf::cat::set icl,profile_file [file join [file normalize ~] .ds9 icl_profile.tsv]
+    ::ogf::cat::set icl,has_mask     0
+    ::ogf::cat::set icl,has_bkg      0
+    ::ogf::cat::set icl,has_profile  0
+    ::ogf::cat::set icl,center_x     {}
+    ::ogf::cat::set icl,center_y     {}
+    ::ogf::cat::set icl,click_mode   0
+    ::ogf::cat::set icl,cmdlog       {}
+    ::ogf::cat::set icl,param,expand-factor          1.5
+    ::ogf::cat::set icl,param,bright-star-mag-limit  18.0
+    ::ogf::cat::set icl,param,bright-star-radius-scale 10.0
+    ::ogf::cat::set icl,param,interp-method          linear
+    ::ogf::cat::set icl,param,detect-thresh          5.0
+    ::ogf::cat::set icl,param,max-dilate-radius      20
+    ::ogf::cat::set icl,param,bkg-method             polynomial
+    ::ogf::cat::set icl,param,bkg-order              3
+    ::ogf::cat::set icl,param,bkg-sigma-clip         3.0
+    ::ogf::cat::set icl,param,bkg-sep-mesh           256
+    ::ogf::cat::set icl,param,rmin                   5.0
+    ::ogf::cat::set icl,param,rmax                   1000.0
+    ::ogf::cat::set icl,param,nsteps                 80
+    ::ogf::cat::set icl,param,spacing                log
+    ::ogf::cat::set icl,param,ellipticity            0.0
+    ::ogf::cat::set icl,param,pa                     0.0
+    ::ogf::cat::set icl,param,mag-zeropoint          25.0
+    ::ogf::cat::set icl,param,pixel-scale            0.06
+    ::ogf::cat::set icl,param,mu-threshold           26.5
+    ::ogf::cat::set icl,param,mu-levels              26.0,27.0,28.0
+    ::ogf::cat::set icl,param,measure-radius         500.0
+    ::ogf::cat::set icl,param,bkg-iterative          0
+    ::ogf::cat::set icl,param,bkg-n-iterations       3
+    ::ogf::cat::set icl,param,bkg-convergence-tol    0.01
+    ::ogf::cat::set icl,param,bkg-refine-thresh      2.0
     CatalogPanelICLParamLoad
 
     # LSBG state (default paths; updated per-FITS by CatalogPanelLSBGUpdateFiles)
-    set catpanel(lsbg,fits_base)    {}
-    set catpanel(lsbg,mask_file)    [file join [file normalize ~] .ds9 lsbg_mask.fits]
-    set catpanel(lsbg,masked_file)  [file join [file normalize ~] .ds9 lsbg_masked.fits]
-    set catpanel(lsbg,bkg_file)     [file join [file normalize ~] .ds9 lsbg_background.fits]
-    set catpanel(lsbg,cleaned_file) [file join [file normalize ~] .ds9 lsbg_cleaned.fits]
-    set catpanel(lsbg,segmap_file)  [file join [file normalize ~] .ds9 lsbg_segmap.fits]
-    set catpanel(lsbg,catalog_file) [file join [file normalize ~] .ds9 lsbg_catalog.tsv]
-    set catpanel(lsbg,has_mask)     0
-    set catpanel(lsbg,has_clean)    0
-    set catpanel(lsbg,has_detect)   0
-    set catpanel(lsbg,has_catalog)  0
-    set catpanel(lsbg,detect_data)  {}
-    set catpanel(lsbg,cmdlog)       {}
-    set catpanel(lsbg,param,mask-detect-thresh)         1.5
-    set catpanel(lsbg,param,mask-detect-minarea)        5
-    set catpanel(lsbg,param,mask-expand-factor)         1.5
-    set catpanel(lsbg,param,max-dilate-radius)          30
-    set catpanel(lsbg,param,bright-star-mag-limit)      18.0
-    set catpanel(lsbg,param,bright-star-radius-scale)   12.0
-    set catpanel(lsbg,param,mask-mag-threshold)         22.0
-    set catpanel(lsbg,param,interp-method)              linear
-    set catpanel(lsbg,param,lsb-protect)                1
-    set catpanel(lsbg,param,lsb-mu-threshold)           24.0
-    set catpanel(lsbg,param,bkg-method)                 sep_large
-    set catpanel(lsbg,param,bkg-mesh-size)              256
-    set catpanel(lsbg,param,bkg-poly-order)             3
-    set catpanel(lsbg,param,bkg-sigma-clip)             3.0
-    set catpanel(lsbg,param,bkg-n-iterations)           3
-    set catpanel(lsbg,param,bkg-refine-thresh)          2.0
-    set catpanel(lsbg,param,bkg-rms-quantile)           0.25
-    set catpanel(lsbg,param,bkg-convergence-tol)        0.01
-    set catpanel(lsbg,param,detect-thresh)              0.8
-    set catpanel(lsbg,param,detect-minarea)             50
-    set catpanel(lsbg,param,detect-filter-kernel)       gauss5x5
-    set catpanel(lsbg,param,deblend-nthresh)            32
-    set catpanel(lsbg,param,deblend-mincont)            0.005
-    set catpanel(lsbg,param,multiscale)                 1
-    set catpanel(lsbg,param,multiscale-factors)         1,2,4
-    set catpanel(lsbg,param,sersic-fit)                 1
-    set catpanel(lsbg,param,sersic-n-min)               0.2
-    set catpanel(lsbg,param,sersic-n-max)               10.0
-    set catpanel(lsbg,param,sersic-re-min)              0.5
-    set catpanel(lsbg,param,sersic-cutout-scale)        5.0
-    set catpanel(lsbg,param,sersic-max-nfev)            500
-    set catpanel(lsbg,param,phot-apertures)             5,10,20,40
-    set catpanel(lsbg,param,mag-zeropoint)              25.0
-    set catpanel(lsbg,param,pixel-scale)                0.06
-    set catpanel(lsbg,param,mu-eff-min)                 24.0
-    set catpanel(lsbg,param,mu-eff-max)                 30.0
-    set catpanel(lsbg,param,r-eff-min)                  2.5
-    set catpanel(lsbg,param,r-eff-max)                  60.0
-    set catpanel(lsbg,param,ellipticity-max)            0.7
-    set catpanel(lsbg,param,min-snr)                    2.0
-    set catpanel(lsbg,param,sersic-n-filter-min)        0.3
-    set catpanel(lsbg,param,sersic-n-filter-max)        6.0
-    set catpanel(lsbg,param,sersic-chi2-max)            10.0
-    set catpanel(lsbg,param,svm-classify)               0
-    set catpanel(lsbg,param,svm-threshold)              0.3
-    set catpanel(lsbg,param,svm-checkpoint)             {}
+    ::ogf::cat::set lsbg,fits_base    {}
+    ::ogf::cat::set lsbg,mask_file    [file join [file normalize ~] .ds9 lsbg_mask.fits]
+    ::ogf::cat::set lsbg,masked_file  [file join [file normalize ~] .ds9 lsbg_masked.fits]
+    ::ogf::cat::set lsbg,bkg_file     [file join [file normalize ~] .ds9 lsbg_background.fits]
+    ::ogf::cat::set lsbg,cleaned_file [file join [file normalize ~] .ds9 lsbg_cleaned.fits]
+    ::ogf::cat::set lsbg,segmap_file  [file join [file normalize ~] .ds9 lsbg_segmap.fits]
+    ::ogf::cat::set lsbg,catalog_file [file join [file normalize ~] .ds9 lsbg_catalog.tsv]
+    ::ogf::cat::set lsbg,has_mask     0
+    ::ogf::cat::set lsbg,has_clean    0
+    ::ogf::cat::set lsbg,has_detect   0
+    ::ogf::cat::set lsbg,has_catalog  0
+    ::ogf::cat::set lsbg,detect_data  {}
+    ::ogf::cat::set lsbg,cmdlog       {}
+    ::ogf::cat::set lsbg,param,mask-detect-thresh         1.5
+    ::ogf::cat::set lsbg,param,mask-detect-minarea        5
+    ::ogf::cat::set lsbg,param,mask-expand-factor         1.5
+    ::ogf::cat::set lsbg,param,max-dilate-radius          30
+    ::ogf::cat::set lsbg,param,bright-star-mag-limit      18.0
+    ::ogf::cat::set lsbg,param,bright-star-radius-scale   12.0
+    ::ogf::cat::set lsbg,param,mask-mag-threshold         22.0
+    ::ogf::cat::set lsbg,param,interp-method              linear
+    ::ogf::cat::set lsbg,param,lsb-protect                1
+    ::ogf::cat::set lsbg,param,lsb-mu-threshold           24.0
+    ::ogf::cat::set lsbg,param,bkg-method                 sep_large
+    ::ogf::cat::set lsbg,param,bkg-mesh-size              256
+    ::ogf::cat::set lsbg,param,bkg-poly-order             3
+    ::ogf::cat::set lsbg,param,bkg-sigma-clip             3.0
+    ::ogf::cat::set lsbg,param,bkg-n-iterations           3
+    ::ogf::cat::set lsbg,param,bkg-refine-thresh          2.0
+    ::ogf::cat::set lsbg,param,bkg-rms-quantile           0.25
+    ::ogf::cat::set lsbg,param,bkg-convergence-tol        0.01
+    ::ogf::cat::set lsbg,param,detect-thresh              0.8
+    ::ogf::cat::set lsbg,param,detect-minarea             50
+    ::ogf::cat::set lsbg,param,detect-filter-kernel       gauss5x5
+    ::ogf::cat::set lsbg,param,deblend-nthresh            32
+    ::ogf::cat::set lsbg,param,deblend-mincont            0.005
+    ::ogf::cat::set lsbg,param,multiscale                 1
+    ::ogf::cat::set lsbg,param,multiscale-factors         1,2,4
+    ::ogf::cat::set lsbg,param,sersic-fit                 1
+    ::ogf::cat::set lsbg,param,sersic-n-min               0.2
+    ::ogf::cat::set lsbg,param,sersic-n-max               10.0
+    ::ogf::cat::set lsbg,param,sersic-re-min              0.5
+    ::ogf::cat::set lsbg,param,sersic-cutout-scale        5.0
+    ::ogf::cat::set lsbg,param,sersic-max-nfev            500
+    ::ogf::cat::set lsbg,param,phot-apertures             5,10,20,40
+    ::ogf::cat::set lsbg,param,mag-zeropoint              25.0
+    ::ogf::cat::set lsbg,param,pixel-scale                0.06
+    ::ogf::cat::set lsbg,param,mu-eff-min                 24.0
+    ::ogf::cat::set lsbg,param,mu-eff-max                 30.0
+    ::ogf::cat::set lsbg,param,r-eff-min                  2.5
+    ::ogf::cat::set lsbg,param,r-eff-max                  60.0
+    ::ogf::cat::set lsbg,param,ellipticity-max            0.7
+    ::ogf::cat::set lsbg,param,min-snr                    2.0
+    ::ogf::cat::set lsbg,param,sersic-n-filter-min        0.3
+    ::ogf::cat::set lsbg,param,sersic-n-filter-max        6.0
+    ::ogf::cat::set lsbg,param,sersic-chi2-max            10.0
+    ::ogf::cat::set lsbg,param,svm-classify               0
+    ::ogf::cat::set lsbg,param,svm-threshold              0.3
+    ::ogf::cat::set lsbg,param,svm-checkpoint             {}
     CatalogPanelLSBGParamLoad
 
     # Interactive Plot state
-    set catpanel(plot,counter) 0
+    ::ogf::cat::set plot,counter 0
 
     # Photo-z state
-    set catpanel(photoz,param,bands)       {g,r,i,z}
-    set catpanel(photoz,param,mag-columns) {}
-    set catpanel(photoz,param,checkpoint)  {}
+    ::ogf::cat::set photoz,param,bands       {g,r,i,z}
+    ::ogf::cat::set photoz,param,mag-columns {}
+    ::ogf::cat::set photoz,param,checkpoint  {}
     CatalogPanelPhotoZParamLoad
 
     # SED Fitting state
-    set catpanel(sed,param,bands)       {g,r,i,z}
-    set catpanel(sed,param,mag-columns) {}
-    set catpanel(sed,param,photoz-column) PHOTO_Z
-    set catpanel(sed,param,checkpoint-emulator) {}
-    set catpanel(sed,param,checkpoint-inverse)  {}
-    set catpanel(sed,param,backend) auto
+    ::ogf::cat::set sed,param,bands       {g,r,i,z}
+    ::ogf::cat::set sed,param,mag-columns {}
+    ::ogf::cat::set sed,param,photoz-column PHOTO_Z
+    ::ogf::cat::set sed,param,checkpoint-emulator {}
+    ::ogf::cat::set sed,param,checkpoint-inverse  {}
+    ::ogf::cat::set sed,param,backend auto
     CatalogPanelSEDParamLoad
 
     # Bulge+Disk state
-    set catpanel(bd,param,max-sources)   100
-    set catpanel(bd,param,free-bulge-n)  0
-    set catpanel(bd,param,mag-zeropoint) 25.0
-    set catpanel(bd,param,pixel-scale)   0.263
+    ::ogf::cat::set bd,param,max-sources   100
+    ::ogf::cat::set bd,param,free-bulge-n  0
+    ::ogf::cat::set bd,param,mag-zeropoint 25.0
+    ::ogf::cat::set bd,param,pixel-scale   0.263
     CatalogPanelBDParamLoad
 
     # Ctrl key tracking (Feature A/C)
@@ -497,23 +496,23 @@ proc CreateCatalogPanel {} {
     bind . <Escape> {+CatalogPanelEscapeKey}
 
     # Bind table header click for sorting (ButtonRelease to not conflict with tktable)
-    bind $catpanel(tbl) <ButtonRelease-1> {+CatalogPanelTableClick %x %y}
+    bind [::ogf::cat::get tbl] <ButtonRelease-1> {+CatalogPanelTableClick %x %y}
 
     # Mouse wheel scroll for catalog table (natural/macOS direction)
-    bind $catpanel(tbl) <Button-4> {
+    bind [::ogf::cat::get tbl] <Button-4> {
 	%W yview scroll 3 units
 	break
     }
-    bind $catpanel(tbl) <Button-5> {
+    bind [::ogf::cat::get tbl] <Button-5> {
 	%W yview scroll -3 units
 	break
     }
     # Horizontal scroll (Shift + wheel, natural/macOS direction)
-    bind $catpanel(tbl) <Shift-Button-4> {
+    bind [::ogf::cat::get tbl] <Shift-Button-4> {
 	%W xview scroll 3 units
 	break
     }
-    bind $catpanel(tbl) <Shift-Button-5> {
+    bind [::ogf::cat::get tbl] <Shift-Button-5> {
 	%W xview scroll -3 units
 	break
     }
@@ -556,25 +555,24 @@ proc CatalogPanelRedrawTtkDo {f} {
 # main window.  catpanel(detached) holds the requested state.
 proc CatalogPanelToggleDetach {} {
     global ds9
-    global catpanel
 
     set f $ds9(catalog_frame)
     set tl [winfo toplevel $f]
     set is_detached [expr {$tl eq $f}]
 
-    if {$catpanel(detached) && !$is_detached} {
+    if {[::ogf::cat::get detached] && !$is_detached} {
 	# Detach
 	set cw [winfo width $f]
 	set ch [winfo height $f]
 	set mw [winfo width .]
 	set mh [winfo height .]
-	set catpanel(detach,cw) $cw
-	set catpanel(detach,ch) $ch
+	::ogf::cat::set detach,cw $cw
+	::ogf::cat::set detach,ch $ch
 	$ds9(toppw) forget $f
 	wm manage $f
 	wm title $f "Catalog - [wm title .]"
 	wm protocol $f WM_DELETE_WINDOW {
-	    set catpanel(detached) 0
+	    ::ogf::cat::set detached 0
 	    CatalogPanelToggleDetach
 	}
 	wm geometry $f ${cw}x${ch}
@@ -583,7 +581,7 @@ proc CatalogPanelToggleDetach {} {
 	wm geometry . ${nw}x${mh}
 	update idletasks
 	CatalogPanelSyncInfoHeight
-    } elseif {!$catpanel(detached) && $is_detached} {
+    } elseif {![::ogf::cat::get detached] && $is_detached} {
 	# Attach
 	set cw [winfo width $f]
 	set mw [winfo width .]
@@ -597,10 +595,9 @@ proc CatalogPanelToggleDetach {} {
 }
 
 proc CatalogPanelSyncInfoHeight {} {
-    global catpanel
     global ds9
-    if {![info exists catpanel(hdrw)] || ![winfo exists $catpanel(hdrw)]} return
-    set h [winfo height $catpanel(hdrw)]
+    if {![::ogf::cat::exists hdrw] || ![winfo exists [::ogf::cat::get hdrw]]} return
+    set h [winfo height [::ogf::cat::get hdrw]]
     if {$h > 1} {
 	catch {$ds9(catalog_frame).info configure -height $h}
     }

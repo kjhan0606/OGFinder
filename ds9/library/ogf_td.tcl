@@ -35,7 +35,7 @@ proc OGFTDInit {} {
     }
     set ogftd(def,galaxies) [dict create label Galaxies prefix {} color yellow columns {} decorate {} order 0 all 1 point {}]
     set ogftd(order) {galaxies}
-    trace add variable ::catpanel(alldata) write OGFTDAlldataChanged
+    ::ogf::cat::trace add alldata OGFTDAlldataChanged
 }
 
 # ------------------------------------------------------------------ registry
@@ -146,14 +146,14 @@ proc ::ogf::td::key_kind {key} {
 # ------------------------------------------------------------------ galaxy catalog (sky index)
 # nearest galaxies around (ra,dec): list of {number sep_arcsec extent_arcsec} within `rad` arcsec, sorted by sep
 proc ::ogf::td::_gal_build {} {
-    global ogftd catpanel
+    global ogftd
     if {!$ogftd(galstale)} return
     set ogftd(galstale) 0
     foreach k {num ra dec ext bins} {set ogftd(gal,$k) {}}
     set ogftd(gal,n) 0
     set ogftd(gal,maxext) 0.0
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
-    set lines [split $catpanel(alldata) \n]
+    if {![::ogf::cat::exists alldata] || [::ogf::cat::get alldata] eq {}} return
+    set lines [split [::ogf::cat::get alldata] \n]
     set h [split [lindex $lines 0] \t]
     set cn [lsearch -exact $h NUMBER]; set ca [lsearch -exact $h ALPHA_J2000]; set cd [lsearch -exact $h DELTA_J2000]
     set ci [lsearch -exact $h ISO_RADIUS]
@@ -241,14 +241,13 @@ proc ::ogf::td::grid_info {} {
     return $ogftd(gridinfo)
 }
 proc ::ogf::td::pixscale {} {
-    global catpanel
     set d [grid_info]
     if {[catch {
 	set det [expr {abs([dict get $d CD1_1]*[dict get $d CD2_2] - [dict get $d CD1_2]*[dict get $d CD2_1])}]
 	set s [expr {sqrt($det)*3600.0}]
     }] || $s <= 0} {
 	set s 1.0
-	catch {set s $catpanel(param,pixel-scale)}
+	catch {set s [::ogf::cat::get param,pixel-scale]}
     }
     return $s
 }
@@ -352,9 +351,8 @@ proc ::ogf::td::build {} {
 # galaxies in common-column form (for the All view)
 proc ::ogf::td::_gal_view_rows {rv} {
     upvar 1 $rv rows
-    global catpanel
-    if {![info exists catpanel(alldata)] || $catpanel(alldata) eq {}} return
-    set lines [split $catpanel(alldata) \n]
+    if {![::ogf::cat::exists alldata] || [::ogf::cat::get alldata] eq {}} return
+    set lines [split [::ogf::cat::get alldata] \n]
     set h [split [lindex $lines 0] \t]
     foreach {nm var} {NUMBER cn X_IMAGE cx Y_IMAGE cy ALPHA_J2000 ca DELTA_J2000 cd MAG_AUTO cm} {set $var [lsearch -exact $h $nm]}
     set i 0
@@ -372,12 +370,12 @@ proc ::ogf::td::_gal_view_rows {rv} {
 
 # the TSV the table shows now (the link code, hover cache, save ... read this instead of catpanel(alldata))
 proc OGFViewTSV {} {
-    global catpanel ogftd
+    global ogftd
     if {[info exists ogftd(kind)] && $ogftd(kind) ne "galaxies"} {
 	::ogf::td::build
 	return $ogftd(view,tsv)
     }
-    if {[info exists catpanel(alldata)]} {return $catpanel(alldata)}
+    if {[::ogf::cat::exists alldata]} {return [::ogf::cat::get alldata]}
     return {}
 }
 
@@ -515,14 +513,14 @@ proc ::ogf::td::review_import {fn} {
 
 # ------------------------------------------------------------------ table output
 proc ::ogf::td::fill {} {
-    global catpanel ogftd
+    global ogftd
     build
     set cols $ogftd(view,cols)
     set nc [llength $cols]
     ::ogf::cat::table_begin
     ::ogf::cat::table_put 0 $cols
-    set catpanel(cache,dirty) 1
-    set pat [expr {[info exists catpanel(search_var)] ? $catpanel(search_var) : {}}]
+    ::ogf::cat::set cache,dirty 1
+    set pat [expr {[::ogf::cat::exists search_var] ? [::ogf::cat::get search_var] : {}}]
     # column-value filters (::ogf::cat::filter_set, e.g. the review filter) apply to these rows too
     set fspecs {}
     if {[::ogf::cat::filter_active]} {set fspecs [::ogf::cat::filter_specs $cols]}
@@ -540,7 +538,7 @@ proc ::ogf::td::fill {} {
     set why {}
     if {$pat ne {}} {lappend why "filter '$pat'"}
     if {[llength $fspecs]} {lappend why [::ogf::cat::filter_text]}
-    set catpanel(status) "[expr {$ogftd(kind) eq {all} ? {All kinds} : [label $ogftd(kind)]}]: $n[expr {[llength $why] ? " of $tot ([join $why {; }])" : {}}] rows"
+    ::ogf::cat::set status "[expr {$ogftd(kind) eq {all} ? {All kinds} : [label $ogftd(kind)]}]: $n[expr {[llength $why] ? " of $tot ([join $why {; }])" : {}}] rows"
 }
 
 proc ::ogf::td::refresh {} {
@@ -564,9 +562,9 @@ proc ::ogf::td::_run_pending {} {
 
 # switch the kind filter
 proc ::ogf::td::show {kind} {
-    global ogftd catpanel current
+    global ogftd current
     if {$kind ne "galaxies" && $kind ne "all" && ![info exists ogftd(raw,$kind)]} {
-	set catpanel(status) "No [string tolower [label $kind]] yet: run the corresponding Time-domain step first"
+	::ogf::cat::set status "No [string tolower [label $kind]] yet: run the corresponding Time-domain step first"
 	set ogftd(kind) $ogftd(kind)
 	set ogftd(radio) $ogftd(kind)
 	return
@@ -579,12 +577,12 @@ proc ::ogf::td::show {kind} {
     catch {CatalogPanelClearSelection}
     if {$kind eq "galaxies"} {
 	delete_markers
-	if {[info exists catpanel(alldata)] && $catpanel(alldata) ne {}} {
+	if {[::ogf::cat::exists alldata] && [::ogf::cat::get alldata] ne {}} {
 	    CatalogPanelFilterReload
 	} else {
 	    CatalogPanelClearTable
 	}
-	if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {catch {CatalogPanelCreateAllMarkers}}
+	if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {catch {CatalogPanelCreateAllMarkers}}
     } else {
 	fill
 	if {$kind eq "all"} {
@@ -595,7 +593,7 @@ proc ::ogf::td::show {kind} {
 	}
 	draw_markers
 	set n [llength [lsearch -all -not -exact [list {*}$ogftd(view,rows)] __none]]
-	set catpanel(status) "[expr {$kind eq {all} ? {All kinds} : [label $kind]}]: $n rows"
+	::ogf::cat::set status "[expr {$kind eq {all} ? {All kinds} : [label $kind]}]: $n rows"
     }
     OGFCacheDirtyAll
 }
@@ -614,12 +612,12 @@ proc OGFTDGalaxyLoaded {} {
 }
 # kind column in the galaxy view (table only; catpanel(alldata) is untouched)
 proc OGFTDAppendKindColumn {ncols nrows} {
-    global catpanel ogftd
+    global ogftd
     if {![::ogf::td::any_data]} return
     set nc [expr {$ncols+1}]
     ::ogf::cat::cell_set 0 $nc kind
     for {set r 1} {$r < $nrows} {incr r} {::ogf::cat::cell_set $r $nc galaxy}
-    $catpanel(tbl) configure -cols $nc
+    [::ogf::cat::get tbl] configure -cols $nc
 }
 
 # alldata changed (new extraction, frame switch, merge ...): host / overlap columns must be recomputed
@@ -631,7 +629,7 @@ proc OGFTDAlldataChanged {args} {
 }
 
 proc OGFCacheDirtyAll {} {
-    set ::catpanel(cache,dirty) 1
+    ::ogf::cat::set cache,dirty 1
 }
 
 # ------------------------------------------------------------------ sort / filter / save in a non-galaxy view
@@ -642,11 +640,11 @@ proc ::ogf::td::sort {col dir} {
     catch {OGFSessLog td.sort note {} -tool internal -title "Sort time-domain table ($ogftd(kind)) by $col $dir" \
 	-note "view of the time-domain table only; the catalog of the exported script is not changed"}
     fill
-    set ::catpanel(status) "Sorted by $col $dir ($ogftd(kind))"
+    ::ogf::cat::set status "Sorted by $col $dir ($ogftd(kind))"
 }
 
 proc ::ogf::td::save {fn} {
-    global ogftd catpanel
+    global ogftd
     build
     set ext [string tolower [file extension $fn]]
     set cols $ogftd(view,cols)
@@ -660,17 +658,17 @@ proc ::ogf::td::save {fn} {
 	}
     }
     if {[catch {set fd [open $fn w]; puts -nonewline $fd [join $lines \n]; close $fd} err]} {
-	set catpanel(status) "Save error: $err"
+	::ogf::cat::set status "Save error: $err"
 	return
     }
     catch {OGFSessLog td.save note {} -tool internal -title "Save time-domain table ($ogftd(kind)) as [file tail $fn]" \
 	-note "time-domain view saved by hand ([file tail $fn]); the galaxy catalog of the exported script is unaffected"}
-    set catpanel(status) "Saved [llength $ogftd(view,rows)] [string tolower [label $ogftd(kind)]] rows to [file tail $fn]"
+    ::ogf::cat::set status "Saved [llength $ogftd(view,rows)] [string tolower [label $ogftd(kind)]] rows to [file tail $fn]"
 }
 
 # ------------------------------------------------------------------ selection info
 proc ::ogf::td::selinfo {row} {
-    global catpanel ogftd
+    global ogftd
     if {![active]} {return 0}
     set key [OGFNumberOfRow $row]
     if {$key eq {}} {return 0}
@@ -685,7 +683,7 @@ proc ::ogf::td::selinfo {row} {
     set l1 [format "%s %s   x,y = %s, %s" $key [string tolower [label $k]] [_g $g X_IMAGE] [_g $g Y_IMAGE]]
     set l2 [format "RA,Dec = %s, %s   mag = %s" [_g $g ALPHA_J2000] [_g $g DELTA_J2000] [_g $g MAG_AUTO]]
     set l3 [OGFTDKindSummary $k [dict merge $raw $g]]
-    set catpanel(sel,text) "$l1\n$l2\n$l3"
+    ::ogf::cat::set sel,text "$l1\n$l2\n$l3"
     return 1
 }
 proc OGFTDKindSummary {k raw} {
@@ -819,7 +817,7 @@ proc ::ogf::td::on_select {proc} {global ogftd; if {$proc ni $ogftd(selcbs)} {la
 
 # called by CatalogPanelGotoSource for every row selection; returns 1 when the row was a time-domain row
 proc ::ogf::td::goto {row {pan 1}} {
-    global ogftd catpanel current
+    global ogftd current
     if {![active]} {return 0}
     set key [OGFNumberOfRow $row]
     if {$key eq {}} {return 0}
@@ -856,9 +854,8 @@ proc OGFTDClearSel {} {::ogf::td::clear_selection_markers}
 # helpers used when the view goes back to the galaxy catalog
 proc CatalogPanelFilterReload {} {CatalogPanelFilter}
 proc CatalogPanelClearTable {} {
-    global catpanel
-    global $catpanel(tbldb)
-    $catpanel(tbl) configure -variable {}
-    unset -nocomplain $catpanel(tbldb)
-    $catpanel(tbl) configure -variable $catpanel(tbldb) -cols 19 -rows 20
+    global [::ogf::cat::get tbldb]
+    [::ogf::cat::get tbl] configure -variable {}
+    unset -nocomplain [::ogf::cat::get tbldb]
+    [::ogf::cat::get tbl] configure -variable [::ogf::cat::get tbldb] -cols 19 -rows 20
 }

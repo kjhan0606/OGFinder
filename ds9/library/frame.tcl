@@ -865,9 +865,8 @@ proc Button1Frame {which x y} {
 	none {
 	    if {$which == $current(frame)} {
 		# ICL BCG center click mode
-		global catpanel
-		if {[info exists catpanel(icl,click_mode)] &&
-		    $catpanel(icl,click_mode)} {
+		if {[::ogf::cat::exists icl,click_mode] &&
+		    [::ogf::cat::get icl,click_mode]} {
 		    CatalogPanelICLClickSetCenter $which $x $y
 		    set ds9(nonepan) 0
 		    return

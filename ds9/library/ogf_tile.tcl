@@ -85,8 +85,8 @@ proc OGFMapRegions {frame reg} {
 # Called from Button1Frame (mode none) for a frame that is not the current one.  Returns 1 when the click
 # hit a catalog marker and selected its table row.
 proc OGFTileClick {which x y} {
-    global catpanel current
-    if {![OGFTileIsOn] || ![info exists catpanel(tbl)]} {return 0}
+    global current
+    if {![OGFTileIsOn] || ![::ogf::cat::exists tbl]} {return 0}
     # all rows under the click in this tile (chooser when several, the nearest row when one), see ogf_pick.tcl
     if {![catch {OGFPickClick $which $x $y} _pk] && $_pk} {return 1}
     if {[catch {$which get marker catalog id $x $y} id] || $id == 0} {return 0}
@@ -107,18 +107,18 @@ proc OGFTileClick {which x y} {
 
 # ---------------------------------------------------------------- display modes
 proc OGFUIDisplay {mode} {
-    global ogfui current ds9 tile panzoom crosshair scale catpanel
+    global ogfui current ds9 tile panzoom crosshair scale
     if {$mode eq "single"} {
 	set ogfui(tile) 0
 	set current(display) single
 	DisplayMode
 	OGFTileAfter
-	set catpanel(status) "Single frame view"
+	::ogf::cat::set status "Single frame view"
 	return
     }
     if {[llength $ds9(frames)] < 2} {
 	set ogfui(tile) 0
-	set catpanel(status) "Tile: load at least two frames"
+	::ogf::cat::set status "Tile: load at least two frames"
 	OGFTileAfter
 	return
     }
@@ -143,7 +143,7 @@ proc OGFUIDisplay {mode} {
     }
     ZoomToFit
     OGFTileAfter
-    set catpanel(status) "Tile: [llength $ds9(active)] frames, layout $ogfui(tilemode)[expr {$ogfui(lockwcs) ? {, WCS lock} : {}}][expr {$ogfui(sharescale) ? {, shared scale} : {}}]"
+    ::ogf::cat::set status "Tile: [llength $ds9(active)] frames, layout $ogfui(tilemode)[expr {$ogfui(lockwcs) ? {, WCS lock} : {}}][expr {$ogfui(sharescale) ? {, shared scale} : {}}]"
 }
 
 proc OGFUITileToggle {} {
@@ -158,11 +158,11 @@ proc OGFUITileOptions {} {
 
 # after every Single/Tile change: redraw catalog graphics in all frames of the view, refresh the strip
 proc OGFTileAfter {} {
-    global catpanel ogfui
+    global ogfui
     set ogfui(tile) [OGFTileIsOn]
     catch {CatalogPanelSyncInfoHeight}
-    if {[info exists catpanel(markall,on)] && $catpanel(markall,on)} {catch {CatalogPanelCreateAllMarkers}}
-    if {[info exists catpanel(sel,nums)] && [llength $catpanel(sel,nums)]} {catch {OGFApplySelection 0}}
+    if {[::ogf::cat::exists markall,on] && [::ogf::cat::get markall,on]} {catch {CatalogPanelCreateAllMarkers}}
+    if {[::ogf::cat::exists sel,nums] && [llength [::ogf::cat::get sel,nums]]} {catch {OGFApplySelection 0}}
     OGFTileRefresh
 }
 

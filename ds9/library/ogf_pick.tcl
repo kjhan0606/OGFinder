@@ -47,7 +47,7 @@ proc OGFPickSep {ra1 dec1 ra2 dec2} {
 
 # candidates under canvas point (x,y) of frame `which`: list of dicts {key kind id mag dist}, nearest first
 proc OGFPickCandidatesRaw {which x y} {
-    global ogfpick ogftd catpanel
+    global ogfpick ogftd
     OGFPickInit
     set fi [OGFPickFrameInfo $which $x $y]
     if {$fi eq {}} {return {}}
@@ -134,9 +134,9 @@ proc OGFPickCandidates {which x y} {
 
 # ---- entry point called from Button1Frame / OGFTileClick.  Returns 1 when the click was handled.
 proc OGFPickClick {which x y {rootx {}} {rooty {}}} {
-    global ogfpick catpanel current
+    global ogfpick current
     OGFPickInit
-    if {!$ogfpick(enable) || ![info exists catpanel(tbl)]} {return 0}
+    if {!$ogfpick(enable) || ![::ogf::cat::exists tbl]} {return 0}
     OGFPickDismiss
     set c [OGFPickCandidates $which $x $y]
     set ogfpick(last) $c

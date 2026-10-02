@@ -101,12 +101,12 @@ proc OGFUIPluginMenu {id} {
 
 # ---------------------------------------------------------------- build
 proc OGFUIBuild {f} {
-    global ogfui catpanel ds9
+    global ogfui ds9
     OGFUIInit
     set ogfui(root) $f
     # --- row 0: menubar
     set mb [ttk::frame $f.menubar]
-    set catpanel(menubar) $mb
+    ::ogf::cat::set menubar $mb
     ttk::style layout CatMenu.TMenubutton {
 	Menubutton.focus -sticky nswe -children {
 	    Menubutton.padding -sticky we -children {
@@ -266,7 +266,7 @@ proc OGFUIBuildMainMenus {} {
 	}
     }
     set tm $mb.tools.m
-    $tm add checkbutton -label "Detach Catalog Panel" -variable catpanel(detached) -command CatalogPanelToggleDetach
+    $tm add checkbutton -label "Detach Catalog Panel" -variable [::ogf::cat::bind_var detached] -command CatalogPanelToggleDetach
     $tm add separator
     $tm add checkbutton -label "Tile all frames" -variable ogfui(tile) -command OGFUITileToggle
     menu $tm.tl -tearoff 0

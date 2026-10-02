@@ -6,30 +6,30 @@ package provide DS9 1.0
 
 proc OGFLinkInit {} {
     global catpanel catcache
-    set catpanel(sel,nums) {}
-    set catpanel(sel,base) {No source selected}
-    set catpanel(hover,text) {}
-    set catpanel(hover,last) 0
-    set catpanel(hover,pending) {}
-    set catpanel(hover,after) {}
-    set catpanel(hover,num) {}
-    set catpanel(cache,dirty) 1
+    ::ogf::cat::set sel,nums {}
+    ::ogf::cat::set sel,base {No source selected}
+    ::ogf::cat::set hover,text {}
+    ::ogf::cat::set hover,last 0
+    ::ogf::cat::set hover,pending {}
+    ::ogf::cat::set hover,after {}
+    ::ogf::cat::set hover,num {}
+    ::ogf::cat::set cache,dirty 1
     set catcache(n) 0
-    trace add variable ::catpanel(alldata) write OGFCacheDirty
-    $catpanel(tbl) tag configure msel -bg #9cc7f5 -fg black
-    bind $catpanel(tbl) <Key-n> {CatalogPanelStepKey 1; break}
-    bind $catpanel(tbl) <Key-p> {CatalogPanelStepKey -1; break}
+    ::ogf::cat::trace add alldata OGFCacheDirty
+    [::ogf::cat::get tbl] tag configure msel -bg #9cc7f5 -fg black
+    bind [::ogf::cat::get tbl] <Key-n> {CatalogPanelStepKey 1; break}
+    bind [::ogf::cat::get tbl] <Key-p> {CatalogPanelStepKey -1; break}
 }
 
 proc OGFCacheDirty {args} {
-    set ::catpanel(cache,dirty) 1
+    ::ogf::cat::set cache,dirty 1
 }
 
 # ---- parsed catalog cache (used for hit tests; rebuilt lazily) ----
 proc OGFCacheBuild {} {
-    global catpanel catcache
-    if {!$catpanel(cache,dirty)} return
-    set catpanel(cache,dirty) 0
+    global catcache
+    if {![::ogf::cat::get cache,dirty]} return
+    ::ogf::cat::set cache,dirty 0
     foreach k {num x y sa sb th mag} {set catcache($k) {}}
     set catcache(n) 0
     set _tsv [OGFViewTSV]
@@ -128,21 +128,20 @@ proc OGFNumberOfRow {row} {return [::ogf::cat::number_of $row]}
 
 # ---- summary text (selected-source block + optional hover line) ----
 proc OGFRefreshSelText {} {
-    global catpanel
-    set t $catpanel(sel,base)
-    if {$catpanel(hover,text) ne {}} {append t "\n" $catpanel(hover,text)}
-    set catpanel(sel,text) $t
+    set t [::ogf::cat::get sel,base]
+    if {[::ogf::cat::get hover,text] ne {}} {append t "\n" [::ogf::cat::get hover,text]}
+    ::ogf::cat::set sel,text $t
 }
 
 proc OGFSetSelBase {text} {
-    set ::catpanel(sel,base) $text
+    ::ogf::cat::set sel,base $text
     OGFRefreshSelText
 }
 
 proc OGFMultiSummary {} {
-    global catpanel catcache
+    global catcache
     OGFCacheBuild
-    set nums $catpanel(sel,nums)
+    set nums [::ogf::cat::get sel,nums]
     set n [llength $nums]
     set mags {}
     foreach u $nums {
@@ -162,13 +161,12 @@ proc OGFMultiSummary {} {
 # ---- selection core ----
 # mode: replace | add | toggle.  pan: recentre the current frame on the source.
 proc CatalogPanelLinkSelect {num {mode replace} {pan 1}} {
-    global catpanel
     set row [OGFRowOfNumber $num]
     if {$row < 0} {
-	set catpanel(status) "Source #$num is not in the table (filtered out?)"
+	::ogf::cat::set status "Source #$num is not in the table (filtered out?)"
 	return
     }
-    set nums $catpanel(sel,nums)
+    set nums [::ogf::cat::get sel,nums]
     switch -- $mode {
 	replace {set nums [list $num]}
 	add {
@@ -181,7 +179,7 @@ proc CatalogPanelLinkSelect {num {mode replace} {pan 1}} {
 	    if {$k >= 0} {set nums [lreplace $nums $k $k]} else {lappend nums $num}
 	}
     }
-    set catpanel(sel,nums) $nums
+    ::ogf::cat::set sel,nums $nums
     if {[llength $nums] == 0} {
 	CatalogPanelClearSelection
 	return
@@ -190,9 +188,9 @@ proc CatalogPanelLinkSelect {num {mode replace} {pan 1}} {
 }
 
 proc OGFApplySelection {pan} {
-    global catpanel current
-    set tbl $catpanel(tbl)
-    set nums $catpanel(sel,nums)
+    global current
+    set tbl [::ogf::cat::get tbl]
+    set nums [::ogf::cat::get sel,nums]
     set prim [lindex $nums end]
     set prow [OGFRowOfNumber $prim]
     if {$prow < 0} return
@@ -208,7 +206,7 @@ proc OGFApplySelection {pan} {
     }
     if {[llength $nums] == 1} {
 	catch {CatalogPanelUpdateSelInfo $prow}
-	OGFSetSelBase $catpanel(sel,text)
+	OGFSetSelBase [::ogf::cat::get sel,text]
     } else {
 	OGFSetSelBase [OGFMultiSummary]
     }
@@ -227,12 +225,12 @@ proc OGFSelFrames {} {
 
 # small cyan crosses for the non-primary members of a multi-selection
 proc OGFDrawExtraMarkers {} {
-    global catpanel catcache
+    global catcache
     OGFCacheBuild
     foreach fr [OGFSelFrames] {
 	catch {$fr marker catalog sextract_msel delete}
     }
-    set extra [lrange $catpanel(sel,nums) 0 end-1]
+    set extra [lrange [::ogf::cat::get sel,nums] 0 end-1]
     if {[llength $extra] == 0} return
     global ogf_msel_reg
     foreach fr [OGFSelFrames] {
@@ -253,11 +251,10 @@ proc OGFDrawExtraMarkers {} {
 }
 
 proc CatalogPanelClearSelection {} {
-    global catpanel
-    set catpanel(sel,nums) {}
-    catch {$catpanel(tbl) selection clear all}
-    catch {$catpanel(tbl) tag delete msel}
-    catch {$catpanel(tbl) tag configure msel -bg #9cc7f5 -fg black}
+    ::ogf::cat::set sel,nums {}
+    catch {[::ogf::cat::get tbl] selection clear all}
+    catch {[::ogf::cat::get tbl] tag delete msel}
+    catch {[::ogf::cat::get tbl] tag configure msel -bg #9cc7f5 -fg black}
     foreach fr [OGFSelFrames] {
 	catch {$fr marker catalog sextract_sel delete}
 	catch {$fr marker catalog sextract_msel delete}
@@ -275,8 +272,7 @@ proc OGFHitAt {which x y} {
 
 # Button-1 press on a source without DS9 catalog markers -> select it.
 proc CatalogPanelLinkPress {which x y} {
-    global catpanel
-    if {![info exists catpanel(tbl)]} {return 0}
+    if {![::ogf::cat::exists tbl]} {return 0}
     set n [OGFHitAt $which $x $y]
     if {$n eq {}} {return 0}
     CatalogPanelLinkSelect $n replace 1
@@ -284,33 +280,32 @@ proc CatalogPanelLinkPress {which x y} {
 }
 
 proc CatalogPanelLinkShiftClick {which x y} {
-    global catpanel
-    if {![info exists catpanel(tbl)]} return
+    if {![::ogf::cat::exists tbl]} return
     set n [OGFHitAt $which $x $y]
     if {$n eq {}} return
     CatalogPanelLinkSelect $n toggle 0
 }
 
 proc CatalogPanelLinkRelease {which x y} {
-    global catpanel ds9
+    global ds9
     if {![info exists ds9(none_press_x)]} return
     if {abs($x - $ds9(none_press_x)) + abs($y - $ds9(none_press_y)) > 3} return
-    if {[llength $catpanel(sel,nums)] == 0} return
-    if {[info exists catpanel(add_objects_mode)] && $catpanel(add_objects_mode)} return
+    if {[llength [::ogf::cat::get sel,nums]] == 0} return
+    if {[::ogf::cat::exists add_objects_mode] && [::ogf::cat::get add_objects_mode]} return
     CatalogPanelClearSelection
-    set catpanel(status) "Selection cleared"
+    ::ogf::cat::set status "Selection cleared"
 }
 
 # ---- hover readout (throttled) ----
 proc CatalogPanelHover {which x y} {
-    global catpanel catcache
-    if {![info exists catpanel(hover,last)]} return
-    if {!$catpanel(cache,dirty) && $catcache(n) == 0} return
+    global catcache
+    if {![::ogf::cat::exists hover,last]} return
+    if {![::ogf::cat::get cache,dirty] && $catcache(n) == 0} return
     set now [clock milliseconds]
-    if {$now - $catpanel(hover,last) < 60} {
-	set catpanel(hover,pending) [list $which $x $y]
-	if {$catpanel(hover,after) eq {}} {
-	    set catpanel(hover,after) [after 70 OGFHoverFlush]
+    if {$now - [::ogf::cat::get hover,last] < 60} {
+	::ogf::cat::set hover,pending [list $which $x $y]
+	if {[::ogf::cat::get hover,after] eq {}} {
+	    ::ogf::cat::set hover,after [after 70 OGFHoverFlush]
 	}
 	return
     }
@@ -318,27 +313,25 @@ proc CatalogPanelHover {which x y} {
 }
 
 proc OGFHoverFlush {} {
-    global catpanel
-    set catpanel(hover,after) {}
-    if {$catpanel(hover,pending) ne {}} {
-	lassign $catpanel(hover,pending) w x y
-	set catpanel(hover,pending) {}
+    ::ogf::cat::set hover,after {}
+    if {[::ogf::cat::get hover,pending] ne {}} {
+	lassign [::ogf::cat::get hover,pending] w x y
+	::ogf::cat::set hover,pending {}
 	OGFHoverDo $w $x $y
     }
 }
 
 proc OGFHoverDo {which x y} {
-    global catpanel
-    set catpanel(hover,last) [clock milliseconds]
+    ::ogf::cat::set hover,last [clock milliseconds]
     set n [OGFHitAt $which $x $y]
-    if {$n eq $catpanel(hover,num)} return
-    set catpanel(hover,num) $n
+    if {$n eq [::ogf::cat::get hover,num]} return
+    ::ogf::cat::set hover,num $n
     if {$n eq {}} {
-	set catpanel(hover,text) {}
+	::ogf::cat::set hover,text {}
     } else {
 	set m [OGFMagOfNumber $n]
 	if {[string is double -strict $m]} {set m [format %.2f $m]} else {set m -}
-	set catpanel(hover,text) "Hover: #$n   MAG_AUTO = $m"
+	::ogf::cat::set hover,text "Hover: #$n   MAG_AUTO = $m"
     }
     OGFRefreshSelText
 }
@@ -347,16 +340,15 @@ proc OGFHoverDo {which x y} {
 # dir = +1 / -1.  require_sel=1: only act when something is selected
 # (used by Up/Down in the image so the cursor-warp keys keep working).
 proc CatalogPanelStepKey {dir {require_sel 0}} {
-    global catpanel
-    if {![info exists catpanel(tbl)]} {return 0}
-    if {[info exists catpanel(ai,active)] && $catpanel(ai,active)} {return 0}
+    if {![::ogf::cat::exists tbl]} {return 0}
+    if {[::ogf::cat::exists ai,active] && [::ogf::cat::get ai,active]} {return 0}
     if {[OGFViewTSV] eq {}} {return 0}
-    if {$require_sel && [llength $catpanel(sel,nums)] == 0} {return 0}
-    set nr [expr {[$catpanel(tbl) cget -rows] - 1}]
+    if {$require_sel && [llength [::ogf::cat::get sel,nums]] == 0} {return 0}
+    set nr [expr {[[::ogf::cat::get tbl] cget -rows] - 1}]
     if {$nr < 1} {return 0}
     set cur -1
-    if {[llength $catpanel(sel,nums)]} {
-	set cur [OGFRowOfNumber [lindex $catpanel(sel,nums) end]]
+    if {[llength [::ogf::cat::get sel,nums]]} {
+	set cur [OGFRowOfNumber [lindex [::ogf::cat::get sel,nums] end]]
     }
     if {$cur < 1} {
 	set new [expr {$dir > 0 ? 1 : $nr}]

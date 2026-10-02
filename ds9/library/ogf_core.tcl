@@ -308,6 +308,15 @@ namespace eval ::ogf::cat {
         {review,*               scalar report    rw   "review feature: review,show = which review states the table lists (all|accept|reject|uncertain|none|notrej); the decisions themselves live in the catalog columns REVIEW / REVIEW_NOTE / REVIEW_TIME"}
         {tbl                    widget catalog   r    "path of the table widget (legacy; not for new code)"}
         {tbldb                  array  catalog   r    "name of the table's data array (legacy; not for new code)"}
+        {detach,*               scalar catalog   rw   "detached-panel geometry/state (window size remembered by CatalogPanelToggleDetach)"}
+        {detached               bool   catalog   rw   "the catalog panel is a separate toplevel (View > Detach Catalog Panel; bound to the menu check button)"}
+        {hdrw                   widget catalog   r    "path of the table's header canvas (legacy; not for new code)"}
+        {hover,*                scalar catalog   rw   "hover-information internals of the table (text, last row, pending after id, number)"}
+        {infoarea               widget catalog   r    "path of the info text area under the table"}
+        {menubar                widget catalog   r    "path of the panel's menubar"}
+        {searchbar              widget catalog   r    "path of the table search bar"}
+        {statusbar              widget catalog   r    "path of the status-bar frame"}
+        {tblframe               widget catalog   r    "path of the frame holding the table"}
         {markall,on             bool   catalog   rw   "all catalog markers are drawn"}
         {param,*                scalar extract   rw   "extraction parameters, e.g. param,detect-thresh, param,mag-zeropoint, param,n-workers (shared by all analysis plugins); persisted in ~/.ds9/sextract.prf"}
         {extract_param,*        scalar extract   rw   "snapshot of param,* taken at the last Extract (AI Merge reuses it)"}

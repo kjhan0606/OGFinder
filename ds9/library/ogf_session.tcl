@@ -38,9 +38,8 @@ proc OGFSessCrc {s} {
 }
 
 proc OGFSessCatCrc {} {
-    global catpanel
-    if {![info exists catpanel(alldata)]} {return 0}
-    return [OGFSessCrc $catpanel(alldata)]
+    if {![::ogf::cat::exists alldata]} {return 0}
+    return [OGFSessCrc [::ogf::cat::get alldata]]
 }
 
 # the review columns (plugins/report: REVIEW, REVIEW_NOTE, REVIEW_TIME) are hand annotations that the exported script never
@@ -63,9 +62,8 @@ proc OGFSessPlainTSV {d} {
 }
 
 proc OGFSessCatInfo {} {
-    global catpanel
     set d {}
-    if {[info exists catpanel(alldata)]} {set d [OGFSessPlainTSV $catpanel(alldata)]}
+    if {[::ogf::cat::exists alldata]} {set d [OGFSessPlainTSV [::ogf::cat::get alldata]]}
     if {$d eq {}} {return [list crc 0 rows 0 cols 0]}
     set lines [split $d \n]
     set rows 0
@@ -130,7 +128,6 @@ proc OGFSessParams {argv} {
 
 # log-time templating (image paths are mapped at export time)
 proc OGFSessTemplate {argv {useroutputs {}}} {
-    global catpanel
     set work [OGFSessWorkDir]
     set root [OGFSessRoot]
     set sbin [OGFSextractBin]
@@ -153,12 +150,12 @@ proc OGFSessTemplate {argv {useroutputs {}}} {
 	} elseif {[string first $work/ $a] == 0} {
 	    set rel [string range $a [string length $work/] end]
 	    # temp catalogs are re-written by the script from the running catalog
-	    if {[regexp {^(.*)_catalog\.tsv$} $rel -> nm] && [file exists $a] && [info exists catpanel(alldata)]} {
+	    if {[regexp {^(.*)_catalog\.tsv$} $rel -> nm] && [file exists $a] && [::ogf::cat::exists alldata]} {
 		set fd [open $a r]; fconfigure $fd -encoding utf-8
 		set c [read $fd]; close $fd
-		if {$c eq $catpanel(alldata)} {
+		if {$c eq [::ogf::cat::get alldata]} {
 		    set t @\{CAT:$nm\}
-		} elseif {$c eq "$catpanel(alldata)\n"} {
+		} elseif {$c eq "[::ogf::cat::get alldata]\n"} {
 		    set t @\{CATNL:$nm\}
 		} else {
 		    set t @\{WORK\}/$rel
@@ -181,7 +178,7 @@ proc OGFSessTemplate {argv {useroutputs {}}} {
 # OGFSessLog STEP CLASS ARGV ?-title T -tool K -payload D -requires L -post D
 #                          -outputs L -network 1 -note S -band K -noexec 1?
 proc OGFSessLog {step class argv args} {
-    global ogfsess catpanel
+    global ogfsess
     if {![info exists ogfsess(enabled)] || !$ogfsess(enabled)} {return 0}
     array set o {-title {} -tool {} -payload {} -requires {} -post {} -outputs {} -network 0 -note {} -band {} -useroutputs {}}
     array set o $args
@@ -303,7 +300,7 @@ proc OGFSessFinalize {} {
 # CatalogPanelLoadTSV hook: link the step that is open to the catalog it produced.
 # kind=set when the table now equals the step's stdout (so the script can rebuild it).
 proc OGFSessOnCatalogLoad {source_name} {
-    global ogfsess catpanel
+    global ogfsess
     if {![info exists ogfsess(enabled)] || !$ogfsess(enabled)} return
     if {$source_name eq "visible"} {
 	OGFSessLog catalog.unrecorded manual {} -tool internal \
@@ -315,7 +312,7 @@ proc OGFSessOnCatalogLoad {source_name} {
     set seq $ogfsess(open)
     set rec [lindex $ogfsess(steps) [expr {$seq-1}]]
     if {[dict get $rec post] ne {} || [dict get $rec stdout_crc] eq {}} return
-    set crc [OGFSessCrc $catpanel(alldata)]
+    set crc [OGFSessCrc [::ogf::cat::get alldata]]
     if {$crc == [dict get $rec stdout_crc]} {
 	OGFSessSet $seq post [dict create kind set]
     }
@@ -477,7 +474,7 @@ proc OGFSessMapArgs {argv_t keys} {
 }
 
 proc OGFSessExport {path} {
-    global ogfsess ds9 catpanel
+    global ogfsess ds9
     set steps $ogfsess(steps)
     if {[llength $steps] == 0} {return 0}
     OGFSessFinalize
@@ -537,7 +534,7 @@ proc OGFSessExport {path} {
     set meta [dict create ogfinder_root $root ds9_version [expr {[info exists ds9(version)] ? $ds9(version) : {}}] \
 	ds9_exe [info nameofexecutable] git_head $git git_dirty_sources $dirty \
 	python [OGFPython] exported [clock format [clock seconds] -format "%Y-%m-%dT%H:%M:%S%z"] \
-	detection_key $detkey workdir [OGFSessWorkDir] ephem_dir [expr {[file isdirectory [file join [OGFSessWorkDir] ephem]] ? [file join [OGFSessWorkDir] ephem] : {}}] n_workers_gui [expr {[info exists catpanel(param,n-workers)] ? $catpanel(param,n-workers) : {}}] \
+	detection_key $detkey workdir [OGFSessWorkDir] ephem_dir [expr {[file isdirectory [file join [OGFSessWorkDir] ephem]] ? [file join [OGFSessWorkDir] ephem] : {}}] n_workers_gui [expr {[::ogf::cat::exists param,n-workers] ? [::ogf::cat::get param,n-workers] : {}}] \
 	session_started [clock format $ogfsess(t0) -format "%Y-%m-%dT%H:%M:%S%z"]]
     set meta_json [OGFJDict $meta]
     set tplf [CatalogPanelGetScript ogf_session_template.py]
@@ -556,9 +553,9 @@ proc OGFSessExport {path} {
 
 # ----------------------------------------------------- menu procs (GUI)
 proc CatalogPanelSessionSave {{path {}}} {
-    global catpanel ogfsess
+    global ogfsess
     if {![info exists ogfsess(steps)] || [llength $ogfsess(steps)] == 0} {
-	set catpanel(status) "Session: nothing recorded yet"
+	::ogf::cat::set status "Session: nothing recorded yet"
 	return
     }
     if {$path eq {}} {
@@ -568,19 +565,19 @@ proc CatalogPanelSessionSave {{path {}}} {
     }
     if {$path eq {}} return
     if {[catch {set n [OGFSessExport $path]} err]} {
-	set catpanel(status) "Session export failed: $err"
+	::ogf::cat::set status "Session export failed: $err"
 	return
     }
-    set catpanel(status) "Session: $n steps written to [file tail $path]"
+    ::ogf::cat::set status "Session: $n steps written to [file tail $path]"
     return $path
 }
 
 proc CatalogPanelSessionReset {{ask 1}} {
-    global catpanel ogfsess
+    global ogfsess
     if {$ask && [tk_messageBox -type yesno -icon question -title "Reset Session Log" \
 	    -message "Discard all [llength $ogfsess(steps)] recorded steps?"] ne "yes"} return
     OGFSessInit
-    set catpanel(status) "Session log reset"
+    ::ogf::cat::set status "Session log reset"
 }
 
 proc OGFSessLogText {} {

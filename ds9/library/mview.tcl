@@ -40,7 +40,7 @@ proc ViewMainMenu {} {
 	-variable view(graph,vert) -command LayoutFrames
     $ds9(mb).view add separator
     $ds9(mb).view add checkbutton -label {Detach Catalog Panel} \
-	-variable catpanel(detached) -command CatalogPanelToggleDetach
+	-variable [::ogf::cat::bind_var detached] -command CatalogPanelToggleDetach
     $ds9(mb).view add separator
     $ds9(mb).view add checkbutton -label [msgcat::mc {Filename}] \
 	-variable view(info,filename) -command LayoutInfoPanel
