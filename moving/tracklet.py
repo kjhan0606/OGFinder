@@ -47,7 +47,11 @@ def fit_tracklet(t_days, ra, dec, sig_arcsec, t_ref=None, obs_off_au=None, fit_p
         A = np.zeros((2 * n, 5)); y = np.r_[xi, eta]; w = np.r_[W, W]
         A[:n, 0] = 1; A[:n, 2] = t - t_ref; A[:n, 4] = -ox
         A[n:, 1] = 1; A[n:, 3] = t - t_ref; A[n:, 4] = -oy
-        N = A.T @ (A * w[:, None]); Ci5 = np.linalg.inv(N)
+        N = A.T @ (A * w[:, None])
+        try:
+            Ci5 = np.linalg.inv(N)
+        except np.linalg.LinAlgError:           # degenerate geometry (e.g. identical epochs)
+            Ci5 = np.linalg.pinv(N)
         p = Ci5 @ (A.T @ (w * y)); r = y - A @ p
         cx = np.array([p[0], p[2]]); cy = np.array([p[1], p[3]]); k = float(p[4])
         npar = 5
@@ -155,13 +159,20 @@ def _spread_triplets(nex):
 # calibration for that instrument/field type: probabilities are NOT transferable to other data without refitting.
 LLR_FEATURES = ("log_rate", "n", "oncr", "sharp", "ntrail", "log_minsnr", "chi2score")
 LLR_MODEL = dict(coef=(-0.828, 4.829, -10.173, -4.984, -1.728, 1.554, -0.116), intercept=-14.19)
+# Second model, used when the detections carry the real/bogus probability `rb` (detect.difference_chip(realbogus=True)): the same features plus
+# the mean and the minimum of the members' clipped real/bogus logit.  Fitted on injection sets of fields OTHER than BB89
+# (`validation/fit_link_score.py --rb` on the out-of-fold `rb` of `validation/train_realbogus.py --oof`).
+LLR_FEATURES_RB = LLR_FEATURES + ("rb_mean", "rb_min")
+LLR_MODEL_RB = dict(coef=(-0.96, 6.003, -1.311, -8.994, -0.371, -0.634, -0.12, 0.597, -0.014), intercept=-18.44)
+RB_LOGIT_CLIP = 8.0
 RESCORE_POOL = 50000
 
 
 def llr_logit(F, model=None):
     """Logit of the tracklet-level logistic model for a feature matrix F (n x len(LLR_FEATURES))."""
     m = model or LLR_MODEL
-    return np.asarray(F, float) @ np.asarray(m["coef"], float) + m["intercept"]
+    c = np.asarray(m["coef"], float)
+    return np.asarray(F, float)[:, :len(c)] @ c + m["intercept"]
 
 
 _EARTH_CACHE = {}
@@ -387,7 +398,13 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
     N[:, 4, 4] += prior; rhs[:, 4] += prior * K0 * (~free_k)
     if obs_off_au is None:                                          # no parallax column at all
         N[:, 4, 4] = 1.0; rhs[:, 4] = 0.0
-    sol = np.linalg.solve(N, rhs[:, :, None])[:, :, 0]
+    try:
+        sol = np.linalg.solve(N, rhs[:, :, None])[:, :, 0]
+        Ninv = None
+    except np.linalg.LinAlgError:
+        # degenerate candidates (e.g. every member of one exposure at the same time) make a batch singular: minimum-norm solution instead
+        Ninv = np.linalg.pinv(N)
+        sol = np.einsum("nij,nj->ni", Ninv, rhs)
     res = (y - np.einsum("nepi,ni->nep", A, sol)) * has[:, :, None]
     chi2 = (res ** 2 * w).sum((1, 2))
     rms = np.sqrt((res ** 2).sum((1, 2)) / (2.0 * nm))
@@ -395,7 +412,7 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
     # formal uncertainty of the free k: with the small HST baseline (~0.1-0.4 arcsec of parallax per unit k) k is often only
     # known to +-1, so the physical gate 0 <= k <= k_max is applied to k within 2 sigma, and the score uses k clipped into range
     with np.errstate(all="ignore"):
-        sk = np.sqrt(np.maximum(np.linalg.inv(N)[:, 4, 4], 0.0))
+        sk = np.sqrt(np.maximum((Ninv if Ninv is not None else np.linalg.inv(N))[:, 4, 4], 0.0))
     sk = np.where(free_k, np.nan_to_num(sk, nan=0.0, posinf=0.0), 0.0)
     kfit_raw = kfit.copy(); kfit = np.clip(kfit, 0.0, k_max)
     rate = np.hypot(vx, vy) / 24.0
@@ -451,7 +468,10 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
         SHP = gather(lambda d: d.get("sharp") if d.get("sharp") is not None and np.isfinite(d.get("sharp")) else 0.4, 0.4)
         SNR = gather(lambda d: d.get("snr") or np.nan)
         nmem = np.maximum(nm, 1)
-        Fm = np.zeros((n, len(LLR_FEATURES)))
+        RBL = gather(lambda d: (np.clip(np.log(max(d["rb"], 1e-6) / max(1.0 - d["rb"], 1e-6)), -RB_LOGIT_CLIP, RB_LOGIT_CLIP)
+                                if d.get("rb") is not None and np.isfinite(d.get("rb")) else np.nan))
+        have_rb = LLR_MODEL_RB is not None and bool(np.isfinite(RBL[has]).mean() > 0.5) if has.any() else False
+        Fm = np.zeros((n, len(LLR_FEATURES_RB)))
         Fm[:, 0] = np.log(np.maximum(rate, 0.5)); Fm[:, 1] = nm
         Fm[:, 2] = (ONCR * has).sum(1) / nmem; Fm[:, 3] = (SHP * has).sum(1) / nmem
         Fm[:, 4] = (TR * has).sum(1)
@@ -459,7 +479,16 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
             Fm[:, 5] = np.log10(np.nanmin(np.where(has & (SNR > 0), SNR, np.inf), axis=1))
         Fm[~np.isfinite(Fm[:, 5]), 5] = 2.0
         Fm[:, 6] = score_chi2
-        logit = np.where(np.isfinite(score), llr_logit(np.where(np.isfinite(Fm), Fm, 0.0)), -np.inf)
+        RBf = np.where(has & np.isfinite(RBL), RBL, np.where(has, -4.0, np.nan))        # unscored member: a low-but-not-hopeless logit
+        with np.errstate(all="ignore"):
+            Fm[:, 7] = np.nanmean(RBf, axis=1); Fm[:, 8] = np.nanmin(np.where(has, RBf, np.inf), axis=1)
+        Fm[~np.isfinite(Fm[:, 7]), 7] = -4.0; Fm[~np.isfinite(Fm[:, 8]), 8] = -4.0
+        Fm = np.where(np.isfinite(Fm), Fm, 0.0)
+        if have_rb:
+            lg = llr_logit(Fm, LLR_MODEL_RB)
+        else:
+            lg = llr_logit(Fm[:, :len(LLR_FEATURES)])
+        logit = np.where(np.isfinite(score), lg, -np.inf)
         order0 = np.argsort(-logit, kind="stable")
         order0 = order0[np.isfinite(logit[order0])][:max(int(rescore_pool), max_tracklets)]
         if stats is not None:
@@ -528,7 +557,8 @@ def link_exposures(dets, tol_arcsec=0.6, min_exposures=3, rate_min_ash=0.5, rate
         f["score"] = float(rank_score[q])
         if prob is not None:
             f["prob"] = float(prob[q])
-            f["features"] = {k_: float(Fm[q, j]) for j, k_ in enumerate(LLR_FEATURES)}
+            f["features"] = {k_: float(Fm[q, j]) for j, k_ in enumerate(LLR_FEATURES_RB if have_rb else LLR_FEATURES)}
+            f["model"] = "rb" if have_rb else "base"
             if bound is not None and np.isfinite(bound[q]):
                 f["bound_ratio"] = float(bound[q])
         out.append(f)
