@@ -48,8 +48,8 @@ def parallel_map(worker_fn, tasks, n_workers=0, label="Processing"):
         tracker.finish()
         return results
 
-    # Parallel via fork context (safe for numpy/sep on Linux)
-    ctx = mp.get_context('fork')
+    # Parallel via fork context (safe for numpy/sep on Linux); spawn where fork does not exist (Windows) - worker_fn must then be importable
+    ctx = mp.get_context('fork' if 'fork' in mp.get_all_start_methods() else 'spawn')
     chunksize = max(1, n // (actual_workers * 4))
 
     print(f"{label}: {n} tasks, {actual_workers} workers", file=sys.stderr)

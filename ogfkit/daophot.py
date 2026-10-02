@@ -342,6 +342,11 @@ def fit_group(resid, rms, model, group, R, maxshift=2.0, fit_sky=True, gain=None
     return out
 
 
+def _init_worker(shared):
+    # spawn start method (Windows/macOS): the globals of the parent are not inherited, so they are passed through the initializer
+    _SH.update(shared)
+
+
 def _worker(chunk):
     S = _SH
     res = []
@@ -393,7 +398,8 @@ def _fit_all(stars, resid, rms, model, R, maxshift, fit_sky, gain, max_group, n_
     if nw > 1 and len(groups) >= 8:
         import multiprocessing as mp
         chunks = [[[stars[i] for i in g] for g in groups[k::nw]] for k in range(nw)]
-        with mp.get_context('fork').Pool(nw) as pool:
+        ctx = mp.get_context('fork' if 'fork' in mp.get_all_start_methods() else 'spawn')
+        with ctx.Pool(nw, initializer=_init_worker, initargs=(dict(_SH),)) as pool:
             parts = pool.map(_worker, chunks)
         results = {}
         for k in range(nw):

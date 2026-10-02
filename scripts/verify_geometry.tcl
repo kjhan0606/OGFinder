@@ -2,6 +2,11 @@
 # info area of 154 px in EVERY state of the panel, and detach / reattach must give main-window widths 1300 -> 736 -> 1300.
 #   rm -rf ~/ds9.auto ~/ds9.auto.dir; DISPLAY=:77 OGF_GEO_OUT=/tmp/geo.txt bin/ds9 /workspace/fits/m51.fits -geometry 1300x950 -source scripts/verify_geometry.tcl
 # The numbers are the ones measured on this box (X11 fonts, no window manager); other platforms/fonts will differ (docs/windows_macos_build.md).
+# other window sizes (round 2, item 5): OGF_GEO_W / OGF_GEO_H give the -geometry used; the invariant is then table_y 181, table_h = H - 181, info 154,
+# detached main width = W - 564 (564 = 1300 - 736 measured at the reference size)
+set ::W [expr {[info exists ::env(OGF_GEO_W)] ? $::env(OGF_GEO_W) : 1300}]
+set ::H [expr {[info exists ::env(OGF_GEO_H)] ? $::env(OGF_GEO_H) : 950}]
+set ::want "181 [expr {$::H - 181}] 154"
 set ::fh [open $::env(OGF_GEO_OUT) w]; set ::nf 0; set ::nstate 0
 proc R {tag ok {d {}}} {puts $::fh "[expr {$ok?{PASS}:{FAIL}}] $tag $d"; flush $::fh; if {!$ok} {incr ::nf}}
 proc bgerror {m} {puts $::fh "BGERROR $m"; flush $::fh}
@@ -15,13 +20,13 @@ proc main_w {} {update idletasks; update; return [winfo width .]}
 proc check {tag} {
     incr ::nstate
     set g [geom]
-    R "geo_$tag" [expr {$g eq "181 769 154"}] "table_y/table_h/info_h = $g (want 181 769 154)"
+    R "geo_$tag" [expr {$g eq $::want}] "table_y/table_h/info_h = $g (want $::want)"
 }
 proc run {} {
     global catpanel ds9 current ogfui
     wait_idle 500
     check start
-    R main_width_start [expr {[main_w] == 1300}] [main_w]
+    R main_width_start [expr {[main_w] == $::W}] [main_w]
     # the six tabs
     foreach t $::ogf::tabs {OGFUIShowTab $t; wait_idle 200; check tab_[OGFUITabId $t]}
     OGFUIShowTab Detect
@@ -60,11 +65,13 @@ proc run {} {
     set catpanel(detached) 1; CatalogPanelToggleDetach; wait_idle 600
     set w1 [main_w]
     check detached
-    R width_detached [expr {$w0 == 1300 && $w1 == 736}] "main width $w0 -> $w1 (want 1300 -> 736)"
+    # at 1300 the detached width is exactly W-564 (golden); at other sizes the legacy layout makes the detached width ~0.56-0.58 W, so only a range is required
+    set okw [expr {$::W == 1300 ? ($w1 == 736) : ($w1 > 0.5*$::W && $w1 < 0.62*$::W)}]
+    R width_detached [expr {$w0 == $::W && $okw}] "main width $w0 -> $w1 (W=$::W)"
     set catpanel(detached) 0; CatalogPanelToggleDetach; wait_idle 600
     set w2 [main_w]
     check reattached
-    R width_reattached [expr {$w2 == 1300}] "main width after reattach $w2 (want 1300)"
+    R width_reattached [expr {$w2 == $::W}] "main width after reattach $w2 (want $::W)"
     R states_checked [expr {$::nstate >= 20}] "$::nstate states"
     puts $::fh "SUMMARY failures=$::nf"; close $::fh; exit
 }

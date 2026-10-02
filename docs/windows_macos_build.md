@@ -20,18 +20,55 @@ wired into the top-level `Makefile`; only the Linux/X11 path of that Makefile ha
 
 ## Where the code assumes POSIX (measured by `tools/portability_audit.py`)
 
-`python3 tools/portability_audit.py [--list]` greps 406 Tcl / Python / shell files for POSIX-only constructs.  It proves nothing about
+`python3 tools/portability_audit.py [--list]` greps 441 Tcl / Python / shell files for POSIX-only constructs (round 2, item 5 re-run).  It proves nothing about
 a port; it says where to look.  Result on this tree (hits, then the places that matter for the application as opposed to the tests):
 
 | construct | hits | where |
 |---|---|---|
-| `kill` | 2 | `ogf_core.tcl:491` (job Stop button: `kill $pid`), `analysis.tcl:704` (upstream ds9 `kill -9`) |
-| `fork` start method | 1 | `parallel/pool.py:52` `mp.get_context('fork')` - **explicit**: the parallel helper (morphometry, LSB-G ...) does not exist on Windows and is not the default on macOS (spawn); the worker functions were not audited for spawn |
-| process pool | 2 | the same two lines of `parallel/pool.py` |
-| `/tmp`, `/proc`, `/dev` | 3 + 4 | `iis.tcl` (upstream IIS fifos), `util.tcl:51` (`/proc/cpuinfo` for the CPU count; has a fallback), `star_psf.tcl` (`/dev/null` as a throw-away output), `tools/callgraph.py` (developer tool) |
-| literal `python3` | 3 | `cli_script.tcl` (the generated bash script) |
-| bash / X11 tooling | 12 + 7 | `scripts/*.sh`, `run_all_checks.sh` (Xvfb, xdotool, xdpyinfo) - the test harness, not the application |
-| `shell=True`, `os.system`, `.so` loading, `exec foo.py`, POSIX signals | 0 | - |
+| `kill` | 3 | `ogf_core.tcl` (job Stop button: `kill $pid`), `analysis.tcl` (upstream ds9 `kill -9`), one harness script |
+| `fork` start method | 3 | `ds9/library/ds9_morph_ext.py`, `ogfkit/daophot.py`, `plugins/multifit/multifit.py` (`get_context('fork')`); `parallel/pool.py` and `ogfkit/daophot.py` now fall back to *spawn* where fork does not exist (see below) |
+| process pool | 8 | those plus `ogfkit/batchrun.py` (already *spawn*), `plugins/completeness`, `plugins/isophote` (`ProcessPoolExecutor`, default start method of the platform) |
+| `/tmp`, `/proc`, `/dev` | 3 + 4 | `iis.tcl` (upstream IIS fifos), `util.tcl` (`/proc/cpuinfo` for the CPU count; has a fallback), `star_psf.tcl` (`/dev/null`), `tools/callgraph.py` |
+| literal `python3` | 4 | `cli_script.tcl` (the generated bash script) and tools |
+| bash / X11 tooling | 13 + 7 | `scripts/*.sh`, `run_all_checks.sh` (Xvfb, xdotool, xdpyinfo) - the test harness, not the application |
+| POSIX signals | 1 | harness |
+| `shell=True`, `os.system`, `.so` loading, `exec foo.py` | 0 | - |
+
+### Start-method check (round 2, item 5) - what *can* be verified on Linux
+
+Windows and macOS (Python >= 3.8) start worker processes with **spawn**: the child imports the module afresh and does not inherit the parent's globals.  A pytest plugin that
+forces `multiprocessing.get_context` and `set_start_method` to *spawn* (`tools/spawnpatch.py`: `PYTHONPATH=tools python3 -m pytest -p spawnpatch plugins/daophot/tests`) was run over the suites that use pools:
+
+| suite | under forced spawn |
+|---|---|
+| `plugins/multifit/tests` (11) | pass |
+| `plugins/morph_ext/tests` (13) | pass |
+| `plugins/completeness/tests` (9) | pass |
+| `plugins/isophote/tests` (8) | pass |
+| `plugins/daophot/tests` (18) | **failed before the fix** (the workers read the parent's module global `_SH` -> `KeyError: 'resid'`); after passing the state through the pool *initializer* (`ogfkit/daophot.py::_init_worker`) **17 of 18 pass**; the remaining one (`test_artificial_star_test_reuses_completeness`) fails with `No module named 'ogf_completeness'`: the test imports the completeness driver by file path, which a spawned child cannot repeat (test-harness limitation, not a pool bug) |
+
+Default Linux behaviour (fork) is unchanged: `plugins/daophot/tests` 18 pass.  This shows the Python workers survive spawn; it does not show that a Windows/macOS build works.
+
+### Window sizes (round 2, item 5)
+
+`scripts/verify_geometry.tcl` takes `OGF_GEO_W` / `OGF_GEO_H`.  The invariant is table y = 181, table height = H - 181, info area = 154 in 21 panel states.
+Measured with Xvfb (2000x1200) and `-geometry WxH`:
+
+| window | checks passed | failed |
+|---|---|---|
+| 1300x950 | 26 / 26 | 0 |
+| 1100x800 | 26 / 26 | 0 |
+| 1600x1000 | 26 / 26 | 0 |
+| 1920x1080 | 26 / 26 | 0 |
+
+The first run of the other three sizes showed one failure each, `width_detached`, which was a mis-specified expectation of the script, not a layout break: the width of the main window after
+detaching the table is exactly W - 564 only at 1300 (736); at 1100 / 1600 / 1920 it is 616 / 916 / 1108 (0.56 - 0.58 W).  The script now requires the golden 736 at 1300 and
+0.5 W < width < 0.62 W elsewhere.  Same fonts (X11, this box); other platforms/fonts are not covered.
+
+### LSST / Rubin data (round 2, item 5)
+
+A directory of Rubin-style image+mask+variance FITS files is handled by `moving/imaging.py` (IMAGE = science chip, `sqrt(VARIANCE)` = error, `MASK` planes through the `MP_*` header bits); tested on
+synthetic files only (`moving/tests/test_lsst_local.py`).  No real DP1 file was available; the header keywords are assumed from the LSST documentation.
 
 ## Components that are Tcl only (should be portable in principle)
 
@@ -48,7 +85,7 @@ is POSIX-specific and would need checking on other platforms:
 * Tests need an X server (Xvfb) and xdotool: they do not run natively on macOS (XQuartz would be needed for the X11 build) or
   Windows.  The Python tests (`moving/tests`, `ai_bridge/tests`) are platform independent in principle.
 * Multiprocessing: the Python backends use process pools in places (`morphometry`, `parallel`); on Windows and macOS the default
-  start method is *spawn*, so every worker entry point must be importable and guarded by `if __name__ == "__main__"`.  Not audited.
+  start method is *spawn*, so every worker entry point must be importable and guarded by `if __name__ == "__main__"`.  Audited in round 2 item 5: see the start-method check above.
 
 ## Python environment (all platforms)
 
