@@ -145,7 +145,7 @@ class TestProfile(unittest.TestCase):
             self.assertEqual(e, [], p['name'])
             if p.get('template'):
                 self.assertFalse(p.get('enabled', True))
-                self.assertTrue(p['transport'] in ('local_command', 'python_callable') or 'example.invalid' in p['base_url'])
+                self.assertTrue(p['transport'] in ('local_command', 'python_callable', 'agent_cli') or 'example.invalid' in p['base_url'])
 
 
 class TestRecords(unittest.TestCase):

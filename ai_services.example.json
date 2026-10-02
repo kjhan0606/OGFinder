@@ -124,5 +124,22 @@
       }},
       "timeout_s": 60, "retries": 2, "backoff_s": 2.0, "rate_limit_per_s": 4, "model_label": "SIMBAD TAP (non-ML)"
     }
+    ,{
+      "name": "template_custom_agent_cli",
+      "template": true,
+      "enabled": false,
+      "_note": "TEMPLATE. Any other agent CLI that reads a prompt file and prints one JSON document {\"results\":[...]} (docs/ai_services.md, 'Agent CLIs'). The four ready-made profiles agent_codex / agent_claude / agent_agy / agent_grok are built in and need no entry here.",
+      "description": "TEMPLATE: a custom agent CLI (placeholder executable)",
+      "task": "star_galaxy",
+      "transport": "agent_cli",
+      "backend": "custom",
+      "executable": "my-agent-cli",
+      "args": ["--prompt-file", "{prompt_file}", "--json"],
+      "prompt_via": "file",
+      "extra_args": [],
+      "env_passthrough": [],
+      "timeout_s": 300,
+      "batch_size": 10
+    }
   ]
 }

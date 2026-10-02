@@ -16,7 +16,7 @@ def build_parser():
         prog='ds9_ai_bridge.py',
         description='OGFinder AI bridge: send catalog objects / cutouts to a user-configured external service and '
                     'return new catalog columns (TSV on stdout or --output).  No models are included.')
-    ap.add_argument('--mode', required=True, choices=['list-services', 'check-service', 'run', 'dry-run', 'validate-profile', 'set-enabled', 'detect-agents'])
+    ap.add_argument('--mode', required=True, choices=['list-services', 'check-service', 'run', 'dry-run', 'validate-profile', 'set-enabled', 'detect-agents', 'set-agent'])
     ap.add_argument('--service', help='service name in the profile file (or "mock")')
     ap.add_argument('--task', help='task type: ' + ', '.join(contracts.TASK_NAMES))
     ap.add_argument('--catalog', help='catalog TSV (OGFinder format; NUMBER column required)')
@@ -50,6 +50,10 @@ def build_parser():
                          'the prompt - catalog rows - to its provider\'s cloud model')
     ap.add_argument('--send-images', action='store_true',
                     help='agent_cli only: also give the CLI the image cutouts (default: NO image data leaves the machine)')
+    ap.add_argument('--summary-only', action='store_true',
+                    help='dry-run: print only a compact summary of what would leave the machine (used by the GUI confirmation)')
+    ap.add_argument('--executable', help='set-agent: path or name of the agent CLI executable ("" = look it up on PATH)')
+    ap.add_argument('--extra-args-json', help='set-agent: JSON list of extra argv elements appended to the CLI command line')
     ap.add_argument('--strict', action='store_true', help='exit 3 when some objects failed (default: 0 unless all failed)')
     ap.add_argument('--enabled', choices=['yes', 'no'], help='set-enabled: new state of --service in the profile file')
     ap.add_argument('--json', action='store_true', help='list-services / check-service: machine readable output')
@@ -94,10 +98,12 @@ def cmd_list(a, log):
             p.get('callable') or ''
         agent = None
         if p.get('transport') == 'agent_cli':
-            path, tried = agent_cli.find_executable(p)
-            agent = {'backend': p.get('backend'), 'installed': bool(path), 'path': path or '', 'tried': tried,
-                     'login': agent_cli.BACKENDS.get(p.get('backend'), {}).get('login', '')}
-            tgt = path or 'NOT FOUND (%s)' % ','.join(tried)
+            exe, tried = agent_cli.find_executable(p)
+            agent = {'backend': p.get('backend'), 'installed': bool(exe), 'path': exe or '', 'tried': tried,
+                     'login': agent_cli.BACKENDS.get(p.get('backend'), {}).get('login', ''),
+                     'executable': p.get('executable') or '', 'extra_args': list(p.get('extra_args') or []),
+                     'label': agent_cli.BACKENDS.get(p.get('backend'), {}).get('label', p.get('backend'))}
+            tgt = exe or 'NOT FOUND (%s)' % ','.join(tried)
         rows.append({'target': tgt, 'profile_sha256': profmod.profile_hash(profmod.with_defaults(p)),
                      'name': p.get('name'), 'task': p.get('task'), 'transport': p.get('transport'),
                      'enabled': bool(p.get('enabled', True)), 'template': bool(p.get('template', False)),
@@ -132,6 +138,66 @@ def cmd_detect(a, log):
         print('service\tbackend\tinstalled\tpath\tlogin')
         for r in rows:
             print('\t'.join([r['service'], r['backend'], 'yes' if r['installed'] else 'no', r['path'] or '-', r['login']]))
+    return EXIT_OK
+
+
+def cmd_set_agent(a, log):
+    """Store "executable" / "extra_args" of an agent_cli service in the profile file (atomic, .bak kept).  A ready-made
+    profile that is not in the file yet is copied into it first.  Nothing else is ever written (no secrets)."""
+    if not a.service:
+        raise BridgeError('--service is required')
+    if a.executable is None and a.extra_args_json is None:
+        raise BridgeError('give --executable and/or --extra-args-json')
+    path = profmod.profile_path(a.services_file)
+    lst, p, err = profmod.load_file(a.services_file)
+    if err:
+        raise BridgeError(err)
+    doc = {'schema': CONTRACT_VERSION, 'services': []}
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            doc = json.load(f)
+    svcs = doc['services'] if isinstance(doc, dict) else doc
+    if isinstance(svcs, dict):
+        raise BridgeError('%s uses the {"services": {name: ...}} form; edit it by hand' % path)
+    ent = next((x for x in svcs if x.get('name') == a.service), None)
+    new = ent is None
+    if new:
+        b = agent_cli.builtin_agent(a.service)
+        if b is None:
+            raise BridgeError('service %r is not defined in %s and is not a ready-made agent profile (%s)' % (
+                a.service, path, ', '.join(x['name'] for x in agent_cli.builtin_profiles())))
+        ent = {k: v for k, v in b.items() if k != 'builtin'}
+    if ent.get('transport') != 'agent_cli':
+        raise BridgeError('service %r is not an agent_cli service' % a.service)
+    if a.executable is not None:
+        if a.executable.strip():
+            ent['executable'] = a.executable.strip()
+        else:
+            ent.pop('executable', None)
+    if a.extra_args_json is not None:
+        try:
+            ea = json.loads(a.extra_args_json)
+        except ValueError as e:
+            raise BridgeError('--extra-args-json: %s' % e)
+        if ea:
+            ent['extra_args'] = ea
+        else:
+            ent.pop('extra_args', None)
+    errs, _w = profmod.validate(profmod.with_defaults(ent))
+    if errs:
+        raise BridgeError('not saved, the profile would be invalid:\n  ' + '\n  '.join(errs))
+    if new:
+        svcs.append(ent)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    if os.path.exists(path):
+        shutil.copyfile(path, path + '.bak')
+    tmp = path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(doc, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+    os.replace(tmp, path)
+    print('%s: executable=%s extra_args=%s (%s)' % (a.service, ent.get('executable', '(PATH lookup)'),
+                                                  json.dumps(ent.get('extra_args', [])), path))
     return EXIT_OK
 
 
@@ -254,6 +320,17 @@ def cmd_run(a, log, dry):
         pass
     tmpd = opts.get('_tmp_cutout_dir')
     try:
+        if dry and a.summary_only:
+            pv = res['previews']
+            dl = [x.get('data_leaving') for x in pv if x.get('data_leaving')]
+            print(json.dumps({'service': res['summary']['service'], 'task': a.task, 'objects': res['summary']['objects'],
+                              'requests': res['summary']['requests'],
+                              'external': res['profile']['transport'] in profmod.EXTERNAL_TRANSPORTS if res.get('profile') else False,
+                              'data_leaving': dl[0] if dl else None,
+                              'images_total': sum(len(x['images_sent']) for x in dl),
+                              'prompt_bytes_total': sum(x['prompt_bytes'] for x in dl),
+                              'argv_first': pv[0].get('argv') if pv else None}))
+            return EXIT_OK
         if dry:
             print(json.dumps({'service': res['summary']['service'], 'task': a.task, 'objects': res['summary']['objects'],
                               'requests_that_would_be_sent': res['summary']['requests'], 'NOTE': 'dry run: nothing was sent',
@@ -292,6 +369,8 @@ def main(argv=None):
     try:
         if a.mode == 'list-services':
             return cmd_list(a, log)
+        if a.mode == 'set-agent':
+            return cmd_set_agent(a, log)
         if a.mode == 'detect-agents':
             return cmd_detect(a, log)
         if a.mode == 'validate-profile':

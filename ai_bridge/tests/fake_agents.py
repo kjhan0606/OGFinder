@@ -16,7 +16,7 @@ import stat
 import sys
 
 TEMPLATE = r'''#!%(python)s
-import json, os, sys, time
+import hashlib, json, os, sys, time
 CFG = %(cfg)s
 LOG = CFG['log']
 argv = sys.argv[1:]
@@ -152,12 +152,12 @@ if flavor == 'codex':
     sys.stdout.write(t + '\n')
 elif flavor == 'claude':
     env = {'type': 'result', 'subtype': 'success', 'is_error': False, 'duration_ms': 5, 'num_turns': 1, 'result': t,
-           'session_id': 'sess-%%d' %% (n + 1), 'total_cost_usd': 0.001, 'modelUsage': {beh.get('model', 'claude-fake-1'): {}}}
+           'session_id': 'sess-' + hashlib.md5(prompt.encode()).hexdigest()[:8], 'total_cost_usd': 0.001, 'modelUsage': {beh.get('model', 'claude-fake-1'): {}}}
     if beh.get('structured'):
         env['structured_output'] = json.loads(t)
     sys.stdout.write(json.dumps(env) + '\n')
 elif flavor == 'agy':
-    sys.stdout.write(json.dumps({'conversation_id': 'conv-%%d' %% (n + 1), 'status': 'SUCCESS', 'response': t + '\n',
+    sys.stdout.write(json.dumps({'conversation_id': 'conv-' + hashlib.md5(prompt.encode()).hexdigest()[:8], 'status': 'SUCCESS', 'response': t + '\n',
                                  'duration_seconds': 0.1, 'num_turns': 1,
                                  'usage': {'input_tokens': 1, 'output_tokens': 1}}) + '\n')
 elif flavor == 'gemini':

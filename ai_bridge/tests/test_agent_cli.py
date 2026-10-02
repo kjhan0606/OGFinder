@@ -97,6 +97,11 @@ class TestDetection(Base):
         self.assertFalse(rows['agent_codex']['agent']['installed'])
         self.assertTrue(rows['agent_grok']['external'] and rows['agent_grok']['valid'])
         self.assertFalse(rows['agent_grok']['network'])
+        buf = io.StringIO()                                          # the text form prints the profile-file header
+        with contextlib.redirect_stdout(buf):
+            cli.main(['--mode', 'list-services', '--services-file', self.sf])
+        self.assertIn('# profile file: ' + self.sf, buf.getvalue())
+        self.assertIn('AGENT CLI installed', buf.getvalue())
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             cli.main(['--mode', 'detect-agents', '--json'])
@@ -154,7 +159,7 @@ class TestEachCLI(Base):
         self.assertGreater(c['stdin_len'], 500)
         h, t = self.table(out)
         self.assertEqual(t['1']['AI_SG_MODEL'], 'fake-model-1')   # "model" from the answer wins over modelUsage
-        self.assertEqual(t['1']['AI_SG_REQID'], 'sess-1')
+        self.assertRegex(t['1']['AI_SG_REQID'], r'^sess-[0-9a-f]{8}$')
 
     def test_claude_structured_output_field(self):
         rc, out, calls = self.go('claude', beh={'structured': True, 'model': 'claude-x'})
@@ -168,7 +173,7 @@ class TestEachCLI(Base):
         self.assertIn('OBJECTS (JSON, begin)', a[1])           # agy takes the prompt as an argv element
         self.assertEqual(c['stdin_len'], 0)
         self.assertIn('--output-format', a)
-        self.assertEqual(self.table(out)[1]['1']['AI_SG_REQID'], 'conv-1')
+        self.assertRegex(self.table(out)[1]['1']['AI_SG_REQID'], r'^conv-[0-9a-f]{8}$')
 
     def test_gemini_as_agy_fallback(self):
         rc, out, calls = self.go('gemini')
@@ -493,6 +498,53 @@ class TestImages(Base):
         self.assertFalse(any(a.startswith('--image') for a in fa.calls(log)[0]['argv']))
         self.run_cli('agent_codex', 'morphology', extra=['--image', self.img, '--no-cache', '--send-images', '--size-pix', '32'])
         self.assertTrue(any(a.startswith('--image=') for a in fa.calls(log)[1]['argv']))
+
+
+class TestSetAgent(Base):
+    def test_set_agent_writes_only_executable_and_args(self):
+        import io, contextlib
+        other = os.path.join(self.d, 'x'); os.makedirs(other)
+        path, _ = fa.make_fake(other, 'myclaude', flavor='claude')
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = cli.main(['--mode', 'set-agent', '--service', 'agent_claude', '--services-file', self.sf,
+                           '--executable', path, '--extra-args-json', json.dumps(['--model', 'haiku'])])
+        self.assertEqual(rc, 0)
+        doc = json.load(open(self.sf))
+        e = doc['services'][0]
+        self.assertEqual((e['name'], e['transport'], e['backend'], e['executable'], e['extra_args']),
+                         ('agent_claude', 'agent_cli', 'claude', path, ['--model', 'haiku']))
+        self.assertEqual(set(e), {'name', 'task', 'transport', 'backend', 'enabled', 'description', 'executable', 'extra_args'})
+        # the file profile overrides the built-in one, and is used for the run
+        rc, out = self.run_cli('agent_claude', extra=['--no-cache'])
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(fa.calls(path + '.calls.jsonl')[0]['argv'][-2:], ['--model', 'haiku'])
+        # a dangerous or secret-like argument is refused and nothing is written
+        before = open(self.sf).read()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rc = cli.main(['--mode', 'set-agent', '--service', 'agent_claude', '--services-file', self.sf,
+                           '--extra-args-json', json.dumps(['--dangerously-skip-permissions'])])
+        self.assertEqual(rc, 1)
+        self.assertEqual(open(self.sf).read(), before)
+        # clearing
+        with contextlib.redirect_stdout(io.StringIO()):
+            cli.main(['--mode', 'set-agent', '--service', 'agent_claude', '--services-file', self.sf, '--executable', '',
+                      '--extra-args-json', '[]'])
+        e = json.load(open(self.sf))['services'][0]
+        self.assertNotIn('executable', e)
+        self.assertNotIn('extra_args', e)
+
+    def test_summary_only(self):
+        import io, contextlib
+        self.fake('claude')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cli.main(['--mode', 'dry-run', '--service', 'agent_claude', '--task', 'star_galaxy', '--catalog', self.cat,
+                           '--services-file', self.sf, '--summary-only'])
+        d = json.loads(buf.getvalue())
+        self.assertEqual((d['objects'], d['requests'], d['external'], d['images_total']), (4, 1, True, 0))
+        self.assertNotIn('OBJECTS', json.dumps(d))       # the rows themselves are not in the summary
+        self.assertGreater(d['prompt_bytes_total'], 500)
 
 
 class TestCache(Base):

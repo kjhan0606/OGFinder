@@ -291,7 +291,7 @@ def run(profile, task, catalog, images, output=None, opts=None, log=None):
     summary = {'service': prof['name'], 'task': task, 'objects': len(recs), 'dry_run': dry}
     if dry:
         summary.update(requests=len(previews), previews=previews, exit_code=0)
-        return {'summary': summary, 'exit_code': 0, 'table': {}, 'columns': [], 'ids': ids, 'previews': previews}
+        return {'summary': summary, 'exit_code': 0, 'table': {}, 'columns': [], 'ids': ids, 'previews': previews, 'profile': prof}
 
     # ---- columns: mapped names in a stable order (task contract order first, then profile order)
     fields = prof['response'].get('fields')
