@@ -190,6 +190,17 @@
     "--mag-zeropoint",
     "{extract:mag-zeropoint}",
     {
+     "if_file": "{mask-catalog}",
+     "argv": [
+      "--mask-catalog",
+      "{mask-catalog}",
+      "--mask-exclude",
+      "{mask-exclude}",
+      "--neighbour-radius",
+      "{neighbour-radius}"
+     ]
+    },
+    {
      "if": "export-feedme",
      "argv": [
       "--export-feedme",
@@ -430,7 +441,25 @@
    "type": "file",
    "default": "",
    "group": "Config file",
-   "help": "Explicit components, bounds, fixed parameters, ties, bbox and sky for one object: a JSON file (see docs/multifit.md) or a GALFIT feedme (sersic, devauc, expdisk, gaussian, psf, sky objects; constraints file G) - the file names in the feedme are used for the PSF / mask / sigma image)."
+   "help": "Explicit components, bounds, fixed parameters, ties (equal / offset / ratio), bbox and sky for one object: a JSON file (see docs/multifit.md) or a GALFIT feedme (sersic[1-3], devauc, expdisk, gaussian, moffat, ferrer, king, nuker, edgedisk, psf, sky and truncation objects; Fourier F1.., bending B1.., rotation R0-R10 and boxy/disky C0 modifiers; constraints file G). The file names in the feedme are used for the PSF / mask / sigma image."
+  },
+  {
+   "name": "mask-catalog",
+   "label": "Neighbour catalog (mask)",
+   "type": "file",
+   "default": "",
+   "group": "Config file",
+   "help": "Config / feedme fit: catalog (TSV with X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE) whose objects inside the fitted box are masked as neighbours (ellipses of Neighbour radius x A_IMAGE x B_IMAGE), except those at a fitted component."
+  },
+  {
+   "name": "mask-exclude",
+   "label": "Do not mask within (px)",
+   "type": "float",
+   "default": 4.0,
+   "group": "Config file",
+   "help": "Catalog objects closer than this many pixels to a fitted component centre are not masked (they are the targets).",
+   "min": 0,
+   "max": 100
   },
   {
    "name": "export-feedme",

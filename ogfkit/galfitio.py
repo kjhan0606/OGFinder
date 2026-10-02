@@ -554,10 +554,10 @@ def write_feedme(cfg, image='image.fits', output='imgblock.fits', sigma='none', 
                 if num in (1, 3):
                     continue
                 if nm == 'q':
-                    out.append(' 9) %s %d   # axis ratio (b/a)' % (_fmt(c['q']), fl(c, 'q')))
+                    out.append(' 9) %s %d   # axis ratio (b/a)' % (_fmt(c.get('q', 0.8)), fl(c, 'q')))
                 elif nm == 'pa':
-                    out.append('10) %s %d   # position angle (PA) [deg: Up=0, Left=90]' % (_fmt(((c['pa'] - 90.0 + 90.0) % 180.0) - 90.0), fl(c, 'pa')))
-                elif nm in ('re', 'rs'):
+                    out.append('10) %s %d   # position angle (PA) [deg: Up=0, Left=90]' % (_fmt(((c.get('pa', 0.0) - 90.0 + 90.0) % 180.0) - 90.0), fl(c, 'pa')))
+                elif nm in ('re', 'rs') and tt != 'edgedisk':
                     out.append(' 4) %s %d   # %s' % (_fmt(c['re'] / (RS_TO_RE if k == 'exp' else 1.0)), fl(c, 're'), 'R_s (disc scale length) [pix]' if k == 'exp' else 'R_e (half-light radius) [pix]'))
                 elif tt == 'edgedisk' and nm == 'rs':
                     out.append(' 5) %s %d   # R_s' % (_fmt(c['rs']), fl(c, 'rs')))

@@ -264,6 +264,28 @@ def export_feedme(a, data_path, comps_img, bbox, cfg, sky, grad, res, psf_file='
     return base
 
 
+def neighbour_mask(a, shape, cm, comps, x0, y0):
+    """Add the ellipses (--neighbour-radius x A_IMAGE, B_IMAGE, THETA_IMAGE) of the --mask-catalog objects that fall in the fitted box to the pixel mask,
+    except objects within --mask-exclude pixels of a fitted component (those are the targets).  -> (mask, number of masked objects)."""
+    cols, rows = tsvio.read_catalog(a.mask_catalog)
+    cm = np.zeros(shape, bool) if cm is None else cm.copy()
+    pos = [(c['x'], c['y']) for c in comps if 'x' in c]
+    n = 0
+    for r in rows:
+        x, y = num(r, 'X_IMAGE') - 1 - x0, num(r, 'Y_IMAGE') - 1 - y0
+        if not (np.isfinite(x) and np.isfinite(y)):
+            continue
+        A, B = num(r, 'A_IMAGE', 2.0), num(r, 'B_IMAGE', 2.0)
+        rad = max(a.neighbour_radius * max(A, 1.0), 1.0)
+        if not (-rad <= x < shape[1] + rad and -rad <= y < shape[0] + rad):
+            continue
+        if any(math.hypot(x - px, y - py) <= max(a.mask_exclude, 0.0) for px, py in pos):
+            continue
+        cm |= ellipse_mask(shape, x, y, a.neighbour_radius * max(A, 1.0), a.neighbour_radius * max(B, 1.0), num(r, 'THETA_IMAGE', 0.0))
+        n += 1
+    return cm, n
+
+
 def run_config(a, data, mask, cfg, hdr=None):
     comps = cfg['components']
     bb = cfg.get('bbox') or [0, data.shape[1], 0, data.shape[0]]
@@ -273,12 +295,17 @@ def run_config(a, data, mask, cfg, hdr=None):
     one = cfg.get('one_based', True)
     comps_img = [json.loads(json.dumps(c)) for c in comps]              # untouched copy (image coordinates) for the export
     for c in comps:
-        c['x'] = c['x'] - x0 - 1 if one else c['x'] - x0
-        c['y'] = c['y'] - y0 - 1 if one else c['y'] - y0
+        if 'x' in c:                                                   # truncation components may inherit the position of their parent
+            c['x'] = c['x'] - x0 - 1 if one else c['x'] - x0
+            c['y'] = c['y'] - y0 - 1 if one else c['y'] - y0
         for k, off in (('x', x0 + (1 if one else 0)), ('y', y0 + (1 if one else 0))):         # bounds on x / y are given in image coordinates like x / y
             if k in c.get('bounds', {}):
                 c['bounds'][k] = [v - off for v in c['bounds'][k]]
     psf, desc = build_psf(data, mask, a)
+    nmask = 0
+    if a.mask_catalog:                                                  # neighbour masking: ellipses of the catalog objects inside the box, except those at a fitted component
+        cm, nmask = neighbour_mask(a, cut.shape, cm, comps, x0, y0)
+        desc += ', %d neighbour(s) masked' % nmask
     rms = cfg.get('rms') or None
     if cfg.get('sigma') and os.path.isfile(cfg['sigma']):
         rms = imageio.load_image(cfg['sigma'])[0][y0:y1, x0:x1].astype(float)
@@ -297,25 +324,31 @@ def run_config(a, data, mask, cfg, hdr=None):
     recs = []
     for k, c in enumerate(res['components']):
         er = c['errors']
-        lines.append('  [%d] %-6s x=%.3f+-%.3f y=%.3f+-%.3f mag=%.3f+-%.3f' % (k, c['kind'], c['x'] + x0 + 1, er.get('x', 0), c['y'] + y0 + 1, er.get('y', 0), c['mag'], er.get('mag', 0)) +
-                     ('' if c['kind'] == 'psf' else ' re=%.3f+-%.3f n=%.3f q=%.3f pa=%.1f' % (c['re'], er.get('re', 0), c['n'], c['q'], c['pa'])))
-        recs.append(dict(COMP=k, KIND=c['kind'], X=c['x'] + x0 + 1, Y=c['y'] + y0 + 1, MAG=c['mag'], MAGERR=er.get('mag'), RE=c.get('re') if c['kind'] != 'psf' else None,
-                         REERR=er.get('re'), N=c.get('n') if c['kind'] != 'psf' else None, Q=c.get('q') if c['kind'] != 'psf' else None, PA=c.get('pa') if c['kind'] != 'psf' else None))
-    tsvio.write_table(os.path.join(a.work, 'multifit_results.tsv'), ['COMP', 'KIND', 'X', 'Y', 'MAG', 'MAGERR', 'RE', 'REERR', 'N', 'Q', 'PA'], recs)
+        pos = ('x=%.3f+-%.3f y=%.3f+-%.3f ' % (c['x'] + x0 + 1, er.get('x', 0), c['y'] + y0 + 1, er.get('y', 0))) if 'x' in c else ''
+        names = [n_ for n_ in mf.param_names(c) if n_ not in ('x', 'y', 'flux')]
+        lines.append('  [%d] %-6s %smag=%.3f+-%.3f ' % (k, c['kind'], pos, c['mag'], er.get('mag', 0)) + ' '.join('%s=%.4g%s' % (n_, c[n_], '+-%.2g' % er[n_] if n_ in er else '') for n_ in names))
+        extra = [n_ for n_ in names if n_ not in ('re', 'n', 'q', 'pa')]
+        recs.append(dict(COMP=k, KIND=c['kind'], X=(c['x'] + x0 + 1) if 'x' in c else None, Y=(c['y'] + y0 + 1) if 'y' in c else None, MAG=c['mag'], MAGERR=er.get('mag'),
+                         RE=c.get('re'), REERR=er.get('re'), N=c.get('n'), Q=c.get('q'), PA=c.get('pa'), EXTRA=';'.join('%s=%.6g' % (n_, c[n_]) for n_ in extra)))
+    tsvio.write_table(os.path.join(a.work, 'multifit_results.tsv'), ['COMP', 'KIND', 'X', 'Y', 'MAG', 'MAGERR', 'RE', 'REERR', 'N', 'Q', 'PA', 'EXTRA'], recs)
     with open(os.path.join(a.work, 'multifit_config_result.json'), 'w') as fh:
         json.dump({k: v for k, v in res.items() if k not in ('model', 'residual', 'good')}, fh, default=lambda o: None)
     if a.export_feedme:
         fitted = []
         for c0, c in zip(comps_img, res['components']):
-            d = dict(c0, x=c['x'] + x0 + (1 if one else 0), y=c['y'] + y0 + (1 if one else 0), mag=c['mag'])
-            if c['kind'] != 'psf':
-                d.update(re=c['re'], q=c['q'], pa=c['pa'])
-                if c['kind'] == 'sersic':
-                    d['n'] = c['n']
-            d.pop('flux', None)
-            for k in list(d.get('bounds', {})):
-                if k in ('x', 'y'):
-                    pass
+            d = dict(c0)
+            for n_ in mf.param_names(c):
+                if n_ in ('x', 'y'):
+                    d[n_] = c[n_] + (x0 if n_ == 'x' else y0) + (1 if one else 0)
+                elif n_ == 'flux':
+                    d['mag'] = c['mag']
+                else:
+                    d[n_] = c[n_]
+            if 'flux' in mf.param_names(c):
+                d.pop('flux', None)
+            else:
+                d.pop('mag', None)
+                d.pop('mu', None)
             fitted.append(d)
         for d, c0 in zip(fitted, comps_img):                                  # bounds were given in image coordinates: keep them
             d['bounds'] = c0.get('bounds', {})
@@ -356,6 +389,8 @@ def main(argv=None):
     ap.add_argument('--montage', type=int, default=6)
     ap.add_argument('--no-residual', action='store_true')
     ap.add_argument('--restarts', type=int, default=2, help='config / feedme fits: number of extra starts (R_e and n rescaled) tried after the given one; the lowest chi2 is kept (0 = fit only from the given start)')
+    ap.add_argument('--mask-catalog', default='', help='config / feedme fits: neighbour masking - TSV catalog (X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE); the ellipses of its objects inside the fitted box are masked, except those within --mask-exclude px of a fitted component')
+    ap.add_argument('--mask-exclude', type=float, default=4.0, help='--mask-catalog: objects closer than this (pixels) to a fitted component centre are not masked')
     ap.add_argument('--export-feedme', default='', help='write the fitted model as a GALFIT feedme (file; with --config) or into this directory (catalog mode: one galfit_<NUMBER>.feedme per fitted object)')
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
