@@ -16,12 +16,30 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.signal import fftconvolve
 
-from . import models as M
+from . import models as M, profiles as PF
 
-KINDS = ('sersic', 'exp', 'dev', 'psf')
+KINDS = ('sersic', 'exp', 'dev', 'psf') + PF.EXTRA_KINDS + ('trunc',)
 PARAMS = {'sersic': ('x', 'y', 'flux', 're', 'n', 'q', 'pa'), 'exp': ('x', 'y', 'flux', 're', 'q', 'pa'),
-          'dev': ('x', 'y', 'flux', 're', 'q', 'pa'), 'psf': ('x', 'y', 'flux')}
+          'dev': ('x', 'y', 'flux', 're', 'q', 'pa'), 'psf': ('x', 'y', 'flux'),
+          'moffat': ('x', 'y', 'flux', 'fwhm', 'beta', 'q', 'pa'), 'ferrer': ('x', 'y', 'i0', 'rout', 'alpha', 'beta', 'q', 'pa'),
+          'king': ('x', 'y', 'i0', 'rc', 'rt', 'alpha', 'q', 'pa'), 'nuker': ('x', 'y', 'ib', 'rb', 'alpha', 'beta', 'gamma', 'q', 'pa'),
+          'edgedisk': ('x', 'y', 'i0', 'hs', 'rs', 'pa'), 'brokenexp': ('x', 'y', 'i0', 'h1', 'h2', 'rbreak', 'alpha', 'q', 'pa'),
+          'trunc': ('rbreak', 'dsoft')}
 FIXED_N = {'exp': 1.0, 'dev': 4.0}
+FIXED_DEFAULT = {'brokenexp': ('alpha',)}                 # parameters that are held fixed unless the component says otherwise
+SB_NORM = {'center': 'i0', 're': 'i0', 'break': 'i0'}     # sersic-family flux normalisations other than the total flux ('sersic1/2/3' of GALFIT): the 'flux' parameter becomes the surface brightness `i0` [counts per pixel]
+EXTENDED = ('sersic', 'exp', 'dev') + PF.EXTRA_KINDS
+
+
+def param_names(c):
+    """Names of the fit parameters of component dict c: the kind's own, plus the optional shape modifiers (c0, Fourier, bending, rotation) present in c."""
+    k = c['kind']
+    names = list(PARAMS[k])
+    if k == 'trunc':
+        names = [n for n in ('x', 'y') if n in c] + names + [n for n in ('q', 'pa') if n in c]
+    elif k in ('sersic', 'exp', 'dev') and c.get('norm', 'total') in SB_NORM:
+        names = ['i0' if n == 'flux' else n for n in names]
+    return names + PF.modifier_names(c)
 FLAGS = dict(BOUND=1, NOCONV=2, CHI2=4, NEIGHBOUR=8, EDGE=16, MASKED=32, SINGULAR=64)
 
 
@@ -51,10 +69,16 @@ def gaussian_psf_array(fwhm, size=None):
 
 
 # ------------------------------------------------------------------------------------------------------------------ rendering
-def render_component(c, shape, psf=None, pad=None):
-    """Convolved image of one component (dict with kind, x, y, flux, [re, n, q, pa]) on `shape`."""
+def _uses_profiles(c):
+    return c['kind'] in PF.EXTRA_KINDS or c.get('norm', 'total') != 'total' or bool(PF.modifier_names(c)) or bool(c.get('trunc_in') or c.get('trunc_out'))
+
+
+def render_component(c, shape, psf=None, pad=None, comps=None):
+    """Convolved image of one component (dict with kind, x, y, flux, [re, n, q, pa, shape modifiers]) on `shape`.  `comps` = the full component list when c refers to truncation components."""
     ny, nx = shape
     kind = c['kind']
+    if kind == 'trunc':
+        return np.zeros(shape)
     if kind == 'psf':
         x, y = c['x'], c['y']
         ix, iy = int(round(x)), int(round(y))
@@ -69,10 +93,6 @@ def render_component(c, shape, psf=None, pad=None):
         if yb > ya and xb > xa:
             out[ya:yb, xa:xb] = c['flux'] * st[ya - y0:yb - y0, xa - x0:xb - x0]
         return out
-    n = FIXED_N.get(kind, c.get('n', 1.0))
-    q = min(max(c.get('q', 1.0), 0.02), 1.0)
-    re = max(c['re'], 0.05)
-    Ie = M.sersic_Ie_from_flux(c['flux'], re, n, q)
     st = None
     if psf is not None:
         st = psf_stamp(psf, c['x'], c['y'])
@@ -80,10 +100,28 @@ def render_component(c, shape, psf=None, pad=None):
             pad = pad if pad is not None else st.shape[0] // 2
         else:
             st = None
+    p = st.shape[0] // 2 if st is not None else 0
+    if _uses_profiles(c):
+        cc = dict(c)
+        cc['q'] = min(max(cc.get('q', 1.0), 0.02), 1.0) if 'q' in cc else cc.get('q')
+        if cc['q'] is None:
+            cc.pop('q')
+        if kind in ('exp', 'dev'):
+            cc['n'] = FIXED_N[kind]
+        truncs = [(comps[j], True) for j in c.get('trunc_in', ())] + [(comps[j], False) for j in c.get('trunc_out', ())] if comps is not None else []
+        big = PF.render(cc, (ny + 2 * p, nx + 2 * p), truncs, origin=(-p, -p))
+    else:
+        n = FIXED_N.get(kind, c.get('n', 1.0))
+        q = min(max(c.get('q', 1.0), 0.02), 1.0)
+        re = max(c['re'], 0.05)
+        Ie = M.sersic_Ie_from_flux(c['flux'], re, n, q)
+        if st is None:
+            return M.render_sersic(shape, c['x'], c['y'], Ie, re, n, q, c.get('pa', 0.0))
+        big = M.render_sersic((ny + 2 * p, nx + 2 * p), c['x'] + p, c['y'] + p, Ie, re, n, q, c.get('pa', 0.0))
+        conv = fftconvolve(big, st, mode='same')
+        return conv[p:p + ny, p:p + nx]
     if st is None:
-        return M.render_sersic(shape, c['x'], c['y'], Ie, re, n, q, c.get('pa', 0.0))
-    p = st.shape[0] // 2
-    big = M.render_sersic((ny + 2 * p, nx + 2 * p), c['x'] + p, c['y'] + p, Ie, re, n, q, c.get('pa', 0.0))
+        return big
     conv = fftconvolve(big, st, mode='same')
     return conv[p:p + ny, p:p + nx]
 
@@ -94,12 +132,19 @@ def render_model(comps, shape, psf=None, sky=0.0, sky_grad=(0.0, 0.0)):
         yy, xx = np.mgrid[:shape[0], :shape[1]]
         out += sky_grad[0] * (xx - shape[1] / 2.0) + sky_grad[1] * (yy - shape[0] / 2.0)
     for c in comps:
-        out += render_component(c, shape, psf)
+        out += render_component(c, shape, psf, comps=comps)
     return out
 
 
 # ------------------------------------------------------------------------------------------------------------------ parameter handling
 DEFAULT_BOUNDS = dict(re=(0.3, 500.0), n=(0.3, 8.0), q=(0.05, 1.0), pa=(-360.0, 360.0))
+# bounds / scales of the parameters of the advanced components: (kind, name) overrides name
+ADV_BOUNDS = {'fwhm': (0.3, 500.0), 'rout': (1.0, 2000.0), 'rc': (0.2, 500.0), 'rt': (1.0, 2000.0), 'rb': (0.2, 500.0), 'hs': (0.2, 500.0), 'rs': (0.3, 2000.0), 'h1': (0.3, 2000.0), 'h2': (0.3, 2000.0),
+              'rbreak': (0.5, 2000.0), 'dsoft': (0.05, 2000.0), 'gamma': (0.0, 2.5), 'c0': (-1.5, 3.0), 'rot_in': (-500.0, 500.0), 'rot_out': (0.5, 2000.0), 'rot_theta': (-3600.0, 3600.0),
+              'rot_alpha': (-3.0, 3.0), 'rot_ws': (0.1, 1000.0), 'rot_incl': (0.0, 85.0), 'rot_pa': (-720.0, 720.0)}
+KIND_BOUNDS = {('moffat', 'beta'): (0.6, 20.0), ('ferrer', 'beta'): (-2.0, 1.95), ('ferrer', 'alpha'): (0.02, 10.0), ('king', 'alpha'): (0.5, 10.0), ('nuker', 'alpha'): (0.3, 10.0),
+               ('nuker', 'beta'): (0.05, 10.0), ('brokenexp', 'alpha'): (0.02, 5.0)}
+FLUXLIKE = ('flux', 'i0', 'ib')
 
 
 def _normalise(c, zp):
@@ -108,25 +153,52 @@ def _normalise(c, zp):
     if kind not in KINDS:
         raise ValueError('unknown component kind %r' % kind)
     c['kind'] = kind
-    if 'flux' not in c:
-        c['flux'] = 10 ** (-0.4 * (c.get('mag', 20.0) - zp))
-    c.setdefault('re', 3.0)
-    c.setdefault('q', 0.8)
-    c.setdefault('pa', 0.0)
-    c.setdefault('n', FIXED_N.get(kind, 1.5))
-    c['fixed'] = set(c.get('fixed', ()))
+    if kind == 'trunc':
+        c.setdefault('dsoft', 5.0)
+        c.setdefault('rbreak', 10.0)
+    else:
+        if c.get('norm', 'total') in SB_NORM:
+            if 'i0' not in c:
+                c['i0'] = c.get('flux', 10 ** (-0.4 * (c.get('mag', 20.0) - zp)))
+            c.setdefault('flux', c['i0'])
+        elif kind in ('ferrer', 'king', 'edgedisk', 'brokenexp'):
+            c.setdefault('i0', c.get('flux', 10 ** (-0.4 * (c.get('mag', 20.0) - zp))))
+        elif kind == 'nuker':
+            c.setdefault('ib', c.get('flux', 10 ** (-0.4 * (c.get('mag', 20.0) - zp))))
+        elif 'flux' not in c:
+            c['flux'] = 10 ** (-0.4 * (c.get('mag', 20.0) - zp))
+        c.setdefault('re', 3.0)
+        c.setdefault('q', 0.8)
+        c.setdefault('pa', 0.0)
+        c.setdefault('n', FIXED_N.get(kind, 1.5))
+        if kind == 'moffat':
+            c.setdefault('fwhm', 3.0); c.setdefault('beta', 2.5)
+        if kind == 'brokenexp':
+            c.setdefault('alpha', 0.5); c.setdefault('h1', 5.0); c.setdefault('h2', 2.0); c.setdefault('rbreak', 10.0)
+    c['fixed'] = set(c.get('fixed', ())) | set(FIXED_DEFAULT.get(kind, ())) - set(c.get('free', ()))
     c['bounds'] = dict(c.get('bounds', {}))
+    for k in ('trunc_in', 'trunc_out'):
+        if k in c:
+            c[k] = [int(v) for v in c[k]]
     return c
 
 
 def _free_list(comps, tie):
-    """[(comp index, name)] of the free parameters + map of tied parameters -> master."""
+    """[(comp index, name)] of the free parameters + map of tied parameters -> (master comp, master name, mode, value) (mode 'eq' | 'offset' | 'ratio')."""
     tie_map = {}
-    for a, b in tie or ():
-        tie_map[tuple(_key(a))] = tuple(_key(b))
+    for t in tie or ():
+        a, b = t[0], t[1]
+        mode = t[2] if len(t) > 2 and t[2] else 'eq'
+        val = t[3] if len(t) > 3 else None
+        ia, na = _key(a)
+        ib, nb = _key(b)
+        if mode in ('offset', 'ratio') and val is None:                       # GALFIT semantics: the offset / ratio is the one of the start values
+            va, vb = comps[ia][na], comps[ib][nb]
+            val = (va - vb) if mode == 'offset' else (va / vb if vb else 1.0)
+        tie_map[(ia, na)] = (ib, nb, mode, val)
     free = []
     for i, c in enumerate(comps):
-        for name in PARAMS[c['kind']]:
+        for name in param_names(c):
             if name in c['fixed'] or (i, name) in tie_map:
                 continue
             free.append((i, name))
@@ -143,14 +215,22 @@ def _key(s):
 def _scale(c, name, box):
     if name in ('x', 'y'):
         return 1.0
-    if name == 'flux':
-        return max(abs(c['flux']), 1e-3)
-    if name == 're':
-        return max(c['re'], 0.5)
-    if name == 'n':
+    if name in FLUXLIKE:
+        return max(abs(c[name]), 1e-3)
+    if name in ('re', 'fwhm', 'rout', 'rc', 'rt', 'rb', 'hs', 'rs', 'h1', 'h2', 'rbreak', 'rot_out'):
+        return max(c[name], 0.5)
+    if name in ('dsoft', 'rot_in'):
+        return max(abs(c[name]), 1.0)
+    if name in ('n', 'beta', 'alpha', 'gamma', 'rot_alpha'):
         return 1.0
     if name == 'q':
         return 0.3
+    if name == 'c0' or name == 'rot_ws' or name.startswith('b') and name[1:].isdigit():
+        return 0.3 if name != 'rot_ws' else max(c[name], 1.0)
+    if name.startswith('f') and name.endswith('a'):
+        return 0.1
+    if name in ('rot_theta', 'rot_incl'):
+        return 30.0
     return 30.0
 
 
@@ -162,19 +242,33 @@ def _bounds(c, name, box, pos0):
         return (max(-0.5, pos0[0] - 0.25 * nx), min(nx - 0.5, pos0[0] + 0.25 * nx))
     if name == 'y':
         return (max(-0.5, pos0[1] - 0.25 * ny), min(ny - 0.5, pos0[1] + 0.25 * ny))
-    if name == 'flux':
-        return (0.0, max(abs(c['flux']), 1.0) * 1e3)
+    if name in FLUXLIKE:
+        return (0.0, max(abs(c[name]), 1.0) * 1e3)
     if name == 're':
         return (DEFAULT_BOUNDS['re'][0], min(DEFAULT_BOUNDS['re'][1], 0.9 * max(nx, ny)))
-    return DEFAULT_BOUNDS[name]
+    if (c['kind'], name) in KIND_BOUNDS:
+        return KIND_BOUNDS[(c['kind'], name)]
+    if name in DEFAULT_BOUNDS:
+        return DEFAULT_BOUNDS[name]
+    if name in ADV_BOUNDS:
+        return ADV_BOUNDS[name]
+    if name.startswith('f') and name.endswith('a'):
+        return (-0.9, 0.9)
+    if name.startswith('f') and name.endswith('p'):
+        return (-720.0, 720.0)
+    if name.startswith('b') and name[1:].isdigit():
+        return (-50.0, 50.0)
+    return (-np.inf, np.inf)
 
 
 def _apply(comps, free, tie_map, vec):
     out = [dict(c) for c in comps]
     for v, (i, name) in zip(vec, free):
         out[i][name] = float(v)
-    for (i, name), (j, name2) in tie_map.items():
-        out[i][name] = out[j][name2]
+    for _ in range(2):                                                   # ties to tied parameters (chains) settle in two passes
+        for (i, name), (j, name2, mode, val) in tie_map.items():
+            m = out[j][name2]
+            out[i][name] = m if mode == 'eq' else (m + val if mode == 'offset' else m * val)
     return out
 
 
@@ -283,22 +377,36 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
     for i, c in enumerate(cs):
         d = dict(kind=c['kind'])
         er = {}
-        for name in PARAMS[c['kind']]:
+        names = param_names(c)
+        for name in names:
             d[name] = float(c[name])
             if (i, name) in errmap:
                 er[name] = float(errmap[(i, name)])
+        for k_ in ('norm', 'trunc_in', 'trunc_out', 'rot_func'):
+            if k_ in c:
+                d[k_] = c[k_]
         if c['kind'] in FIXED_N:
             d['n'] = FIXED_N[c['kind']]
-        fl = max(c['flux'], 1e-30)
-        d['mag'] = float(zp - 2.5 * math.log10(fl)) if c['flux'] > 0 else float('nan')
-        er['mag'] = float(1.0857 * er['flux'] / fl) if 'flux' in er and c['flux'] > 0 else float('nan')
+        if 'flux' in names and c['kind'] != 'trunc':
+            fl = max(c['flux'], 1e-30)
+            d['mag'] = float(zp - 2.5 * math.log10(fl)) if c['flux'] > 0 else float('nan')
+            er['mag'] = float(1.0857 * er['flux'] / fl) if 'flux' in er and c['flux'] > 0 else float('nan')
+        elif c['kind'] == 'trunc' or c['kind'] == 'psf':
+            d['mag'] = float('nan')
+        else:                                                              # surface-brightness normalised profile: magnitude of the (unconvolved) model inside the fitted box
+            try:
+                tot = float(render_component(dict(c, flux=c.get('flux', 1.0)), (ny, nx), None, comps=cs).sum())
+            except Exception:
+                tot = 0.0
+            d['mag'] = float(zp - 2.5 * math.log10(tot)) if tot > 0 else float('nan')
+            er['mag'] = float('nan')
         d['errors'] = er
-        d['free'] = [n_ for n_ in PARAMS[c['kind']] if (i, n_) in errmap]
+        d['free'] = [n_ for n_ in names if (i, n_) in errmap]
         for (ii, name) in free:
             if ii == i:
                 k = free.index((ii, name))
                 b = (lo[k], hi[k])
-                if np.isfinite(c[name]) and (abs(c[name] - b[0]) < 1e-6 * max(1, abs(b[0])) + 1e-9 or abs(c[name] - b[1]) < 1e-6 * max(1, abs(b[1])) + 1e-9) and name not in ('flux',):
+                if np.isfinite(c[name]) and (abs(c[name] - b[0]) < 1e-6 * max(1, abs(b[0])) + 1e-9 or abs(c[name] - b[1]) < 1e-6 * max(1, abs(b[1])) + 1e-9) and name not in FLUXLIKE:
                     d.setdefault('at_bound', []).append(name)
                     hit = True
         out_c.append(d)
