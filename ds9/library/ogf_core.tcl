@@ -324,6 +324,7 @@ namespace eval ::ogf::cat {
         {morph,*                list   galaxy_model rw "per NUMBER: {type description confidence color}"}
         {isophote,*             any    isophote  rw   "isophote plugin: last output files (model_file, resid_file, table_file, plot_file) and the show-frames state"}
         {completeness,*         any    completeness rw "completeness plugin: result files and the 50 % / 90 % limiting magnitudes (lim50, lim90) of the last run"}
+        {daophot,*              any    daophot   rw   "daophot plugin: last output files (stars_file, psf_file, resid_file, diag_file, cmd_file)"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}
