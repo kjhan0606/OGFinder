@@ -60,8 +60,20 @@ menu-parity table), `settings_only`, `variants` (a cascade of `{id,label,proc}`)
 `after` (Tcl called when the job is done).
 
 `cli` templates: `{python}` `{plugin_dir}` `{work}` (`~/.ds9`) `{root}` `{image}` (current FITS) `{catalog}`
-(temporary TSV of the current catalog) and `{param-name}`; an element `{"if":"bool-param","argv":[...]}` is included
-only when the parameter is true.  The argv is what the recorder stores: paths under `{root}` become `@{ROOT}/...`
+(temporary TSV of the current catalog) and `{param-name}`; since item 3 also `{other_plugin:param}` (a parameter of another plugin, its `store`
+binding is honoured, e.g. `{extract:n-workers}`), `{script:NAME}` (a driver of `ds9/library`, found like `CatalogPanelGetScript`) and `{cat:KEY}`
+(a catalog-panel key through `::ogf::cat::get`, empty when unset, e.g. `{cat:psf,file}`).  An element `{"if":"bool-param","argv":[...]}` is
+included only when the parameter is true; `{"if_file":"{cat:psf,file}","argv":[...]}` only when the expanded token names an existing file.
+Optional step keys for cli steps: `record` (recorder step name when it must differ from `<plugin>.<step>`, e.g. `analysis.sersic`, so old session
+files and the golden test stay valid), `requires` (recorder `requires` list, default `catalog` for `add_columns`), `catalog_tmp` (name of the
+temporary catalog file, i.e. the `@{CAT:name}` token of the exported script), `done_status` (status text when the job finished OK);
+`needs` accepts `psf` besides `image` and `catalog`.  `tools/validate_manifests.py` (run by `scripts/run_all_checks.sh` as `manifests`)
+checks all manifests and templates statically: unknown tokens, parameters that do not exist, a driver or flag that does not exist,
+`{catalog}`/`{image}` without the matching `needs`, undefined procs, bad defaults.  Steps converted from Tcl procs to templates (item 3):
+`morphology.sersic`, `morphology.morphometry`, `morphology.bulge_disk`, `photometry.psf_phot`, `photometry.crowded` - the old procs
+(`CatalogPanelSersicFit`, ...) stay in the Tcl files as the oracle of `scripts/verify_cli_templates.tcl` (argv, recorder record, catalog and status
+identical for both paths: 53 checks) and for external callers.  The other proc steps were **not** converted: they open dialogs, read ICL/LSBG
+state, apply results to markers/frames, or write files the next step reads; a template cannot express that.  The argv is what the recorder stores: paths under `{root}` become `@{ROOT}/...`
 in the exported script, so drivers must live on disk (not in the embedded zip).
 
 Session classes: **AUTO** replayed by the exported script in pipeline mode on new data; **CONFIG** (band registry)
