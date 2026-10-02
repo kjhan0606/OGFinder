@@ -1,4 +1,4 @@
-# Extended morphology (plugins/morphology, step morph_ext): outputs of ds9_morph_ext.py -> catalog keys morphext,*, growth-curve plot / table windows.
+# Extended morphology (plugins/morph_ext): outputs of ds9_morph_ext.py -> catalog keys morphext,*, growth-curve plot / table windows.
 
 proc OGFMorphExtFile {name} {return [file join [OGFSessWorkDir] morph_ext $name]}
 

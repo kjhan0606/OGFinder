@@ -148,9 +148,9 @@ proc sec_multifit {} {
 }
 
 proc sec_morphext {} {
-    ::ogf::params::put morphology mx-max-sources 60
-    ::ogf::params::put morphology mx-curves 3
-    lassign [run_step morphology morph_ext] ok recs
+    ::ogf::params::put morph_ext mx-max-sources 60
+    ::ogf::params::put morph_ext mx-curves 3
+    lassign [run_step morph_ext morph_ext] ok recs
     R morphext_ran $ok $recs
     R morphext_recorded [expr {[lindex $recs 0 0] eq "analysis.morph_ext"}] $recs
     set cols [::ogf::cat::columns]
@@ -239,7 +239,14 @@ proc chips_fit {} {
     # the plugin that moved into a More menu is still reachable through the cascade
     if {[info exists ogfui(more,Measure)]} {
 	set m [$ogfui(more,Measure) cget -menu]
-	R chips_more_menu [expr {[$m index end] >= 0 && [string match *daophot* [lindex [$m entryconfigure 0 -menu] end]]}] [$m entryconfigure 0 -menu]
+	# every plugin that moved into the More menu stays reachable: each entry is a cascade whose sub-menu exists
+	set okm [expr {[$m index end] ne "none" && [$m index end] >= 0}]
+	for {set i 0} {$i <= [$m index end]} {incr i} {
+	    set sub [lindex [$m entryconfigure $i -menu] end]
+	    if {$sub eq {} || ![winfo exists $sub]} {set okm 0}
+	}
+	R chips_more_menu $okm "[$m index end] entries; first [lindex [$m entryconfigure 0 -menu] end]"
+
     }
 }
 

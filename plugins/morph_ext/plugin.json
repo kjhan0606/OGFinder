@@ -1,0 +1,250 @@
+{
+ "schema": 1,
+ "id": "morph_ext",
+ "name": "Extended morphology",
+ "short": "Morph+",
+ "tab": "Measure",
+ "order": 11,
+ "description": "Petrosian radii (3 eta), Petrosian flux, R20/R50/R80/R90, concentration, Kron radius/magnitude, noise-corrected smoothness, Petrosian-segmented Gini/M20 and growth curves with neighbour handling.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy",
+   "sep"
+  ]
+ },
+ "primary": "morph_ext",
+ "settings": "params",
+ "tcl": "morph_ext.tcl",
+ "steps": [
+  {
+   "id": "morph_ext",
+   "label": "Extended Morphology (Petrosian, Kron, S, growth curves)",
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.morph_ext"
+   ],
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "title": "Extended morphology",
+   "record": "analysis.morph_ext",
+   "requires": "",
+   "done_status": "extended morphology done",
+   "catalog_tmp": "morph_ext",
+   "after": "OGFMorphExtAfter",
+   "cli": [
+    "{python}",
+    "{script:ds9_morph_ext.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/morph_ext",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    "--eta",
+    "{mx-eta}",
+    "--eta-lo",
+    "{mx-eta-lo}",
+    "--eta-hi",
+    "{mx-eta-hi}",
+    "--kron-scale",
+    "{mx-kron-scale}",
+    "--kron-min",
+    "{mx-kron-min}",
+    "--smooth-frac",
+    "{mx-smooth-frac}",
+    "--rmax",
+    "{mx-rmax}",
+    "--neighbour-radius",
+    "{mx-neighbour-radius}",
+    "--max-sources",
+    "{mx-max-sources}",
+    "--curves",
+    "{mx-curves}",
+    {
+     "if": "mx-circular",
+     "argv": [
+      "--circular"
+     ]
+    },
+    {
+     "if": "mx-fill-neighbours",
+     "argv": [
+      "--mask-neighbours"
+     ]
+    },
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "MX_RP",
+     "MX_RP_LO",
+     "MX_RP_HI",
+     "MX_FLUX_P",
+     "MX_MAG_P",
+     "MX_R20",
+     "MX_R50",
+     "MX_R80",
+     "MX_R90",
+     "MX_CONC",
+     "MX_KRON_R",
+     "MX_KRON_MAG",
+     "MX_SMOOTH",
+     "MX_GINI_P",
+     "MX_M20_P",
+     "MX_FLAG"
+    ]
+   }
+  },
+  {
+   "id": "morph_curves",
+   "label": "Growth Curves Plot...",
+   "proc": "OGFMorphExtCurves",
+   "session": "NONE"
+  },
+  {
+   "id": "morph_growth",
+   "label": "Growth Curve Table...",
+   "proc": "OGFMorphExtTable",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "mx-eta",
+   "label": "Petrosian eta",
+   "type": "float",
+   "default": 0.2,
+   "group": "Extended morphology",
+   "help": "Petrosian ratio defining R_P (MX_RP); Petrosian flux = flux inside 2 R_P, R20..R90 and C are fractions of it.",
+   "min": 0.05,
+   "max": 0.6
+  },
+  {
+   "name": "mx-eta-lo",
+   "label": "eta (low)",
+   "type": "float",
+   "default": 0.1,
+   "group": "Extended morphology",
+   "help": "Second Petrosian ratio, column MX_RP_LO.",
+   "min": 0.02,
+   "max": 0.5,
+   "expert": true
+  },
+  {
+   "name": "mx-eta-hi",
+   "label": "eta (high)",
+   "type": "float",
+   "default": 0.3,
+   "group": "Extended morphology",
+   "help": "Third Petrosian ratio, column MX_RP_HI.",
+   "min": 0.05,
+   "max": 0.8,
+   "expert": true
+  },
+  {
+   "name": "mx-kron-scale",
+   "label": "Kron aperture scale",
+   "type": "float",
+   "default": 2.5,
+   "group": "Extended morphology",
+   "help": "Flux aperture = scale x Kron radius (SExtractor MAG_AUTO uses 2.5).",
+   "min": 1.0,
+   "max": 6.0
+  },
+  {
+   "name": "mx-kron-min",
+   "label": "Kron min. radius (px)",
+   "type": "float",
+   "default": 3.5,
+   "group": "Extended morphology",
+   "help": "Smallest semi-major axis of the Kron flux aperture.",
+   "min": 1.0,
+   "max": 30,
+   "expert": true
+  },
+  {
+   "name": "mx-smooth-frac",
+   "label": "Smoothness box (x R_P)",
+   "type": "float",
+   "default": 0.25,
+   "group": "Extended morphology",
+   "help": "Width of the boxcar of the smoothness / clumpiness S in units of the Petrosian radius.",
+   "min": 0.05,
+   "max": 0.6,
+   "expert": true
+  },
+  {
+   "name": "mx-circular",
+   "label": "Circular apertures",
+   "type": "bool",
+   "default": false,
+   "group": "Extended morphology",
+   "help": "Use circular apertures instead of the catalog ellipse (A_IMAGE, B_IMAGE, THETA_IMAGE)."
+  },
+  {
+   "name": "mx-fill-neighbours",
+   "label": "Mask neighbours",
+   "type": "bool",
+   "default": true,
+   "group": "Extended morphology",
+   "help": "Mask the other catalog objects (ellipses of neighbour radius x A_IMAGE) inside the aperture of the target; masked pixels are replaced by the azimuthal mean."
+  },
+  {
+   "name": "mx-neighbour-radius",
+   "label": "Neighbour mask radius (x A_IMAGE)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Extended morphology",
+   "help": "Semi-axis of the masked neighbour ellipse.",
+   "min": 1.0,
+   "max": 10,
+   "expert": true
+  },
+  {
+   "name": "mx-rmax",
+   "label": "Max. radius (px)",
+   "type": "float",
+   "default": 150.0,
+   "group": "Extended morphology",
+   "help": "Largest semi-major axis of the growth curve.",
+   "min": 20,
+   "max": 1000,
+   "expert": true
+  },
+  {
+   "name": "mx-max-sources",
+   "label": "Max. objects",
+   "type": "int",
+   "default": 500,
+   "group": "Extended morphology",
+   "help": "Brightest catalog objects measured.",
+   "min": 1,
+   "max": 100000
+  },
+  {
+   "name": "mx-curves",
+   "label": "Growth-curve plots",
+   "type": "int",
+   "default": 4,
+   "group": "Extended morphology",
+   "help": "Number of brightest objects in the growth-curve / eta plot (0 = none).",
+   "min": 0,
+   "max": 24
+  }
+ ]
+}

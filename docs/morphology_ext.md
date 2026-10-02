@@ -1,4 +1,4 @@
-# Extended morphology (Morphology plugin, step "Extended Morphology")
+# Extended morphology (plugin `morph_ext`, step "Extended Morphology")
 
 Adds what `morphometry/` (CAS, Gini, M20, one Petrosian radius) lacked, in the new module `morphometry/extended.py` (pure functions) and the driver `ds9/library/ds9_morph_ext.py`.
 The existing step and its columns (`CONC ASYM GINI M20 R_PETRO`) are unchanged.
@@ -18,11 +18,11 @@ The existing step and its columns (`CONC ASYM GINI M20 R_PETRO`) are unchanged.
 Apertures follow the catalog ellipse (A_IMAGE, B_IMAGE, THETA_IMAGE) unless *Circular apertures*. Other catalog objects (> 3 % of the target flux) are masked with ellipses of `neighbour-radius` x A_IMAGE;
 masked pixels are replaced by the mean of the unmasked pixels at the same elliptical radius (sep's area-ratio correction is not used: it is wrong when the mask sits in the outskirts).
 Growth curves (`morph_ext_growth.tsv`: NUMBER R FLUX ETA) and a growth-curve / eta plot of the brightest objects (`morph_ext_curves.png`) are written to `<work>/morph_ext/`
-(menu: *Growth Curves Plot…*, *Growth Curve Table…*). Parameters live in the "Extended morphology" group of the Structure dialog; catalog keys `morphext,*`.
+(menu: *Growth Curves Plot…*, *Growth Curve Table…*). Parameters live in the dialog of the "Morph+" chip (Measure tab); catalog keys `morphext,*`.
 
     python ds9/library/ds9_morph_ext.py IMAGE --catalog TSV [--mask FITS] [--work DIR] [--eta 0.2] [--kron-scale 2.5] [--mask-neighbours] [--circular] ...
 
-## Validation (analytic Sersic references: exact Petrosian eta from the incomplete gamma function, noise-free renderings, 401² images, F_tot = 1e5; `plugins/morphology/tests`)
+## Validation (analytic Sersic references: exact Petrosian eta from the incomplete gamma function, noise-free renderings, 401² images, F_tot = 1e5; `plugins/morph_ext/tests`)
 | case | R_P (eta 0.1/0.2/0.3) rel. error | R20/R50/R80/R90 max rel. error | C error | F_P/F_tot (true) |
 |---|---|---|---|---|
 | n=1, re 15, q 1 | +0.0001 / 0.0000 / -0.0004 | 0.0010 | 0.000 | 0.9931 (0.9933) |
