@@ -2,13 +2,24 @@
 import numpy as np
 
 
+_BN_CACHE = {}
+
+
 def sersic_bn(n):
     """Exact b_n: gamma(2n, b_n) = Gamma(2n)/2 (scipy), Ciotti & Bertin series if scipy is missing."""
+    key = float(n)
+    v = _BN_CACHE.get(key)
+    if v is not None:
+        return v
     try:
         from scipy.special import gammaincinv
-        return float(gammaincinv(2.0 * n, 0.5))
+        v = float(gammaincinv(2.0 * n, 0.5))
     except Exception:
-        return 2.0 * n - 1.0 / 3.0 + 4.0 / (405.0 * n) + 46.0 / (25515.0 * n * n)
+        v = 2.0 * n - 1.0 / 3.0 + 4.0 / (405.0 * n) + 46.0 / (25515.0 * n * n)
+    if len(_BN_CACHE) > 4096:
+        _BN_CACHE.clear()
+    _BN_CACHE[key] = v
+    return v
 
 
 def sersic_flux_total(Ie, re, n, q):
@@ -50,11 +61,13 @@ def render_sersic(shape, xc, yc, Ie, re, n, q, pa_deg, c=0.0, nsub=7, rsub=None,
         if not sel.any():
             continue
         o = (np.arange(ns) + 0.5) / ns - 0.5
-        acc = np.zeros(sel.sum())
+        oy_, ox_ = np.meshgrid(o, o, indexing='ij')
         xs, ys = x[sel], y[sel]
-        for oy in o:
-            for ox in o:
-                acc += _sersic_eval(xs + ox, ys + oy, xc, yc, Ie, re, n, q, pa_deg, c)
+        acc = np.zeros(xs.size)
+        step = max(1, 200000 // (ns * ns))                       # vectorised over the sub-pixel grid, in chunks of pixels
+        for a0 in range(0, xs.size, step):
+            sl = slice(a0, a0 + step)
+            acc[sl] = _sersic_eval(xs[sl, None] + ox_.ravel()[None, :], ys[sl, None] + oy_.ravel()[None, :], xc, yc, Ie, re, n, q, pa_deg, c).sum(axis=1)
         img[sel] = acc / (ns * ns)
     return img
 
