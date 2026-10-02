@@ -1,0 +1,370 @@
+{
+ "schema": 1,
+ "id": "spectra",
+ "name": "Spectroscopy (1D, 2D, IFU cubes)",
+ "short": "Spectra",
+ "tab": "Measure",
+ "order": 33,
+ "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window.",
+ "requires": {
+  "python": [
+   "numpy",
+   "scipy",
+   "astropy"
+  ]
+ },
+ "primary": "fit",
+ "settings": "params",
+ "tcl": "spectra.tcl",
+ "params": [
+  {
+   "name": "spec-dir",
+   "label": "Spectrum directory",
+   "type": "string",
+   "default": "",
+   "group": "Spectra",
+   "help": "Directory with the spectra (FITS table / 1D image / ASCII, 2D spectra, IFU cubes)."
+  },
+  {
+   "name": "spec-pattern",
+   "label": "File name pattern",
+   "type": "string",
+   "default": "spec_{NUMBER}.fits",
+   "group": "Spectra",
+   "help": "{NUMBER} is replaced by the catalog NUMBER."
+  },
+  {
+   "name": "link-file",
+   "label": "Link table (NUMBER FILE [KIND X Y ROW])",
+   "type": "string",
+   "default": "",
+   "group": "Spectra",
+   "help": "Optional TSV that overrides the pattern: one line per object; FILE relative to the table (or the spectrum directory)."
+  },
+  {
+   "name": "kind",
+   "label": "File kind",
+   "type": "choice",
+   "default": "auto",
+   "group": "Spectra",
+   "help": "auto = detect (table / 1D image -> 1D, 2D image -> 2D spectrum, 3D -> IFU cube).",
+   "choices": [
+    "auto",
+    "1d",
+    "2d",
+    "cube"
+   ]
+  },
+  {
+   "name": "wave-unit",
+   "label": "Wavelength unit",
+   "type": "choice",
+   "default": "auto",
+   "group": "Spectra",
+   "help": "auto = from the file (CUNIT/TUNIT; micron-sized values without unit are read as micron).",
+   "choices": [
+    "auto",
+    "angstrom",
+    "nm",
+    "um"
+   ]
+  },
+  {
+   "name": "row-column",
+   "label": "Catalog column with the spectrum row",
+   "type": "string",
+   "default": "",
+   "group": "2D / IFU extraction",
+   "help": "2D spectra: row (0-based) of the object; empty = the middle row. A ROW column in the link table has priority."
+  },
+  {
+   "name": "extract-mode",
+   "label": "2D extraction",
+   "type": "choice",
+   "default": "boxcar",
+   "group": "2D / IFU extraction",
+   "help": "boxcar = fractional-edge sum; optimal = Horne weights with a Gaussian profile measured from the collapsed spectrum.",
+   "choices": [
+    "boxcar",
+    "optimal"
+   ]
+  },
+  {
+   "name": "extract-halfwidth",
+   "label": "2D half width (rows)",
+   "type": "float",
+   "default": 3.0,
+   "group": "2D / IFU extraction",
+   "help": "",
+   "min": 0.5,
+   "max": 50
+  },
+  {
+   "name": "sky-inner",
+   "label": "Sky rows: inner offset",
+   "type": "float",
+   "default": 0.0,
+   "group": "2D / IFU extraction",
+   "help": "Rows with inner < |row - object| <= outer give a median sky per column that is subtracted (outer 0 = off).",
+   "min": 0,
+   "max": 500
+  },
+  {
+   "name": "sky-outer",
+   "label": "Sky rows: outer offset",
+   "type": "float",
+   "default": 0.0,
+   "group": "2D / IFU extraction",
+   "help": "",
+   "min": 0,
+   "max": 500
+  },
+  {
+   "name": "aperture-radius",
+   "label": "IFU aperture radius (spaxels)",
+   "type": "float",
+   "default": 2.5,
+   "group": "2D / IFU extraction",
+   "help": "Circular aperture centred on the catalog X_IMAGE / Y_IMAGE read as spaxel coordinates (or X, Y of the link table).",
+   "min": 0.5,
+   "max": 100
+  },
+  {
+   "name": "cube-xy",
+   "label": "Catalog position = spaxel",
+   "type": "bool",
+   "default": true,
+   "group": "2D / IFU extraction",
+   "help": "If off, cubes are extracted at the cube centre unless the link table gives X, Y."
+  },
+  {
+   "name": "snr-min",
+   "label": "Line detection S/N",
+   "type": "float",
+   "default": 4.0,
+   "group": "Lines and redshift",
+   "help": "Matched-filter threshold.",
+   "min": 2,
+   "max": 50
+  },
+  {
+   "name": "kernel-sigma-px",
+   "label": "Matched-filter sigma (pixels)",
+   "type": "float",
+   "default": 2.0,
+   "group": "Lines and redshift",
+   "help": "",
+   "min": 0.5,
+   "max": 20,
+   "expert": true
+  },
+  {
+   "name": "cont-width",
+   "label": "Continuum window (pixels)",
+   "type": "int",
+   "default": 101,
+   "group": "Lines and redshift",
+   "help": "Width of the running median (lines masked iteratively).",
+   "min": 11,
+   "max": 2001,
+   "expert": true
+  },
+  {
+   "name": "z-column",
+   "label": "Known redshift column (empty = blind)",
+   "type": "string",
+   "default": "",
+   "group": "Lines and redshift",
+   "help": "If the catalog has a redshift (e.g. Z_SPEC), lines are fitted at that redshift instead of searching."
+  },
+  {
+   "name": "zmax",
+   "label": "Maximum redshift searched",
+   "type": "float",
+   "default": 7.0,
+   "group": "Lines and redshift",
+   "help": "",
+   "min": 0.1,
+   "max": 15
+  },
+  {
+   "name": "fit-line",
+   "label": "Line for SP_LINE_* columns",
+   "type": "choice",
+   "default": "Ha",
+   "group": "Lines and redshift",
+   "help": "Flux, FWHM and rest-frame equivalent width of this line are reported.",
+   "choices": [
+    "Lya",
+    "CIV",
+    "CIII]",
+    "MgII",
+    "[OII]",
+    "Hg",
+    "Hb",
+    "[OIII]5008",
+    "Ha",
+    "[NII]6585",
+    "[SII]6718"
+   ]
+  }
+ ],
+ "steps": [
+  {
+   "id": "link",
+   "label": "Link Spectra to Catalog",
+   "title": "Link spectra to catalog objects",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_link",
+   "catalog_tmp": "spectra_link",
+   "done_status": "spectra linked",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "link",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SP_FILE",
+     "SP_KIND",
+     "SP_OK"
+    ]
+   }
+  },
+  {
+   "id": "fit",
+   "label": "Fit Lines + Redshift",
+   "title": "Fit emission lines and redshifts",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_fit",
+   "catalog_tmp": "spectra_fit",
+   "done_status": "spectra fitted",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "fit",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--snr-min",
+    "{snr-min}",
+    "--kernel-sigma-px",
+    "{kernel-sigma-px}",
+    "--cont-width",
+    "{cont-width}",
+    "--z-column",
+    "{z-column}",
+    "--zmax",
+    "{zmax}",
+    "--fit-line",
+    "{fit-line}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SP_Z",
+     "SP_ZERR",
+     "SP_ZQ",
+     "SP_NLINES",
+     "SP_SNR",
+     "SP_LINE_FLUX",
+     "SP_LINE_FLUXERR",
+     "SP_LINE_FWHM_KMS",
+     "SP_LINE_EW"
+    ]
+   }
+  },
+  {
+   "id": "viewer",
+   "label": "Spectrum Viewer...",
+   "proc": "OGFSpectraViewer",
+   "session": "NONE"
+  },
+  {
+   "id": "table",
+   "label": "Link / Result Table...",
+   "proc": "OGFSpectraTable",
+   "session": "NONE"
+  }
+ ]
+}
