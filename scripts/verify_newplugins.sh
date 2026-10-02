@@ -21,5 +21,10 @@ if [ -f "$W/gui/ogfinder_session.py" ]; then
     if [ -f "$W/replay/m51/outputs/saved.tsv.meta.json" ]; then echo "replay: catalog metadata sidecar written"; else echo "replay: catalog metadata sidecar MISSING"; ok=0; fi
   fi
   [ $rc = 0 ] && [ "$nw" = 0 ] && [ "$nid" -ge 1 ] || ok=0
+  if [ -f "$W/gui/gui_bundle.zip" ]; then      # reproducibility bundle made by the GUI (repro section): re-run its session script and compare the catalog
+    "$PY" plugins/repro/repro.py verify "$W/gui/gui_bundle.zip" --workdir "$W/bundle_verify" -- "${OGF_TEST_FITS:-/workspace/fits}/m51.fits" > "$W/bundle_verify.txt" 2>&1; brc=$?
+    echo "bundle verify: rc=$brc $(grep '^VERIFY' "$W/bundle_verify.txt")"; grep -E '^FAIL' "$W/bundle_verify.txt" | head -5
+    [ $brc = 0 ] || ok=0
+  fi
 else echo "no exported session script"; ok=0; fi
 [ $ok = 1 ]

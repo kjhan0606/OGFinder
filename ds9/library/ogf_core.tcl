@@ -334,6 +334,9 @@ namespace eval ::ogf::cat {
         {cluster,*              any    cluster    rw  "cluster / lensing plugin: output files (rs_png, density_file, peaks_file, json_file)"}
         {spectra,*               any    spectra rw  "spectroscopy plugin: links_file, results_file"}
         {xmatch,*                any    xmatch rw  "cross-match plugin: summary_file, pairs_file"}
+        {lightcurves,*           any    lightcurves rw  "light-curve plugin: results_file, json_file"}
+        {batch,*                 any    batch rw  "batch plugin: nothing stored"}
+        {repro,*                 any    repro rw  "repro plugin: nothing stored"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}

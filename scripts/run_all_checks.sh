@@ -112,6 +112,12 @@ chk_spectra_tests() { "$PY" -m pytest -q plugins/spectra/tests 2>&1 | tail -3; [
 EXTRA="$EXTRA spectra_tests"
 chk_xmatch_tests() { "$PY" -m pytest -q plugins/xmatch/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA xmatch_tests"
+chk_lightcurves_tests() { "$PY" -m pytest -q plugins/lightcurves/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA lightcurves_tests"
+chk_batch_tests() { "$PY" -m pytest -q plugins/batch/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA batch_tests"
+chk_repro_tests() { "$PY" -m pytest -q plugins/repro/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA repro_tests"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc

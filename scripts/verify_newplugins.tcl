@@ -356,6 +356,138 @@ proc sec_xmatch {} {
     R xmatch_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_lightcurves {} {
+    set dir [file join [file dirname [OGFSessWorkDir]] lc_demo]
+    set nums [lrange [::ogf::cat::values NUMBER] 0 27]
+    exec [OGFPython] [file join [::ogf::step::plugin_dir lightcurves] make_demo.py] $dir [join $nums ,] --seed 3
+    ::ogf::params::put lightcurves source file
+    ::ogf::params::put lightcurves lc-file [file join $dir lc_demo.tsv]
+    lassign [run_step lightcurves classify] ok recs
+    R lightcurves_ran $ok $recs
+    R lightcurves_recorded [expr {[lindex $recs 0 0] eq "analysis.lightcurves"}] $recs
+    R lightcurves_columns [expr {"LC_CLASS" in [::ogf::cat::columns] && "LC_PSN" in [::ogf::cat::columns] && "LC_PEAK_MAG" in [::ogf::cat::columns]}]
+    R lightcurves_rows [expr {[nonempty LC_PSN] >= 22}] "psn=[nonempty LC_PSN]"
+    # compare with the demo truth
+    set tf [open [file join $dir truth.tsv] r]; set tl [split [read $tf] \n]; close $tf
+    set truth {}
+    foreach l [lrange $tl 1 end] {if {$l ne {}} {dict set truth [lindex $l 0] [lindex $l 1]}}
+    set good 0; set tot 0; set snok 0; set sntot 0
+    foreach n [::ogf::cat::values NUMBER] c [::ogf::cat::values LC_CLASS] p [::ogf::cat::values LC_PSN] {
+	if {![dict exists $truth $n] || $c eq {}} continue
+	incr tot
+	set t [dict get $truth $n]
+	if {$c eq $t} {incr good}
+	if {$t in {SNIa SNIbc SNII}} {incr sntot; if {$p ne {} && $p >= 0.5} {incr snok}}
+    }
+    R lightcurves_accuracy [expr {$tot >= 24 && double($good) / $tot >= 0.6}] "class match $good of $tot; SN found $snok of $sntot"
+    foreach f {lc_results.tsv lc_results.json} {
+	R lightcurves_file_$f [expr {[file exists [file join [OGFSessWorkDir] lightcurves $f]] && [file size [file join [OGFSessWorkDir] lightcurves $f]] > 100}]
+    }
+    set w [OGFLcViewer LC[lindex $nums 0]]
+    update
+    R lightcurves_viewer [expr {[winfo exists $w] && [image width ogflcimg] > 400 && [image height ogflcimg] > 200}] "[image width ogflcimg]x[image height ogflcimg]"
+    OGFLcStep 1; update
+    R lightcurves_viewer_next [expr {$::ogf_lc_id eq "LC[lindex $nums 1]"}] "now $::ogf_lc_id"
+    destroy $w
+    OGFLcTable; update
+    R lightcurves_table_window [expr {[winfo exists .ogftext] && [string match "*PSN*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    R lightcurves_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
+proc sec_batch {} {
+    # 1. the Python expansion of the cli templates equals the Tcl one (same params, same context)
+    set script [file join [::ogf::step::plugin_dir batch] batch.py]
+    set neq 0; set nn 0; set bad {}
+    foreach {pid sid} {xmatch match cluster members daophot find daophot run isophote fit sedcodes photoz spectra fit psfex build} {
+	if {[catch {
+	    set step [::ogf::reg::step $pid $sid]
+	    set ctx [::ogf::step::context $pid [expr {[::ogf::json::get $step catalog_tmp] ne {} ? [::ogf::json::get $step catalog_tmp] : $sid}]]
+	    set tcl_argv [::ogf::step::build_argv $pid $step $ctx]
+	    set pj {}
+	    foreach p [::ogf::json::get [::ogf::reg::get $pid] params] {
+		set v [::ogf::params::get $pid [dict get $p name]]
+		lappend pj [dict get $p name] $v
+	    }
+	    set pd "\{"; set first 1
+	    foreach {k v} $pj {if {!$first} {append pd ,}; set first 0; append pd "\"$k\":\"[string map [list \\ \\\\ \" \\\"] $v]\""}
+	    append pd "\}"
+	    set cj "\{\"python\":\"[dict get $ctx python]\",\"work\":\"[dict get $ctx work]\",\"image\":\"[dict get $ctx image]\",\"root\":\"[dict get $ctx root]\",\"mask\":\"[dict get $ctx mask]\",\"catalog\":\"[expr {[dict exists $ctx catalog] ? [dict get $ctx catalog] : {}}]\"\}"
+	    set out [exec [OGFPython] $script --expand $pid.$sid --root [OGFSessRoot] --ctx-json $cj --params-json $pd]
+	    set py_argv [::ogf::json::parse $out]
+	} err]} {
+	    lappend bad "$pid.$sid: $err"
+	    continue
+	}
+	incr nn
+	if {$py_argv eq $tcl_argv} {incr neq} else {lappend bad "$pid.$sid differs"}
+    }
+    R batch_expand_equal [expr {$nn >= 6 && $neq == $nn}] "$neq of $nn identical; [join [lrange $bad 0 2] {; }]"
+    # 2. a small batch run through the GUI
+    set base [file join [file dirname [OGFSessWorkDir]] batch_demo]
+    file mkdir $base
+    set py "import numpy as np\nfrom astropy.io import fits\nfor k in range(3):\n    rng=np.random.RandomState(k); im=rng.randn(200,200)*5+100\n    yy,xx=np.mgrid\[0:200,0:200\]\n    for i in range(15):\n        x,y=rng.rand(2)*160+20; im+=rng.uniform(150,900)*np.exp(-((xx-x)**2+(yy-y)**2)/8.0)\n    fits.writeto('$base/f%d.fits'%k, im.astype('float32'), overwrite=True)\n"
+    exec [OGFPython] -c $py
+    set fh [open [file join $base fields.txt] w]
+    foreach k {0 1 2} {puts $fh "G$k [file join $base f$k.fits]"}
+    close $fh
+    set fh [open [file join $base recipe.json] w]
+    puts $fh {{"detect": {"args": ["--detect-thresh", "3"]}, "steps": [{"plugin": "noisemodel", "step": "model"}, {"plugin": "example_hello", "step": "greet"}]}}
+    close $fh
+    ::ogf::params::put batch fields-file [file join $base fields.txt]
+    ::ogf::params::put batch recipe-file [file join $base recipe.json]
+    ::ogf::params::put batch outdir [file join $base out]
+    ::ogf::params::put batch jobs 3
+    ::ogf::params::put batch resume 0
+    OGFBatchRun
+    update
+    R batch_started [expr {$::ogf::batch::running && [winfo exists .ogfbatch]}]
+    set t0 [clock seconds]
+    while {$::ogf::batch::running && [clock seconds] - $t0 < 120} {after 200; update}
+    R batch_finished [expr {!$::ogf::batch::running && $::ogf::batch::rc == 0}] "rc=$::ogf::batch::rc after [expr {[clock seconds]-$t0}] s"
+    update
+    set nrows [llength [.ogfbatch.tree children {}]]
+    set states {}
+    foreach c [.ogfbatch.tree children {}] {lappend states [lindex [.ogfbatch.tree item $c -values] 1]}
+    R batch_progress_view [expr {$nrows == 3 && $states eq {ok ok ok}}] "rows=$nrows states=$states"
+    set sf [file join $base out summary.tsv]
+    set fh [open $sf r]; set lines [split [string trim [read $fh]] \n]; close $fh
+    R batch_summary [expr {[llength $lines] == 4 && ![regexp {\tfailed\t} [join [lrange $lines 1 end] \n]]}] [lindex $lines 1]
+    R batch_field_logs [expr {[file size [file join $base out G0 field.log]] > 100 && [file exists [file join $base out G2 catalog.tsv]]}]
+    # resume
+    ::ogf::params::put batch resume 1
+    OGFBatchRun
+    set t0 [clock seconds]
+    while {$::ogf::batch::running && [clock seconds] - $t0 < 120} {after 200; update}
+    set fh [open $sf r]; set txt [read $fh]; close $fh
+    R batch_resume_cached [expr {[regexp {\t0\t3\t0\t} [lindex [split $txt \n] 1]] || [regexp {\t3\t0\t} [lindex [split $txt \n] 1]]}] [lindex [split $txt \n] 1]
+    OGFBatchSummary; update
+    R batch_summary_window [expr {[winfo exists .ogftext] && [string match "*G1*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    destroy .ogfbatch
+    R batch_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
+proc sec_repro {} {
+    ::ogf::params::put repro bundle-file [file join [expr {[info exists ::env(OGF_NP_DIR)] ? $::env(OGF_NP_DIR) : [file dirname [OGFSessWorkDir]]}] gui_bundle.zip]
+    ::ogf::params::put repro note "verify_newplugins"
+    set z [OGFReproBundle]
+    R repro_bundle_written [expr {$z ne {} && [file size $z] > 2000}] "$z [expr {[file exists $z] ? [file size $z] : 0}] bytes"
+    set listing [exec [OGFPython] -c "import zipfile,sys;print(' '.join(zipfile.ZipFile(sys.argv\[1\]).namelist()))" $z]
+    R repro_bundle_files [expr {[string match "*manifest.json*" $listing] && [string match "*params.json*" $listing] && [string match "*steps.json*" $listing] && [string match "*requirements.lock*" $listing] && [string match "*session.py*" $listing] && [string match "*outputs/catalog_final.tsv*" $listing]}] $listing
+    set mj [exec [OGFPython] -c "import zipfile,sys,json;m=json.loads(zipfile.ZipFile(sys.argv\[1\]).read('manifest.json'));p=json.loads(zipfile.ZipFile(sys.argv\[1\]).read('params.json'));s=json.loads(zipfile.ZipFile(sys.argv\[1\]).read('steps.json'));print(m\['kind'],len(m\['inputs']),len(m\['outputs']),len(p),len(s),m\['tool'].get('head','')\[:9\],m\['outputs']\[0]\['rows'])" $z]
+    lassign $mj kind nin nout npl nstep head rows
+    R repro_manifest [expr {$kind eq "session" && $nin >= 1 && $nout == 1 && $npl >= 20 && $nstep >= 1}] "kind=$kind inputs=$nin plugins-with-params=$npl steps=$nstep git=$head rows=$rows"
+    R repro_rows_match [expr {$rows == [llength [::ogf::cat::values NUMBER]]}] "rows=$rows catalog=[llength [::ogf::cat::values NUMBER]]"
+    set ok [OGFReproVerify]
+    R repro_verify_integrity $ok $::ogf::repro::last_out
+    catch {destroy .ogftext}
+    OGFReproInfo; update
+    R repro_info_window [expr {[winfo exists .ogftext] && [string match "*sha256*" [.ogftext.t get 1.0 end]]}]
+    catch {destroy .ogftext}
+    R repro_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_daophot {} {
     set f0 [llength $::ds9(frames)]
     ::ogf::params::put daophot fwhm 3.5
@@ -445,7 +577,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster spectra xmatch} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel sedcodes cluster spectra xmatch lightcurves batch repro} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}
