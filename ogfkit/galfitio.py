@@ -283,10 +283,11 @@ def _fmt(v, p=4):
     return ('%.' + str(p) + 'f') % v
 
 
-def write_feedme(cfg, image='image.fits', output='imgblock.fits', sigma='none', psf='none', mask='none', constraints='none', region=None, shape=None, conv_box=None, plate_scale=(1.0, 1.0),
+def write_feedme(cfg, image='image.fits', output='imgblock.fits', sigma='none', psf='none', mask='none', constraints='none', region=None, shape=None, conv_box=None, plate_scale=None,
                  zp=None, exptime=None, mode=0, comment=''):
     """Config dict (as returned by parse_feedme / used by plugins/multifit --config) -> GALFIT feedme text.
     Component values are written as the start values (use the fitted config to export a result).  Object order: components, then the sky."""
+    plate_scale = plate_scale or cfg.get('plate_scale') or (1.0, 1.0)
     zp = cfg.get('zp', 25.0) if zp is None else zp
     exptime = cfg.get('exptime', 1.0) if exptime is None else exptime
     lm = 2.5 * math.log10(max(exptime, 1e-30))

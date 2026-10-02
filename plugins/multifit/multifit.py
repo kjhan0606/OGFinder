@@ -163,7 +163,7 @@ def fit_object(i):
                GF_NERR=dom['errors'].get('n') if dom['kind'] == 'sersic' else None, GF_Q=dom.get('q') if dom['kind'] != 'psf' else None,
                GF_PA=dom.get('pa') if dom['kind'] != 'psf' else None, GF_BT=(first['flux'] / tot) if (len(comps) > 1 and tot > 0) else None,
                GF_MAG2=comps[1]['mag'] if len(comps) > 1 else None, GF_SKY=res['sky'], GF_CHI2=res['chi2_red'], GF_NCOMP=len(comps), GF_NNEIGH=nn, GF_RESFRAC=resfrac, GF_FLAG=flag,
-               model_name=nameid, comps=[{k: v for k, v in c.items()} for c in comps], bbox=(cx0, cx1, cy0, cy1), tmod=tmod.astype(np.float32), nfev=res['nfev'], bic=res['bic'])
+               model_name=nameid, comps=[{k: v for k, v in c.items()} for c in comps], all_comps=[{k: v for k, v in c.items()} for c in res['components']], bbox=(cx0, cx1, cy0, cy1), tmod=tmod.astype(np.float32), nfev=res['nfev'], bic=res['bic'])
     if a.keep_stamps:
         out['stamps'] = (cut.astype(np.float32), (res['model']).astype(np.float32), (res['residual']).astype(np.float32))
     return out
@@ -220,20 +220,74 @@ def montage(results, path, n=6):
     plt.close(fig)
 
 
-def run_config(a, data, mask):
-    cfg = json.load(open(a.config))
+def load_config(a, hdr):
+    """JSON config or GALFIT feedme (detected by content) -> config dict (1-based image coordinates)."""
+    txt = open(a.config).read()
+    if txt.lstrip().startswith('{'):
+        return json.loads(txt)
+    from ogfkit import galfitio
+    ex = 1.0
+    for k in ('EXPTIME', 'EXPOSURE', 'ITIME'):
+        try:
+            ex = float(hdr[k]); break
+        except Exception:
+            pass
+    cfg = galfitio.parse_feedme(a.config, exptime=ex)
+    for w in cfg.get('warnings', ()):
+        sys.stderr.write('multifit: GALFIT feedme: %s\n' % w)
+    if cfg.get('psf_sampling', 1) != 1:
+        raise SystemExit('multifit: PSF fine sampling E) = %d is not supported (provide a PSF at the data pixel scale)' % cfg['psf_sampling'])
+    return cfg
+
+
+def export_feedme(a, data_path, comps_img, bbox, cfg, sky, grad, res, psf_file='none', tag='', tie=None, zp=25.0):
+    """Write a GALFIT feedme (+ constraints when bounds / ties exist) that reproduces this fit's model; comps_img in 1-based image coordinates; bbox = (x0, x1, y0, y1) 0-based half-open."""
+    from ogfkit import galfitio
+    out = dict(cfg or {}, components=comps_img, bbox=list(bbox), sky_value=sky, sky_grad=list(grad), tie=tie or [], zp=zp)
+    out['sky'] = (cfg or {}).get('sky', 'const')
+    out.pop('region', None)
+    shape = (bbox[3] - bbox[2], bbox[1] - bbox[0])
+    cons = galfitio.write_constraints(out)
+    has_cons = len(cons.strip().splitlines()) > 1
+    base = a.export_feedme
+    if not base.endswith('.feedme'):
+        os.makedirs(base, exist_ok=True)
+        base = os.path.join(base, 'galfit%s.feedme' % tag)
+    cpath = os.path.splitext(base)[0] + '.constraints'
+    text = galfitio.write_feedme(out, image=os.path.abspath(data_path), output='imgblock%s.fits' % tag, psf=psf_file, mask=(os.path.abspath(a.mask) if a.mask and os.path.isfile(a.mask) else 'none'),
+                                 constraints=(cpath if has_cons else 'none'), shape=shape, zp=zp, exptime=(cfg or {}).get('exptime', 1.0), comment='chi2/dof %.3f' % res['chi2_red'] if res else '')
+    with open(base, 'w') as fh:
+        fh.write(text)
+    if has_cons:
+        with open(cpath, 'w') as fh:
+            fh.write(cons)
+    return base
+
+
+def run_config(a, data, mask, cfg, hdr=None):
     comps = cfg['components']
     bb = cfg.get('bbox') or [0, data.shape[1], 0, data.shape[0]]
     x0, x1, y0, y1 = [int(v) for v in bb]
     cut = data[y0:y1, x0:x1].astype(float)
     cm = (mask[y0:y1, x0:x1] if mask is not None else None)
+    one = cfg.get('one_based', True)
+    comps_img = [json.loads(json.dumps(c)) for c in comps]              # untouched copy (image coordinates) for the export
     for c in comps:
-        c['x'] = c['x'] - x0 - 1 if cfg.get('one_based', True) else c['x'] - x0
-        c['y'] = c['y'] - y0 - 1 if cfg.get('one_based', True) else c['y'] - y0
+        c['x'] = c['x'] - x0 - 1 if one else c['x'] - x0
+        c['y'] = c['y'] - y0 - 1 if one else c['y'] - y0
+        for k, off in (('x', x0 + (1 if one else 0)), ('y', y0 + (1 if one else 0))):         # bounds on x / y are given in image coordinates like x / y
+            if k in c.get('bounds', {}):
+                c['bounds'][k] = [v - off for v in c['bounds'][k]]
     psf, desc = build_psf(data, mask, a)
-    rms = cfg.get('rms') or imageio.robust_sigma(cut, cm)
+    rms = cfg.get('rms') or None
+    if cfg.get('sigma') and os.path.isfile(cfg['sigma']):
+        rms = imageio.load_image(cfg['sigma'])[0][y0:y1, x0:x1].astype(float)
+        desc += ', sigma image ' + os.path.basename(cfg['sigma'])
+    if rms is None:
+        rms = imageio.robust_sigma(cut, cm)
+    g0 = cfg.get('sky_grad') or [0.0, 0.0]
     res = mf.fit(cut, comps, psf=psf, rms=rms, mask=cm, sky=cfg.get('sky', 'const'), sky_value=cfg.get('sky_value'), gain=cfg.get('gain') or a.gain or None,
-                 zp=cfg.get('zp', a.mag_zeropoint), tie=cfg.get('tie'), max_nfev=a.max_nfev)
+                 zp=cfg.get('zp', a.mag_zeropoint), tie=cfg.get('tie'), max_nfev=a.max_nfev, sky_grad=g0)
     full_m = np.zeros(data.shape, np.float32); full_r = np.zeros(data.shape, np.float32)
     full_m[y0:y1, x0:x1] = res['model']; full_r[y0:y1, x0:x1] = res['residual']
     imageio.save_fits(os.path.join(a.work, 'multifit_model.fits'), full_m)
@@ -250,6 +304,24 @@ def run_config(a, data, mask):
     tsvio.write_table(os.path.join(a.work, 'multifit_results.tsv'), ['COMP', 'KIND', 'X', 'Y', 'MAG', 'MAGERR', 'RE', 'REERR', 'N', 'Q', 'PA'], recs)
     with open(os.path.join(a.work, 'multifit_config_result.json'), 'w') as fh:
         json.dump({k: v for k, v in res.items() if k not in ('model', 'residual', 'good')}, fh, default=lambda o: None)
+    if a.export_feedme:
+        fitted = []
+        for c0, c in zip(comps_img, res['components']):
+            d = dict(c0, x=c['x'] + x0 + (1 if one else 0), y=c['y'] + y0 + (1 if one else 0), mag=c['mag'])
+            if c['kind'] != 'psf':
+                d.update(re=c['re'], q=c['q'], pa=c['pa'])
+                if c['kind'] == 'sersic':
+                    d['n'] = c['n']
+            d.pop('flux', None)
+            for k in list(d.get('bounds', {})):
+                if k in ('x', 'y'):
+                    pass
+            fitted.append(d)
+        for d, c0 in zip(fitted, comps_img):                                  # bounds were given in image coordinates: keep them
+            d['bounds'] = c0.get('bounds', {})
+        fn = export_feedme(a, a.image, fitted, (x0, x1, y0, y1), cfg, res['sky'], res['sky_grad'], res, psf_file=os.path.abspath(a.psf) if a.psf and os.path.isfile(a.psf) else (cfg.get('psf') or 'none'),
+                           tie=cfg.get('tie'), zp=cfg.get('zp', a.mag_zeropoint))
+        lines.append('GALFIT feedme written: %s' % fn)
     print('\n'.join(lines))
     return 0
 
@@ -283,13 +355,30 @@ def main(argv=None):
     ap.add_argument('--n-workers', type=int, default=0)
     ap.add_argument('--montage', type=int, default=6)
     ap.add_argument('--no-residual', action='store_true')
+    ap.add_argument('--export-feedme', default='', help='write the fitted model as a GALFIT feedme (file; with --config) or into this directory (catalog mode: one galfit_<NUMBER>.feedme per fitted object)')
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
     W = lambda n: os.path.join(a.work, 'multifit_' + n)
+    cfg = None
+    if a.config and a.image in ('-', 'feedme'):                              # image / PSF / mask named in the feedme
+        from ogfkit import galfitio
+        cfg0 = galfitio.parse_feedme(a.config)
+        a.image = cfg0['input']
+        if cfg0.get('psf') and not (a.psf or a.psf_model):
+            a.psf = cfg0['psf']
+        if cfg0.get('mask') and not a.mask:
+            a.mask = cfg0['mask']
     data, hdr = imageio.load_image(a.image)
     mask = imageio.load_mask(a.mask, data.shape) if a.mask and os.path.isfile(a.mask) else None
     if a.config:
-        return run_config(a, data, mask)
+        cfg = load_config(a, hdr)
+        if cfg.get('galfit'):
+            if cfg.get('psf') and os.path.isfile(cfg['psf']) and not (a.psf or a.psf_model or a.psf_fwhm > 0):
+                a.psf = cfg['psf']
+            if cfg.get('mask') and os.path.isfile(cfg['mask']) and mask is None:
+                mask = imageio.load_mask(cfg['mask'], data.shape)
+                a.mask = cfg['mask']
+        return run_config(a, data, mask, cfg, hdr)
     cols, rows = tsvio.read_catalog(a.catalog)
     zp = a.mag_zeropoint
     sv = [start_values(r, zp) for r in rows]
@@ -334,6 +423,31 @@ def main(argv=None):
     if not a.no_residual:
         imageio.save_fits(W('model.fits'), full_m)
         imageio.save_fits(W('residual.fits'), (data - full_m).astype(np.float32))
+    if a.export_feedme:
+        os.makedirs(a.export_feedme, exist_ok=True)
+        nexp = 0
+        for r in results:
+            if 'bbox' not in r:
+                continue
+            x0, x1, y0, y1 = r['bbox']
+            cs = []
+            for c in r['all_comps']:
+                d = dict(kind=c['kind'], x=c['x'] + x0 + 1, y=c['y'] + y0 + 1, mag=c['mag'], fixed=sorted(c.get('fixed', ())))
+                if c['kind'] != 'psf':
+                    d.update(re=c['re'], q=c['q'], pa=c['pa'])
+                    if c['kind'] == 'sersic':
+                        d['n'] = c['n']
+                cs.append(d)
+            tag = '_%s' % r['NUMBER']
+            pf = os.path.join(a.export_feedme, 'galfit%s_psf.fits' % tag)
+            try:
+                st = mf.psf_stamp(psf, cs[0]['x'] - 1, cs[0]['y'] - 1)
+                imageio.save_fits(pf, np.asarray(st, np.float32))
+            except Exception:
+                pf = 'none'
+            export_feedme(a, a.image, cs, (x0, x1, y0, y1), None, r['GF_SKY'], (0.0, 0.0), dict(chi2_red=r['GF_CHI2']), psf_file=os.path.abspath(pf) if pf != 'none' else 'none', tag=tag, zp=zp)
+            nexp += 1
+        sys.stderr.write('multifit: %d GALFIT feedme files written to %s (target + fitted neighbours; masked neighbours are not exported)\n' % (nexp, a.export_feedme))
     montage(sorted([r for r in results if 'stamps' in r], key=lambda r: r['i']), W('montage.png'), a.montage)
     ok = [r for r in results if r.get('GF_FLAG', 0) == 0 or 'bbox' in r]
     nconv = sum(1 for r in results if 'bbox' in r and not (r['GF_FLAG'] & (mf.FLAGS['NOCONV'] | mf.FLAGS['CHI2'])))

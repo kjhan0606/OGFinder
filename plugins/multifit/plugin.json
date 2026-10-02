@@ -103,7 +103,14 @@
     "--mag-zeropoint",
     "{extract:mag-zeropoint}",
     "--n-workers",
-    "{extract:n-workers}"
+    "{extract:n-workers}",
+    {
+     "if": "export-feedme",
+     "argv": [
+      "--export-feedme",
+      "{work}/multifit/galfit"
+     ]
+    }
    ],
    "output": {
     "mode": "add_columns",
@@ -181,7 +188,14 @@
     "--gain",
     "{gain}",
     "--mag-zeropoint",
-    "{extract:mag-zeropoint}"
+    "{extract:mag-zeropoint}",
+    {
+     "if": "export-feedme",
+     "argv": [
+      "--export-feedme",
+      "{work}/multifit/galfit"
+     ]
+    }
    ],
    "output": {
     "mode": "text"
@@ -412,11 +426,19 @@
   },
   {
    "name": "config",
-   "label": "Config file (JSON)",
+   "label": "Config file (JSON or GALFIT feedme)",
    "type": "file",
    "default": "",
    "group": "Config file",
-   "help": "GALFIT-feedme-like JSON with explicit components, bounds, fixed parameters, ties, bbox and sky for one object (see docs/multifit.md)."
+   "help": "Explicit components, bounds, fixed parameters, ties, bbox and sky for one object: a JSON file (see docs/multifit.md) or a GALFIT feedme (sersic, devauc, expdisk, gaussian, psf, sky objects; constraints file G) - the file names in the feedme are used for the PSF / mask / sigma image)."
+  },
+  {
+   "name": "export-feedme",
+   "label": "Also write GALFIT feedme files",
+   "type": "bool",
+   "default": false,
+   "group": "GALFIT",
+   "help": "Write the fitted model as GALFIT feedme files (galfit_<NUMBER>.feedme + PSF stamp, or galfit.feedme for a config fit) into <work>/multifit/galfit, so the same fit can be run or checked with GALFIT."
   }
  ]
 }
