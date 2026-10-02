@@ -213,7 +213,7 @@ proc ::ogf::cat::status {msg} {::ogf::status $msg}
 #   ::ogf::cat::header COL                       column title ("" if unset)
 #   ::ogf::cat::table_col NAME                   column index of the title NAME (first match), -1 if absent
 #   ::ogf::cat::cell ROW COL ?default?           value of one cell (default "" ; use cell_exists to tell empty from absent)
-#   ::ogf::cat::cell_exists ROW COL
+#   ::ogf::cat::cell_exists ROW COL / cell_set ROW COL VALUE
 #   ::ogf::cat::row_of NUMBER / number_of ROW    table row of a source NUMBER (-1 if filtered out) and back ("" if unknown)
 #   ::ogf::cat::table_begin                      unbind the table and clear its data (before filling)
 #   ::ogf::cat::table_put ROW FIELDS ?ncols?     store the fields (trimmed) of ROW in columns 1..; with ncols the list is cut/padded with "" to that width
@@ -232,6 +232,7 @@ proc ::ogf::cat::cell {row col {default {}}} {
     if {[info exists t($row,$col)]} {return $t($row,$col)}
     return $default
 }
+proc ::ogf::cat::cell_set {row col val} {upvar #0 [_db] t; return [::set t($row,$col) $val]}
 proc ::ogf::cat::header {col} {return [cell 0 $col]}
 proc ::ogf::cat::table_col {name} {
     upvar #0 [_db] t

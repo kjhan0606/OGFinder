@@ -29,9 +29,24 @@ and follow the catalog when the frame is switched.  The `Review` chip (tab *Resu
   `::ogf::review::set_note TEXT ?NUMBERS?`, `::ogf::review::show all|accept|reject|uncertain|none|notrej`,
   `::ogf::review::counts`.
 
-Review applies to the **galaxy** catalog.  With the time-domain kind filter on Moving / Transients / All the commands refuse with
-a message ("switch the kind filter to Galaxies first"): those rows are generated views, not stored cells.  This is a limit, not a
-design choice.
+Review works on **every kind of row** of the table:
+
+* **Galaxy rows** (the SExtractor catalog): the decision is stored in the three catalog columns, as above.
+* **Moving, Transient and Detection rows** (time-domain kinds, `docs/plugins.md` "Time-domain table"): these rows are a generated view, not
+  catalog cells, so their decisions are kept by the time-domain layer (`::ogf::td::review_set|review_get|review_note|review_count`,
+  `ogf_td.tcl`), keyed by the row key (`M5`, `T7`, `D12`) **plus the row's RA/Dec strings**.  Once at least one decision exists the view
+  shows the same three columns `REVIEW REVIEW_NOTE REVIEW_TIME` at its right end, so the *Show by Review* filter, the tint, *Review All
+  Shown Rows*, the notes, the session steps and *Export Report...* work unchanged in the Moving / Transients / Detections / All views.
+  The galaxy catalog is not touched (checked: its TSV is byte-identical after reviewing time-domain rows).
+* In the **All** view galaxy rows show the decisions of the galaxy catalog, and a decision on a galaxy row made there is written to the
+  catalog; the kind filter stays on All (the catalog write reloads the galaxy table, which would switch the view back, so the review code
+  restores the kind and the selection afterwards).  One call may mix galaxy and time-domain keys.
+* **A new run replaces the rows.**  Tracklet numbers are only unique within a run, so when `set_rows` replaces the rows of a kind, a
+  decision is kept only if its key *and* position still match the new row; the others are dropped (logged at INFO).  Clearing a kind drops
+  its decisions.  Reviewing is therefore tied to the loaded run: to keep decisions across sessions use **Save Time-domain Review...** /
+  **Load Time-domain Review...** (TSV `key kind ra dec REVIEW REVIEW_NOTE REVIEW_TIME`); on load a row is applied only where key and
+  position match the rows now loaded, the rest are counted as skipped (a different run with other numbers or positions is never mixed in).
+* The decisions of time-domain rows live in memory, not in a catalog file: **Save Catalog does not contain them**.  This is a limit.
 
 ### Session recorder
 
@@ -43,6 +58,7 @@ script skips it (like the sort/save steps of the time-domain table):
 | `review.set` | `numbers`, `status` (`accept` / `reject` / `uncertain` / `clear`), `note` |
 | `review.note` | `numbers`, `note` |
 | `report.export` | `file`, `rows`, `thumbnails` |
+| `review.td_save` / `review.td_load` | `file`, `rows` / `file`, `applied`, `skipped` |
 
 No existing step signature changes (`verify_session_replay.py`: 78 checks, 0 failed).  The catalog fingerprint the recorder stores after
 each step (`OGFSessCatInfo`) ignores the three review columns, because the exported script never reproduces hand annotations;
@@ -90,6 +106,17 @@ CLI (the same code, e.g. for a batch run on a saved catalog):
 
 stdout: `REPORT<TAB>html<TAB>listed<TAB>selected<TAB>thumbnails<TAB>pdf-or-"-"`.
 
+## Tests (time-domain rows)
+
+`scripts/verify_review_td.tcl` (`--only review_td`, 55 checks, real ds9 + real extraction of `m51.fits`; the moving / transient / detection
+rows are synthetic and placed on real galaxy positions, because no moving-object pipeline run is needed to test the review layer): columns
+appended in order, values, time format, selection kept, counts of the shown rows, note cleaning, steps recorded (`review.set` / `review.note`,
+class `note`), galaxy catalog byte-identical, the five filters + filter AND search, tint cells (`rv_*` tags on `REVIEW`), *Review All
+Shown*, sort keeps decisions with their rows, transients and detections, the All view (galaxy and time-domain rows, galaxy decision made
+from the All view lands in the catalog and the view stays on All, mixed selection), clear, save / load of the TSV (wiped and restored, a
+changed position is skipped), re-run keeps unchanged rows and drops changed ones, clearing a kind drops its decisions, HTML report from
+the Moving view (rows and ids parsed from the HTML), session export lists the steps, layout 181/769/154.
+
 ## Tests
 
 * `plugins/report/tests` (pytest, `scripts/run_all_checks.sh --only report_tests`): the report is generated from a real extraction of
@@ -103,8 +130,10 @@ stdout: `REPORT<TAB>html<TAB>listed<TAB>selected<TAB>thumbnails<TAB>pdf-or-"-"`.
 
 ## Limits
 
-* Galaxy catalog only (see above).  Decisions are keyed by `NUMBER`: after a new extraction the numbers change and the old decisions do not
-  apply (load the saved catalog instead).
+* Galaxy decisions are keyed by `NUMBER`: after a new extraction the numbers change and the old decisions do not apply (load the saved
+  catalog instead).  Time-domain decisions are keyed by row key + position and tied to the loaded run (see above).
+* A report exported from a time-domain view uses the view as its table: the cut-outs use the view's `X_IMAGE/Y_IMAGE` on the detection grid
+  (rows outside the image get no cut-out), the "all columns" line shows the kind's own columns.  Mixed views (All) work the same way.
 * A review is not replayed by the exported script: it is a hand annotation.  Re-running the pipeline on new data produces a catalog
   without decisions.
 * Cut-outs are of the *displayed image file* (first 2-D HDU), not of the current ds9 scale or other bands; one stretch for all.

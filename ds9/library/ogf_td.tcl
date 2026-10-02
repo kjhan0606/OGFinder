@@ -96,12 +96,17 @@ proc ::ogf::td::set_rows {kind cols rows {show 0}} {
     if {![info exists ogftd(def,$kind)]} {error "time-domain kind $kind is not registered"}
     set ogftd(raw,$kind) [list $cols $rows]
     set ogftd(stale) 1
+    catch {review_prune $kind}
     OGFTDControlsRefresh
     if {$show} {show $kind} elseif {[active]} {refresh}
 }
 proc ::ogf::td::clear {kind} {
     global ogftd
     unset -nocomplain ogftd(raw,$kind)
+    if {[info exists ogftd(review)]} {
+	set pre [dict get $ogftd(def,$kind) prefix]
+	foreach k [dict keys $ogftd(review)] {if {[string match ${pre}* $k]} {dict unset ogftd(review) $k}}
+    }
     set ogftd(stale) 1
     if {$ogftd(kind) eq $kind} {show galaxies} else {refresh}
     OGFTDControlsRefresh
@@ -324,7 +329,8 @@ proc ::ogf::td::build {} {
     } else {
 	lassign [_kind_view $kind 1] cols rows
     }
-    # sort
+    # review columns (only once a decision exists or a REVIEW filter is on), then sort
+    lassign [_review_view $cols $rows] cols rows
     if {$ogftd(sortcol) ne {}} {
 	set ix [lsearch -exact $cols $ogftd(sortcol)]
 	if {$ix >= 0} {
@@ -375,32 +381,166 @@ proc OGFViewTSV {} {
     return {}
 }
 
+# ------------------------------------------------------------------ review state of non-galaxy rows
+# Moving / transient / detection rows are generated views, so their accept / reject / uncertain decisions cannot live in catalog cells.
+# They are kept here, keyed by the row key (M5, T7, D12) together with a signature of the row (its ra / dec strings): when a new run
+# replaces the rows of a kind, only the decisions whose key AND signature still match are kept (review_prune); the rest are dropped,
+# because a tracklet number of a new run is a different object.  The decisions appear as the columns REVIEW REVIEW_NOTE REVIEW_TIME at
+# the right end of the view (and so in Save, the REVIEW filter and the report) once at least one decision exists.
+#   ::ogf::td::review_set KEYS STATUS ?NOTE SETNOTE TIME?   -> number of rows changed (STATUS accept|reject|uncertain|clear)
+#   ::ogf::td::review_get KEY -> {status note time} or {}      ::ogf::td::review_count -> number of stored decisions
+#   ::ogf::td::review_export FILE / review_import FILE         TSV  key kind ra dec REVIEW REVIEW_NOTE REVIEW_TIME (matched by key + position)
+set ::ogf::td::reviewcols {REVIEW REVIEW_NOTE REVIEW_TIME}
+proc ::ogf::td::_sig {raw} {
+    set ra [expr {[dict exists $raw ra] ? [dict get $raw ra] : {}}]
+    set de [expr {[dict exists $raw dec] ? [dict get $raw dec] : {}}]
+    return "$ra $de"
+}
+proc ::ogf::td::review_count {} {global ogftd; return [expr {[info exists ogftd(review)] ? [dict size $ogftd(review)] : 0}]}
+proc ::ogf::td::review_get {key} {
+    global ogftd
+    if {[info exists ogftd(review)] && [dict exists $ogftd(review) $key]} {
+	set d [dict get $ogftd(review) $key]
+	return [list [dict get $d status] [dict get $d note] [dict get $d time]]
+    }
+    return {}
+}
+proc ::ogf::td::review_set {keys status {note {}} {setnote 0} {time {}}} {
+    global ogftd
+    if {![info exists ogftd(review)]} {set ogftd(review) [dict create]}
+    if {$time eq {}} {set time [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]}
+    set n 0
+    foreach key $keys {
+	set raw [row_of $key]
+	if {$raw eq {}} continue
+	incr n
+	if {$status eq "clear"} {dict unset ogftd(review) $key; continue}
+	set old [expr {[dict exists $ogftd(review) $key] ? [dict get $ogftd(review) $key] : {}}]
+	set on [expr {[dict exists $old note] ? [dict get $old note] : {}}]
+	dict set ogftd(review) $key [dict create status $status note [expr {$setnote ? $note : $on}] time $time sig [_sig $raw]]
+    }
+    set ogftd(stale) 1
+    return $n
+}
+proc ::ogf::td::review_note {keys note} {
+    global ogftd
+    if {![info exists ogftd(review)]} {set ogftd(review) [dict create]}
+    set n 0
+    foreach key $keys {
+	set raw [row_of $key]
+	if {$raw eq {}} continue
+	incr n
+	if {[dict exists $ogftd(review) $key]} {
+	    dict set ogftd(review) $key note $note
+	} else {
+	    dict set ogftd(review) $key [dict create status {} note $note time {} sig [_sig $raw]]
+	}
+    }
+    set ogftd(stale) 1
+    return $n
+}
+# after the rows of KIND were replaced: keep only decisions of that kind whose row is still there unchanged
+proc ::ogf::td::review_prune {kind} {
+    global ogftd
+    if {![info exists ogftd(review)] || [dict size $ogftd(review)] == 0} {return 0}
+    set pre [dict get $ogftd(def,$kind) prefix]
+    set drop {}
+    dict for {key d} $ogftd(review) {
+	if {![string match ${pre}* $key] || ![string is integer -strict [string range $key [string length $pre] end]]} continue
+	set raw [row_of $key]
+	if {$raw eq {} || [_sig $raw] ne [dict get $d sig]} {lappend drop $key}
+    }
+    foreach k $drop {dict unset ogftd(review) $k}
+    if {[llength $drop]} {::ogf::log INFO "review: dropped [llength $drop] decision(s) of kind $kind whose rows changed in the new run"}
+    return [llength $drop]
+}
+# add the REVIEW columns to a view {cols rows}; galaxy rows of the All view take the decisions of the galaxy catalog
+proc ::ogf::td::_review_view {cols rows} {
+    global ogftd
+    set galrev {}
+    set ki [lsearch -exact $cols kind]
+    if {$ki >= 0 && [::ogf::cat::has] && [lsearch -exact [::ogf::cat::columns] REVIEW] >= 0} {
+	foreach d [::ogf::cat::rows] {
+	    if {[dict exists $d NUMBER]} {dict set galrev [dict get $d NUMBER] $d}
+	}
+    }
+    set need [expr {[review_count] > 0 || [dict size $galrev] > 0 && $ki >= 0 && [lsearch -exact [lmap r $rows {lindex $r $ki}] galaxy] >= 0}]
+    if {!$need && [::ogf::cat::filter_active] && [dict exists [::ogf::cat::filters] REVIEW]} {set need 1}
+    if {!$need} {return [list $cols $rows]}
+    set out {}
+    foreach r $rows {
+	set key [lindex $r 0]
+	set v [review_get $key]
+	if {$v eq {} && [dict exists $galrev $key]} {
+	    set g [dict get $galrev $key]
+	    set v [list [expr {[dict exists $g REVIEW] ? [dict get $g REVIEW] : {}}] [expr {[dict exists $g REVIEW_NOTE] ? [dict get $g REVIEW_NOTE] : {}}] \
+		[expr {[dict exists $g REVIEW_TIME] ? [dict get $g REVIEW_TIME] : {}}]]
+	}
+	if {$v eq {}} {set v {{} {} {}}}
+	lappend out [concat $r $v]
+    }
+    return [list [concat $cols $::ogf::td::reviewcols] $out]
+}
+proc ::ogf::td::review_export {fn} {
+    global ogftd
+    set lines [list [join {key kind ra dec REVIEW REVIEW_NOTE REVIEW_TIME} \t]]
+    if {[info exists ogftd(review)]} {
+	dict for {key d} $ogftd(review) {
+	    lassign [split [dict get $d sig] { }] ra de
+	    set raw [row_of $key]
+	    lappend lines [join [list $key [expr {$raw eq {} ? {} : [dict get $raw kind]}] $ra $de [dict get $d status] [dict get $d note] [dict get $d time]] \t]
+	}
+    }
+    set fd [open $fn w]; fconfigure $fd -encoding utf-8; puts $fd [join $lines \n]; close $fd
+    return [expr {[llength $lines] - 1}]
+}
+# rows of a review_export file are applied where key and position match the rows now loaded; returns {applied skipped}
+proc ::ogf::td::review_import {fn} {
+    global ogftd
+    set fd [open $fn r]; fconfigure $fd -encoding utf-8; set txt [read $fd]; close $fd
+    if {![info exists ogftd(review)]} {set ogftd(review) [dict create]}
+    set ok 0; set skip 0
+    foreach l [lrange [split $txt \n] 1 end] {
+	if {[string trim $l] eq {}} continue
+	lassign [split $l \t] key kind ra de st note time
+	set raw [row_of $key]
+	if {$raw eq {} || [_sig $raw] ne "$ra $de" || $st ni {accept reject uncertain {}}} {incr skip; continue}
+	dict set ogftd(review) $key [dict create status $st note $note time $time sig [_sig $raw]]
+	incr ok
+    }
+    set ogftd(stale) 1
+    if {[active]} {refresh}
+    return [list $ok $skip]
+}
+
 # ------------------------------------------------------------------ table output
 proc ::ogf::td::fill {} {
     global catpanel ogftd
     build
-    set tbl $catpanel(tbl)
-    global $catpanel(tbldb)
-    set db $catpanel(tbldb)
-    $tbl configure -variable {}
-    unset -nocomplain $db
     set cols $ogftd(view,cols)
     set nc [llength $cols]
-    set c 1
-    foreach h $cols {set ${db}(0,$c) $h; incr c}
+    ::ogf::cat::table_begin
+    ::ogf::cat::table_put 0 $cols
     set catpanel(cache,dirty) 1
     set pat [expr {[info exists catpanel(search_var)] ? $catpanel(search_var) : {}}]
+    # column-value filters (::ogf::cat::filter_set, e.g. the review filter) apply to these rows too
+    set fspecs {}
+    if {[::ogf::cat::filter_active]} {set fspecs [::ogf::cat::filter_specs $cols]}
     set row 1
     foreach r $ogftd(view,rows) {
 	if {$pat ne {} && ![string match -nocase "*${pat}*" [join $r \t]]} continue
-	set c 1
-	foreach v $r {set ${db}($row,$c) $v; incr c}
+	if {[llength $fspecs] && ![::ogf::cat::filter_row_ok $fspecs $r]} continue
+	::ogf::cat::table_put $row $r
 	incr row
     }
-    $tbl configure -variable $db -cols $nc -rows $row -state disabled
+    ::ogf::cat::table_end $nc $row -state disabled
+    catch {::ogf::cat::_table_filled}
     set n [expr {$row-1}]
     set tot [llength $ogftd(view,rows)]
-    set catpanel(status) "[expr {$ogftd(kind) eq {all} ? {All kinds} : [label $ogftd(kind)]}]: $n[expr {$pat ne {} ? " of $tot (filter '$pat')" : {}}] rows"
+    set why {}
+    if {$pat ne {}} {lappend why "filter '$pat'"}
+    if {[llength $fspecs]} {lappend why [::ogf::cat::filter_text]}
+    set catpanel(status) "[expr {$ogftd(kind) eq {all} ? {All kinds} : [label $ogftd(kind)]}]: $n[expr {[llength $why] ? " of $tot ([join $why {; }])" : {}}] rows"
 }
 
 proc ::ogf::td::refresh {} {
@@ -476,11 +616,9 @@ proc OGFTDGalaxyLoaded {} {
 proc OGFTDAppendKindColumn {ncols nrows} {
     global catpanel ogftd
     if {![::ogf::td::any_data]} return
-    set db $catpanel(tbldb)
-    global $db
     set nc [expr {$ncols+1}]
-    set ${db}(0,$nc) kind
-    for {set r 1} {$r < $nrows} {incr r} {set ${db}($r,$nc) galaxy}
+    ::ogf::cat::cell_set 0 $nc kind
+    for {set r 1} {$r < $nrows} {incr r} {::ogf::cat::cell_set $r $nc galaxy}
     $catpanel(tbl) configure -cols $nc
 }
 
@@ -534,16 +672,14 @@ proc ::ogf::td::save {fn} {
 proc ::ogf::td::selinfo {row} {
     global catpanel ogftd
     if {![active]} {return 0}
-    set db $catpanel(tbldb)
-    global $db
     set key [OGFNumberOfRow $row]
     if {$key eq {}} {return 0}
     set raw [row_of $key]
     if {$raw eq {}} {return 0}
     set k [dict get $raw kind]
     set g {}
-    for {set c 1} {$c <= [$catpanel(tbl) cget -cols]} {incr c} {
-	if {[info exists ${db}(0,$c)] && [info exists ${db}($row,$c)]} {dict set g [set ${db}(0,$c)] [set ${db}($row,$c)]}
+    for {set c 1} {$c <= [::ogf::cat::table_ncols]} {incr c} {
+	if {[::ogf::cat::cell_exists 0 $c] && [::ogf::cat::cell_exists $row $c]} {dict set g [::ogf::cat::cell 0 $c] [::ogf::cat::cell $row $c]}
     }
     proc _g {g k} {expr {[dict exists $g $k] && [dict get $g $k] ne {} ? [dict get $g $k] : "-"}}
     set l1 [format "%s %s   x,y = %s, %s" $key [string tolower [label $k]] [_g $g X_IMAGE] [_g $g Y_IMAGE]]
@@ -689,11 +825,9 @@ proc ::ogf::td::goto {row {pan 1}} {
     if {$key eq {}} {return 0}
     set raw [row_of $key]
     if {$raw eq {}} {return 0}
-    set db $catpanel(tbldb)
-    global $db
     set g [dict create]
-    for {set c 1} {$c <= [$catpanel(tbl) cget -cols]} {incr c} {
-	if {[info exists ${db}(0,$c)] && [info exists ${db}($row,$c)]} {dict set g [set ${db}(0,$c)] [set ${db}($row,$c)]}
+    for {set c 1} {$c <= [::ogf::cat::table_ncols]} {incr c} {
+	if {[::ogf::cat::cell_exists 0 $c] && [::ogf::cat::cell_exists $row $c]} {dict set g [::ogf::cat::cell 0 $c] [::ogf::cat::cell $row $c]}
     }
     set full [dict merge $raw $g]
     set ra [dict get $g ALPHA_J2000]; set de [dict get $g DELTA_J2000]

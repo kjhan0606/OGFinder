@@ -5,7 +5,7 @@
  "short": "Report",
  "tab": "Results",
  "order": 25,
- "description": "Accept / reject / uncertain review of candidates (stored in the catalog columns REVIEW, REVIEW_NOTE, REVIEW_TIME, filterable, recorded as informational session steps) and a self-contained HTML (optionally PDF) report with cut-outs, measurements and processing provenance.",
+ "description": "Accept / reject / uncertain review of candidates (galaxy rows: catalog columns REVIEW, REVIEW_NOTE, REVIEW_TIME; moving / transient / detection rows: the same columns in the view, kept with the view and savable to a TSV; filterable, recorded as informational session steps) and a self-contained HTML (optionally PDF) report with cut-outs, measurements and processing provenance.",
  "requires": {
   "python": [
    "numpy",
@@ -26,9 +26,6 @@
    "session": "NONE",
    "records": [
     "review.set"
-   ],
-   "needs": [
-    "catalog"
    ]
   },
   {
@@ -38,9 +35,6 @@
    "session": "NONE",
    "records": [
     "review.set"
-   ],
-   "needs": [
-    "catalog"
    ]
   },
   {
@@ -50,9 +44,6 @@
    "session": "NONE",
    "records": [
     "review.set"
-   ],
-   "needs": [
-    "catalog"
    ]
   },
   {
@@ -62,9 +53,6 @@
    "session": "NONE",
    "records": [
     "review.set"
-   ],
-   "needs": [
-    "catalog"
    ]
   },
   {
@@ -74,9 +62,6 @@
    "session": "NONE",
    "records": [
     "review.note"
-   ],
-   "needs": [
-    "catalog"
    ]
   },
   {
@@ -85,9 +70,6 @@
    "session": "NONE",
    "records": [
     "review.set"
-   ],
-   "needs": [
-    "catalog"
    ],
    "variants": [
     {
@@ -111,9 +93,6 @@
    "id": "filter",
    "label": "Show by Review",
    "session": "NONE",
-   "needs": [
-    "catalog"
-   ],
    "variants": [
     {
      "id": "f_all",
@@ -148,6 +127,24 @@
    ]
   },
   {
+   "id": "td_save",
+   "label": "Save Time-domain Review...",
+   "proc": "OGFReviewTDSave",
+   "session": "NONE",
+   "records": [
+    "review.td_save"
+   ]
+  },
+  {
+   "id": "td_load",
+   "label": "Load Time-domain Review...",
+   "proc": "OGFReviewTDLoad",
+   "session": "NONE",
+   "records": [
+    "review.td_load"
+   ]
+  },
+  {
    "id": "export",
    "label": "Export Report...",
    "title": "Export candidate report",
@@ -155,9 +152,6 @@
    "session": "NONE",
    "records": [
     "report.export"
-   ],
-   "needs": [
-    "catalog"
    ]
   },
   {

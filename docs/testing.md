@@ -16,6 +16,7 @@
 | `cat_api` | `scripts/verify_cat_api.tcl` (unit test of the `::ogf::cat` accessor: get/set/trace/registry) | Xvfb | yes |
 | `cat_behavior` | `scripts/verify_cat_behavior.sh` (82 features: exec argv, `catpanel` keys, `.prf` files, session steps and status text, diffed against `scripts/golden/cat_behavior.golden`; `--update` only from deliberately reviewed code) | Xvfb | yes |
 | `report_tests` | `plugins/report/tests` (pytest: HTML report contents on m51 and a HUDF F160W crop, cut-outs, escaping, optional PDF) | python deps, `bin/ds9_sextract` | yes |
+| `review_td` | `scripts/verify_review_td.tcl` (review on moving / transient / detection rows and the All view: columns, filters, tint, steps, save/load, re-run pruning, report from a time-domain view; 55 checks) | Xvfb | yes |
 | `review_gui` | `scripts/verify_review_gui.tcl` (review columns, table filter and tint, session steps, save/load round trip, export job, layout invariants; 51 checks) | Xvfb | yes |
 | `session_replay` | `scripts/verify_session_replay.sh`: record GUI sessions, export scripts, replay, compare (78 checks) | Xvfb, venv, ~10+ min | no |
 | `link_bench` | `moving/validation/link_bench.py` on the injected sets `/workspace/work/inj1-6.json.pkl` (SKIP when missing); when the regenerated sets `/workspace/work/i1/sets/inj1..12.json.pkl` exist (incl. CR-heavy 9-12, held-out 7-8) all twelve run and per-group totals are printed | venv | no |

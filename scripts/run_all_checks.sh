@@ -23,7 +23,7 @@ need_x() { if ! DISPLAY=$DISP xdpyinfo >/dev/null 2>&1; then
 gui() { rm -rf ~/ds9.auto ~/ds9.auto.dir; DISPLAY=$DISP timeout -s KILL "${T:-240}" "$@"; }
 
 # ---- checks: each defines  chk_NAME  (print details on stdout, return 0 pass / 1 fail / 77 skip) and is registered in ALL / LONG
-ALL="tools_syntax ai_bridge_tests moving_tests ai_gui icl_export click_chooser click_xevent cat_api cat_behavior report_tests review_gui"
+ALL="tools_syntax ai_bridge_tests moving_tests ai_gui icl_export click_chooser click_xevent cat_api cat_behavior report_tests review_gui review_td"
 LONG="session_replay link_bench moving_session"
 chk_tools_syntax() { local bad=0 f
   for f in tools/*.py scripts/*.py; do "$PY" -m py_compile "$f" 2>&1 || bad=1; done
@@ -61,6 +61,8 @@ chk_cat_behavior() { need_x || { echo "no X server"; return 77; }; DISPLAY_OVERR
 chk_report_tests() { "$PY" -m pytest -q plugins/report/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 chk_review_gui() { need_x || { echo "no X server"; return 77; }
   OGF_REVIEW_OUT="$OUT/review.txt" OGF_REVIEW_DIR="$OUT/review_work" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_review_gui.tcl > "$OUT/review_raw.txt" 2>&1; tclsum "$OUT/review.txt"; }
+chk_review_td() { need_x || { echo "no X server"; return 77; }
+  OGF_RVTD_OUT="$OUT/review_td.txt" OGF_RVTD_DIR="$OUT/review_td_work" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_review_td.tcl > "$OUT/review_td_raw.txt" 2>&1; tclsum "$OUT/review_td.txt"; }
 # ---- extra checks registered by later work (appended below by the feature that adds them)
 chk_moving_options() { need_x || { echo "no X server"; return 77; }
   OGF_MOVOPT_OUT="$OUT/movopt.txt" gui $DS9 $FITS/m51.fits -geometry 1300x950 -source scripts/verify_moving_options.tcl > "$OUT/movopt_raw.txt" 2>&1; tclsum "$OUT/movopt.txt"; }
