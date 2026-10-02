@@ -1,0 +1,293 @@
+{
+ "schema": 1,
+ "id": "xmatch",
+ "name": "Multiwavelength cross-match",
+ "short": "X-match",
+ "tab": "Measure",
+ "order": 34,
+ "description": "Match the catalog with a local table (FITS / CSV / TSV / VOTable) or a TAP service by sky position (or pixel position): nearest counterpart, number of candidates, ambiguity flags, systematic offset and chance-match estimate; copy columns of the counterpart.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy"
+  ]
+ },
+ "primary": "match",
+ "settings": "params",
+ "tcl": "xmatch.tcl",
+ "params": [
+  {
+   "name": "source",
+   "label": "Reference source",
+   "type": "choice",
+   "default": "file",
+   "group": "Reference",
+   "help": "file = local table; tap = one cone query over the whole field through an IVOA TAP service (needs \"Allow network access\").",
+   "choices": [
+    "file",
+    "tap"
+   ]
+  },
+  {
+   "name": "ref-file",
+   "label": "Reference table",
+   "type": "string",
+   "default": "",
+   "group": "Reference",
+   "help": "FITS table, CSV, TSV/ASCII or VOTable (source = file)."
+  },
+  {
+   "name": "ref-format",
+   "label": "Table format",
+   "type": "choice",
+   "default": "auto",
+   "group": "Reference",
+   "help": "auto = from the extension.",
+   "choices": [
+    "auto",
+    "fits",
+    "csv",
+    "ascii",
+    "votable"
+   ]
+  },
+  {
+   "name": "mode",
+   "label": "Match in",
+   "type": "choice",
+   "default": "sky",
+   "group": "Reference",
+   "help": "sky = RA/Dec (arcsec); pixel = X/Y columns of the reference compared with X_IMAGE/Y_IMAGE (pixels).",
+   "choices": [
+    "sky",
+    "pixel"
+   ]
+  },
+  {
+   "name": "radius-arcsec",
+   "label": "Match radius (arcsec or pixels)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Reference",
+   "help": "",
+   "min": 0.01,
+   "max": 600
+  },
+  {
+   "name": "apply-shift",
+   "label": "Remove the median offset before matching",
+   "type": "bool",
+   "default": false,
+   "group": "Reference",
+   "help": "Sky mode: the median RA/Dec offset of the clean pairs is subtracted from the reference and the matching redone (the offset is always reported)."
+  },
+  {
+   "name": "ref-ra-col",
+   "label": "Reference RA column",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": "Empty = detect (ra, RAJ2000, RA_ICRS, ...). Values in degrees or sexagesimal (hours for RA)."
+  },
+  {
+   "name": "ref-dec-col",
+   "label": "Reference Dec column",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": "Empty = detect."
+  },
+  {
+   "name": "ref-x-col",
+   "label": "Reference X column (pixel mode)",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": ""
+  },
+  {
+   "name": "ref-y-col",
+   "label": "Reference Y column (pixel mode)",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": ""
+  },
+  {
+   "name": "ref-id-col",
+   "label": "Reference ID column",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": "Copied exactly (as text) to XM_ID."
+  },
+  {
+   "name": "copy-columns",
+   "label": "Columns to copy (max 4, comma separated)",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": "Values of the matched reference row go to XM_V1..XM_V4."
+  },
+  {
+   "name": "cat-ra-col",
+   "label": "Catalog RA column",
+   "type": "string",
+   "default": "ALPHA_J2000",
+   "group": "Columns",
+   "help": ""
+  },
+  {
+   "name": "cat-dec-col",
+   "label": "Catalog Dec column",
+   "type": "string",
+   "default": "DELTA_J2000",
+   "group": "Columns",
+   "help": ""
+  },
+  {
+   "name": "allow-network",
+   "label": "Allow network access",
+   "type": "bool",
+   "default": false,
+   "group": "TAP service",
+   "help": "Required for source = tap."
+  },
+  {
+   "name": "tap-url",
+   "label": "TAP base URL",
+   "type": "string",
+   "default": "https://gea.esac.esa.int/tap-server/tap",
+   "group": "TAP service",
+   "help": "<base>/sync is used. Examples: ESA Gaia, https://simbad.cds.unistra.fr/simbad/sim-tap, https://tapvizier.cds.unistra.fr/TAPVizieR/tap."
+  },
+  {
+   "name": "tap-adql",
+   "label": "ADQL ({ra} {dec} {radius_deg})",
+   "type": "string",
+   "default": "",
+   "group": "TAP service",
+   "help": "Empty = Gaia DR3 cone (G, parallax). The query is sent once for the field centre; use your own table/columns for other services."
+  },
+  {
+   "name": "tap-radius-arcmin",
+   "label": "Cone radius (arcmin, 0 = from catalog extent)",
+   "type": "float",
+   "default": 0.0,
+   "group": "TAP service",
+   "help": "",
+   "min": 0,
+   "max": 300
+  },
+  {
+   "name": "tap-timeout",
+   "label": "TAP timeout (s)",
+   "type": "float",
+   "default": 120.0,
+   "group": "TAP service",
+   "help": "",
+   "min": 5,
+   "max": 3600,
+   "expert": true
+  }
+ ],
+ "steps": [
+  {
+   "id": "match",
+   "label": "Cross-match",
+   "title": "Cross-match with a reference catalog",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.xmatch",
+   "catalog_tmp": "xmatch",
+   "done_status": "cross-match done",
+   "after": "OGFXmatchAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/xmatch.py",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/xmatch",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--source",
+    "{source}",
+    "--ref-file",
+    "{ref-file}",
+    "--ref-format",
+    "{ref-format}",
+    "--mode",
+    "{mode}",
+    "--radius-arcsec",
+    "{radius-arcsec}",
+    "--ref-ra-col",
+    "{ref-ra-col}",
+    "--ref-dec-col",
+    "{ref-dec-col}",
+    "--ref-x-col",
+    "{ref-x-col}",
+    "--ref-y-col",
+    "{ref-y-col}",
+    "--ref-id-col",
+    "{ref-id-col}",
+    "--copy-columns",
+    "{copy-columns}",
+    "--cat-ra-col",
+    "{cat-ra-col}",
+    "--cat-dec-col",
+    "{cat-dec-col}",
+    "--tap-url",
+    "{tap-url}",
+    "--tap-adql",
+    "{tap-adql}",
+    "--tap-radius-arcmin",
+    "{tap-radius-arcmin}",
+    "--tap-timeout",
+    "{tap-timeout}",
+    {
+     "if": "apply-shift",
+     "argv": [
+      "--apply-shift"
+     ]
+    },
+    {
+     "if": "allow-network",
+     "argv": [
+      "--allow-network"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "XM_SEP",
+     "XM_N",
+     "XM_FLAG",
+     "XM_DRA",
+     "XM_DDEC",
+     "XM_ID",
+     "XM_V1",
+     "XM_V2",
+     "XM_V3",
+     "XM_V4"
+    ]
+   }
+  },
+  {
+   "id": "summary",
+   "label": "Match Summary...",
+   "proc": "OGFXmatchSummary",
+   "session": "NONE"
+  },
+  {
+   "id": "pairs",
+   "label": "Pair Table...",
+   "proc": "OGFXmatchPairs",
+   "session": "NONE"
+  }
+ ]
+}
