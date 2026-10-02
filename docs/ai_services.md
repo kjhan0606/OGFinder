@@ -149,6 +149,17 @@ network services need `--allow-network`. `--allow-network` does not enable agent
 | Gemini CLI (as the agy fallback) | `0.62.0` | `gemini --help` lists `-p --output-format -o --approval-mode plan --skip-trust`; real run failed with exit 41 and the JSON error object on **stderr** (parsed) | the success envelope (`response`, `stats.models`) |
 | Grok (xAI) | `grok 1.0.46` | `grok --help` lists `-p/--single --prompt-file --output-format {plain,json,...} --permission-mode dontAsk --tools --no-auto-update --cwd --json-schema --max-turns`; real run printed `{"type":"error","message":"Not signed in..."}` which is parsed | **the success JSON envelope was never seen** - the parser accepts `{"results": ...}` directly or the first of `result/response/text/output/content`, otherwise fails with a message naming the keys; treat Grok as the least verified |
 
+**Grok authentication (round 2, item 6; grok 1.0.46, checked on this box without reading any credential).** `grok login --help` offers `--oauth` (browser, auth.x.ai) and
+`--device-auth` / `--device-code` (headless: the CLI prints a URL and a one-time code, a human approves it in a browser on any machine; **needs a person, cannot be done
+non-interactively**). `~/.grok` holds only `config.toml` and `bin/` here, i.e. no stored login; `grok models` answers "You are not authenticated". The non-interactive route
+is the environment variable **`XAI_API_KEY`** (a key from console.x.ai; the binary also knows `GROK_CODE_XAI_API_KEY`, `GROK_DISABLE_API_KEY_AUTH`, `GROK_HOME`,
+`GROK_CONFIG_PATH`, `GROK_AUTH_PROVIDER_COMMAND|ACCESS_TOKEN|REFRESH_TOKEN|EXPIRES_AT` for an external token provider): with a dummy value `grok models` prints "You are
+using XAI_API_KEY", but `grok -p` / `--prompt-file` rejects an invalid key with the same `Not signed in` error envelope, so the key is validated at the first request.
+No key exists on the box and the `SAND_*` variables are the sandbox's own (unrelated to Grok), so no model answer was obtained and the success envelope is still unverified.
+`ai_bridge/tests/test_grok_live.py` runs the real round trip on a 2-object star/galaxy task and is SKIPPED unless `grok` is installed and authenticated (it also
+skips on an authentication error at run time); the first successful run will show which envelope keys the parser actually needs.
+Steps for the user: `grok login --device-code` (approve the code in a browser) or `export XAI_API_KEY=...`, then `python -m pytest ai_bridge/tests/test_grok_live.py -v -rs`.
+
 **No real agent CLI has produced a model answer in any test**: the box has no login for any of them and no API key was
 used or exists, so nothing was sent to any provider. All five binaries were installed only to read their `--help` and to confirm
 that our argv is accepted and that their *not-logged-in* failure is understood (`scripts/verify_agent_cli_real.py`).
