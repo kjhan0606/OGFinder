@@ -77,7 +77,8 @@ def _astrom_sigma_pix(chip, nin=None, others=None):
 def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_size=25,
                     min_pix=3, extra_mask=None, psf_t=None, fw_t=None, n_t=0, psf_r=None, fw_r=None, n_r=0,
                     source_noise=False, astrom_sigma=None, psf_field_t=None, psf_field_r=None, template_psf="target",
-                    tile=(512, 512), tile_margin=32, astrom_template_sigma=None):
+                    tile=(512, 512), tile_margin=32, astrom_template_sigma=None,
+                    cr_reject=True, trail_fit=True, realbogus=True, trail_fit_max=40):
     """Returns dict(alpha=..., S=..., sigma_alpha=..., score=..., mask=..., dets=[...], info=...).
 
     Optional noise model / PSF extensions (all off by default: the defaults reproduce the previous behaviour exactly):
@@ -89,6 +90,16 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
       psf_field_t / psf_field_r   `imaging.PSFField` (spatially varying PSF of the target / template); runs `zogy_tiled`.
       template_psf    "target" (default, as before) or "measure": measure the template PSF from the template's own stars (constant per chip,
                       or a PSFField if `psf_field_r` is given).
+
+    Detection-stage options (item 1; `cr_reject=trail_fit=realbogus=False` reproduces the previous detections exactly):
+      cr_reject       run L.A.Cosmic (`crrej.chip_lac`) on the target and add the features `lac3`, `lac_n7`, `lac_frac` (cosmic-ray evidence
+                      independent of the archive DQ flag) to every detection.  It is a *feature*, not a veto (see `crrej`).
+      realbogus       score every detection (S/N >= 6) with the shipped real/bogus model (`realbogus.py`, weights `moving/data/realbogus_model.json`):
+                      `rb` in [0, 1]; the linker uses it to choose its input pool.  Detections get shape features (flux profile, PSF-fit chi2, fine
+                      structure, ...) whether or not a model is available.
+      trail_fit       re-measure the centre / length / angle of the `trail_fit_max` best trail-channel detections (by `rb`, else S/N) with a trailed-PSF
+                      line-segment fit (`centroid.fit_segment`) that masks cosmic-ray pixels; the centroid error of long faint trails falls from
+                      ~5 px to ~1.6 px median (docs/moving_objects.md).  Adds `x_mom`, `y_mom` (previous centroid) and `trail_fit`=1.
     """
     ny, nx = target.shape
     tpl = template.copy()
@@ -257,9 +268,152 @@ def difference_chip(target, template, nin=None, method="zogy", snr_det=5.0, psf_
         dd["near_sat"] = bool(sat_d[min(max(yi_, 0), ny - 1), min(max(xi_, 0), nx - 1)])
         dd.setdefault("channel", "point")
     dets = _dedupe(dets)
+    lac = None
+    if cr_reject or realbogus or trail_fit:
+        from . import crrej
+        if cr_reject:
+            lac = crrej.chip_lac(target)
+            info["lac_frac"] = float(lac.mean()); info["lac_backend"] = crrej.backend()
+        _shape_features(dets, target, bkg_t, rms_t, lac, fw_t, trail_mask=tm if trail_masks else None, alpha=alpha)
+        if realbogus:
+            from . import realbogus as RB
+            info["realbogus"] = RB.score_dets(dets)
+        if trail_fit:
+            info["trail_fit"] = _refit_trails(dets, alpha, target, lac, fw_t, sig_alpha, trail_fit_max)
     info["n_pos"] = sum(1 for d in dets if d["sign"] > 0); info["n_neg"] = sum(1 for d in dets if d["sign"] < 0)
     return dict(alpha=alpha, score=score, mask=inval, dets=dets, info=info, sigma_alpha=float(sig_alpha),
                 psf=psf_t, bkg=bkg_t, rms=rms_t)
+
+
+RB_MIN_SNR = 6.0
+
+
+def _shape_features(dets, target, bkg, rms, lac, fwhm_psf, trail_mask=None, alpha=None, r=10):
+    """Shape / cosmic-ray features of every detection from the raw (background-subtracted) target cutout around its position.
+    point channel: flux fractions in rings around the centroid (`f_r1`: r<=1 px, `f_r2`: 1<r<=2, `f_r3`: 2<r<=3.5 of the total within 3.5 px;
+    a cosmic-ray hit has f_r1 -> 1, a PSF with FWHM ~1.7 px about 0.55), `pk_nb` (brightest neighbour of the peak / peak), `psf_chi2` (reduced chi2
+    of a Gaussian of the PSF width fitted to the 9x9 cutout, amplitude + constant free), `psf_amp` (fitted amplitude / peak pixel), `fine`
+    (L.A.Cosmic fine-structure ratio at the peak: (median3 - median7(median3)) / rms), `lap` (positive Laplacian at the peak / rms), `n_hi`
+    (pixels > 3 rms in 7x7), `asym` (flux asymmetry of the 7x7 cutout), `lac3` / `lac_n7` (L.A.Cosmic pixels in 3x3 / 7x7; 0 without a mask),
+    `arch3` (archive CR-flag pixels in 3x3), `n_near` (other S/N>=6 detections within 10 px: crowding / fragmentation).
+    trail channel: `lac_frac` / `arch_frac` = fraction of the trail core mask on L.A.Cosmic / archive-flagged pixels, `fill` = npix / (L * 2.355 sigma).
+    Positions are (x, y) of the detection in the target chip (already cropped)."""
+    from scipy.spatial import cKDTree
+    ny, nx = target.shape
+    sig_psf = max(fwhm_psf / 2.355, 0.8)
+    arch = getattr(target, "cr", None)
+    data = target.data
+    pos = [d for d in dets if d["sign"] > 0 and d["snr"] >= RB_MIN_SNR]
+    if pos:
+        xy = np.array([[d["x"], d["y"]] for d in pos])
+        tree = cKDTree(xy)
+        nnear = np.array([len(v) - 1 for v in tree.query_ball_point(xy, 10.0)])
+    for i, d in enumerate(pos):
+        d["n_near"] = int(nnear[i])
+        if d.get("channel") == "trail":
+            continue
+        xi, yi = int(round(d["x"])), int(round(d["y"]))
+        y0, y1, x0, x1 = max(0, yi - r), min(ny, yi + r + 1), max(0, xi - r), min(nx, xi + r + 1)
+        cut = (data[y0:y1, x0:x1] - bkg[y0:y1, x0:x1]).astype(np.float64)
+        rm = float(np.median(rms[y0:y1, x0:x1])) + 1e-9
+        py, px = yi - y0, xi - x0
+        if not (2 <= py < cut.shape[0] - 2 and 2 <= px < cut.shape[1] - 2):
+            continue
+        cx, cy = d["x"] - x0, d["y"] - y0
+        yy, xx = np.mgrid[0:cut.shape[0], 0:cut.shape[1]]
+        rr = np.hypot(xx - cx, yy - cy)
+        tot = cut[rr <= 3.5].sum()
+        if tot > 0:
+            d["f_r1"] = float(cut[rr <= 1.0].sum() / tot)
+            d["f_r2"] = float(cut[(rr > 1.0) & (rr <= 2.0)].sum() / tot)
+            d["f_r3"] = float(cut[(rr > 2.0) & (rr <= 3.5)].sum() / tot)
+        pk = cut[py, px]
+        nb = cut[py - 1:py + 2, px - 1:px + 2].copy(); nb[1, 1] = -np.inf
+        d["pk_nb"] = float(np.max(nb) / pk) if pk > 0 else np.nan
+        s7 = cut[max(0, py - 3):py + 4, max(0, px - 3):px + 4]
+        d["n_hi"] = int((s7 > 3.0 * rm).sum())
+        h = s7.shape[0] // 2
+        tt = s7.sum()
+        if tt > 0 and s7.shape == (7, 7):
+            d["asym"] = float((abs(s7[:, :3].sum() - s7[:, 4:].sum()) + abs(s7[:3, :].sum() - s7[4:, :].sum())) / tt)
+        # fine structure and Laplacian (L.A.Cosmic statistics at the peak)
+        win = cut[max(0, py - 6):py + 7, max(0, px - 6):px + 7]
+        m3 = ndi.median_filter(win, size=3, mode="nearest"); m37 = ndi.median_filter(m3, size=7, mode="nearest")
+        wy, wx = min(py, 6), min(px, 6)
+        d["fine"] = float((m3[wy, wx] - m37[wy, wx]) / rm)
+        d["lap"] = float(max(4 * cut[py, px] - cut[py - 1, px] - cut[py + 1, px] - cut[py, px - 1] - cut[py, px + 1], 0.0) / (rm * np.sqrt(20.0)))
+        # Gaussian PSF fit at the detection centroid (linear in amplitude and constant)
+        g = np.exp(-0.5 * (rr ** 2) / sig_psf ** 2)
+        m = rr <= 4.5
+        A = np.stack([g[m], np.ones(m.sum())], 1)
+        coef, *_ = np.linalg.lstsq(A, cut[m], rcond=None)
+        res = cut[m] - A @ coef
+        d["psf_chi2"] = float(np.sum(res ** 2) / rm ** 2 / max(m.sum() - 2, 1))
+        d["psf_amp"] = float(coef[0] / pk) if pk > 0 else np.nan
+        if lac is not None:
+            ly0, lx0 = max(0, yi - 1), max(0, xi - 1)
+            d["lac3"] = int(lac[ly0:yi + 2, lx0:xi + 2].any())
+            d["lac_n7"] = int(lac[max(0, yi - 3):yi + 4, max(0, xi - 3):xi + 4].sum())
+        else:
+            d["lac3"] = 0; d["lac_n7"] = 0
+        if arch is not None:
+            d["arch3"] = int(arch[max(0, yi - 1):yi + 2, max(0, xi - 1):xi + 2].any())
+    # trail channel: coverage of the component by cosmic-ray pixels
+    for d in pos:
+        if d.get("channel") != "trail":
+            continue
+        L = float(d.get("trail_len_pix", 2 * d.get("a_pix", 1.0))); th = d.get("theta_pix", 0.0); th = float(th) if np.isfinite(th) else 0.0
+        hl = 0.5 * L
+        R = int(np.ceil(hl)) + 4
+        xi, yi = int(round(d["x"])), int(round(d["y"]))
+        y0, y1, x0, x1 = max(0, yi - R), min(ny, yi + R + 1), max(0, xi - R), min(nx, xi + R + 1)
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        u = (xx - d["x"]) * np.cos(th) + (yy - d["y"]) * np.sin(th); v = -(xx - d["x"]) * np.sin(th) + (yy - d["y"]) * np.cos(th)
+        sel = (np.abs(u) <= hl) & (np.abs(v) <= 2.5)
+        if sel.sum() > 0:
+            d["lac_frac"] = float(lac[y0:y1, x0:x1][sel].mean()) if lac is not None else 0.0
+            d["arch_frac"] = float(arch[y0:y1, x0:x1][sel].mean()) if arch is not None else 0.0
+            d["fill"] = float(d.get("npix", 0) / max(L * 2.355 * sig_psf, 1.0))
+            if alpha is not None:
+                sub = alpha[y0:y1, x0:x1][sel]
+                d["trail_peak_frac"] = float(sub.max() / max(sub.sum(), 1e-9)) if sub.sum() > 0 else np.nan
+
+
+def _refit_trails(dets, alpha, target, lac, fwhm_psf, sig_alpha, nmax):
+    """Trailed-PSF segment fit of the best `nmax` trail detections (by `rb`, else S/N) - see `centroid.fit_segment`.  Updates x, y, ra, dec, the
+    trail end points, length, position angle and `sig_pos_arcsec` of the accepted fits; keeps the moment centroid in `x_mom`, `y_mom`."""
+    from . import centroid as CE
+    tr = [d for d in dets if d.get("channel") == "trail" and d["sign"] > 0 and d["snr"] >= 8.0]
+    tr.sort(key=lambda d: -(d.get("rb") if d.get("rb") is not None and np.isfinite(d.get("rb", np.nan)) else 0.0) * 1e6 - d["snr"])
+    nz = float(1.4826 * np.median(np.abs(alpha[alpha != 0] - np.median(alpha[alpha != 0])))) if np.any(alpha != 0) else 1.0
+    sg = max(fwhm_psf / 2.355, 0.8)
+    mask = (target.bad | (lac if lac is not None else False))
+    ok = 0; moved = 0
+    for d in tr[:nmax]:
+        L0 = float(d.get("trail_len_pix", 2 * d.get("a_pix", 3.0))); th0 = float(d.get("theta_pix", 0.0))
+        best = None
+        for f in (1.0, 2.0):
+            r = CE.fit_segment(alpha, d["x"], d["y"], L0 * f, th0, sg, nz, mask=mask, max_hw=120)
+            if r.get("ok") and (best is None or r["chi2_red"] < best["chi2_red"]):
+                best = r
+        if best is None or best["L"] < 4.0 or not np.isfinite(best["sx"]) and False:
+            continue
+        ok += 1
+        d["x_mom"], d["y_mom"] = d["x"], d["y"]
+        moved += int(np.hypot(best["x"] - d["x"], best["y"] - d["y"]) > 2.0)
+        L = best["L"]; th = best["th"]; cx, cy = best["x"], best["y"]
+        ax = np.array([np.cos(th), np.sin(th)])
+        ends = [(cx - 0.5 * L * ax[0], cy - 0.5 * L * ax[1]), (cx + 0.5 * L * ax[0], cy + 0.5 * L * ax[1])]
+        r1, d1 = target.wcs.all_pix2world([ends[0][0], ends[1][0], cx, cx + ax[0]], [ends[0][1], ends[1][1], cy, cy + ax[1]], 0)
+        d["x"], d["y"] = float(cx), float(cy)
+        d["ra"], d["dec"] = float(r1[2]), float(d1[2])
+        d["trail_ends_ra"] = [float(r1[0]), float(r1[1])]; d["trail_ends_dec"] = [float(d1[0]), float(d1[1])]
+        d["trail_len_pix"] = float(L); d["trail_len_arcsec"] = float(L * target.pixscale); d["theta_pix"] = float(th)
+        d["pa_deg"] = float(np.degrees(np.arctan2((r1[3] - r1[2]) * np.cos(np.radians(d1[2])), d1[3] - d1[2])) % 180.0)
+        d["trail_fit"] = 1; d["trail_chi2"] = float(best["chi2_red"])
+        d["sig_pos_arcsec"] = float(max(np.nanmax([best["sx"], best["sy"], 0.0]), 0.3) * target.pixscale)
+        d["a_pix"] = float(L / 2); d["a_arcsec"] = float(L / 2 * target.pixscale); d["elong"] = float(max(L, 1.0) / (2.355 * sg))
+    return dict(candidates=len(tr), fitted=ok, moved_gt2px=moved)
 
 
 def _det_features(o, sign, score, alpha, target, tpl, valid, psf, bkg, rms, sig_alpha, fwhm_psf):

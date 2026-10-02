@@ -14,9 +14,10 @@ from .util import log
 
 
 def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, snr_det=5.0, progress=None,
-                     save_diff_dir=None, extra=None):
+                     save_diff_dir=None, extra=None, **diff_kw):
     """Difference every chip that covers `center` (ra, dec; or the whole chips if None) against the median of the
-    other exposures and detect/classify.  `chips` must already be aligned.  Returns (dets, infos)."""
+    other exposures and detect/classify.  `chips` must already be aligned.  Returns (dets, infos).
+    `diff_kw` goes to `detect.difference_chip` (cr_reject, trail_fit, realbogus, source_noise, astrom_sigma, ...)."""
     if psf is None:
         psf = I.estimate_psf(chips, snr_min=6.0)
     psf_t, fw, n = psf
@@ -50,7 +51,7 @@ def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, s
             continue
         if progress:
             progress("difference %s" % c.name)
-        out = D.difference_chip(cc, tpl, psf_t=psf_t, fw_t=fw, n_t=n, snr_det=snr_det)
+        out = D.difference_chip(cc, tpl, psf_t=psf_t, fw_t=fw, n_t=n, snr_det=snr_det, **diff_kw)
         info = out["info"]; infos[c.name] = info
         ex = exs.index(c.path)
         for d in out["dets"]:
@@ -132,7 +133,7 @@ def detection_veto(dets, chip_shapes=None, stationary_arcsec=0.2, stationary_min
 
 def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_exposures=3,
                     classes=("trail", "point", "artefact_cr", "artefact_edge"), max_per_exposure=400, veto=True, chip_shapes=None,
-                    veto_stats=None, **kw):
+                    veto_stats=None, use_rb=True, rb_min=0.0, rb_snr_min=6.0, use_lac_cr=True, **kw):
     """Select detections and link them across exposures (see tracklet.link_exposures).
 
     `veto` (default True; or a dict of `detection_veto` options) removes stationary / template-residual / chip-edge detections from the pool
@@ -162,11 +163,25 @@ def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_
         vmask, vc = detection_veto(dets, chip_shapes, snr_min=snr_min, **(veto if isinstance(veto, dict) else {}))
         if veto_stats is not None:
             veto_stats.update(vc)
-    pool = [(i, d) for i, d in enumerate(dets) if d["sign"] > 0 and d["snr"] >= snr_min and _ok(d) and not vmask[i]
+    snr_floor = min(snr_min, rb_snr_min) if use_rb and any(_f(d.get("rb")) is not None for d in dets) else snr_min
+    pool = [(i, d) for i, d in enumerate(dets) if d["sign"] > 0 and d["snr"] >= snr_floor and _ok(d) and not vmask[i]
             and d["cls"] in classes + ("artefact_dipole", "faint")]
+    # real/bogus ordering of the pool (detections carry `rb` when the model was available at detection time, `detect.difference_chip(realbogus=True)`):
+    # the per-exposure cap then keeps the most real-looking detections instead of the brightest (cosmic-ray residuals are bright).  `rb_min` drops
+    # detections below that probability.  Detections without `rb` (older detections.tsv, no model) are ordered by S/N exactly as before.
+    def _rb(d):
+        v = _f(d.get("rb")) if use_rb else None
+        return v
+    have_rb = use_rb and any(_rb(d) is not None for _, d in pool)
+    if have_rb:
+        # S/N threshold of the pool = rb_snr_min for scored detections (the model was trained from S/N 6), `snr_min` for unscored ones
+        pool = [(i, d) for i, d in pool if (_rb(d) is None and d["snr"] >= snr_min) or (_rb(d) is not None and d["snr"] >= rb_snr_min and _rb(d) >= rb_min)]
+        order_key = lambda x: -(_rb(x[1]) if _rb(x[1]) is not None else 0.0) * 1e6 - x[1]["snr"]
+    else:
+        order_key = lambda x: -x[1]["snr"]
     keep = set()
     for ex in {d["ex"] for _, d in pool}:
-        grp = sorted([(i, d) for i, d in pool if d["ex"] == ex], key=lambda x: -x[1]["snr"])[:max_per_exposure]
+        grp = sorted([(i, d) for i, d in pool if d["ex"] == ex], key=order_key)[:max_per_exposure]
         keep.update(i for i, _ in grp)
     for i, d in enumerate(dets):
         if i in keep:
@@ -174,9 +189,9 @@ def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_
                             id=i, flux=d["flux_e_s"], cls=d["cls"], snr=d["snr"], texp=d.get("texp"), channel=d.get("channel", "point"),
                             trail_pa=d.get("pa_deg") if d["channel"] == "trail" else None,
                             trail_len=d.get("trail_len_arcsec") if d["channel"] == "trail" else None,
-                            on_cr=d.get("on_cr") in (True, 1, "True", "1"), sharp=_f(d.get("sharp")), tpl_snr=_f(d.get("tpl_snr")),
+                            on_cr=(d.get("on_cr") in (True, 1, "True", "1")) or (use_lac_cr and d.get("lac3") in (1, "1", True, "True")), sharp=_f(d.get("sharp")), tpl_snr=_f(d.get("tpl_snr")),
                             x_chip=_f(d.get("x_chip")), y_chip=_f(d.get("y_chip")), chip=d.get("chip"), neg_frac=_f(d.get("neg_frac")),
-                            a_pix=_f(d.get("a_pix")), elong=_f(d.get("elong"))))
+                            a_pix=_f(d.get("a_pix")), elong=_f(d.get("elong")), rb=_f(d.get("rb"))))
     trs = T.link_exposures(sel, tol_arcsec=tol_arcsec, min_exposures=min_exposures, obs_off_au=chips_by_ex_offsets, **kw)
     return trs
 
