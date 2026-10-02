@@ -14,7 +14,6 @@
   {
    "id": "sersic",
    "label": "Sersic Fitting",
-   "proc": "CatalogPanelSersicFit",
    "legacy": [
     "Analysis > Sérsic Fitting"
    ],
@@ -26,12 +25,37 @@
    "needs": [
     "catalog",
     "image"
-   ]
+   ],
+   "title": "Sersic fitting",
+   "record": "analysis.sersic",
+   "requires": "",
+   "done_status": "Sérsic fitting complete",
+   "cli": [
+    "{python}",
+    "{script:ds9_sersic.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SERSIC_N",
+     "SERSIC_RE",
+     "SERSIC_IE",
+     "SERSIC_ELLIP",
+     "SERSIC_THETA",
+     "SERSIC_CHI2"
+    ]
+   }
   },
   {
    "id": "morphometry",
    "label": "Non-Parametric Morphology (CAS/Gini/M20)",
-   "proc": "CatalogPanelMorphometry",
    "legacy": [
     "Analysis > Non-Parametric Morphology (CAS/Gini/M20)"
    ],
@@ -43,12 +67,34 @@
    "needs": [
     "catalog",
     "image"
-   ]
+   ],
+   "title": "Non-parametric morphology (CAS/Gini/M20)",
+   "record": "analysis.morphometry",
+   "requires": "",
+   "done_status": "Morphometry complete (CAS/Gini/M20/Petrosian)",
+   "cli": [
+    "{python}",
+    "{script:ds9_morphometry.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "CONC",
+     "ASYM",
+     "GINI",
+     "M20",
+     "R_PETRO"
+    ]
+   }
   },
   {
    "id": "bulge_disk",
    "label": "Bulge+Disk Decomposition",
-   "proc": "CatalogPanelBulgeDisk",
    "legacy": [
     "Analysis > Bulge+Disk Decomp..."
    ],
@@ -61,7 +107,52 @@
     "catalog",
     "image"
    ],
-   "settings": "params"
+   "settings": "params",
+   "title": "Bulge+Disk decomposition",
+   "record": "analysis.bulge_disk",
+   "requires": "",
+   "done_status": "Bulge+Disk decomposition complete",
+   "catalog_tmp": "bulgedisk",
+   "cli": [
+    "{python}",
+    "{script:ds9_bulge_disk.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--mag-zeropoint",
+    "{mag-zeropoint}",
+    "--pixel-scale",
+    "{pixel-scale}",
+    "--max-sources",
+    "{max-sources}",
+    {
+     "if": "free-bulge-n",
+     "argv": [
+      "--free-bulge-n"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,file}",
+     "argv": [
+      "--psf",
+      "{cat:psf,file}"
+     ]
+    },
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "BT_RATIO",
+     "BULGE_RE",
+     "BULGE_MAG",
+     "DISK_RS",
+     "DISK_MAG",
+     "BD_CHI2",
+     "BD_FLAG"
+    ]
+   }
   }
  ],
  "params": [

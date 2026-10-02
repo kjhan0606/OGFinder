@@ -9,7 +9,6 @@
   {
    "id": "psf_phot",
    "label": "PSF Photometry",
-   "proc": "CatalogPanelPSFPhotometry",
    "legacy": [
     "Analysis > PSF Photometry"
    ],
@@ -20,8 +19,39 @@
    ],
    "needs": [
     "catalog",
-    "image"
-   ]
+    "image",
+    "psf"
+   ],
+   "title": "PSF photometry",
+   "record": "analysis.psf_phot",
+   "requires": "psf",
+   "done_status": "PSF photometry complete",
+   "catalog_tmp": "psfphot",
+   "cli": [
+    "{python}",
+    "{script:ds9_psf_phot.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--psf",
+    "{cat:psf,file}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "FLUX_PSF",
+     "FLUXERR_PSF",
+     "MAG_PSF",
+     "MAGERR_PSF",
+     "CHI2_PSF",
+     "X_PSF",
+     "Y_PSF"
+    ]
+   }
   },
   {
    "id": "multiband",
@@ -43,7 +73,6 @@
   {
    "id": "crowded",
    "label": "Crowded Field Photometry",
-   "proc": "CatalogPanelCrowdedPhot",
    "legacy": [
     "Analysis > Crowded Field Photometry"
    ],
@@ -54,8 +83,37 @@
    ],
    "needs": [
     "catalog",
-    "image"
-   ]
+    "image",
+    "psf"
+   ],
+   "title": "Crowded field photometry",
+   "record": "analysis.crowded_phot",
+   "requires": "psf",
+   "done_status": "Crowded field photometry complete",
+   "cli": [
+    "{python}",
+    "{script:ds9_crowded_phot.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--psf",
+    "{cat:psf,file}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "FLUX_CROWD",
+     "FLUXERR_CROWD",
+     "MAG_CROWD",
+     "X_CROWD",
+     "Y_CROWD",
+     "N_NEIGHBORS"
+    ]
+   }
   },
   {
    "id": "crossmatch",
