@@ -123,6 +123,11 @@ chk_batch_tests() { "$PY" -m pytest -q plugins/batch/tests 2>&1 | tail -3; [ ${P
 EXTRA="$EXTRA batch_tests"
 chk_repro_tests() { "$PY" -m pytest -q plugins/repro/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA repro_tests"
+chk_lensmodel_tests() { "$PY" -m pytest -q plugins/lensmodel/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA lensmodel_tests"
+chk_lensmodel_gui() { need_x || { echo "no X server"; return 77; }
+  DISPLAY_OVERRIDE=$DISP "$HERE/verify_lensmodel.sh" "$OUT/lensmodel_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA lensmodel_gui"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
