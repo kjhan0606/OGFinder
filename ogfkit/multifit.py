@@ -292,7 +292,7 @@ def fit(data, comps, psf=None, rms=1.0, mask=None, sky='const', sky_value=None, 
         good &= ~np.asarray(mask, bool)
     rms_a = np.broadcast_to(np.asarray(rms, float), data.shape)
     free, tie_map = _free_list(comps0, tie)
-    pos0 = [(c['x'], c['y']) for c in comps0]
+    pos0 = [(c.get('x', (nx - 1) / 2.0), c.get('y', (ny - 1) / 2.0)) for c in comps0]
     # sky start: median of the pixels furthest from the centre
     yy, xx = np.mgrid[:ny, :nx]
     rr = np.hypot(xx - (nx - 1) / 2.0, yy - (ny - 1) / 2.0)

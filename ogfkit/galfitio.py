@@ -241,6 +241,8 @@ def parse_feedme(src, exptime=1.0, strict=True, base_dir=None):
             if key in o['mods']:
                 try:
                     c[nm] = [comp_of_obj[int(float(v))] for v in o['mods'][key]]
+                    if any(comps[j]['kind'] != 'trunc' for j in c[nm]):
+                        raise KeyError(nm)
                 except (KeyError, ValueError):
                     raise FeedmeError('object %d: %s) refers to an object that is not a (supported) truncation component: %s' % (c['galfit_object'], key.capitalize(), ' '.join(o['mods'][key])))
         if c.get('norm') == 'break' and not (c.get('trunc_in') or c.get('trunc_out')):
@@ -298,6 +300,9 @@ def _read_modifiers(c, M_, k, warn):
             c['fixed'].append('f%da' % m)
         if fl[1] != 1:
             c['fixed'].append('f%dp' % m)
+    if 'c0' in c and any(re.match(r'^f[0-9]+a$', q) for q in c):
+        warn.append('object %d: C0 together with Fourier modes: GALFIT 3.0.5 normalises the flux of such a profile differently from the paper (a factor >= 2 that depends on the amplitudes and phases; '
+                    'C0 = 0 with Fourier modes crashes it) - multifit uses the normalisation of Peng et al. 2010, the total magnitude will differ from GALFIT\'s' % k)
     for key in sorted((q for q in M_ if re.match(r'^B[0-9]+$', q)), key=lambda q: int(q[1:])):
         m = int(key[1:])
         v, f = _val_flag(M_[key], key)
@@ -330,36 +335,59 @@ def _read_modifiers(c, M_, k, warn):
 
 
 # ------------------------------------------------------------------------------------------------------------------ constraints
-_CNAME = {'x': 'x', 'y': 'y', 'mag': 'flux', 're': 're', 'rs': 're', 'n': 'n', 'q': 'q', 'pa': 'pa', 'fwhm': 'fwhm', 'c0': 'c0', 'mu': 'i0', 'rb': 'rb', 'rout': 'rout', 'rc': 'rc', 'rt': 'rt',
-          'alpha': 'alpha', 'beta': 'beta', 'gamma': 'gamma', 'hs': 'hs', 'rbreak': 'rbreak', 'dsoft': 'dsoft', 'rsoft': 'dsoft'}
+_POS_NAME = {'re': 4, 'rs': 4, 'rb': 4, 'n': 5, 'alpha': 5, 'beta': 6, 'gamma': 7}
+_POS_OUT = {4: 're', 5: 'n', 6: 'beta', 7: 'gamma'}
+_GTYPE = {'sersic': 'sersic', 'exp': 'expdisk', 'dev': 'devauc', 'psf': 'psf', 'moffat': 'moffat', 'ferrer': 'ferrer', 'king': 'king', 'nuker': 'nuker', 'edgedisk': 'edgedisk'}
 
 
 def _cname(c, pname):
-    """GALFIT constraint parameter name -> (multifit key, kind of conversion) for component c; None if unknown."""
-    t = c['galfit_type']
+    """GALFIT constraint parameter name -> (multifit key, conversion) for component c; None if unknown / not constrainable.
+    The real GALFIT names parameters by position (measured with 3.0.5): x y mag q pa c0 f<m> (Fourier amplitude) f<m>p (phase), and re / rs / rb = parameter 4, n / alpha = 5, beta = 6, gamma = 7
+    whatever the object type (an unknown name makes GALFIT segfault, bending / rotation parameters cannot be constrained at all); for surface-brightness objects `mag` constrains the surface brightness."""
+    t = c.get('galfit_type') or _GTYPE.get(c.get('kind'), c.get('kind'))
     p = pname.lower()
-    if p in ('mag', 'mu'):
-        if t in _SBKEY or c.get('norm'):
-            return (_SBKEY.get(t, 'i0'), 'mu')
-        return ('flux', 'mag')
-    if p == 'rs' and t == 'edgedisk':
-        return ('rs', None)
-    if p == 're' and t in ('gaussian',):
-        return ('re', 'fwhm')
-    if p == 'fwhm' and t == 'gaussian':
-        return ('re', 'fwhm')
-    if p == 'n' and t == 'moffat':
-        return ('beta', None)
-    if p in ('rs',) and t == 'expdisk':
-        return ('re', 'rs')
+    if t == 'trunc':
+        return ('rbreak', None) if p in ('re', 'rs', 'rb', 'rbreak') else None
+    if p in ('x', 'y', 'q', 'c0'):
+        return (p, None)
     if p == 'pa':
         return ('pa', 'pa')
-    if p in ('f%s' % q for q in range(1, 40)) or re.match(r'^f[0-9]+$', p):
+    if p in ('mag', 'mu'):
+        sb = _SBKEY.get(t) or ('i0' if c.get('norm') else None)
+        return (sb, 'mu') if sb else ('flux', 'mag')
+    m = re.match(r'^f([0-9]+)(p?)$', p)
+    if m:
+        return ('f%s%s' % (m.group(1), 'p' if m.group(2) else 'a'), None)
+    if t == 'gaussian' and p == 'fwhm':
+        return ('re', 'fwhm')
+    pos = _POS_NAME.get(p)
+    nm = _PNAMES.get(t, {}).get(pos) if pos else None
+    if nm is None or nm in ('mag', 'mu', 'q', 'pa', 'xy'):
         return None
-    if re.match(r'^b[0-9]+$', p):
-        return (p, None)
-    if p in _CNAME:
-        return (_CNAME[p], None)
+    if t == 'expdisk' and nm == 'rs':
+        return ('re', 'rs')
+    if t == 'gaussian':
+        return ('re', 'fwhm')
+    return (nm, None)
+
+
+def _gname(c, key):
+    """multifit parameter key -> GALFIT constraint name (None = cannot be constrained in GALFIT)."""
+    if key in ('x', 'y', 'q', 'pa', 'c0'):
+        return key
+    if key in ('flux', 'i0', 'ib'):
+        return 'mag'
+    m = re.match(r'^f([0-9]+)([ap])$', key)
+    if m:
+        return 'f%s%s' % (m.group(1), 'p' if m.group(2) == 'p' else '')
+    if c['kind'] == 'trunc':
+        return 're' if key == 'rbreak' else None
+    t = _GTYPE.get(c['kind'])
+    if t is None:
+        return None
+    for pos, nm in _PNAMES[t].items():
+        if pos in _POS_OUT and (nm == key or (key == 're' and nm in ('re', 'rs'))):
+            return 'rs' if (t == 'expdisk' and pos == 4) else _POS_OUT[pos]
     return None
 
 
@@ -582,17 +610,6 @@ def write_feedme(cfg, image='image.fits', output='imgblock.fits', sigma='none', 
     return '\n'.join(out) + '\n'
 
 
-def _gname(c, key):
-    """multifit parameter key -> (GALFIT constraint name, conversion)."""
-    if key in ('flux', 'i0', 'ib') and (c['kind'] in ('sersic', 'exp', 'dev', 'psf', 'moffat') and key == 'flux' or key in ('i0', 'ib')):
-        return ('mag' if key == 'flux' else 'mu'), key
-    if key == 're':
-        return ('rs' if c['kind'] == 'exp' else 're'), key
-    if key == 'beta' and c['kind'] == 'moffat':
-        return 'n', key
-    return key, key
-
-
 def write_constraints(cfg):
     """Bounds and ties of a config dict -> GALFIT constraints file text (objects numbered in the order of write_feedme, the sky last)."""
     lines = ['# Component  parameter  constraint        written by ogfkit.galfitio']
@@ -602,25 +619,26 @@ def write_constraints(cfg):
     pixarea = float(ps[0]) * float(ps[1]) * cfg.get('exptime', 1.0)
     for i, c in enumerate(cfg['components'], 1):
         for k, (lo, hi) in (c.get('bounds') or {}).items():
-            nm, _ = _gname(c, k)
-            if k == 'flux':
+            nm = _gname(c, k)
+            if nm is None:
+                lines.append('# %d  %s  %s to %s : GALFIT cannot constrain this parameter' % (i, k, _fmt(lo), _fmt(hi)))
+            elif k == 'flux':
                 lines.append('%d  mag  %s to %s' % (i, _fmt(-2.5 * math.log10(hi) + zp + lm), _fmt(-2.5 * math.log10(max(lo, 1e-30)) + zp + lm)))
             elif k in ('i0', 'ib'):
                 lines.append('%d  mag  %s to %s' % (i, _fmt(zp - 2.5 * math.log10(hi / pixarea)), _fmt(zp - 2.5 * math.log10(max(lo, 1e-300) / pixarea))))
-            elif k == 're':
-                f = RS_TO_RE if c['kind'] == 'exp' else 1.0
-                lines.append('%d  %s  %s to %s' % (i, nm, _fmt(lo / f), _fmt(hi / f)))
+            elif k == 're' and c['kind'] == 'exp':
+                lines.append('%d  rs  %s to %s' % (i, _fmt(lo / RS_TO_RE), _fmt(hi / RS_TO_RE)))
             elif k == 'pa':
                 lines.append('%d  pa  %s to %s' % (i, _fmt(lo - 90.0), _fmt(hi - 90.0)))
             else:
-                lines.append('%d  %s  %s to %s' % (i, nm.upper() if re.match(r'^[fb][0-9]', nm) else nm, _fmt(lo), _fmt(hi)))
+                lines.append('%d  %s  %s to %s' % (i, nm, _fmt(lo), _fmt(hi)))
     for t in cfg.get('tie') or ():
         a, b = t[0], t[1]
         mode = t[2] if len(t) > 2 else 'offset'
         (ia, na), (ib, nb) = a.split('.'), b.split('.')
         ca, cb = cfg['components'][int(ia)], cfg['components'][int(ib)]
-        if na == nb:
-            nm, _ = _gname(ca, na)
+        if na == nb and _gname(ca, na):
+            nm = _gname(ca, na)
             if na in ('flux', 'i0', 'ib') and mode == 'ratio':
                 lines.append('# flux ratio %s = ratio * %s: GALFIT ties magnitudes by offset (mag offset = -2.5 log10 ratio), the value follows the start values' % (a, b))
                 mode = 'offset'

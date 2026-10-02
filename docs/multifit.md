@@ -96,8 +96,56 @@ Run with `GALFIT_BIN=/path/galfit [GALFIT_LD=dir with libncurses.so.5/libtinfo.s
 Not done: no comparison on real survey images with an independent truth; multi-component fits to real galaxies (bulge + disc + bar) not compared; GALFIT features not implemented above; the GALFIT result is a closed-source binary run on Linux only; the synthetic cases cover 150 fits each for two programs, not a statistically exhaustive survey of the parameter space.
 
 
+## Advanced components (GALFIT 3 compatible; `ogfkit/profiles.py`)
+Used from `--config` (JSON or GALFIT feedme), `multifit.py IMAGE --config cfg --work DIR`; the dialog step "Fit From Config File" has the same parameters (`config`, `mask-catalog`, `mask-exclude`, `neighbour-radius`).
+All keys are flat entries of a component dict, so they can be fixed, bounded and tied like any other parameter.
+
+| feature | keys (GALFIT feedme keyword) |
+|---|---|
+| generalised ellipse (boxy/disky) | `c0` (`C0`) |
+| Fourier modes (azimuthal) | `f<m>a`, `f<m>p` amplitude and phase [deg] (`F<m>) amp phase`), any m |
+| bending modes | `b<m>` (`B<m>`), any m (B1 = banana, B2 = S-shape) |
+| coordinate rotation (spiral) | `rot_func` `'power'`/`'log'`, `rot_in`, `rot_out`, `rot_theta` [deg], `rot_alpha` (power) or `rot_ws` (log), `rot_incl`, `rot_pa` (`R0`-`R4`, `R9`, `R10`) |
+| truncation | separate component `kind='trunc'` with `rbreak`, `dsoft` (optional own `x,y,q,pa`, else the parent's), referenced by `trunc_in`/`trunc_out` = list of component indices of the parent (`T0) radial`, `T4`, `T5`, `Ti)`, `To)`) |
+| flux normalisation | `norm`: `total` (default, `flux`), `center`, `re`, `break` (GALFIT `sersic1/2/3`, also `expdisk1/2/3`, `devauc1/2/3`; then the amplitude is the surface brightness `i0` in counts/pixel) |
+| other profiles | `moffat` (flux, fwhm, beta), `ferrer` (i0, rout, alpha, beta), `king` (i0, rc, rt, alpha), `nuker` (ib, rb, alpha, beta, gamma), `edgedisk` (i0, hs, rs, pa), `brokenexp` (i0, h1, h2, rbreak, alpha; multifit-only, no GALFIT counterpart; `alpha` fixed unless freed) |
+
+Ties (`tie` list): `["1.x","0.x"]` equal; `["1.re","0.re","offset"]`, `["1.flux","0.flux","ratio"]`, optional 4th element = value. Without a value the offset/ratio is that of the start values, as in GALFIT
+(a GALFIT `mag offset` is a flux ratio). Neighbour masking in config fits: `--mask-catalog TSV --neighbour-radius K --mask-exclude PX` masks the ellipses (K x A_IMAGE, B_IMAGE, THETA_IMAGE) of the catalog objects in
+the fitted box except those within PX pixels of a fitted component (the catalog mode already had `--neighbours mask`). Results: `multifit_results.tsv` has the usual columns plus `EXTRA` (`name=value;...` of all other parameters); `--export-feedme` writes all of it back as feedme + constraints.
+
+Feedme/constraints import-export (`ogfkit/galfitio.py`): C0, F1..Fn, B1..Bn, R0-R4/R9/R10, T0-T5/T9/T10 truncation objects, `Ti)/To)` object references, `sersic1/2/3`, moffat, ferrer, king, nuker, edgedisk; surface-brightness
+objects are converted with the plate scale and exposure time (`i0 = dx dy t_exp 10^(-0.4 (mu - ZP))`). The constraints file follows what GALFIT 3.0.5 actually accepts (measured): parameters are named by position -
+`x y mag q pa c0`, `f<m>` (Fourier amplitude), `f<m>p` (phase), `re/rs/rb` = parameter 4, `n/alpha` = 5, `beta` = 6, `gamma` = 7 (for surface-brightness objects `mag` constrains the surface brightness; any unknown name crashes GALFIT);
+bending and rotation parameters cannot be constrained in GALFIT (written as comments / warned on import); `radial2`, length/height truncation and other rotation functions are rejected on import.
+
+Conventions measured against the GALFIT 3.0.5 binary (not from the paper where they differ): Fourier phase uses the mirrored angle `theta = atan2(y'/q, -x')` with `r = r0 (1 + sum a_m cos(m (theta + phi_m)))`; bending `y' = y + sum (-1)^(m+1) b_m (x/R_scale)^m`
+(R_scale = R_e; R_s for exponentials; FWHM-radius for Moffat, R_out for Ferrer, ...); rotation uses the tanh edge function with `A = 2 (20 deg)/|theta_out| - 1.00001` (paper: 0.23), power law `[0.5 (r/r_out + 1)]^alpha`, log `log(r/ws + 1)/log(r_out/ws + 1)`,
+inclination deprojection about `rot_pa` before the spiral rotation; truncation `P = 0.5 (tanh((2 - B) r/r_b + B) + 1)`, `B = 2.65 - 4.95 r_b/(r_b - r_s)` (binary 4.95, paper 4.98); small-radius sharp truncation edges are 5x5 sub-sampled.
+
+Validation (`plugins/multifit/validation/galfit_advanced.py parity|h2h|recovery`; reports `galfit_advanced_*.json`; GALFIT 3.0.5 only for the local comparison, tests skip without `GALFIT_BIN`/`GALFIT_LD`):
+* **Render parity** with GALFIT (P=1, 101x101, 25 model definitions each without and with a Moffat PSF, models written to GALFIT through `write_feedme`, so the exporter is tested too): all 50 cases agree, median max|d|/peak 0.32 %,
+  48/50 within 1 % of the peak and 49/50 within 2 %, worst 2.6 % (n = 4, R_e = 4 px, PSF-convolved cusp pixel), total flux within 0.21 % (worst: Moffat, 0.21 %). By component (max|d|/peak, no PSF): C0 0.07-0.19 %, Fourier 0.06-0.22 %, bending 0.06 %,
+  rotation power/log 0.08-0.29 %, outer truncation 0.06 %, inner truncation 0.8 % (sharp edge, sub-sampling), two truncations 1.6 %, Moffat 0.2 %, Ferrer 0.13 %, King 0.12 %, Nuker 0.54 %, edge-on disc 0.79 %.
+* **Head-to-head fits** on GALFIT-rendered data (101x101, Moffat PSF, constant sigma, same start feedme/constraints for both, 12 realisations per case, chi2 re-evaluated with GALFIT's renderer): chi2(multifit) - chi2(GALFIT), median / range / fraction within 0.5:
+  Fourier F1+F3 +0.003 / [-0.25, +40.9] / 0.92; bending B1+B2 +0.010 / [-1.6, 5.2] / 0.73 (GALFIT crashed once); rotation (power, theta free) +0.077 / [-6.7, 0.5] / 0.83; outer truncation (R_break free) +0.014 / [-1.0, 0.09] / 0.92;
+  boxy Sersic + Moffat +0.007 / [-2.6, 0.02] / 0.92; tied bulge + disc (x/y offset, flux ratio) +0.27 / [0.006, 0.87] / 0.67 (GALFIT lower in 4/12 by < 1); masked bright neighbour with F2 -2.6 / [-5.5, -0.09] / 0.17 (multifit lower in 10/12:
+  GALFIT stops in a q/F2 degeneracy). Parameter differences multifit - GALFIT (median / 90th percentile |.|): Fourier mag 0.0001/0.002, R_e 0.07 %/0.25 %, F3 amplitude 0.0004/0.0009; truncation R_break 0.0004/0.027 px (relative 0.04 %/2.7 %); Moffat FWHM 0.2 %/0.3 %;
+  well-constrained parameters agree to better than 1 %, the degenerate ones (bending B1/B2, rotation theta with PA, F2 with q) differ by the same amounts as either differs from the truth. Wall time per fit: multifit CLI 1.8-4.7 s, GALFIT 0.5-5 s.
+* **Synthetic truth recovery** (ogfkit renderer, Moffat PSF, sigma 2, sky 50, 12 realisations per case, `fit_multistart` with 2 restarts, 600 evaluations): reduced chi2 0.99-1.01 in all 14 cases, converged 12/12; parameter errors (median / 90th percentile |error|):
+  Fourier (m = 1, 3) mag 0.0001 / 0.12, R_e -1.4 % / 12 %, F3 amplitude -0.14 / 0.19 (strongly degenerate with q at S/N ~ 100; the sign of an amplitude is degenerate with a phase shift of 180/m); truncation R_break 0.0003 / 0.36 px, R_e 1.7 % / 4.4 %;
+  King r_c +4 % / 13 %, r_t -6 % / 21 %; Ferrer r_out 0.5 % / 8.5 %; Nuker r_b 1.6 % / 32 %, gamma -0.017 / 0.11; edge-on disc h_s 1.4 % / 4.7 %, r_s 0.5 % / 4 %, PA 0.2 / 0.4 deg, centre y scatter 0.3 px;
+  broken exponential h_1 5 % (90th percentile 190 %: the break and h_1 are degenerate when the break is near the edge), R_break -4 % / 50 %; inner truncation R_break 0.0 / 2.6 %; spiral (log) rotation theta_out median -16 deg, 90th percentile 109 deg (the winding angle is only weakly constrained);
+  bending B1 90th percentile 3.5 (unbounded fit, degenerate with PA; fits needing B1/B2 should be bounded); boxy C0 absolute error 0.6 / 1.8 in a joint boxy Sersic + Moffat fit (C0 is weakly constrained).
+Reproduce: `GALFIT_BIN=... GALFIT_LD=... python plugins/multifit/validation/galfit_advanced.py parity|h2h|recovery OUT.json [--n 12]` (recovery needs no GALFIT).
+
+Known differences and limitations: GALFIT 3.0.5 normalises the flux of a profile that has **both** C0 and Fourier modes differently from Peng et al. 2010 (factor >= 2, depends on amplitudes and phases; `C0 = 0` with Fourier modes crashes it) -
+multifit uses the paper's normalisation, so the total magnitudes of such objects differ from GALFIT's (a warning is printed on feedme import; shapes agree to 0.2-0.6 % after scaling); GALFIT returns zeros for a truncated plain `sersic` (needs `sersic1/2/3`) and multifit rejects that feedme;
+no PSF fine sampling (`E) != 1` is refused); only `radial` truncation; rotation only power/log; the broken exponential, `rot_*`/`b*` bounds and amplitudes beyond GALFIT's constrainable set are multifit-only extensions; the catalog mode (`--catalog`) does not use the advanced components;
+the advanced components are numerically sub-sampled and therefore slower than the plain Sersic path (not benchmarked separately).
+
 ## Limitations
-No analytic Moffat/Gaussian/Ferrers/Nuker/Fourier-mode/truncation components, no spiral/bar modes; the PSF of a component is evaluated at its start position (not re-evaluated while fitting);
+The GALFIT advanced components (next section) are available only in config / feedme fits, not in the catalog mode (`--model` choices unchanged); the PSF of a component is evaluated at its start position (not re-evaluated while fitting);
 the sky is local to the cutout (n ≳ 4 profiles and large galaxies in small cutouts have the usual sky-wing degeneracy: fix the sky for those); errors are formal (no covariance between components in
 `GF_MAGERR`, which adds the component errors in quadrature); at most `max-neighbours` neighbours are fitted per cutout and only if they have > 1 % of the target flux; neighbours are started from the catalog
 shape parameters (A_IMAGE, B_IMAGE, THETA_IMAGE, FLUX_RADIUS, FLUX_AUTO, CLASS_STAR); the model image sums target-only components over objects.
