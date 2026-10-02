@@ -1,0 +1,674 @@
+{
+ "schema": 1,
+ "id": "cluster",
+ "name": "Cluster and lensing (red sequence, members, arcs, overdensity)",
+ "short": "Cluster",
+ "tab": "Measure",
+ "order": 32,
+ "description": "Red sequence from the colour-magnitude diagram (likelihood fit with a tilted sequence), statistical + colour + redshift cluster membership, strong-lensing arc candidates (length/width, curvature radius, tangential alignment) and Poisson-significance overdensity maps.",
+ "requires": {
+  "python": [
+   "numpy",
+   "scipy",
+   "astropy"
+  ]
+ },
+ "primary": "members",
+ "settings": "params",
+ "tcl": "cluster.tcl",
+ "params": [
+  {
+   "name": "mag-column",
+   "label": "Magnitude column",
+   "type": "string",
+   "default": "MAG_ISOCOR",
+   "group": "Columns",
+   "help": "Magnitude used on the CMD x axis and for the density sample (a catalog column)."
+  },
+  {
+   "name": "blue-column",
+   "label": "Colour: blue-band magnitude",
+   "type": "string",
+   "default": "MAG_AUTO",
+   "group": "Columns",
+   "help": "Colour = blue - red. Any two magnitude columns (use the band mapping of Photo-z / SED codes for the band names)."
+  },
+  {
+   "name": "red-column",
+   "label": "Colour: red-band magnitude",
+   "type": "string",
+   "default": "MAG_ISOCOR",
+   "group": "Columns",
+   "help": ""
+  },
+  {
+   "name": "blue-err-column",
+   "label": "Blue magnitude error column",
+   "type": "string",
+   "default": "MAGERR_AUTO",
+   "group": "Columns",
+   "help": "Empty = only the error floor below."
+  },
+  {
+   "name": "red-err-column",
+   "label": "Red magnitude error column",
+   "type": "string",
+   "default": "",
+   "group": "Columns",
+   "help": ""
+  },
+  {
+   "name": "min-color-err",
+   "label": "Colour error floor (mag)",
+   "type": "float",
+   "default": 0.02,
+   "group": "Columns",
+   "help": "Added in quadrature to the catalog errors.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "center-mode",
+   "label": "Cluster centre",
+   "type": "choice",
+   "default": "auto",
+   "group": "Centre",
+   "help": "auto = peak of the galaxy density map (or the centre found by an earlier cluster step); manual = the pixel below.",
+   "choices": [
+    "auto",
+    "manual"
+   ]
+  },
+  {
+   "name": "center-x",
+   "label": "Centre X (pixel, 1-based)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Centre",
+   "help": "Used with manual.",
+   "min": 0,
+   "max": 10000000.0
+  },
+  {
+   "name": "center-y",
+   "label": "Centre Y (pixel, 1-based)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Centre",
+   "help": "",
+   "min": 0,
+   "max": 10000000.0
+  },
+  {
+   "name": "smooth-px",
+   "label": "Centre-finder smoothing (px, 0 = auto)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Centre",
+   "help": "Gaussian sigma of the density map used to find the centre (0 = 3 % of the smaller image side).",
+   "min": 0,
+   "max": 100000.0,
+   "expert": true
+  },
+  {
+   "name": "mag-min",
+   "label": "Bright magnitude limit (0 = auto)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Red sequence",
+   "help": "Both limits 0 = 3rd to 85th percentile of the magnitudes.",
+   "min": 0,
+   "max": 60
+  },
+  {
+   "name": "mag-max",
+   "label": "Faint magnitude limit (0 = auto)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Red sequence",
+   "help": "",
+   "min": 0,
+   "max": 60
+  },
+  {
+   "name": "mag-ref",
+   "label": "Reference magnitude m0 (0 = median)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Red sequence",
+   "help": "The sequence is colour = a + b (m - m0); a is the colour at m0.",
+   "min": 0,
+   "max": 60,
+   "expert": true
+  },
+  {
+   "name": "fit-radius",
+   "label": "Fit radius (px, 0 = auto)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Red sequence",
+   "help": "Only objects closer than this to the centre enter the fit (cluster-dominated region; auto = 12 % of the smaller image side).",
+   "min": 0,
+   "max": 10000000.0
+  },
+  {
+   "name": "fixed-slope",
+   "label": "Fixed slope (flat sequence)",
+   "type": "bool",
+   "default": false,
+   "group": "Red sequence",
+   "help": "Fit a horizontal sequence instead of a tilted one."
+  },
+  {
+   "name": "slope-min",
+   "label": "Slope search: minimum",
+   "type": "float",
+   "default": -0.2,
+   "group": "Red sequence",
+   "help": "Range of slopes tried for the starting point.",
+   "min": -2,
+   "max": 2,
+   "expert": true
+  },
+  {
+   "name": "slope-max",
+   "label": "Slope search: maximum",
+   "type": "float",
+   "default": 0.1,
+   "group": "Red sequence",
+   "help": "",
+   "min": -2,
+   "max": 2,
+   "expert": true
+  },
+  {
+   "name": "rs-window",
+   "label": "Colour window (mag)",
+   "type": "float",
+   "default": 0.6,
+   "group": "Red sequence",
+   "help": "Half width of the colour window around the starting line used by the likelihood fit.",
+   "min": 0.1,
+   "max": 3,
+   "expert": true
+  },
+  {
+   "name": "rs-nsig",
+   "label": "Membership clip (sigma)",
+   "type": "float",
+   "default": 2.0,
+   "group": "Red sequence",
+   "help": "An object is on the sequence when |colour - line| < this x sqrt(scatter^2 + error^2).",
+   "min": 0.5,
+   "max": 6
+  },
+  {
+   "name": "z-column",
+   "label": "Redshift column (empty = none)",
+   "type": "string",
+   "default": "",
+   "group": "Membership",
+   "help": "Spectroscopic or photometric redshift column (e.g. EZ_Z or Z_SPEC); objects without a value are not rejected."
+  },
+  {
+   "name": "z-center",
+   "label": "Cluster redshift (0 = median of the sequence)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Membership",
+   "help": "",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "z-width",
+   "label": "Redshift window dz/(1+z)",
+   "type": "float",
+   "default": 0.05,
+   "group": "Membership",
+   "help": "Accept |z - zc| < width (1 + zc).",
+   "min": 0.001,
+   "max": 2
+  },
+  {
+   "name": "max-radius",
+   "label": "Maximum radius (px, 0 = none)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Membership",
+   "help": "",
+   "min": 0,
+   "max": 10000000.0
+  },
+  {
+   "name": "pmem-min",
+   "label": "Minimum membership probability",
+   "type": "float",
+   "default": 0.5,
+   "group": "Membership",
+   "help": "p_mem = 1 - S_bg / S(r) from the radial profile of the sequence galaxies.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "arc-nsig",
+   "label": "Arc threshold (sigma of smoothed image)",
+   "type": "float",
+   "default": 2.0,
+   "group": "Arcs",
+   "help": "Region = connected pixels above this x sigma of the Gaussian-smoothed image.",
+   "min": 0.5,
+   "max": 10
+  },
+  {
+   "name": "arc-smooth",
+   "label": "Arc smoothing sigma (px)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Arcs",
+   "help": "",
+   "min": 0.3,
+   "max": 5,
+   "expert": true
+  },
+  {
+   "name": "arc-elong-min",
+   "label": "Pre-filter: minimum A/B",
+   "type": "float",
+   "default": 2.0,
+   "group": "Arcs",
+   "help": "Only catalog objects at least this elongated are measured.",
+   "min": 1,
+   "max": 20
+  },
+  {
+   "name": "arc-min-size",
+   "label": "Pre-filter: minimum length 2A (px)",
+   "type": "float",
+   "default": 6.0,
+   "group": "Arcs",
+   "help": "",
+   "min": 0,
+   "max": 1000,
+   "expert": true
+  },
+  {
+   "name": "arc-lw-min",
+   "label": "Minimum length/width",
+   "type": "float",
+   "default": 4.0,
+   "group": "Arcs",
+   "help": "Candidate cut on L/W (L = sqrt(12) x rms along the ridge, W = FWHM across).",
+   "min": 1,
+   "max": 100
+  },
+  {
+   "name": "arc-align-max",
+   "label": "Maximum tangential misalignment (deg)",
+   "type": "float",
+   "default": 30.0,
+   "group": "Arcs",
+   "help": "Angle between the major axis and the tangential direction about the centre (needs a centre).",
+   "min": 0,
+   "max": 90
+  },
+  {
+   "name": "arc-cc-max",
+   "label": "Maximum centre offset / radius",
+   "type": "float",
+   "default": 0.5,
+   "group": "Arcs",
+   "help": "Distance of the fitted circle centre from the cluster centre in units of the circle radius.",
+   "min": 0,
+   "max": 100,
+   "expert": true
+  },
+  {
+   "name": "arc-snr-min",
+   "label": "Minimum S/N",
+   "type": "float",
+   "default": 5.0,
+   "group": "Arcs",
+   "help": "",
+   "min": 0,
+   "max": 1000
+  },
+  {
+   "name": "arc-allow-straight",
+   "label": "Allow straight (uncurved) candidates",
+   "type": "bool",
+   "default": false,
+   "group": "Arcs",
+   "help": "Default requires curvature: straight tangential edge-on galaxies are then rejected."
+  },
+  {
+   "name": "arc-max-cutout",
+   "label": "Maximum cutout half size (px)",
+   "type": "float",
+   "default": 300.0,
+   "group": "Arcs",
+   "help": "Cutout half size is 4 A + 10, limited by this.",
+   "min": 20,
+   "max": 2000,
+   "expert": true
+  },
+  {
+   "name": "dens-sample",
+   "label": "Density sample",
+   "type": "choice",
+   "default": "all",
+   "group": "Overdensity",
+   "help": "all = every object in the magnitude range; rs / members need the red-sequence step first.",
+   "choices": [
+    "all",
+    "rs",
+    "members"
+   ]
+  },
+  {
+   "name": "dens-sigma",
+   "label": "Smoothing sigma (px, 0 = auto)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Overdensity",
+   "help": "0 = 3 % of the smaller image side.",
+   "min": 0,
+   "max": 100000.0
+  },
+  {
+   "name": "dens-bin",
+   "label": "Map cell (px)",
+   "type": "int",
+   "default": 4,
+   "group": "Overdensity",
+   "help": "",
+   "min": 1,
+   "max": 100,
+   "expert": true
+  },
+  {
+   "name": "peak-threshold",
+   "label": "Peak threshold (sigma)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Overdensity",
+   "help": "",
+   "min": 0,
+   "max": 100
+  },
+  {
+   "name": "show-frames",
+   "label": "Open the significance map in a frame",
+   "type": "bool",
+   "default": false,
+   "group": "Overdensity",
+   "help": ""
+  }
+ ],
+ "steps": [
+  {
+   "id": "members",
+   "label": "Red Sequence + Members",
+   "title": "Red sequence and cluster members",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.cluster_members",
+   "catalog_tmp": "cluster_members",
+   "done_status": "red sequence and members done",
+   "after": "OGFClusterAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/cluster.py",
+    "--task",
+    "members",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/cluster",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    {
+     "if_file": "{image}",
+     "argv": [
+      "--image",
+      "{image}"
+     ]
+    },
+    "--mag-column",
+    "{mag-column}",
+    "--center-mode",
+    "{center-mode}",
+    "--center-x",
+    "{center-x}",
+    "--center-y",
+    "{center-y}",
+    "--smooth-px",
+    "{smooth-px}",
+    "--mag-min",
+    "{mag-min}",
+    "--mag-max",
+    "{mag-max}",
+    "--blue-column",
+    "{blue-column}",
+    "--red-column",
+    "{red-column}",
+    "--blue-err-column",
+    "{blue-err-column}",
+    "--red-err-column",
+    "{red-err-column}",
+    "--min-color-err",
+    "{min-color-err}",
+    "--mag-ref",
+    "{mag-ref}",
+    "--fit-radius",
+    "{fit-radius}",
+    {
+     "if": "fixed-slope",
+     "argv": [
+      "--fixed-slope"
+     ]
+    },
+    "--slope-min",
+    "{slope-min}",
+    "--slope-max",
+    "{slope-max}",
+    "--rs-window",
+    "{rs-window}",
+    "--rs-nsig",
+    "{rs-nsig}",
+    "--z-column",
+    "{z-column}",
+    "--z-center",
+    "{z-center}",
+    "--z-width",
+    "{z-width}",
+    "--max-radius",
+    "{max-radius}",
+    "--pmem-min",
+    "{pmem-min}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "CL_RS_RES",
+     "CL_RS_PULL",
+     "CL_RS",
+     "CL_R",
+     "CL_PMEM",
+     "CL_MEMBER"
+    ]
+   }
+  },
+  {
+   "id": "arcs",
+   "label": "Arc Candidates",
+   "title": "Lensing arc candidates",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.cluster_arcs",
+   "catalog_tmp": "cluster_arcs",
+   "done_status": "arc candidates done",
+   "after": "OGFClusterAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/cluster.py",
+    "--task",
+    "arcs",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/cluster",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    {
+     "if_file": "{image}",
+     "argv": [
+      "--image",
+      "{image}"
+     ]
+    },
+    "--mag-column",
+    "{mag-column}",
+    "--center-mode",
+    "{center-mode}",
+    "--center-x",
+    "{center-x}",
+    "--center-y",
+    "{center-y}",
+    "--smooth-px",
+    "{smooth-px}",
+    "--mag-min",
+    "{mag-min}",
+    "--mag-max",
+    "{mag-max}",
+    "--arc-nsig",
+    "{arc-nsig}",
+    "--arc-smooth",
+    "{arc-smooth}",
+    "--arc-elong-min",
+    "{arc-elong-min}",
+    "--arc-min-size",
+    "{arc-min-size}",
+    "--arc-lw-min",
+    "{arc-lw-min}",
+    "--arc-align-max",
+    "{arc-align-max}",
+    "--arc-cc-max",
+    "{arc-cc-max}",
+    "--arc-snr-min",
+    "{arc-snr-min}",
+    {
+     "if": "arc-allow-straight",
+     "argv": [
+      "--arc-allow-straight"
+     ]
+    },
+    "--arc-max-cutout",
+    "{arc-max-cutout}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "ARC_LEN",
+     "ARC_WID",
+     "ARC_LW",
+     "ARC_RCURV",
+     "ARC_SPAN",
+     "ARC_ALIGN",
+     "ARC_CC",
+     "ARC_SNR",
+     "ARC_SCORE",
+     "ARC_FLAG"
+    ]
+   }
+  },
+  {
+   "id": "density",
+   "label": "Overdensity Map",
+   "title": "Overdensity significance map",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.cluster_density",
+   "catalog_tmp": "cluster_density",
+   "done_status": "overdensity map done",
+   "after": "OGFClusterAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/cluster.py",
+    "--task",
+    "density",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/cluster",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    {
+     "if_file": "{image}",
+     "argv": [
+      "--image",
+      "{image}"
+     ]
+    },
+    "--mag-column",
+    "{mag-column}",
+    "--center-mode",
+    "{center-mode}",
+    "--center-x",
+    "{center-x}",
+    "--center-y",
+    "{center-y}",
+    "--smooth-px",
+    "{smooth-px}",
+    "--mag-min",
+    "{mag-min}",
+    "--mag-max",
+    "{mag-max}",
+    "--dens-sample",
+    "{dens-sample}",
+    "--dens-sigma",
+    "{dens-sigma}",
+    "--dens-bin",
+    "{dens-bin}",
+    "--peak-threshold",
+    "{peak-threshold}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "CL_SIGMA"
+    ]
+   }
+  },
+  {
+   "id": "cmd",
+   "label": "Colour-Magnitude Plot...",
+   "proc": "OGFClusterPlot",
+   "session": "NONE"
+  },
+  {
+   "id": "summary",
+   "label": "Cluster Summary...",
+   "proc": "OGFClusterSummary",
+   "session": "NONE"
+  },
+  {
+   "id": "frames",
+   "label": "Show Overdensity Map",
+   "proc": "OGFClusterFrame",
+   "session": "NONE"
+  }
+ ]
+}
