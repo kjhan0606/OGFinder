@@ -104,8 +104,10 @@ def main():
     rec('no Tcl errors on stderr', not bad_err, '; '.join(bad_err[:3]))
     rec('menu "AI Services" has exactly: Service Registry... / Run Task on Catalog... / Show Last Run Log',
         "menu AI Services entries: {Service Registry...} {Run Task on Catalog...} {Show Last Run Log}" in log)
-    rec('registry dialog opened, lists mock + localrest, env status only',
-        'registry dialog exists: 1 rows=2 items=localrest mock' in log or 'registry dialog exists: 1 rows=2 items=mock localrest' in log, '')
+    rec('registry dialog opened, lists mock + localrest + the 4 built-in agent profiles, env status only',
+        any(('registry dialog exists: 1 rows=6 items=%s' % ' '.join(o)) in log for o in (
+            ['localrest', 'mock', 'agent_codex', 'agent_claude', 'agent_agy', 'agent_grok'],
+            ['mock', 'localrest', 'agent_codex', 'agent_claude', 'agent_agy', 'agent_grok'])), '')
     rec('registry "Test Connection" on the built-in mock reports OK', 'registry test(mock): OK' in log)
     rec('dry run: nothing sent, catalog columns unchanged, no step recorded',
         'dry run selected rows ok=1; columns unchanged: 1; sessions steps: 1' in log)

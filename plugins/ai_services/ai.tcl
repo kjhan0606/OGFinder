@@ -29,6 +29,7 @@ proc OGFAIInit {} {
     set ogfai(lastlog) "No AI Services run yet in this session."
     set ogfai(confirmed) {}
     foreach s {photoz sed_fit morphology star} {set ogfai(backend,$s) local}
+    set ogfai(last,backend) generic
     set ogfai(last,size) {}
     set ogfai(last,unit) pix
     set ogfai(last,norm) {(profile)}
@@ -43,7 +44,7 @@ proc OGFAIInit {} {
 	    if {$eq < 0} continue
 	    set k [string trim [string range $line 0 $eq-1]]
 	    set v [string trim [string range $line $eq+1 end]]
-	    if {$k eq "services_file"} {set ogfai(sf) $v} elseif {[string match backend,* $k]} {set ogfai($k) $v}
+	    if {$k eq "services_file"} {set ogfai(sf) $v} elseif {$k eq "run_backend" && $v in {generic codex claude agy grok}} {set ogfai(last,backend) $v} elseif {[string match backend,* $k]} {set ogfai($k) $v}
 	}
     }
 }
@@ -55,6 +56,7 @@ proc OGFAIPrefSave {} {
     catch {file mkdir [OGFSessWorkDir]}
     if {[catch {set fd [open [OGFAIPrefFile] w]}]} return
     puts $fd "services_file=$ogfai(sf)"
+    puts $fd "run_backend=$ogfai(last,backend)"
     foreach s {photoz sed_fit morphology star} {puts $fd "backend,$s=$ogfai(backend,$s)"}
     close $fd
 }
@@ -130,6 +132,76 @@ proc OGFAIIsNetwork {info} {
     return [expr {[dict exists $info transport] && [dict get $info transport] in {https_json https_multipart tap_query}}]
 }
 
+proc OGFAIIsAgent {info} {
+    return [expr {[dict exists $info transport] && [dict get $info transport] eq "agent_cli"}]
+}
+
+# provider behind each agent CLI (shown in the confirmation; the CLI forwards the prompt to its cloud model)
+set ::OGFAI_AGENT_PROVIDER {codex OpenAI claude Anthropic agy Google gemini Google grok xAI}
+
+# agent_cli services: dict name -> {backend label installed path executable extra_args} from list-services --json
+proc OGFAIAgentInfo {} {
+    set res {}
+    if {![file exists [OGFAIScript]]} {return $res}
+    lassign [OGFAIExec [concat [OGFAIArgv list-services] --json]] rc out err
+    if {$rc || [catch {set doc [::ogf::json::parse $out]}]} {return $res}
+    foreach sv [::ogf::json::get $doc services] {
+	set ag [::ogf::json::get $sv agent]
+	if {$ag eq {}} continue
+	dict set res [dict get $sv name] [dict create backend [::ogf::json::get $ag backend] \
+	    label [::ogf::json::get $ag label] installed [::ogf::json::get $ag installed 0] path [::ogf::json::get $ag path] \
+	    executable [::ogf::json::get $ag executable] extra_args [::ogf::json::get $ag extra_args] \
+	    login [::ogf::json::get $ag login] enabled [expr {[::ogf::json::get $sv enabled 1] ? "yes" : "no"}] \
+	    valid [expr {[::ogf::json::get $sv valid 1] ? "yes" : "no"}]]
+    }
+    return $res
+}
+
+# what exactly leaves the machine, built from the bridge's own dry run (--summary-only: no prompt text, no rows)
+# -> dict (empty on failure)
+proc OGFAIAgentSummary {sumargv} {
+    lassign [OGFAIExec $sumargv] rc out err
+    if {$rc || [catch {set d [::ogf::json::parse $out]}]} {return [dict create error [string trim $err]]}
+    return $d
+}
+
+# confirmation for an agent CLI: once per backend and session (a run with image cutouts asks once more)
+proc OGFAIConfirmAgent {info sumargv sendimg} {
+    global ogfai OGFAI_AGENT_PROVIDER
+    OGFAIInit
+    set name [dict get $info name]
+    set key "$name:[expr {$sendimg ? {images} : {rows}}]"
+    if {[lsearch -exact $ogfai(confirmed) $key] >= 0} {return 1}
+    set d [OGFAIAgentSummary $sumargv]
+    if {[dict exists $d error]} {
+	tk_messageBox -type ok -icon error -title "AI Services: $name" \
+	    -message "Cannot prepare the request, nothing was sent:\n[dict get $d error]"
+	return 0
+    }
+    set dl [::ogf::json::get $d data_leaving]
+    set be [::ogf::json::get $dl backend]
+    set prov [expr {[dict exists $OGFAI_AGENT_PROVIDER $be] ? [dict get $OGFAI_AGENT_PROVIDER $be] : "the CLI's provider"}]
+    set nimg [::ogf::json::get $d images_total 0]
+    set msg "'$name' hands data to the agent CLI [::ogf::json::get $dl backend]:\n  [::ogf::json::get $dl executable]\n\n"
+    append msg "The CLI forwards the prompt to $prov's cloud model under the CLI's own login, so this data LEAVES YOUR COMPUTER:\n"
+    append msg "  - [::ogf::json::get $dl objects] catalog object(s), per object: [join [::ogf::json::get $dl record_fields] {, }]\n"
+    append msg "  - the full catalog row text: [expr {[::ogf::json::get $dl catalog_row_sent 0] ? {YES (this task needs it)} : {no}}]\n"
+    if {$sendimg && $nimg > 0} {
+	append msg "  - IMAGE DATA: $nimg cutout file(s) (you ticked 'Send image cutouts')\n"
+    } else {
+	append msg "  - image data: NONE (cutouts are not sent unless ticked)\n"
+    }
+    append msg "  - about [expr {[::ogf::json::get $d prompt_bytes_total 0] / 1024 + 1}] kB of prompt in [::ogf::json::get $d requests 1] request(s)\n"
+    set envs [::ogf::json::get $dl env_names_passed]
+    append msg "\nEnvironment variables handed to the CLI (names only): [expr {[llength $envs] ? [join $envs {, }] : {none}}]\n"
+    append msg "No credentials are stored by OGFinder. The CLI runs with tools disabled in an empty temporary folder.\n"
+    append msg "To see the exact prompt and command first, cancel and use 'Dry run'.\n"
+    append msg "\nContinue? (asked once per backend per session)"
+    if {[tk_messageBox -type yesno -icon warning -title "AI Services: send data to $name" -message $msg] ne "yes"} {return 0}
+    lappend ogfai(confirmed) $key
+    return 1
+}
+
 # one confirmation per service and session before anything leaves the machine
 proc OGFAIConfirm {info what} {
     global ogfai
@@ -182,7 +254,7 @@ proc OGFAIRunTask {task service args} {
     global ogfai ogfsess
     OGFAIInit
     set seq 0
-    array set o {-rows all -dry 0 -size {} -unit pix -norm {} -fmt {} -rename {} -title {} -params {} -numbers {}}
+    array set o {-rows all -dry 0 -size {} -unit pix -norm {} -fmt {} -rename {} -title {} -params {} -numbers {} -images 0}
     array set o $args
     if {![::ogf::cat::has]} {
 	::ogf::cat::set status "AI Services: no catalog - extract sources first"
@@ -200,6 +272,8 @@ proc OGFAIRunTask {task service args} {
     }
     set nrows [expr {[llength $numbers] ? [llength $numbers] : [OGFAIRowCount]}]
     set net [OGFAIIsNetwork $info]
+    set agent [OGFAIIsAgent $info]
+    set sendimg [expr {$agent && [string is true -strict $o(-images)]}]
     lassign [OGFAIImages] bands files
     set catfile [CatalogPanelSaveTempCatalog ai]
     if {$catfile eq {}} {::ogf::cat::set status "AI Services: cannot write the temporary catalog"; return 0}
@@ -213,14 +287,26 @@ proc OGFAIRunTask {task service args} {
     if {$o(-fmt) ne {} && $o(-fmt) ne "(profile)"} {lappend argv --cutout-format $o(-fmt)}
     foreach r $o(-rename) {lappend argv --rename $r}
     foreach p $o(-params) {lappend argv --param $p}
+    if {$sendimg} {lappend argv --send-images}
+    set sumargv [concat [lreplace $argv 3 3 dry-run] --summary-only]
     if {!$dry} {
 	lappend argv --provenance-output [file join [OGFSessWorkDir] ai_last_run.provenance.json]
 	# the user confirmed the transfer; the recorded argv keeps the flag so replay mode can run it.
 	# Pipeline mode still refuses network steps unless the script itself gets --allow-network.
 	if {$net} {lappend argv --allow-network}
+	if {$agent} {lappend argv --allow-agent-cli}
     }
     set what "$nrows object(s) of the catalog (positions, magnitudes, catalog row text[expr {[llength $files] ? {, image cutouts} : {}}] as the profile's request template specifies) will be sent."
-    if {!$dry && ![OGFAIConfirm $info $what]} {
+    if {$agent && !$dry} {
+	if {![dict exists [OGFAIAgentInfo] $service] || ![dict get [OGFAIAgentInfo] $service installed]} {
+	    ::ogf::cat::set status "AI Services: the agent CLI of '$service' was not found on PATH (Run Task dialog > Backend: enter its path and press 'Save to profile')"
+	    return 0
+	}
+	set confirmed [OGFAIConfirmAgent $info $sumargv $sendimg]
+    } else {
+	set confirmed [expr {$dry || [OGFAIConfirm $info $what]}]
+    }
+    if {!$dry && !$confirmed} {
 	::ogf::cat::set status "AI Services: cancelled"
 	return 0
     }
@@ -233,9 +319,11 @@ proc OGFAIRunTask {task service args} {
 	set class [expr {[llength $numbers] ? "manual" : "auto"}]
 	set seq 0
 	catch {set seq [OGFSessLog ai.run $class $argv -title $title -tool python -requires catalog \
-	    -network [expr {$net ? 1 : 0}] \
-	    -payload [dict create service $service task $task profile_sha256 [dict get $info sha] \
-		transport [dict get $info transport] objects $nrows] \
+	    -network [expr {($net || $agent) ? 1 : 0}] \
+	    -payload [expr {$agent ? [dict create service $service task $task profile_sha256 [dict get $info sha] \
+		transport [dict get $info transport] objects $nrows backend [dict get [OGFAIAgentInfo] $service backend] \
+		send_images [expr {$sendimg ? 1 : 0}]] : [dict create service $service task $task profile_sha256 [dict get $info sha] \
+		transport [dict get $info transport] objects $nrows]}] \
 	    -note [expr {[llength $numbers] ? "row subset chosen by hand (NUMBER list); replay only" : {}}]]}
     }
     set t0 [clock milliseconds]
@@ -307,10 +395,10 @@ proc OGFAIRegistry {} {
     pack $w.top.e -side left -fill x -expand true
     pack $w.top.b -side left -padx 4
     bind $w.top.e <Return> OGFAIRegApplyPath
-    ttk::treeview $w.tv -columns {task transport enabled env envstatus target note} -show {tree headings} -height 9 -selectmode browse
+    ttk::treeview $w.tv -columns {task transport enabled env envstatus target note} -show {tree headings} -height 10 -selectmode browse
     $w.tv heading #0 -text Name
     $w.tv column #0 -width 150 -stretch 0
-    foreach {c t wd} {task Task 120 transport Transport 100 enabled Enabled 60 env {Auth env var} 130 envstatus {Env} 50 target Target 260 note Note 90} {
+    foreach {c t wd} {task Task 120 transport Transport 100 enabled Enabled 60 env {Auth env var} 130 envstatus {Env} 50 target Target 260 note Note 130} {
 	$w.tv heading $c -text $t
 	$w.tv column $c -width $wd -stretch [expr {$c eq "target"}]
     }
@@ -322,9 +410,11 @@ proc OGFAIRegistry {} {
     ttk::button $w.btn.close -text Close -command [list destroy $w]
     pack $w.btn.en $w.btn.test $w.btn.mk -side left -padx 4
     pack $w.btn.close -side right -padx 4
+    ttk::button $w.btn.ag -text "Detect Agent CLIs" -command OGFAIRegDetect
+    pack $w.btn.ag -side left -padx 4
     ttk::button $w.btn.set -text "Profile / Backends..." -command {OGFParamDialog ai_services}
     pack $w.btn.set -side left -padx 4
-    ttk::label $w.sec -text "Keys are never stored or shown: a profile names an environment variable; this window shows only set / unset." -foreground gray30
+    ttk::label $w.sec -text "Keys are never stored or shown: a profile names an environment variable; this window shows only set / unset.\nAgent CLIs (agent_*) use their own login; 'Test Connection' on them only runs <cli> --version." -foreground gray30 -justify left
     pack $w.top -fill x -pady 4
     pack $w.tv -fill both -expand true -padx 4
     pack $w.msg -fill x -padx 6 -pady 2
@@ -371,6 +461,22 @@ proc OGFAIBackendChoices {step} {
 	if {[dict get $r enabled] eq "yes" && [dict get $r valid] eq "yes" && [dict get $r task] in [list $task any]} {lappend vals [dict get $r name]}
     }
     return $vals
+}
+
+# installed / not found for the four agent CLIs (no model is contacted; only `--version`)
+proc OGFAIRegDetect {} {
+    set w .ogfai_reg
+    lassign [OGFAIExec [concat [OGFAIArgv detect-agents] --json]] rc out err
+    if {$rc || [catch {set doc [::ogf::json::parse $out]}]} {
+	$w.msg configure -text "detection failed: [string trim $err]"
+	return
+    }
+    set lines {}
+    foreach r [::ogf::json::get $doc agent_clis] {
+	lappend lines [format "%-16s %s" [::ogf::json::get $r label] [expr {[::ogf::json::get $r installed 0] ? "installed: [::ogf::json::get $r path]  ([::ogf::json::get $r version])" : "NOT FOUND on PATH ([join [::ogf::json::get $r tried] {, }])"}]]
+    }
+    $w.msg configure -text [join $lines "\n"]
+    OGFAIAppendLog "Detect agent CLIs\n[join $lines \n]\n"
 }
 
 proc OGFAIRegApplyPath {} {
@@ -426,6 +532,7 @@ proc OGFAIRegTest {} {
     if {$n eq {}} return
     set w .ogfai_reg
     set info [OGFAIServiceInfo $n]
+    # agent CLI: only checks that the executable exists and prints its version; no prompt, no data, no cloud call
     if {[OGFAIIsNetwork $info] && ![OGFAIConfirm $info "A test request (HTTP GET of the service's health URL; no catalog data) will be sent."]} {
 	$w.msg configure -text "Test cancelled."
 	return
@@ -458,6 +565,12 @@ proc OGFAIRunDialog {} {
     set ogfai(run,rows) $rows
     set ogfai(run,task) photoz
     set ogfai(run,service) {}
+    set ogfai(run,agents) [OGFAIAgentInfo]
+    set ogfai(run,backend) $ogfai(last,backend)
+    set ogfai(run,bshow) {}
+    set ogfai(run,images) 0
+    set ogfai(run,exe) {}
+    set ogfai(run,xargs) {}
     set ogfai(run,which) all
     set ogfai(run,dry) 0
     set ogfai(run,size) $ogfai(last,size)
@@ -470,8 +583,23 @@ proc OGFAIRunDialog {} {
     set r 0
     ttk::label $w.lt -text "Task"
     ttk::combobox $w.ct -textvariable ogfai(run,task) -state readonly -values $OGFAI_TASKS -width 34
+    ttk::label $w.lb -text "Backend"
+    ttk::combobox $w.cb -textvariable ogfai(run,bshow) -state readonly -width 44 -values [OGFAIBackendLabels]
     ttk::label $w.ls -text "Service"
     ttk::combobox $w.cs -textvariable ogfai(run,service) -state readonly -width 34
+    ttk::labelframe $w.ag -text "Agent CLI (runs on your machine, uses its own login; data goes to the provider's cloud model)"
+    ttk::label $w.ag.l1 -text "Executable"
+    ttk::entry $w.ag.e1 -textvariable ogfai(run,exe) -width 44
+    ttk::button $w.ag.b1 -text "Browse..." -command OGFAIRunBrowseExe
+    ttk::label $w.ag.l2 -text "Extra args (JSON list)"
+    ttk::entry $w.ag.e2 -textvariable ogfai(run,xargs) -width 44
+    ttk::button $w.ag.b2 -text "Save to profile" -command OGFAIRunSaveAgent
+    ttk::checkbutton $w.ag.img -text "Send image cutouts to the CLI (default OFF: only catalog numbers leave the machine)" -variable ogfai(run,images)
+    ttk::label $w.ag.st -text {} -wraplength 480 -justify left
+    grid $w.ag.l1 $w.ag.e1 $w.ag.b1 -padx 4 -pady 2 -sticky w
+    grid $w.ag.l2 $w.ag.e2 $w.ag.b2 -padx 4 -pady 2 -sticky w
+    grid $w.ag.img -columnspan 3 -padx 4 -pady 2 -sticky w
+    grid $w.ag.st -columnspan 3 -padx 4 -pady 2 -sticky w
     ttk::label $w.lr -text "Rows"
     ttk::frame $w.fr
     ttk::radiobutton $w.fr.a -text "all ($nall)" -variable ogfai(run,which) -value all
@@ -495,13 +623,18 @@ proc OGFAIRunDialog {} {
     ttk::button $w.bb.cancel -text Cancel -command {set ogfai(run,done) cancel}
     pack $w.bb.ok $w.bb.cancel -side left -padx 4
     grid $w.lt $w.ct -padx 6 -pady 3 -sticky w
+    grid $w.lb $w.cb -padx 6 -pady 3 -sticky w
     grid $w.ls $w.cs -padx 6 -pady 3 -sticky w
+    grid $w.ag -columnspan 2 -padx 6 -pady 4 -sticky we
     grid $w.lr $w.fr -padx 6 -pady 3 -sticky w
     grid $w.cut -columnspan 2 -padx 6 -pady 4 -sticky we
     grid $w.dry -columnspan 2 -padx 6 -pady 2 -sticky w
     grid $w.note -columnspan 2 -padx 6 -pady 2 -sticky w
     grid $w.bb -columnspan 2 -pady 6
     bind $w.ct <<ComboboxSelected>> OGFAIRunTaskChanged
+    bind $w.cb <<ComboboxSelected>> OGFAIRunBackendPicked
+    bind $w.cs <<ComboboxSelected>> OGFAIRunServiceChanged
+    set ogfai(run,bshow) [OGFAIBackendLabel $ogfai(run,backend)]
     OGFAIRunTaskChanged
     bind $w <Escape> {set ogfai(run,done) cancel}
     wm protocol $w WM_DELETE_WINDOW {set ogfai(run,done) cancel}
@@ -512,29 +645,129 @@ proc OGFAIRunDialog {} {
     set task $ogfai(run,task); set svc $ogfai(run,service)
     set which $ogfai(run,which); set dry $ogfai(run,dry)
     foreach k {size unit norm fmt} {set ogfai(last,$k) $ogfai(run,$k)}
+    set ogfai(last,backend) $ogfai(run,backend)
+    set imgs $ogfai(run,images)
+    OGFAIPrefSave
     destroy $w
     if {!$go} return
     if {$svc eq {}} {::ogf::cat::set status "AI Services: no enabled service for task $task (see Service Registry)"; return}
     OGFAIRunTask $task $svc -rows $which -dry $dry -size [string trim $ogfai(last,size)] -unit $ogfai(last,unit) \
-	-norm $ogfai(last,norm) -fmt $ogfai(last,fmt)
+	-norm $ogfai(last,norm) -fmt $ogfai(last,fmt) -images $imgs
+}
+
+# Backend dropdown: the four agent CLIs (with installed / not found) + the generic services of the registry
+set ::OGFAI_BACKENDS {codex "Codex CLI (codex exec)" claude "Claude Code (claude -p)" agy "agy / Gemini CLI (agy, gemini -p)" grok "Grok (xAI CLI)"}
+
+proc OGFAIBackendInstalled {be rows} {
+    # rows: dict name -> info (OGFAIAgentInfo)
+    set found 0
+    dict for {n i} $rows {
+	if {[dict get $i backend] eq $be && [dict get $i installed]} {set found 1}
+    }
+    return $found
+}
+
+proc OGFAIBackendLabel {be} {
+    global ogfai OGFAI_BACKENDS
+    if {$be eq "generic"} {return "Generic services (REST / local command / python / mock)"}
+    set rows [expr {[info exists ogfai(run,agents)] ? $ogfai(run,agents) : {}}]
+    return "[dict get $OGFAI_BACKENDS $be]  -  [expr {[OGFAIBackendInstalled $be $rows] ? {installed} : {NOT FOUND on PATH}}]"
+}
+
+proc OGFAIBackendLabels {} {
+    global OGFAI_BACKENDS
+    set l {}
+    foreach be [dict keys $OGFAI_BACKENDS] {lappend l [OGFAIBackendLabel $be]}
+    lappend l [OGFAIBackendLabel generic]
+    return $l
+}
+
+proc OGFAIRunBackendPicked {} {
+    global ogfai OGFAI_BACKENDS
+    set sel $ogfai(run,bshow)
+    set ogfai(run,backend) generic
+    foreach be [dict keys $OGFAI_BACKENDS] {if {$sel eq [OGFAIBackendLabel $be]} {set ogfai(run,backend) $be}}
+    set ogfai(run,service) {}
+    OGFAIRunTaskChanged
+}
+
+proc OGFAIRunBrowseExe {} {
+    global ogfai
+    set f [tk_getOpenFile -title "Agent CLI executable" -parent .ogfai_run]
+    if {$f ne {}} {set ogfai(run,exe) $f}
+}
+
+# write executable / extra args of the chosen agent service into the profile file (bridge --mode set-agent)
+proc OGFAIRunSaveAgent {} {
+    global ogfai
+    set w .ogfai_run
+    set svc $ogfai(run,service)
+    if {$svc eq {} || ![dict exists $ogfai(run,agents) $svc]} return
+    set xa [string trim $ogfai(run,xargs)]
+    if {$xa eq {}} {set xa "\[\]"}
+    lassign [OGFAIExec [concat [OGFAIArgv set-agent] [list --service $svc --executable [string trim $ogfai(run,exe)] --extra-args-json $xa]]] rc out err
+    if {$rc} {
+	$w.ag.st configure -text "NOT saved: [string trim $err]"
+	return
+    }
+    set ogfai(run,agents) [OGFAIAgentInfo]
+    $w.cb configure -values [OGFAIBackendLabels]
+    set ogfai(run,bshow) [OGFAIBackendLabel $ogfai(run,backend)]
+    OGFAIRunServiceChanged
+    $w.ag.st configure -text "Saved: [string trim $out]"
+}
+
+# fill the agent frame for the chosen service
+proc OGFAIRunServiceChanged {} {
+    global ogfai
+    set w .ogfai_run
+    if {![winfo exists $w]} return
+    set svc $ogfai(run,service)
+    if {$ogfai(run,backend) eq "generic" || $svc eq {} || ![dict exists $ogfai(run,agents) $svc]} return
+    set i [dict get $ogfai(run,agents) $svc]
+    set ogfai(run,exe) [dict get $i executable]
+    set ogfai(run,xargs) [expr {[llength [dict get $i extra_args]] ? "\[[join [lmap a [dict get $i extra_args] {format {"%s"} $a}] ,]\]" : {}}]
+    if {[dict get $i installed]} {
+	$w.ag.st configure -text "Found: [dict get $i path]    Login: [dict get $i login]"
+    } else {
+	$w.ag.st configure -text "NOT FOUND on PATH. Install the CLI, or enter its full path above and press 'Save to profile'.    Login: [dict get $i login]"
+    }
 }
 
 proc OGFAIRunTaskChanged {} {
     global ogfai
     set w .ogfai_run
     set vals {}
+    set be $ogfai(run,backend)
     foreach r $ogfai(run,rows) {
-	if {[dict get $r enabled] eq "yes" && [dict get $r valid] eq "yes" && [dict get $r task] in [list $ogfai(run,task) any]} {
-	    lappend vals [dict get $r name]
+	if {[dict get $r enabled] ne "yes" || [dict get $r valid] ne "yes"} continue
+	set isag [expr {[dict get $r transport] eq "agent_cli"}]
+	if {$be eq "generic"} {
+	    if {$isag} continue
+	    if {[dict get $r task] in [list $ogfai(run,task) any]} {lappend vals [dict get $r name]}
+	} else {
+	    if {!$isag || ![dict exists $ogfai(run,agents) [dict get $r name]]} continue
+	    if {[dict get [dict get $ogfai(run,agents) [dict get $r name]] backend] ne $be} continue
+	    if {[dict get $r task] in [list $ogfai(run,task) any]} {lappend vals [dict get $r name]}
 	}
     }
     $w.cs configure -values $vals
     if {$ogfai(run,service) ni $vals} {set ogfai(run,service) [lindex $vals 0]}
+    if {$be eq "generic"} {
+	grid remove $w.ag
+    } else {
+	grid $w.ag
+	OGFAIRunServiceChanged
+    }
     if {[llength $vals]} {
-	$w.note configure -text "Result columns are added to the catalog table; mock results are tagged SERVICE=mock."
+	if {$be eq "generic"} {
+	    $w.note configure -text "Result columns are added to the catalog table; mock results are tagged SERVICE=mock."
+	} else {
+	    $w.note configure -text "Result columns are added to the catalog table. Before the first run you see exactly what leaves the machine; 'Dry run' shows the prompt and the command."
+	}
 	$w.bb.ok state !disabled
     } else {
-	$w.note configure -text "No enabled, valid service for this task. Open Service Registry... to enable one or create the profile file."
+	$w.note configure -text "No enabled, valid service for this backend / task. Open Service Registry... to enable one or create the profile file."
 	$w.bb.ok state disabled
     }
 }

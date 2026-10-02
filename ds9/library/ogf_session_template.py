@@ -770,7 +770,15 @@ def check_requirements(field, rec):
         if not os.path.exists(p):
             return 'intermediate input %s was not produced (the step that creates it did not run)' % os.path.relpath(
                 p, field.dir)
-    if rec.get('network') and str(rec.get('network')) not in ('0', '') and not (field.replay or field.args.allow_network):
+    if rec['step'] == 'ai.run' and (rec.get('payload') or {}).get('transport') == 'agent_cli':
+        # an agent CLI forwards the catalogue rows to its provider's cloud model: needs its own switch in pipeline mode
+        if not (field.replay or getattr(field.args, 'allow_agent_cli', False)):
+            return ('hands catalogue data to the agent CLI %s (cloud model); use --allow-agent-cli' %
+                    (rec.get('payload') or {}).get('backend', ''))
+        if str((rec.get('payload') or {}).get('send_images')) in ('1', 'true', 'True') and not (
+                field.replay or getattr(field.args, 'allow_agent_images', False)):
+            return 'sends image cutouts to the agent CLI (cloud model); use --allow-agent-images as well'
+    elif rec.get('network') and str(rec.get('network')) not in ('0', '') and not (field.replay or field.args.allow_network):
         return 'needs network access (%s); use --allow-network' % ('external AI service' if rec['step'] == 'ai.run' else 'VizieR')
     return None
 
@@ -1339,6 +1347,8 @@ def main(argv=None):
                     help='pipeline mode: replace the limits of the recorded catalog trim/filter steps '
                          '(either bound may be empty), e.g. --trim MAG_AUTO=18:27')
     ap.add_argument('--allow-network', action='store_true', help='run steps that need network access (cross-match, external AI services)')
+    ap.add_argument('--allow-agent-images', action='store_true', help='with --allow-agent-cli: also run agent-CLI steps that were recorded with "send image cutouts" ticked')
+    ap.add_argument('--allow-agent-cli', action='store_true', help='run ai.run steps that use an agent CLI (Codex CLI, Claude Code, agy/Gemini CLI, Grok): the CLI forwards catalogue rows to its provider\'s cloud model')
     ap.add_argument('--jobs', type=int, default=1, help='fields processed in parallel')
     ap.add_argument('--resume', action='store_true', help='skip steps whose inputs/parameters are unchanged')
     ap.add_argument('--zp', action='append', default=[], metavar='[BAND=]ZP', help='AB zeropoint override')
