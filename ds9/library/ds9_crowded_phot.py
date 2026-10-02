@@ -50,11 +50,17 @@ def main():
     parser.add_argument('--max-iter', type=int, default=3,
                         help='Maximum iterations (default: 3)')
     parser.add_argument('--mag-zeropoint', type=float, default=25.0)
+    parser.add_argument('--psf-model', default='',
+                        help='optional spatially varying PSF model (ogfkit.psfmodel JSON/FITS): each source uses the model PSF at its position')
 
     from parallel import add_batch_args
     add_batch_args(parser)
 
     args = parser.parse_args()
+    psf_model = None
+    if args.psf_model:
+        from ogfkit.psfmodel import load_model
+        psf_model = load_model(args.psf_model)
 
     try:
         from astropy.io import fits
@@ -99,7 +105,7 @@ def main():
     cfg = CrowdedPhotConfig(max_iterations=args.max_iter,
                              mag_zeropoint=args.mag_zeropoint)
     results = crowded_photometry(data, psf, sources, cfg,
-                                  n_workers=args.n_workers)
+                                  n_workers=args.n_workers, psf_model=psf_model)
 
     # Output TSV
     print("NUMBER\tFLUX_CROWD\tFLUXERR_CROWD\tMAG_CROWD\tX_CROWD\tY_CROWD\tN_NEIGHBORS")

@@ -14,12 +14,14 @@ from .util import log
 
 
 def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, snr_det=5.0, progress=None,
-                     save_diff_dir=None, extra=None, psf_tile=None, psf_min_stars=5, **diff_kw):
+                     save_diff_dir=None, extra=None, psf_tile=None, psf_min_stars=5, psf_source='tiles', **diff_kw):
     """Difference every chip that covers `center` (ra, dec; or the whole chips if None) against the median of the
     other exposures and detect/classify.  `chips` must already be aligned.  Returns (dets, infos).
     `diff_kw` goes to `detect.difference_chip` (cr_reject, trail_fit, realbogus, source_noise, astrom_sigma, template_psf, ...).
     `psf_tile=N` (pixels) measures a spatially varying PSF per N x N tile from the stars of all exposures of the same detector
-    (`imaging.measure_psf_field`, tiles with < `psf_min_stars` stars use the pooled PSF) and runs the tiled ZOGY (`zogy_tiled`); None = one PSF per chip (default)."""
+    (`imaging.measure_psf_field`, tiles with < `psf_min_stars` stars use the pooled PSF) and runs the tiled ZOGY (`zogy_tiled`); None = one PSF per chip (default).
+    `psf_source='model'` (with psf_tile) replaces the per-tile stacks by one spatially varying polynomial PSF model per chip (`ogfkit.psfmodel`, PSFEx-like: stars of the
+    chip, order 0-2 chosen from the star count, constant/Moffat/Gaussian fallback with few stars), evaluated at the centre of every tile."""
     if psf is None:
         psf = I.estimate_psf(chips, snr_min=6.0)
     psf_t, fw, n = psf
@@ -54,7 +56,11 @@ def detect_in_region(chips, center=None, half_pix=700, psf=None, min_inputs=2, s
         if progress:
             progress("difference %s" % c.name)
         kw_c = dict(diff_kw)
-        if psf_tile:
+        if psf_tile and psf_source == "model":
+            pf = I.psf_model_field(cc, psf_t, fw, fw_floor)
+            kw_c["psf_field_t"] = pf; kw_c["psf_field_r"] = pf
+            log("psf model %s: %s" % (c.name, pf.summary()))
+        elif psf_tile:
             same = [o for o in chips if getattr(o, "extver", None) == getattr(c, "extver", None)]
             pf = I.measure_psf_field(same, cc.shape, tile=(int(psf_tile), int(psf_tile)), min_stars=psf_min_stars, snr_min=6.0, origin=getattr(cc, "origin", (0, 0)),
                                      constant=(psf_t, fw), min_fwhm_pix=fw_floor)

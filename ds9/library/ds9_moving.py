@@ -171,6 +171,7 @@ def _detect_opts(a):
     if am not in (None, "", "off"):
         o["astrom_sigma"] = True if am == "sidecar" else "measure" if am == "measure" else float(am)
     if getattr(a, "psf_tile", None): o["psf_tile"] = int(a.psf_tile)
+    if getattr(a, "psf_source", None) not in (None, "tiles"): o["psf_source"] = a.psf_source
     if getattr(a, "template_psf", None) not in (None, "target"): o["template_psf"] = a.template_psf
     return o
 
@@ -473,6 +474,7 @@ def main(argv=None):
     ap.add_argument("--astrom", default="off", help="difference: ZOGY astrometric-registration term: off (default) | sidecar (alignment rms per chip) | "
                     "measure (estimated from the star offsets of each target/template pair) | a number = sigma in pixels")
     ap.add_argument("--psf-tile", type=int, default=0, help="difference: spatially varying PSF on tiles of N pixels (tiled ZOGY); 0 = one PSF per chip")
+    ap.add_argument("--psf-source", default="tiles", choices=["tiles", "model"], help="difference with --psf-tile: PSF per tile from stacked stars (default) or one spatially varying polynomial PSF model per chip (ogfkit.psfmodel)")
     ap.add_argument("--template-psf", default="target", choices=["target", "measure"], help="difference: PSF of the template (default: the target PSF)")
     ap.add_argument("--tol", type=float, default=0.5)
     ap.add_argument("--min-exposures", type=int, default=3)

@@ -4,7 +4,7 @@ import numpy as np
 from scipy.ndimage import shift
 
 
-def subtract_sources(data, psf, results):
+def subtract_sources(data, psf, results, psf_model=None):
     """Subtract fitted PSFs from image data.
 
     Parameters
@@ -33,6 +33,11 @@ def subtract_sources(data, psf, results):
 
         x = r['X_CROWD'] - 1.0
         y = r['Y_CROWD'] - 1.0
+        if psf_model is not None:             # PSF model at the star position
+            psf = np.asarray(psf_model.stamp(x, y, 0.0, 0.0, psf.shape[0] if psf.shape[0] % 2 == 1 else None), float)
+            psf_sum = psf.sum()
+            psf_norm = psf / psf_sum
+            psf_hy, psf_hx = psf.shape[0] // 2, psf.shape[1] // 2
         amp = flux / psf_sum
 
         px0 = int(x) - psf_hx

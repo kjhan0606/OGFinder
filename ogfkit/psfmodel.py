@@ -23,6 +23,8 @@ from scipy.sparse.linalg import lsqr
 
 from . import models as _m
 
+_LSQR_ITER = 400                   # lsqr iterations (converged well before this for the typical 20-300 stars)
+
 
 # ----------------------------------------------------------------------------------------------------------------- kernel
 def _cubic_w(t):
@@ -101,6 +103,20 @@ class PSFModel:
         s = self.stamp(x, y, x - ix, y - iy, size)
         h = (s.shape[0] - 1) // 2
         return s, ix - h, iy - h
+
+    # -- moving/imaging.PSFField-compatible interface (zogy_tiled takes any object with `at`)
+    def at(self, x, y, size=None):
+        """Unit-sum PSF stamp for the tile centred on pixel (x, y): what `moving.zogy.zogy_tiled` asks of a PSF field."""
+        return self.stamp(x, y, 0.0, 0.0, size)
+
+    @property
+    def varies(self):
+        return self.degree > 0
+
+    def summary(self):
+        d = diagnostics(self, 3)
+        return dict(mode=self.meta.get('mode'), n_stars=self.meta.get('n_stars'), degree=self.degree, oversample=self.oversample, size=self.size,
+                    fwhm_pix_min=d['fwhm_min'], fwhm_pix_max=d['fwhm_max'], constant_fwhm_pix=d['fwhm_mean'], e_min=d['e_min'], e_max=d['e_max'])
 
     def fwhm_estimate(self, x=None, y=None):
         x = 0.5 * sum(self.xr) if x is None else x
@@ -489,7 +505,7 @@ def fit_coefficients(stamps, weights, offsets, fluxes, pos, shape_xy, size, over
         r0 += edge.size
     A = sparse.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(r0, K * nf * nf))
     b = np.concatenate(rhs)
-    sol = lsqr(A, b, atol=1e-9, btol=1e-9, iter_lim=400)[0]
+    sol = lsqr(A, b, atol=1e-9, btol=1e-9, iter_lim=int(_LSQR_ITER))[0]
     C = sol.reshape(K, nf, nf)
     return C, nf
 
@@ -532,7 +548,7 @@ def fit_moffat_to_stars(stamps, weights):
 
 # ----------------------------------------------------------------------------------------------------------------- driver
 def build_psf_model(data, bkg=None, rms=None, mask=None, xy=None, fwhm_prior=3.0, size=None, oversample='auto', degree=None, snr_min=25.0,
-                    saturation=None, n_iter=2, max_stars=400, neighbour_fit=None, smooth=0.02, reject_sigma=3.5, min_dist=None, kind='empirical', lookup=True):
+                    saturation=None, n_iter=2, max_stars=400, neighbour_fit=None, smooth=None, reject_sigma=3.5, min_dist=None, kind='empirical', lookup=True):
     """Build a spatially varying PSF model from the field stars of `data`.
 
     xy        optional (N, 2) 0-based star positions; otherwise stars are detected and picked on the stellar locus.
@@ -610,10 +626,14 @@ def build_psf_model(data, bkg=None, rms=None, mask=None, xy=None, fwhm_prior=3.0
         return mdl, info
     deg = auto_degree(nst, degree)
     if oversample == 'auto':
-        s = 2 if nst >= 25 else 1       # s=1 + cubic interpolation sharpens the model by ~3 % in FWHM; s=2 is accurate to ~1 %
+        # oversampling only pays for undersampled PSFs (FWHM < 2.5 px): there s=2 (with strong smoothing) reduces the FWHM bias from -3 % to +1 % and the worst
+        # stamp error from 22 % to 14 %; for well sampled PSFs s=1 + cubic shifts is clearly better (noise of the sub-pixel phase fit: FWHM bias -2 % vs -4 %, e error 0.007 vs 0.03)
+        s = 2 if (nst >= 25 and fw < 2.5) else 1
     else:
         s = int(oversample)
     info.update(degree=deg, oversample=s)
+    if smooth is None:
+        smooth = 0.02 if s == 1 else 0.3
     mdl = None
     keep = np.ones(nst, bool)
     stars_out = []
@@ -702,3 +722,56 @@ def _paste(img, stamp, x0, y0):
     yb, xb = min(img.shape[0], y0 + h), min(img.shape[1], x0 + w)
     if yb > ya and xb > xa:
         img[ya:yb, xa:xb] += stamp[ya - y0:yb - y0, xa - x0:xb - x0]
+
+
+def star_table(info):
+    """Per-star records of build_psf_model's info as long-form rows (1-based x, y)."""
+    return [dict(ID=i + 1, X_IMAGE=s['x'] + 1, Y_IMAGE=s['y'] + 1, FLUX=s['flux'], FWHM=s['fwhm'], E=s['e'], PA=s['pa'],
+                 RESID_FRAC=s['resid_rms_frac'], USED=int(s['used'])) for i, s in enumerate(info.get('stars', []))]
+
+
+def grid_table(model, grid=7):
+    """Rows (x, y, fwhm, e, pa) of the model's shape on a grid x grid lattice (the 'PSF maps')."""
+    d = diagnostics(model, grid)
+    rows = []
+    for j, y in enumerate(d['y']):
+        for i, x in enumerate(d['x']):
+            rows.append(dict(X=x + 1, Y=y + 1, FWHM=d['fwhm'][j][i], E=d['e'][j][i], PA=d['pa'][j][i]))
+    return rows
+
+
+def shape_at(model, xs, ys):
+    """FWHM, ellipticity, PA of the model at the given positions (0-based), as three lists."""
+    r = [psf_shape(model.stamp(x, y, 0.0, 0.0)) for x, y in zip(xs, ys)]
+    return [q['fwhm'] for q in r], [q['e'] for q in r], [q['pa'] for q in r]
+
+
+def plot_maps(model, info, path, grid=9):
+    """PNG with the FWHM / ellipticity maps, the stars' measured FWHM against the model and the central PSF."""
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    d = diagnostics(model, grid)
+    fig, ax = plt.subplots(2, 3, figsize=(11, 6.5))
+    ext = [d['x'][0], d['x'][-1], d['y'][0], d['y'][-1]]
+    for a, key, lab in ((ax[0, 0], 'fwhm', 'model FWHM (px)'), (ax[0, 1], 'e', 'model ellipticity'), (ax[0, 2], 'pa', 'model PA (deg)')):
+        im = a.imshow(np.array(d[key]), origin='lower', extent=ext)
+        fig.colorbar(im, ax=a, fraction=0.046)
+        a.set_title(lab, fontsize=9)
+    st = [s for s in info.get('stars', []) if s['used']]
+    if st:
+        sx, sy = [s['x'] for s in st], [s['y'] for s in st]
+        mf, me, _ = shape_at(model, sx, sy)
+        ax[1, 0].plot(mf, [s['fwhm'] for s in st], 'k.', ms=4)
+        lim = [min(mf + [s['fwhm'] for s in st]), max(mf + [s['fwhm'] for s in st])]
+        ax[1, 0].plot(lim, lim, 'r-', lw=0.8)
+        ax[1, 0].set_xlabel('model FWHM at the star')
+        ax[1, 0].set_ylabel('measured FWHM of the star')
+        ax[1, 1].plot(sx, sy, 'k.', ms=4)
+        ax[1, 1].set_xlim(ext[0], ext[1]); ax[1, 1].set_ylim(ext[2], ext[3])
+        ax[1, 1].set_title('%d PSF stars' % len(st), fontsize=9)
+    ax[1, 2].imshow(np.log10(np.clip(model.stamp(0.5 * sum(model.xr), 0.5 * sum(model.yr)), 1e-6, None)), origin='lower')
+    ax[1, 2].set_title('central PSF (log10)', fontsize=9)
+    fig.tight_layout()
+    fig.savefig(path, dpi=80)
+    plt.close(fig)

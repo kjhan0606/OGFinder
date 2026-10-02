@@ -318,6 +318,26 @@ class PSFField:
                     fwhm_pix_min=float(np.nanmin(self.fwhm)), fwhm_pix_max=float(np.nanmax(self.fwhm)), constant_fwhm_pix=float(self.constant_fwhm))
 
 
+def psf_model_field(chip, psf, fwhm, fwhm_floor=0.0, snr_min=15.0):
+    """Spatially varying PSF of one chip as a `ogfkit.psfmodel.PSFModel` (has `at(x, y)` and `summary()` like `PSFField`).  The chip's bad / saturated /
+    cosmic-ray pixels are masked.  A model narrower than `fwhm_floor` (hot-pixel contamination) or built from < 4 stars is replaced by the
+    constant fallback PSF `psf` (so the tiled ZOGY never sees a worse PSF than the default one)."""
+    import os, sys
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    from ogfkit import psfmodel as PM
+    mask = np.zeros(chip.data.shape, bool)
+    for k in ("bad", "saturated", "cr"):
+        v = getattr(chip, k, None)
+        if v is not None:
+            mask |= np.asarray(v).astype(bool)
+    mdl, info = PM.build_psf_model(np.asarray(chip.data, np.float32), mask=mask, fwhm_prior=max(float(fwhm), 1.5), snr_min=snr_min, n_iter=2)
+    if info.get("mode") not in ("empirical",) or mdl.fwhm_estimate() < fwhm_floor:
+        return PM.from_image(psf)
+    return mdl
+
+
 def constant_psf_field(shape, psf, fwhm, tile=(512, 512)):
     ny, nx = shape; nty = int(np.ceil(ny / tile[0])); ntx = int(np.ceil(nx / tile[1]))
     arr = np.empty((nty, ntx), object)

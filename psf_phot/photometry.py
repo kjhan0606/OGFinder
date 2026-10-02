@@ -10,6 +10,7 @@ def _fit_one_source(data, psf, src, cfg):
     x = src['x']
     y = src['y']
     num = src['number']
+    psf = src.get('psf_local', psf)          # spatially varying PSF model: the stamp at this source (set by do_psf_photometry)
 
     ny_img, nx_img = data.shape
     psf_hy, psf_hx = psf.shape[0] // 2, psf.shape[1] // 2
@@ -38,6 +39,14 @@ def _fit_one_source(data, psf, src, cfg):
         hy = min(cy, cutout.shape[0] // 2)
         hx = min(cx, cutout.shape[1] // 2)
         psf_cut = psf_cut[cy-hy:cy+hy+1, cx-hx:cx+hx+1]
+
+    if psf_cut.shape[0] < cutout.shape[0] or psf_cut.shape[1] < cutout.shape[1]:
+        # centre the (smaller) PSF stamp in the cutout: the star sits at the cutout centre, so a PSF stamp placed in the corner (as before) cannot match it
+        padded = np.zeros(cutout.shape)
+        oy = (cutout.shape[0] - psf_cut.shape[0]) // 2
+        ox = (cutout.shape[1] - psf_cut.shape[1]) // 2
+        padded[oy:oy + psf_cut.shape[0], ox:ox + psf_cut.shape[1]] = psf_cut
+        psf_cut = padded
 
     dx0 = x - int(x)
     dy0 = y - int(y)
@@ -88,7 +97,7 @@ def _worker_fit_psf(args):
             shm_psf.close()
 
 
-def do_psf_photometry(data, psf, sources, cfg=None, n_workers=0):
+def do_psf_photometry(data, psf, sources, cfg=None, n_workers=0, psf_model=None):
     """Perform PSF photometry on all sources.
 
     Parameters
@@ -106,6 +115,10 @@ def do_psf_photometry(data, psf, sources, cfg=None, n_workers=0):
     """
     if cfg is None:
         cfg = PSFPhotConfig()
+    if psf_model is not None:
+        # optional spatially varying PSF (ogfkit.psfmodel.PSFModel): every source is fitted with the model PSF at its position
+        size = psf.shape[0] if (psf.shape[0] % 2 == 1) else None
+        sources = [dict(s_, psf_local=np.asarray(psf_model.stamp(s_['x'], s_['y'], 0.0, 0.0, size), float)) for s_ in sources]
 
     from parallel import parallel_map, resolve_n_workers, SharedArray
 

@@ -38,7 +38,14 @@
     "--mag-zeropoint",
     "{extract:mag-zeropoint}",
     "--n-workers",
-    "{extract:n-workers}"
+    "{extract:n-workers}",
+    {
+     "if_file": "{cat:psf,model}",
+     "argv": [
+      "--psf-model",
+      "{cat:psf,model}"
+     ]
+    }
    ],
    "output": {
     "mode": "add_columns",
@@ -101,7 +108,14 @@
     "--mag-zeropoint",
     "{extract:mag-zeropoint}",
     "--n-workers",
-    "{extract:n-workers}"
+    "{extract:n-workers}",
+    {
+     "if_file": "{cat:psf,model}",
+     "argv": [
+      "--psf-model",
+      "{cat:psf,model}"
+     ]
+    }
    ],
    "output": {
     "mode": "add_columns",

@@ -193,6 +193,19 @@
       "help": "0 = one PSF per chip. N > 0 = PSF measured per N x N tile and tiled ZOGY (needs several stars per tile; sparse fields fall back to the pooled PSF)."
     },
     {
+      "name": "psf-source",
+      "label": "PSF source",
+      "type": "choice",
+      "default": "tiles",
+      "choices": [
+        "tiles",
+        "model"
+      ],
+      "group": "Difference (ZOGY)",
+      "expert": 1,
+      "help": "With a PSF tile size > 0: tiles = PSF stacked from the stars of every tile (default); model = one spatially varying polynomial PSF model per chip (PSFEx-like, falls back to the default PSF with few stars or a too narrow model)."
+    },
+    {
       "name": "template-psf",
       "label": "Template PSF",
       "type": "choice",

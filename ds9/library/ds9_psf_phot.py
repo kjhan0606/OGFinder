@@ -48,11 +48,17 @@ def main():
     parser.add_argument('--fit-radius', type=int, default=10,
                         help='Fitting radius in pixels (default: 10)')
     parser.add_argument('--mag-zeropoint', type=float, default=25.0)
+    parser.add_argument('--psf-model', default='',
+                        help='optional spatially varying PSF model (ogfkit.psfmodel JSON/FITS): each source uses the model PSF at its position')
 
     from parallel import add_batch_args
     add_batch_args(parser)
 
     args = parser.parse_args()
+    psf_model = None
+    if args.psf_model:
+        from ogfkit.psfmodel import load_model
+        psf_model = load_model(args.psf_model)
 
     try:
         from astropy.io import fits
@@ -95,7 +101,7 @@ def main():
 
     cfg = PSFPhotConfig(fit_radius=args.fit_radius, mag_zeropoint=args.mag_zeropoint)
     results = do_psf_photometry(data, psf, sources, cfg,
-                                 n_workers=args.n_workers)
+                                 n_workers=args.n_workers, psf_model=psf_model)
 
     # Output TSV
     print("NUMBER\tFLUX_PSF\tFLUXERR_PSF\tMAG_PSF\tMAGERR_PSF\tCHI2_PSF\tX_PSF\tY_PSF")

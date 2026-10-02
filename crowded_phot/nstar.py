@@ -22,6 +22,7 @@ def fit_group(data, psf, sources, max_shift=2.0):
     n = len(sources)
     if n == 0:
         return []
+    psf = sources[0].get('psf_local', psf)       # spatially varying PSF: stamp at the group centre (crowded_photometry psf_model)
 
     ny, nx = data.shape
     psf_hy, psf_hx = psf.shape[0] // 2, psf.shape[1] // 2

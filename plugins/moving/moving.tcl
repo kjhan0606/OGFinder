@@ -397,6 +397,7 @@ proc OGFMovZogyArgs {} {
     if {![catch {::ogf::params::get moving source-noise} v] && $v} {lappend a --source-noise}
     if {![catch {::ogf::params::get moving astrom} v] && $v ni {{} off}} {lappend a --astrom $v}
     if {![catch {::ogf::params::get moving psf-tile} v] && [string is integer -strict $v] && $v > 0} {lappend a --psf-tile $v}
+    if {![catch {::ogf::params::get moving psf-source} v] && $v ni {{} tiles}} {lappend a --psf-source $v}
     if {![catch {::ogf::params::get moving template-psf} v] && $v ni {{} target}} {lappend a --template-psf $v}
     return $a
 }

@@ -25,7 +25,7 @@ def _worker_fit_group(args):
             shm_psf.close()
 
 
-def crowded_photometry(data, psf, sources, cfg=None, n_workers=0):
+def crowded_photometry(data, psf, sources, cfg=None, n_workers=0, psf_model=None):
     """Perform crowded field photometry with iteration.
 
     Parameters
@@ -69,6 +69,10 @@ def crowded_photometry(data, psf, sources, cfg=None, n_workers=0):
             group_sources_list = [sources[i] for i in group_idx]
             if len(group_sources_list) == 0:
                 continue
+            if psf_model is not None:        # PSF model at the group centre (spatially varying PSF)
+                gx = float(np.mean([s_['x'] for s_ in group_sources_list])); gy = float(np.mean([s_['y'] for s_ in group_sources_list]))
+                group_sources_list = [dict(s_) for s_ in group_sources_list]
+                group_sources_list[0]['psf_local'] = np.asarray(psf_model.stamp(gx, gy, 0.0, 0.0, psf.shape[0] if psf.shape[0] % 2 == 1 else None), float)
             if len(group_sources_list) > cfg.max_group_size:
                 group_sources_list = group_sources_list[:cfg.max_group_size]
             group_tasks.append(group_sources_list)
@@ -104,7 +108,7 @@ def crowded_photometry(data, psf, sources, cfg=None, n_workers=0):
 
         # Subtract and detect new sources
         if iteration < cfg.max_iterations - 1:
-            residual = subtract_sources(current_data, psf, iter_results)
+            residual = subtract_sources(current_data, psf, iter_results, psf_model=psf_model)
 
             # Detect new sources in residual
             mask = ~np.isfinite(residual)

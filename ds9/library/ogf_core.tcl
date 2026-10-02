@@ -313,6 +313,7 @@ namespace eval ::ogf::cat {
         {extract_param,*        scalar extract   rw   "snapshot of param,* taken at the last Extract (AI Merge reuses it)"}
         {psf,param,*            scalar star_psf  rw   "PSF / deconvolution parameters; persisted in ~/.ds9/psf_deconv.prf"}
         {psf,file               path   star_psf  rw   "FITS file of the current PSF (written by Build/Load PSF; read by deconv, photometry, morphology)"}
+        {psf,model              path   psfex     rw   "JSON of the spatially varying PSF model (psfex plugin, Use Model as Catalog PSF); PSF/crowded photometry add --psf-model when set"}
         {psf,has_psf            bool   star_psf  rw   "1 when psf,file is valid"}
         {psf,star_indices       list   star_psf  rw   "row indices of the stars found by Find Stars"}
         {psf,stars              any    star_psf  rw   "star list (legacy)"}
@@ -325,6 +326,7 @@ namespace eval ::ogf::cat {
         {isophote,*             any    isophote  rw   "isophote plugin: last output files (model_file, resid_file, table_file, plot_file) and the show-frames state"}
         {completeness,*         any    completeness rw "completeness plugin: result files and the 50 % / 90 % limiting magnitudes (lim50, lim90) of the last run"}
         {daophot,*              any    daophot   rw   "daophot plugin: last output files (stars_file, psf_file, resid_file, diag_file, cmd_file)"}
+        {psfex,*                any    psfex     rw   "psfex plugin: last output files (model_file, center_file, stars_file, maps_file, plot_file)"}
         {icl,param,*            scalar icl       rw   "ICL parameters (also the source of the shared Mask presets)"}
         {icl,*                  any    icl       rw   "ICL pipeline state (files, flags, click mode, command log)"}
         {lsbg,param,*           scalar lsbg      rw   "LSBG parameters"}
