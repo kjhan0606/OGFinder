@@ -1,0 +1,344 @@
+{
+ "schema": 1,
+ "id": "sedcodes",
+ "name": "SED codes (EAZY, CIGALE, Bagpipes, Prospector)",
+ "short": "SED codes",
+ "tab": "Measure",
+ "order": 31,
+ "description": "Photo-z (EAZY) and SED fitting (CIGALE, Bagpipes, Prospector) through adapters in the style of the AI bridge (python_callable / local_command, profile files, mock executables); magnitudes from MAG_<band> columns, results as EZ_* / SC_* columns.",
+ "requires": {
+  "python": [
+   "numpy",
+   "scipy"
+  ]
+ },
+ "primary": "photoz",
+ "settings": "params",
+ "tcl": "sedcodes.tcl",
+ "steps": [
+  {
+   "id": "photoz",
+   "label": "Photo-z (EAZY)",
+   "title": "Photo-z with EAZY",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.sedcodes_photoz",
+   "catalog_tmp": "sedcodes_photoz",
+   "done_status": "EAZY photo-z done",
+   "after": "OGFSedcodesAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/sedcodes.py",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--max-objects",
+    "{max-objects}",
+    "--mag-columns",
+    "{mag-columns}",
+    "--min-mag-err",
+    "{min-mag-err}",
+    "--timeout",
+    "{timeout}",
+    "--work",
+    "{work}/sedcodes",
+    "--task",
+    "photoz",
+    "--code",
+    "eazy",
+    "--engine",
+    "{engine}",
+    "--z-min",
+    "{z-min}",
+    "--z-max",
+    "{z-max}",
+    "--z-step",
+    "{z-step}",
+    "--point-estimate",
+    "{point-estimate}",
+    {
+     "if": "prior",
+     "argv": [
+      "--prior"
+     ]
+    },
+    "--python",
+    "{python}",
+    "--command",
+    "{command}",
+    "--eazy-data",
+    "{eazy-data}",
+    "--filters-res",
+    "{filters-res}",
+    "--templates-file",
+    "{templates-file}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "EZ_Z",
+     "EZ_ZERR",
+     "EZ_Z16",
+     "EZ_Z50",
+     "EZ_Z84",
+     "EZ_CHI2",
+     "EZ_NOTE"
+    ]
+   }
+  },
+  {
+   "id": "sedfit",
+   "label": "SED Fit (external code)",
+   "title": "SED fit with an external code",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.sedcodes_sedfit",
+   "catalog_tmp": "sedcodes_sedfit",
+   "done_status": "SED fit done",
+   "after": "OGFSedcodesAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/sedcodes.py",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--max-objects",
+    "{max-objects}",
+    "--mag-columns",
+    "{mag-columns}",
+    "--min-mag-err",
+    "{min-mag-err}",
+    "--timeout",
+    "{timeout}",
+    "--work",
+    "{work}/sedcodes",
+    "--task",
+    "sed_fit",
+    "--code",
+    "{sed-code}",
+    "--z-column",
+    "{z-column}",
+    "--n-live",
+    "{n-live}",
+    "--python",
+    "{python}",
+    "--command",
+    "{command}",
+    "--eazy-data",
+    "{eazy-data}",
+    "--filters-res",
+    "{filters-res}",
+    "--templates-file",
+    "{templates-file}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SC_LOGM",
+     "SC_LOGM_ERR",
+     "SC_LOGAGE",
+     "SC_LOGAGE_ERR",
+     "SC_LOGZ",
+     "SC_AV",
+     "SC_SFR",
+     "SC_CHI2",
+     "SC_NOTE"
+    ]
+   }
+  },
+  {
+   "id": "check",
+   "label": "Check Installed Codes...",
+   "proc": "OGFSedcodesCheck",
+   "session": "NONE"
+  },
+  {
+   "id": "profiles",
+   "label": "Write AI-Services Profiles...",
+   "proc": "OGFSedcodesProfiles",
+   "session": "NONE"
+  }
+ ],
+ "params": [
+  {
+   "name": "sed-code",
+   "label": "SED-fit code",
+   "type": "choice",
+   "default": "cigale",
+   "group": "SED fit",
+   "help": "Code used by \"SED Fit (external code)\": cigale = pcigale run (input files + pcigale.ini), bagpipes / prospector = Python library through the fit scripts in sed_adapters/native.",
+   "choices": [
+    "cigale",
+    "bagpipes",
+    "prospector"
+   ]
+  },
+  {
+   "name": "engine",
+   "label": "EAZY engine",
+   "type": "choice",
+   "default": "native",
+   "group": "Photo-z (EAZY)",
+   "help": "native = eazy-py in the interpreter below; external = classic EAZY file interface through the command below.",
+   "choices": [
+    "native",
+    "external"
+   ]
+  },
+  {
+   "name": "python",
+   "label": "Python of the code",
+   "type": "string",
+   "default": "",
+   "group": "Interpreters / commands",
+   "help": "Interpreter that has eazy-py / bagpipes / prospector installed (empty = the one running OGFinder)."
+  },
+  {
+   "name": "command",
+   "label": "Command (external)",
+   "type": "string",
+   "default": "",
+   "group": "Interpreters / commands",
+   "help": "External EAZY executable (the param file is appended), `pcigale run`, or a fit script for bagpipes/prospector with the JSON protocol of docs/sed_codes.md. Split like a shell would, run without a shell."
+  },
+  {
+   "name": "eazy-data",
+   "label": "EAZY data directory",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z (EAZY)",
+   "help": "Directory of the eazy-photoz repository (filters/, templates/). Empty = $EAZYCODE."
+  },
+  {
+   "name": "filters-res",
+   "label": "FILTER.RES file",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z (EAZY)",
+   "help": "Overrides <eazy-data>/filters/FILTER.RES.latest (a FILTER.RES.info next to it is needed by the external engine)."
+  },
+  {
+   "name": "templates-file",
+   "label": "Templates file",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z (EAZY)",
+   "help": "Overrides <eazy-data>/templates/eazy_v1.3.spectra.param."
+  },
+  {
+   "name": "z-min",
+   "label": "z min",
+   "type": "float",
+   "default": 0.01,
+   "group": "Photo-z (EAZY)",
+   "help": "",
+   "min": 0,
+   "max": 20
+  },
+  {
+   "name": "z-max",
+   "label": "z max",
+   "type": "float",
+   "default": 6.0,
+   "group": "Photo-z (EAZY)",
+   "help": "",
+   "min": 0.1,
+   "max": 30
+  },
+  {
+   "name": "z-step",
+   "label": "z step",
+   "type": "float",
+   "default": 0.01,
+   "group": "Photo-z (EAZY)",
+   "help": "",
+   "min": 0.0005,
+   "max": 1
+  },
+  {
+   "name": "prior",
+   "label": "Apply magnitude prior",
+   "type": "bool",
+   "default": false,
+   "group": "Photo-z (EAZY)",
+   "help": "EAZY apply-prior switch (needs prior files for the filter)."
+  },
+  {
+   "name": "point-estimate",
+   "label": "Point estimate",
+   "type": "choice",
+   "default": "peak",
+   "group": "Photo-z (EAZY)",
+   "help": "peak = maximum of p(z); ml = mean of p(z) (z_m1) for the external engine.",
+   "choices": [
+    "peak",
+    "ml"
+   ]
+  },
+  {
+   "name": "z-column",
+   "label": "Redshift column (SED fit)",
+   "type": "string",
+   "default": "Z_SPEC",
+   "group": "SED fit",
+   "help": "Catalog column holding the redshift at which the SED is fitted (e.g. EZ_Z from the EAZY step, or Z_SPEC)."
+  },
+  {
+   "name": "mag-columns",
+   "label": "Magnitude columns",
+   "type": "string",
+   "default": "",
+   "group": "Photometry",
+   "help": "Comma-separated MAG_<band> columns, or COLUMN:BAND to assign a band to any magnitude column (MAG_AUTO:F160W) (bands known to sed_adapters/filters.py: HST ACS/WFC3, JWST NIRCam, SDSS_*, J/H/KS, IRAC1/2). Empty = every MAG_<band> except AUTO/ISO/APER."
+  },
+  {
+   "name": "min-mag-err",
+   "label": "Calibration error floor (mag)",
+   "type": "float",
+   "default": 0.02,
+   "group": "Photometry",
+   "help": "Added in quadrature to the catalog magnitude errors.",
+   "min": 0,
+   "max": 1
+  },
+  {
+   "name": "max-objects",
+   "label": "Max. objects",
+   "type": "int",
+   "default": 2000,
+   "group": "Photometry",
+   "help": "First N catalog rows.",
+   "min": 1,
+   "max": 1000000
+  },
+  {
+   "name": "n-live",
+   "label": "Live points (bagpipes / prospector)",
+   "type": "int",
+   "default": 400,
+   "group": "SED fit",
+   "help": "Nested-sampling live points (more = slower and more reliable posteriors).",
+   "min": 50,
+   "max": 20000
+  },
+  {
+   "name": "timeout",
+   "label": "Time-out (s)",
+   "type": "int",
+   "default": 3600,
+   "group": "Photometry",
+   "help": "Per call of the external code.",
+   "min": 10,
+   "max": 1000000,
+   "expert": true
+  }
+ ]
+}
