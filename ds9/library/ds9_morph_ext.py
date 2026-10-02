@@ -27,6 +27,7 @@ from ogfkit import tsvio, imageio  # noqa: E402
 from morphometry import extended as X  # noqa: E402
 
 COLUMNS = ['MX_RP', 'MX_RP_LO', 'MX_RP_HI', 'MX_FLUX_P', 'MX_MAG_P', 'MX_R20', 'MX_R50', 'MX_R80', 'MX_R90', 'MX_CONC', 'MX_KRON_R', 'MX_KRON_MAG', 'MX_SMOOTH', 'MX_GINI_P', 'MX_M20_P', 'MX_FLAG']
+FEATURE_COLUMNS = ['MX_ASYM', 'MX_NPEAK', 'MX_LOTZ', 'MX_NSHELL', 'MX_SHELL_FRAC', 'MX_NTAIL', 'MX_TAIL_FRAC', 'MX_TAIL_LEN', 'MX_TIDAL_FRAC', 'MX_RES_FRAC', 'MX_NPAIR', 'MX_PAIR_SEP', 'MX_PAIR_RATIO', 'MX_PAIR_KIND', 'MX_MORPH_FLAGS']
 G = {}
 
 
@@ -93,12 +94,17 @@ def one(i):
         tgt = ell_mask(cut.shape, x - x0, y - y0, 1.5, 1.0, 0.0)
         m &= ~tgt
     res = X.measure_object(cut, x - x0, y - y0, q, th, G['rms'], rmax=rmax, mask=m, etas=(a.eta_lo, a.eta, a.eta_hi), main_eta=a.eta, kron_scale=a.kron_scale,
-                           kron_min=a.kron_min, smooth_frac=a.smooth_frac, seed=int(r['NUMBER']) if str(r['NUMBER']).isdigit() else i, curve_fracs=(0.2, 0.5, 0.8, 0.9), want_curve=a.want_curve)
+                           kron_min=a.kron_min, smooth_frac=a.smooth_frac, seed=int(r['NUMBER']) if str(r['NUMBER']).isdigit() else i, curve_fracs=(0.2, 0.5, 0.8, 0.9), want_curve=a.want_curve,
+                           features=a.features, feat_opts=dict(nsig=a.feat_nsig, asym_merger=a.asym_merger))
     fp = res['flux_p']
     out.update(MX_RP=res['rp'][a.eta], MX_RP_LO=res['rp'][a.eta_lo], MX_RP_HI=res['rp'][a.eta_hi], MX_FLUX_P=fp, MX_MAG_P=(zp - 2.5 * math.log10(fp)) if fp and fp > 0 else None,
                MX_R20=res['r_frac'][0.2], MX_R50=res['r_frac'][0.5], MX_R80=res['r_frac'][0.8], MX_R90=res['r_frac'][0.9], MX_CONC=res['conc'], MX_KRON_R=res['kron_r'],
                MX_KRON_MAG=(zp - 2.5 * math.log10(res['kron_flux'])) if res['kron_flux'] and res['kron_flux'] > 0 else None, MX_SMOOTH=res['smooth'], MX_GINI_P=res['gini_p'],
                MX_M20_P=res['m20_p'], MX_FLAG=res['flag'] | (8 if nn else 0))
+    if a.features and 'feat' in res:
+        f = res['feat']
+        out.update(MX_ASYM=f['asym'], MX_NPEAK=f['npeak'], MX_LOTZ=f['lotz'], MX_NSHELL=f['n_shell'], MX_SHELL_FRAC=f['shell_frac'], MX_NTAIL=f['n_tail'], MX_TAIL_FRAC=f['tail_frac'],
+                   MX_TAIL_LEN=f['tail_len'], MX_TIDAL_FRAC=f['tidal_frac'], MX_RES_FRAC=f['res_frac'], MX_MORPH_FLAGS=f['flags'])
     if a.want_curve and 'curve' in res:
         out['curve'] = res['curve']
     return out
@@ -154,10 +160,21 @@ def main(argv=None):
     ap.add_argument('--neighbour-min-frac', type=float, default=0.03)
     ap.add_argument('--max-sources', type=int, default=500)
     ap.add_argument('--min-flux-radius', type=float, default=0.0, help='skip objects with FLUX_RADIUS below this (px)')
+    ap.add_argument('--features', action='store_true', help='add merger / interaction indicators: asymmetry, peaks, Gini-M20 class, shells, tails, pairs')
+    ap.add_argument('--features-only', action='store_true', help='implies --features; output only the feature columns')
+    ap.add_argument('--feat-nsig', type=float, default=3.0, help='--features: significance of residual features (sigma of the smoothed residual)')
+    ap.add_argument('--asym-merger', type=float, default=0.35, help='--features: asymmetry above which an object is flagged a merger (Conselice 2003)')
+    ap.add_argument('--pair-sep', type=float, default=1.5, help='--features: companions closer than this x (R_P + R_P,comp) are pairs')
+    ap.add_argument('--pair-major', type=float, default=0.25, help='--features: companion/target flux ratio from which a pair is major')
+    ap.add_argument('--pair-minor', type=float, default=0.1, help='--features: flux ratio limit of minor pairs')
     ap.add_argument('--curves', type=int, default=4, help='growth-curve plot for this many brightest objects (0 = none)')
     ap.add_argument('--mag-zeropoint', type=float, default=25.0)
     ap.add_argument('--n-workers', type=int, default=0)
     a = ap.parse_args(argv)
+    a.features = a.features or a.features_only
+    if a.features:                                                   # companions are masked, not detected as features
+        a.mask_neighbours = True
+        a.neighbour_min_frac = min(a.neighbour_min_frac, 0.003)
     data0, hdr = imageio.load_image(a.image)
     mask0 = imageio.load_mask(a.mask, data0.shape) if a.mask and os.path.isfile(a.mask) else None
     sep = X._sep()
@@ -203,10 +220,25 @@ def main(argv=None):
         tsvio.write_table(os.path.join(a.work, 'morph_ext_growth.tsv'), ['NUMBER', 'R', 'FLUX', 'ETA'], recs)
         if a.curves > 0:
             plot_curves(results, os.path.join(a.work, 'morph_ext_curves.png'), a.curves)
-    out = [(r['NUMBER'], {c: (by[r['NUMBER']].get(c) if r['NUMBER'] in by else None) for c in COLUMNS}) for r in rows]
+    cols_out = list(COLUMNS)
+    if a.features:
+        from morphometry import features as FT
+        xs = np.array([g['x'] for g in geo]); ys = np.array([g['y'] for g in geo])
+        rps = np.array([by[r['NUMBER']].get('MX_RP', np.nan) if r['NUMBER'] in by and by[r['NUMBER']].get('MX_RP') is not None else np.nan for r in rows], float)
+        rps = np.where(np.isfinite(rps), rps, np.array([g['A'] * 2.0 for g in geo]))
+        fl = np.array([g['flux'] for g in geo])
+        pr = FT.find_pairs(xs, ys, rps, fl, a.pair_sep, a.pair_major, a.pair_minor)
+        for i, r in enumerate(rows):
+            rr = by.get(r['NUMBER'])
+            if rr is None:
+                continue
+            rr.update(MX_NPAIR=int(pr['n_comp'][i]), MX_PAIR_SEP=pr['sep'][i], MX_PAIR_RATIO=pr['ratio'][i], MX_PAIR_KIND=int(pr['kind'][i]))
+            rr['MX_MORPH_FLAGS'] = int(rr.get('MX_MORPH_FLAGS') or 0) | (FT.FLAGS['PAIR_MINOR'] if pr['kind'][i] == 1 else FT.FLAGS['PAIR_MAJOR'] if pr['kind'][i] == 2 else 0)
+        cols_out = list(FEATURE_COLUMNS) if a.features_only else cols_out + FEATURE_COLUMNS
+    out = [(r['NUMBER'], {c: (by[r['NUMBER']].get(c) if r['NUMBER'] in by else None) for c in cols_out}) for r in rows]
     nok = sum(1 for rr in results if rr.get('MX_RP') is not None and np.isfinite(rr.get('MX_RP')))
     sys.stderr.write('morph_ext: %d with a Petrosian radius\n' % nok)
-    tsvio.write_columns(COLUMNS, out)
+    tsvio.write_columns(cols_out, out)
     return 0
 
 

@@ -212,7 +212,7 @@ def fill_masked(data, mask, x, y, q, theta, dr=1.0):
 
 # --------------------------------------------------------------------------------------------------------------------- one object
 def measure_object(data, x, y, q, theta, rms, rmax=None, mask=None, etas=(0.1, 0.2, 0.3), main_eta=0.2, kron_scale=2.5, kron_min=3.5, kron_rmax=None,
-                   smooth_frac=0.25, noise_patch=None, seed=0, curve_fracs=(0.2, 0.5, 0.8, 0.9), want_curve=False):
+                   smooth_frac=0.25, noise_patch=None, seed=0, curve_fracs=(0.2, 0.5, 0.8, 0.9), want_curve=False, features=False, feat_opts=None):
     """All extended indices of one object; `x, y` 0-based; returns a dict (nan for what could not be measured) + optionally the growth curve."""
     ny, nx = data.shape
     q = float(min(max(q, 0.15), 1.0))
@@ -276,12 +276,51 @@ def measure_object(data, x, y, q, theta, rms, rmax=None, mask=None, etas=(0.1, 0
         seg = ap & (cut >= sb_rp) if np.isfinite(sb_rp) and sb_rp > 0 else ap & (cut > 0)
         if seg.sum() >= 10:
             out['gini_p'], out['m20_p'] = gini_m20(cut[seg], (xx[seg], yy[seg]))
+    if features:
+        out['feat'] = _features(data, mask_img, x, y, q, theta, rp, rms, out, seed, feat_opts or {})
     if want_curve:
         out['curve'] = (cv.r.tolist(), cv.F.tolist(), (rr.tolist(), eta.tolist()))
     return out
 
 
 # --------------------------------------------------------------------------------------------------------------------- analytic references (tests / docs)
+def _features(data, mask_img, x, y, q, theta, rp, rms, out, seed, opts):
+    """Merger indicators (morphometry.features): asymmetry, multiple peaks, Lotz class, shells and tails."""
+    from morphometry import features as FT
+    f = dict(asym=float('nan'), npeak=0, lotz='unknown', n_shell=0, shell_frac=float('nan'), n_tail=0, tail_frac=float('nan'), tail_len=float('nan'), tidal_frac=float('nan'), res_frac=float('nan'), flags=0)
+    f['lotz'] = FT.lotz_class(out['gini_p'], out['m20_p'])
+    if f['lotz'] == 'merger':
+        f['flags'] |= FT.FLAGS['MERGER_GM20']
+    if not (np.isfinite(rp) and rp >= 2.0):
+        return f
+    ny, nx = data.shape
+    h = int(math.ceil(opts.get('r_hi', 4.0) * rp)) + 8
+    x0, y0 = int(round(x)) - h, int(round(y)) - h
+    xa, ya, xb, yb = max(0, x0), max(0, y0), min(nx, x0 + 2 * h + 1), min(ny, y0 + 2 * h + 1)
+    cut = data[ya:yb, xa:xb].astype(float)
+    cm = np.zeros(cut.shape, bool) if mask_img is None else np.asarray(mask_img)[ya:yb, xa:xb]
+    xc, yc = x - xa, y - ya
+    u, v, rr = FT._ell_coords(cut.shape, xc, yc, q, theta)
+    ap = (rr <= 1.5 * rp) & ~cm
+    rng = np.random.default_rng(seed + 17)
+    noise = rng.normal(0.0, rms, cut.shape)
+    if 1.5 * rp <= min(xc, yc, cut.shape[1] - 1 - xc, cut.shape[0] - 1 - yc):
+        f['asym'] = FT.asymmetry(np.where(cm, 0.0, cut), ap, xc, yc, noise)[0]
+        if np.isfinite(f['asym']) and f['asym'] >= opts.get('asym_merger', 0.35):
+            f['flags'] |= FT.FLAGS['MERGER_ASYM']
+    pk = FT.peaks(cut, ap, rms, max(1.5, 0.08 * rp), xc, yc)
+    f['npeak'] = len(pk)
+    if len(pk) >= 2:
+        f['flags'] |= FT.FLAGS['DOUBLE']
+    d = FT.detect_features(cut, cm, xc, yc, q, theta, rp, rms, flux_p=out['flux_p'] if np.isfinite(out['flux_p']) else None, **{k: val for k, val in opts.items() if k in ('nsig', 'r_lo', 'r_hi', 'min_area', 'shell_dphi', 'shell_aspect', 'tail_elong', 'tail_len')})
+    f.update(n_shell=d['n_shell'], shell_frac=d['shell_frac'], n_tail=d['n_tail'], tail_frac=d['tail_frac'], tail_len=d['tail_len'], tidal_frac=d['tidal_frac'], res_frac=d['res_frac'], components=d['components'])
+    if d['n_shell']:
+        f['flags'] |= FT.FLAGS['SHELL']
+    if d['n_tail']:
+        f['flags'] |= FT.FLAGS['TAIL']
+    return f
+
+
 def sersic_fraction(r_over_re, n):
     """Fraction of the total flux of a Sersic profile inside r (circular, in units of re)."""
     from ogfkit.models import sersic_bn

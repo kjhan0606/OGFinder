@@ -5,7 +5,7 @@
  "short": "Morph+",
  "tab": "Measure",
  "order": 11,
- "description": "Petrosian radii (3 eta), Petrosian flux, R20/R50/R80/R90, concentration, Kron radius/magnitude, noise-corrected smoothness, Petrosian-segmented Gini/M20 and growth curves with neighbour handling.",
+ "description": "Petrosian radii (3 eta), Petrosian flux, R20/R50/R80/R90, concentration, Kron radius/magnitude, noise-corrected smoothness, Petrosian-segmented Gini/M20 and growth curves with neighbour handling. Merger / interaction indicators: rotational asymmetry, multiple peaks, Lotz Gini-M20 class, shells, tidal tails and catalog pair classification.",
  "requires": {
   "python": [
    "numpy",
@@ -107,6 +107,107 @@
      "MX_GINI_P",
      "MX_M20_P",
      "MX_FLAG"
+    ]
+   }
+  },
+  {
+   "id": "morph_merger",
+   "label": "Merger / Tidal Features (asymmetry, shells, tails, pairs)",
+   "session": "AUTO",
+   "stage": "measure",
+   "records": [
+    "analysis.morph_merger"
+   ],
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "title": "Merger and tidal-feature indicators",
+   "record": "analysis.morph_merger",
+   "requires": "",
+   "done_status": "merger indicators done",
+   "catalog_tmp": "morph_merger",
+   "cli": [
+    "{python}",
+    "{script:ds9_morph_ext.py}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/morph_merger",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    "--eta",
+    "{mx-eta}",
+    "--eta-lo",
+    "{mx-eta-lo}",
+    "--eta-hi",
+    "{mx-eta-hi}",
+    "--kron-scale",
+    "{mx-kron-scale}",
+    "--kron-min",
+    "{mx-kron-min}",
+    "--smooth-frac",
+    "{mx-smooth-frac}",
+    "--rmax",
+    "{mx-rmax}",
+    "--neighbour-radius",
+    "{mx-neighbour-radius}",
+    "--max-sources",
+    "{mx-max-sources}",
+    "--curves",
+    "{mx-curves}",
+    {
+     "if": "mx-circular",
+     "argv": [
+      "--circular"
+     ]
+    },
+    {
+     "if": "mx-fill-neighbours",
+     "argv": [
+      "--mask-neighbours"
+     ]
+    },
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--features-only",
+    "--feat-nsig",
+    "{mx-feat-nsig}",
+    "--asym-merger",
+    "{mx-asym-merger}",
+    "--pair-sep",
+    "{mx-pair-sep}",
+    "--pair-major",
+    "{mx-pair-major}",
+    "--pair-minor",
+    "{mx-pair-minor}",
+    "--n-workers",
+    "{extract:n-workers}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "MX_ASYM",
+     "MX_NPEAK",
+     "MX_LOTZ",
+     "MX_NSHELL",
+     "MX_SHELL_FRAC",
+     "MX_NTAIL",
+     "MX_TAIL_FRAC",
+     "MX_TAIL_LEN",
+     "MX_TIDAL_FRAC",
+     "MX_RES_FRAC",
+     "MX_NPAIR",
+     "MX_PAIR_SEP",
+     "MX_PAIR_RATIO",
+     "MX_PAIR_KIND",
+     "MX_MORPH_FLAGS"
     ]
    }
   },
@@ -245,6 +346,56 @@
    "help": "Number of brightest objects in the growth-curve / eta plot (0 = none).",
    "min": 0,
    "max": 24
+  },
+  {
+   "name": "mx-feat-nsig",
+   "label": "Feature significance (sigma)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Merger / tidal features",
+   "help": "Residual shells / tails must exceed this many sigma of the smoothed residual of the elliptical-median model.",
+   "min": 1.5,
+   "max": 10
+  },
+  {
+   "name": "mx-asym-merger",
+   "label": "Asymmetry merger limit",
+   "type": "float",
+   "default": 0.35,
+   "group": "Merger / tidal features",
+   "help": "Rotational asymmetry (background corrected, Conselice 2003) above which an object is flagged as merger.",
+   "min": 0.05,
+   "max": 1.0
+  },
+  {
+   "name": "mx-pair-sep",
+   "label": "Pair separation (x sum of R_P)",
+   "type": "float",
+   "default": 1.5,
+   "group": "Merger / tidal features",
+   "help": "Companions closer than this multiple of the sum of the two Petrosian radii are pairs.",
+   "min": 0.5,
+   "max": 10
+  },
+  {
+   "name": "mx-pair-major",
+   "label": "Major-pair flux ratio",
+   "type": "float",
+   "default": 0.25,
+   "group": "Merger / tidal features",
+   "help": "Companion/target flux ratio (either direction) from which a pair is a major pair (1:4).",
+   "min": 0.05,
+   "max": 1.0
+  },
+  {
+   "name": "mx-pair-minor",
+   "label": "Minor-pair flux ratio",
+   "type": "float",
+   "default": 0.1,
+   "group": "Merger / tidal features",
+   "help": "Flux ratio limit of minor pairs (1:10).",
+   "min": 0.01,
+   "max": 1.0
   }
  ]
 }
