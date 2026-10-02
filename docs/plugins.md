@@ -76,6 +76,21 @@ identical for both paths: 53 checks) and for external callers.  The other proc s
 state, apply results to markers/frames, or write files the next step reads; a template cannot express that.  The argv is what the recorder stores: paths under `{root}` become `@{ROOT}/...`
 in the exported script, so drivers must live on disk (not in the embedded zip).
 
+**Headless blocks** (item 1 of the second round).  A step that keeps its GUI `proc`/`variants` may carry an additional `"headless": {…}` object with
+the same keys as a cli step (`cli`, `output`, `record`, `title`, `requires`, `done_status`, `needs`, `session`, `catalog_tmp`, `network`) plus `tool`
+(`sextract`: the compiled `ds9_sextract` is the interpreter), `before`/`after` (Tcl procs run before the argv is built / after the job).
+`::ogf::step::run ID STEP headless` merges it over the step (`proc`, `variants` removed) and runs it through the job runner and recorder;
+`cliexpand.find_step` returns the same merged step, so `batch` runs it without a GUI.  Extra template features used by these blocks: tokens
+`{sextract}` `{image_tail}` `{base}` (FITS base name) `{psf}`; conditions `"if": "a"` or `"if": ["a","b"]` (all true), `"if_not": "a"`,
+`"if_eq": [param, v1, v2…]`, `"if_file"`, `"if_not_file"`; output modes `capture` (stdout kept in `::ogf::step::last(ID.STEP)` for the `after` hook /
+the batch log) and `set` (stdout stored under the cat key `name`, `force 1` re-records even if unchanged); a parameter may carry `"key"` to
+store itself under an existing legacy key (e.g. `icl,center_x`) instead of the derived one.  The legacy procs stay as the oracle:
+`scripts/verify_cli_headless.tcl` compares argv, recorder record, catalog and status of both paths (123 checks) and
+`scripts/verify_headless_real.py` runs the real drivers on m51 (GUI legacy path vs. batch headless).
+Headless blocks exist for: `extract.extract|dual`, `photometry.multiband|crossmatch|segmap|completeness`, `photoz_sed.photoz|sed`, `deconv.deconvolve`,
+`mask.auto`, `lsbg.run_all`, `icl.background|profile|measure`.  Not converted (no template can express them): galaxy morphology (AI backend hook, marker
+colouring state), galaxy fit (GUI stub), moving objects (stage chain with dialogs/caches), the per-stage LSBG steps, ICL decompose/colour/sector/multi-fit.
+
 Session classes: **AUTO** replayed by the exported script in pipeline mode on new data; **CONFIG** (band registry)
 only in replay mode; **MANUAL** (hand edits) only with `--include-manual` or replay; **NONE** not recorded.
 CLI steps go through the recorder automatically (`class` from `session`).  Tcl steps record themselves via

@@ -32,7 +32,7 @@ Changing the detection arguments recomputes the whole field; changing a late ste
 *Run Batch…* starts the runner in the background (the GUI stays usable), opens the progress window (one row per field: state, current step, steps done; progress bar; live runner output; Cancel, Resume, Summary table). Status is polled from `status.json` every 0.7 s.
 
 ## Validation (tests in `plugins/batch/tests`, measured)
-* 33 cli templates of all plugins expand headlessly; in the GUI check the Python expansion is argument-for-argument identical to the Tcl `build_argv` for 8 steps with the live parameter stores.
+* 33 cli templates and 14 `headless` blocks of GUI steps (extract, dual extract, multi-band, cross-match, segmentation map, completeness, photo-z, SED fit, deconvolution, auto mask, LSBG, ICL background/profile/measure) expand headlessly; in the GUI check the Python expansion is argument-for-argument identical to the Tcl `build_argv` for 8 steps with the live parameter stores.
 * 6 synthetic fields × (detect + noisemodel + hello): `--jobs 1` 8.2 s, `--jobs 3` 2.8 s (×2.9); catalogs byte-identical between serial and parallel runs.
 * Resume: second run 18/18 steps cached; changing noisemodel `bw` → 12 steps recomputed (2 per field), detection cached; changing the detection threshold → all 18 recomputed.
 * Failure isolation: one missing image fails only its field (`detect: image not found`), the others finish; step timeout → rc 124 failure; recipe validation errors; dry run.
