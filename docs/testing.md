@@ -46,3 +46,11 @@
 
 Test data location: `OGF_TEST_FITS` (default `/workspace/fits`).  `docs/windows_macos_build.md` lists what is *not* verified on
 other platforms.  The generator/compare scripts are in `tools/` (see `tools/README.md`).
+
+## Notes on the analysis-plugin checks (items A-N)
+* `newplugins` runs one GUI section per plugin (each step through `::ogf::step::run`, outputs, windows, layout invariant), exports the session script, replays it headless (stdout and catalog CRC per step identical) and, since the `repro` section,
+  re-runs the GUI-made reproducibility bundle (`plugins/repro/repro.py verify`, session replay) and requires the re-run catalog to match the GUI catalog.  `OGF_NP_ONLY=lightcurves,batch,repro` limits it to some sections.
+* `batch_tests` and `repro_tests` need `bin/ds9_sextract` (skipped otherwise); `xmatch_tests` contains one live Gaia DR3 TAP test (skipped when offline); `spectra_tests` has a real SDSS test (skipped when `/workspace/fits/sdss` is absent);
+  `sedcodes_tests` uses mock codes plus the real eazy-py / Bagpipes when installed.
+* Plugin tests print their measured numbers (`pytest -s`); the values quoted in `docs/<plugin>.md` and `docs/progress_log.md` come from those runs.
+* Do not edit repository files or plugins while `run_all_checks.sh` is running: the stages read them live.

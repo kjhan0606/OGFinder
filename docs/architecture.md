@@ -550,3 +550,27 @@ measured geometry, pixel counts and logs, not looked at.
 | detach / reattach | 1328x709 -> 738x709 + 585x709 -> 1328x709 | 1300x950 -> 736x950 + 559x950 -> 1300x950 |
 | `layout.tcl` lines | 12958 | 1873 (12198 after the first pass) |
 
+
+## 9. Analysis plugins added after the restructuring (items A-N)
+
+Everything below follows the plugin contract of docs/plugins.md; none of it touches `catpanel(...)` (the new code reads and writes catalog state only through `::ogf::cat::*`, the parameter stores and the job runner).
+
+**New plugins** (`plugins/<id>/`, one chip each on the Measure tab; `tools/validate_manifests.py` currently validates 32 plugins / 202 steps, 33 with a cli template): `completeness`, `daophot`, `psfex`, `multifit`, `morph_ext` (extended morphology),
+`noisemodel`, `photoz_sed`/`sedcodes` (EAZY / CIGALE / Bagpipes / Prospector adapters), `cluster` (red sequence, membership, overdensity, arcs), `spectra` (1D/2D/IFU spectra, line fits, redshifts), `xmatch` (catalog cross-match, local file or TAP),
+`lightcurves` (transient light-curve classification, SN score), `batch` (many-field runner) and `repro` (reproducibility bundles); `docs/<id>.md` of each plugin states its method, validation numbers and limits.
+Each analysis plugin has the same four layers: a **pure-function engine** in `ogfkit/` (numpy/scipy/astropy, JSON-serialisable results; server-ready), a **CLI** `plugins/<id>/<id>.py` that implements the manifest `cli` template and the add_columns stdout contract
+(NUMBER + the step's columns), the **manifest** (declarative parameters -> the generic parameter dialog, steps, outputs) with a small Tcl file for windows (viewers/tables), and **tests** (`plugins/<id>/tests`, synthetic truth with quantitative assertions).
+Parameters live in the JSON parameter store of the plugin (new plugins never use the legacy `catpanel` store, because adding parameters there would change the golden session files).
+
+**`ogfkit`** (`ogfkit/`): shared, GUI-independent numerics and I/O: `tsvio` (catalog TSV), `imageio`, `meta` (catalog metadata), `noise`, `psfmodel`, `models`, `synth`, and the engines `daophot`, `multifit`, `cluster`, `spectra`, `xmatch`, `lcclass`, `repro`, `batchrun`, `cliexpand`
+(with synthetic-truth generators `clustersynth`, `spectrasynth`, `lcsynth`).  Engines never import Tk; the CLIs add only argument parsing and file output.
+
+**Metadata mechanism** (`ogfkit/meta.py`): a step may record scalar results that describe the catalog as a whole (e.g. the 50 % completeness magnitude, red-sequence fit, cross-match offset) with `meta.update(<work>/catalog_meta.json, key, value, nrows=N)`.
+The GUI's Save Catalog writes them to `<name>.meta.json`, the FITS table export copies the scalars into the table header, and consumers ignore metadata whose `nrows` differs from the catalog's (stale after a trim).
+
+**`{mask}` token**: the effective mask of the shared mask manager for the current image (a 0/1 FITS file) is available to cli templates as `{mask}`; it is empty when no mask exists, so it is used as `{"if_file": "{mask}", "argv": ["--mask", "{mask}"]}`.
+
+**Chip overflow**: a tab with more chips than fit in the 559-px catalog panel keeps the first chips and moves the rest into a "More" menu button at the end of the row (`OGFUI` chip layout); the layout invariant (`geom` = `181 769 154 1300x950` at `-geometry 1300x950`) holds with every Measure plugin installed (checked by `chips_fit` / `chips_more_menu` in `scripts/verify_newplugins.tcl`).
+
+**Headless execution of manifest steps**: `ogfkit/cliexpand.py` re-implements `::ogf::step::build_argv` in Python (tested to give the same argv as the Tcl implementation for 8 steps with live parameter stores); `plugins/batch` uses it to run any step with a cli template over many fields, and
+`plugins/repro` bundles parameters, versions, checksums and the session script and can re-run and compare them.  The exported Python session script remains the way to replay the legacy Tcl-dialog steps.

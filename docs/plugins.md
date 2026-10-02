@@ -67,7 +67,7 @@ included only when the parameter is true; `{"if_file":"{cat:psf,file}","argv":[.
 Optional step keys for cli steps: `record` (recorder step name when it must differ from `<plugin>.<step>`, e.g. `analysis.sersic`, so old session
 files and the golden test stay valid), `requires` (recorder `requires` list, default `catalog` for `add_columns`), `catalog_tmp` (name of the
 temporary catalog file, i.e. the `@{CAT:name}` token of the exported script), `done_status` (status text when the job finished OK);
-`needs` accepts `psf` besides `image` and `catalog`.  `tools/validate_manifests.py` (run by `scripts/run_all_checks.sh` as `manifests`)
+`needs` accepts `psf` besides `image` and `catalog`.  `{mask}` is the effective mask of the shared mask manager for the current image (a 0/1 FITS file; empty when there is no mask) — use it as `{"if_file": "{mask}", "argv": ["--mask", "{mask}"]}`.  The conditional element supports only a positive `if` (parameter true) and `if_file` (file exists); to switch an option off by default add a boolean parameter that is true when the option is wanted.  Steps that add columns must use column names that do not exist in the catalog yet (adding an existing name fails).  `tools/validate_manifests.py` (run by `scripts/run_all_checks.sh` as `manifests`)
 checks all manifests and templates statically: unknown tokens, parameters that do not exist, a driver or flag that does not exist,
 `{catalog}`/`{image}` without the matching `needs`, undefined procs, bad defaults.  Steps converted from Tcl procs to templates (item 3):
 `morphology.sersic`, `morphology.morphometry`, `morphology.bulge_disk`, `photometry.psf_phot`, `photometry.crowded` - the old procs
