@@ -343,6 +343,7 @@ namespace eval ::ogf::cat {
         {morphext,*             any    morph_ext rw  "extended morphology plugin: output files (growth_file, plot_file)"}
         {noisemodel,*           any    noisemodel rw  "background & noise model plugin: output files (bkg_file, rms_file, sub_file, json_file, plot_file, curve_file)"}
         {stacking,*             any    stacking   rw  "stacking plugin: output files (stack_file, err_file, cube_file, profile_file, json_file, plot_file) and the last result (n_stacked, aperture_sum, aperture_err)"}
+        {trails,*               any    trails     rw  "trails plugin: mask_path (flag mask the step updates), image, and the last result (n_trails, masked_fraction, n_flagged, result_file, flags_file, filled_file)"}
         {sedcodes,*             any    sedcodes rw    "SED codes plugin: results_file (JSON of the last run), profile_file (ai_bridge profiles written by the plugin)"}
         {cluster,*              any    cluster    rw  "cluster / lensing plugin: output files (rs_png, density_file, peaks_file, json_file)"}
         {spectra,*               any    spectra rw  "spectroscopy plugin: links_file, results_file"}

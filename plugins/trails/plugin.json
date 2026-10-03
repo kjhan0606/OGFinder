@@ -1,0 +1,378 @@
+{
+ "schema": 1,
+ "id": "trails",
+ "name": "Satellite / aircraft trail removal",
+ "short": "Remove Trails",
+ "tab": "Detect",
+ "order": 5,
+ "description": "One click: detect straight satellite and aircraft trails (Radon candidates verified by a contrast scan statistic against trail-free lines), measure their width, add them to the shared mask (undoable in Mask > Edit Mask), flag catalogue objects touching a trail (TRAIL_FLAG), optionally interpolate the band from the local sky or write a mask extension for multi-frame stacks. The image is never modified.",
+ "requires": {
+  "python": [
+   "numpy",
+   "astropy",
+   "scipy"
+  ]
+ },
+ "primary": "remove",
+ "settings": "params",
+ "tcl": "trails.tcl",
+ "steps": [
+  {
+   "id": "remove",
+   "label": "Remove Trails",
+   "title": "Remove satellite / aircraft trails",
+   "session": "AUTO",
+   "stage": "detect",
+   "needs": [
+    "image"
+   ],
+   "record": "trails.remove",
+   "catalog_tmp": "trails",
+   "done_status": "trail removal done",
+   "before": "OGFTrailsBefore",
+   "after": "OGFTrailsAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/trails.py",
+    "{image}",
+    "--work",
+    "{work}/trails",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--threshold",
+    "{threshold}",
+    "--min-length",
+    "{min-length}",
+    "--max-trails",
+    "{max-trails}",
+    "--smooth",
+    "{smooth}",
+    "--min-aspect",
+    "{min-aspect}",
+    "--max-fwhm",
+    "{max-fwhm}",
+    "--margin",
+    "{margin}",
+    "--edge-sigma",
+    "{edge-sigma}",
+    "--end-extend",
+    "{end-extend}",
+    "--fill",
+    "{fill}",
+    "--touch-k",
+    "{touch-k}",
+    "--pixel-scale",
+    "{extract:pixel-scale}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    {
+     "if": "fill-noise",
+     "argv": [
+      "--fill-noise"
+     ]
+    },
+    {
+     "if": "catalog-check",
+     "argv": [
+      "--catalog-check"
+     ]
+    },
+    {
+     "if_not": "flag-catalog",
+     "argv": [
+      "--no-flag-catalog"
+     ]
+    },
+    {
+     "if_file": "{catalog}",
+     "argv": [
+      "--catalog",
+      "{catalog}"
+     ]
+    },
+    "--mask",
+    "{cat:trails,mask_path}"
+   ],
+   "output": {
+    "mode": "capture"
+   }
+  },
+  {
+   "id": "preview",
+   "label": "Detect Trails (preview, no mask)",
+   "title": "Detect trails (preview)",
+   "session": "AUTO",
+   "stage": "detect",
+   "needs": [
+    "image"
+   ],
+   "record": "trails.preview",
+   "done_status": "trail preview done",
+   "after": "OGFTrailsPreviewAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/trails.py",
+    "{image}",
+    "--work",
+    "{work}/trails",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--threshold",
+    "{threshold}",
+    "--min-length",
+    "{min-length}",
+    "--max-trails",
+    "{max-trails}",
+    "--smooth",
+    "{smooth}",
+    "--min-aspect",
+    "{min-aspect}",
+    "--max-fwhm",
+    "{max-fwhm}",
+    "--margin",
+    "{margin}",
+    "--edge-sigma",
+    "{edge-sigma}",
+    "--end-extend",
+    "{end-extend}",
+    "--fill",
+    "{fill}",
+    "--touch-k",
+    "{touch-k}",
+    "--pixel-scale",
+    "{extract:pixel-scale}",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    {
+     "if": "fill-noise",
+     "argv": [
+      "--fill-noise"
+     ]
+    },
+    {
+     "if": "catalog-check",
+     "argv": [
+      "--catalog-check"
+     ]
+    },
+    {
+     "if_not": "flag-catalog",
+     "argv": [
+      "--no-flag-catalog"
+     ]
+    },
+    {
+     "if_file": "{catalog}",
+     "argv": [
+      "--catalog",
+      "{catalog}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "capture"
+   }
+  },
+  {
+   "id": "undo",
+   "label": "Undo Trail Removal",
+   "proc": "OGFTrailsUndo",
+   "session": "NONE"
+  },
+  {
+   "id": "clear",
+   "label": "Clear Trail Mask",
+   "proc": "OGFTrailsClear",
+   "session": "MANUAL",
+   "records": [
+    "mask.trails-clear"
+   ],
+   "needs": [
+    "image"
+   ]
+  },
+  {
+   "id": "stack",
+   "label": "Stack Frames Excluding Trails...",
+   "proc": "OGFTrailsStackDialog",
+   "session": "MANUAL",
+   "records": [
+    "trails.stack"
+   ]
+  }
+ ],
+ "params": [
+  {
+   "name": "threshold",
+   "label": "Detection threshold",
+   "type": "float",
+   "default": 8.0,
+   "group": "Detection",
+   "help": "Significance of the best along-track run relative to parallel trail-free lines of the same image (robust z). the default was set from the false-trail rate on trail-free HUDF, M51 and synthetic galaxy fields (see docs/trails.md); lower = more sensitive to faint trails, more false detections.",
+   "min": 4.0,
+   "max": 30.0
+  },
+  {
+   "name": "min-length",
+   "label": "Minimum length (px, 0 = auto)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Detection",
+   "help": "Shortest trail accepted; 0 = 12 % of the image diagonal (at least 30 px). Lower it to find short partial trails.",
+   "min": 0.0,
+   "max": 100000.0,
+   "unit": "px"
+  },
+  {
+   "name": "max-trails",
+   "label": "Maximum number of trails",
+   "type": "int",
+   "default": 8,
+   "group": "Detection",
+   "help": "Stop after this many trails per image.",
+   "min": 1,
+   "max": 50
+  },
+  {
+   "name": "smooth",
+   "label": "Smoothing sigma (px)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Detection",
+   "help": "Gaussian smoothing of the background-subtracted image before the line search (0 = none).",
+   "min": 0.0,
+   "max": 10.0,
+   "unit": "px",
+   "expert": true
+  },
+  {
+   "name": "min-aspect",
+   "label": "Minimum length / width",
+   "type": "float",
+   "default": 8.0,
+   "group": "Detection",
+   "help": "Reject candidates that are shorter than this many times their measured FWHM (chains of galaxies make broad, short ridges).",
+   "min": 2.0,
+   "max": 100.0,
+   "expert": true
+  },
+  {
+   "name": "max-fwhm",
+   "label": "Maximum width (px)",
+   "type": "float",
+   "default": 40.0,
+   "group": "Detection",
+   "help": "Reject candidates whose fitted FWHM exceeds this.",
+   "min": 2.0,
+   "max": 500.0,
+   "unit": "px",
+   "expert": true
+  },
+  {
+   "name": "catalog-check",
+   "label": "Use elongated catalogue objects as evidence",
+   "type": "bool",
+   "default": false,
+   "group": "Detection",
+   "help": "When a catalogue is loaded, candidates slightly below the threshold are accepted if at least two elongated (A/B>=3), aligned objects lie on them."
+  },
+  {
+   "name": "margin",
+   "label": "Mask margin (px)",
+   "type": "float",
+   "default": 2.0,
+   "group": "Mask",
+   "help": "Added to the measured half-width (box half-width + edge-sigma x blur) of the trail profile.",
+   "min": 0.0,
+   "max": 50.0,
+   "unit": "px"
+  },
+  {
+   "name": "edge-sigma",
+   "label": "Profile edge (sigma)",
+   "type": "float",
+   "default": 2.0,
+   "group": "Mask",
+   "help": "Number of profile blur widths added outside the fitted box edge.",
+   "min": 0.0,
+   "max": 6.0,
+   "expert": true
+  },
+  {
+   "name": "end-extend",
+   "label": "Extend ends (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Mask",
+   "help": "Extend each trail segment by this many pixels at both ends (a partial trail fades out gradually).",
+   "min": 0.0,
+   "max": 100.0,
+   "unit": "px",
+   "expert": true
+  },
+  {
+   "name": "fill",
+   "label": "Fill option",
+   "type": "choice",
+   "default": "mask",
+   "group": "Fill",
+   "help": "mask = leave the trail masked (default, for photometry); interpolate = additionally write <image>_trailfree.fits with the band interpolated across from the local sky on both sides; stack = additionally write <image>_trails_mef.fits (SCI + TRAILMASK extension) for excluding the trail from multi-frame stacks.",
+   "choices": [
+    "mask",
+    "interpolate",
+    "stack"
+   ]
+  },
+  {
+   "name": "fill-noise",
+   "label": "Add sky noise to interpolated pixels",
+   "type": "bool",
+   "default": false,
+   "group": "Fill",
+   "help": "Interpolated pixels get Gaussian noise of the sky sigma so that the noise level of the filled image is preserved."
+  },
+  {
+   "name": "flag-catalog",
+   "label": "Flag catalogue objects (TRAIL_FLAG)",
+   "type": "bool",
+   "default": true,
+   "group": "Catalog",
+   "help": "Add TRAIL_FLAG (1 footprint touches the mask, 2 centre inside, 4 looks like a trail fragment), TRAIL_ID and TRAIL_DIST to the catalogue."
+  },
+  {
+   "name": "touch-k",
+   "label": "Footprint size (x A,B)",
+   "type": "float",
+   "default": 2.5,
+   "group": "Catalog",
+   "help": "An object touches a trail when its ellipse k x (A,B) reaches the mask band.",
+   "min": 0.5,
+   "max": 10.0,
+   "expert": true
+  },
+  {
+   "name": "show-overlay",
+   "label": "Show the mask overlay",
+   "type": "bool",
+   "default": true,
+   "group": "Display",
+   "help": "Switch the mask overlay on after Remove Trails."
+  },
+  {
+   "name": "confirm-panel",
+   "label": "Show the result panel (with Undo)",
+   "type": "bool",
+   "default": true,
+   "group": "Display",
+   "help": "Small window with the result and an Undo button."
+  },
+  {
+   "name": "show-filled",
+   "label": "Open the interpolated image in a frame",
+   "type": "bool",
+   "default": false,
+   "group": "Display",
+   "help": "With fill = interpolate, load <image>_trailfree.fits into a new frame."
+  }
+ ]
+}

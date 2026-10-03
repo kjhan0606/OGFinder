@@ -360,8 +360,8 @@ def _binning(shape, maxdim):
     return max(1, int(math.ceil(max(shape) / float(maxdim))))
 
 
-def detect_trails(img, valid=None, threshold=7.0, min_length=None, max_trails=8, smooth=1.0, clip=3.0, cand=4.0, maxdim=768,
-                  margin=2.0, edge_sigma=2.0, catalog=None, catalog_rescue=None, seed=1, n_null=100, mesh=32):
+def detect_trails(img, valid=None, threshold=8.0, min_length=None, max_trails=8, smooth=1.0, clip=3.0, cand=4.0, maxdim=768,
+                  margin=2.0, edge_sigma=2.0, catalog=None, catalog_rescue=None, seed=1, n_null=100, mesh=32, min_aspect=8.0, max_fwhm=40.0):
     """-> dict(trails=[...], sigma_pix, binning, n_candidates, ...).  Each trail: id, x1,y1,x2,y2 (1-based FITS pixels), theta_deg, rho, length,
     halfwidth (mask half-width = box half-width + edge_sigma * blur + margin), box_halfwidth, blur, amp, amp_snr, zscore, run_score, s0, s1."""
     img = np.asarray(img, np.float32)
@@ -438,6 +438,13 @@ def detect_trails(img, valid=None, threshold=7.0, min_length=None, max_trails=8,
             f['rescued'] = True
         if (f['s1'] - f['s0']) < min_length * 0.9:
             continue
+        # shape check: a trail is long and thin; a galaxy (or a chain of them) gives a broad, short 'ridge'
+        prof = measure_profile(img, valid, f['theta'], f['rho'], f['s0'], f['s1'], sig_pix, a_guess=max(1.0, f['width_strip'] / 2.0))
+        fw = prof['fwhm'] if prof is not None else float(f['width_strip'])
+        if fw > max_fwhm or (f['s1'] - f['s0']) < min_aspect * fw:
+            out.setdefault('rejected', []).append(dict(theta=f['theta'], rho=f['rho'], length=f['s1'] - f['s0'], fwhm=fw, zscore=f['zscore'], reason='shape'))
+            continue
+        f['prof'] = prof
         accepted.append(f)
         band = trail_mask(z.shape, [dict(x1=to_xy(f['theta'], f['rho'], f['s0'], 0, nx, ny)[0] + 1, y1=to_xy(f['theta'], f['rho'], f['s0'], 0, nx, ny)[1] + 1,
                                          x2=to_xy(f['theta'], f['rho'], f['s1'], 0, nx, ny)[0] + 1, y2=to_xy(f['theta'], f['rho'], f['s1'], 0, nx, ny)[1] + 1,
@@ -454,7 +461,7 @@ def detect_trails(img, valid=None, threshold=7.0, min_length=None, max_trails=8,
                 cur.pop(k)
     for i, f in enumerate(accepted, 1):
         th, rho, s0, s1 = f['theta'], f['rho'], f['s0'], f['s1']
-        prof = measure_profile(img, valid, th, rho, s0, s1, sig_pix, a_guess=max(1.0, f['width_strip'] / 2.0))
+        prof = f.get('prof')
         if prof is not None and abs(prof['t0']) < 30:
             rho += prof['t0']
         else:

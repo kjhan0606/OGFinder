@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Satellite / aircraft trail removal: detect linear trails, build a mask, fill or exclude, flag catalogue objects.
 
-    trails.py IMAGE --work DIR [--mask MASKFILE] [--catalog TSV] [--threshold 7 --min-length 0 --max-trails 8 --smooth 1]
+    trails.py IMAGE --work DIR [--mask MASKFILE] [--catalog TSV] [--threshold 8 --min-length 0 --max-trails 8 --smooth 1]
               [--margin 2 --edge-sigma 2 --end-extend 3] [--fill mask|interpolate|stack] [--fill-noise] [--touch-k 2.5]
-              [--catalog-check] [--pixel-scale S --mag-zeropoint Z] [--meta-out FILE]
+              [--catalog-check] [--no-flag-catalog] [--pixel-scale S --mag-zeropoint Z] [--meta-out FILE]
     trails.py IMAGE --task stack --frames F1 F2 ... --work DIR [--stack-method sigclip|median|mean] [--frame-masks M1 M2 ...]
 
 What it writes into DIR (prefix trails_): trails.json (all trails: pixel end points, angle, length, width, amplitude, scores), mask.fits (0/1
@@ -73,7 +73,7 @@ def sky_header(hdr):
 
 def detect(a, img, hdr, cat):
     return T.detect_trails(img, threshold=a.threshold, min_length=a.min_length or None, max_trails=a.max_trails, smooth=a.smooth,
-                           margin=a.margin, edge_sigma=a.edge_sigma, catalog=cat if a.catalog_check else None, catalog_rescue=0.7 if a.catalog_check else None)
+                           margin=a.margin, edge_sigma=a.edge_sigma, min_aspect=a.min_aspect, max_fwhm=a.max_fwhm, catalog=cat if a.catalog_check else None, catalog_rescue=0.7 if a.catalog_check else None)
 
 
 def run_detect(a):
@@ -185,17 +185,19 @@ def main(argv=None):
     ap.add_argument('--work', required=True)
     ap.add_argument('--mask', help='flag mask of the shared mask manager (~/.ds9/mask_<base>.fits): the trail bit is set there (undoable)')
     ap.add_argument('--catalog')
-    ap.add_argument('--threshold', type=float, default=7.0)
+    ap.add_argument('--threshold', type=float, default=8.0)
     ap.add_argument('--min-length', type=float, default=0.0, help='minimum trail length in pixels (0 = 12 percent of the diagonal)')
     ap.add_argument('--max-trails', type=int, default=8)
     ap.add_argument('--smooth', type=float, default=1.0)
+    ap.add_argument('--min-aspect', type=float, default=8.0, help='reject candidates shorter than this many times their FWHM (galaxy chains)')
+    ap.add_argument('--max-fwhm', type=float, default=40.0)
     ap.add_argument('--margin', type=float, default=2.0)
     ap.add_argument('--edge-sigma', type=float, default=2.0)
     ap.add_argument('--end-extend', type=float, default=3.0)
     ap.add_argument('--fill', choices=['mask', 'interpolate', 'stack'], default='mask')
     ap.add_argument('--fill-noise', action='store_true')
     ap.add_argument('--write-mef', action='store_true')
-    ap.add_argument('--flag-catalog', dest='flag_catalog', type=int, default=1)
+    ap.add_argument('--no-flag-catalog', dest='flag_catalog', action='store_false', help='do not write the TRAIL_FLAG / TRAIL_ID / TRAIL_DIST columns')
     ap.add_argument('--touch-k', type=float, default=2.5)
     ap.add_argument('--catalog-check', action='store_true', help='use elongated aligned catalogue objects as extra evidence (lowers the threshold to 70 percent for supported candidates)')
     ap.add_argument('--pixel-scale', type=float, default=0.0)
