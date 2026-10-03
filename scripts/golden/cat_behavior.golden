@@ -97,6 +97,7 @@ HOME-scratch yes
   catpanel(photoz,param,bands) = g,r,i
   catpanel(photoz,param,checkpoint) = /nonexistent.pt
   catpanel(photoz,param,mag-columns) = MAG_APER_2
+  catpanel(photoz,param,mixture-out) = 
 === params_sed
   PRF sed_fit.prf:
     bands=g,r
@@ -199,6 +200,7 @@ HOME-scratch yes
   catpanel(photoz,param,bands) = u,g
   catpanel(photoz,param,checkpoint) = /nonexistent.pt
   catpanel(photoz,param,mag-columns) = MAG_AUTO,MAG_ISOCOR,MAG_APER,MAG_APER_2,MAG_APER_3,MAG_APER_5
+  catpanel(photoz,param,mixture-out) = 
   cols+: PHOTO_Z PHOTO_Z_ERR PHOTO_Z_Q68 PHOTO_Z_OUTLIER
   photoz dialog destroyed: 1
   PRF photo_z.prf:
