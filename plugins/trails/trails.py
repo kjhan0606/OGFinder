@@ -28,7 +28,10 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
-from ogfkit import trails as T, tsvio, imageio, meta as ometa  # noqa: E402
+from ogfkit import trails as T, trails_ext as TX, tsvio, imageio, meta as ometa  # noqa: E402
+
+
+FLAGCOLS = ['TRAIL_FLAG', 'TRAIL_ID', 'TRAIL_DIST', 'TRAIL_FLUX', 'TRAIL_FRAC']
 
 
 def base_of(path):
@@ -54,7 +57,7 @@ def read_cat(path):
     if not rows or 'X_IMAGE' not in cols:
         return None
     cat = {'NUMBER': [r.get('NUMBER', str(i + 1)) for i, r in enumerate(rows)]}
-    for c in ('X_IMAGE', 'Y_IMAGE', 'A_IMAGE', 'B_IMAGE', 'THETA_IMAGE'):
+    for c in ('X_IMAGE', 'Y_IMAGE', 'A_IMAGE', 'B_IMAGE', 'THETA_IMAGE', 'FLUX_AUTO', 'FLUX_ISO'):
         if c in cols:
             cat[c] = np.array([tsvio.fnum(r.get(c)) for r in rows])
     return cat
@@ -83,6 +86,16 @@ def run_detect(a):
     cat = read_cat(a.catalog)
     res = detect(a, img, hdr, cat)
     trails = res['trails']
+    if a.curved:                     # curved / segmented trails: tile-wise detection + chain linking (segments share a `group` id)
+        for t in TX.detect_curved(img, trails, margin=a.margin, edge_sigma=a.edge_sigma, min_aspect=a.min_aspect, max_fwhm=a.max_fwhm):
+            t['id'] = len(trails) + 1
+            trails.append(t)
+    for t in trails:                 # flicker: duty cycle along the track
+        try:
+            ap_ = TX.along_profile(img, t)
+            t['duty'] = float(ap_['duty']); t['n_gaps'] = int(ap_['n_gaps']); t['flicker'] = bool(ap_['duty'] < 0.8 and ap_['n_gaps'] >= 2)
+        except Exception:
+            pass
     mask = T.trail_mask(img.shape, trails, end_extend=a.end_extend) if trails else np.zeros(img.shape, bool)
     out = lambda n: os.path.join(a.work, 'trails_' + n)
     kw = sky_header(hdr)
@@ -104,7 +117,7 @@ def run_detect(a):
     with open(out('overlay.reg'), 'w') as f:
         f.write('# Region file format: DS9 version 4.1\nglobal color=cyan width=2\nimage\n')
         for t in trails:
-            f.write('line(%.2f,%.2f,%.2f,%.2f) # line=0 0 text={trail %d}\n' % (t['x1'], t['y1'], t['x2'], t['y2'], t['id']))
+            f.write('line(%.2f,%.2f,%.2f,%.2f) # line=0 0 text={trail %d%s}\n' % (t['x1'], t['y1'], t['x2'], t['y2'], t['id'], (' g%d' % t['group']) if t.get('group') else ''))
     # fills
     if trails and a.fill == 'interpolate':
         fixed = T.fill_interpolate(img, trails, mask=mask, noise=a.fill_noise)
@@ -124,9 +137,12 @@ def run_detect(a):
     flags_rows = None
     if cat is not None and a.flag_catalog:
         fl, tid, dist = T.flag_catalog(cat, trails, touch_k=a.touch_k) if trails else (np.zeros(len(cat['X_IMAGE']), int), np.zeros(len(cat['X_IMAGE']), int), np.full(len(cat['X_IMAGE']), -1.0))
-        flags_rows = [(n, dict(TRAIL_FLAG=int(f), TRAIL_ID=int(i), TRAIL_DIST=float(d))) for n, f, i, d in zip(cat['NUMBER'], fl, tid, dist)]
+        tfx, tfr = TX.trail_flux(cat, trails) if trails else (np.zeros(len(fl)), np.full(len(fl), -1.0))
+        flags_rows = [(n, dict(TRAIL_FLAG=int(f), TRAIL_ID=int(i), TRAIL_DIST=float(d), TRAIL_FLUX=float(x), TRAIL_FRAC=float(q)))
+                      for n, f, i, d, x, q in zip(cat['NUMBER'], fl, tid, dist, tfx, tfr)]
         with open(out('flags.tsv'), 'w') as f:
-            tsvio.write_columns(['TRAIL_FLAG', 'TRAIL_ID', 'TRAIL_DIST'], flags_rows, f)
+            tsvio.write_columns(FLAGCOLS, flags_rows, f)
+        summary['n_flux_contaminated'] = int((tfx > 0).sum())
         summary['n_flagged'] = int((fl > 0).sum())
         summary['n_flagged_centre_inside'] = int(((fl & 2) > 0).sum())
         summary['n_trail_fragments'] = int(((fl & 4) > 0).sum())
@@ -149,32 +165,62 @@ def run_detect(a):
         print('#TRAIL id=%d x1=%.1f y1=%.1f x2=%.1f y2=%.1f angle=%.2f length=%.0f fwhm=%.1f halfwidth=%.1f z=%.1f' %
               (t['id'], t['x1'], t['y1'], t['x2'], t['y2'], t['theta_deg'], t['length'], t['fwhm'], t['halfwidth'], t['zscore']))
     if flags_rows is not None:
-        tsvio.write_columns(['TRAIL_FLAG', 'TRAIL_ID', 'TRAIL_DIST'], flags_rows)
+        tsvio.write_columns(FLAGCOLS, flags_rows)
     if a.meta_out:
         ometa.update(a.meta_out, 'trails', dict(n_trails=len(trails), masked_fraction=float(mask.mean()), fill=a.fill))
     return 0
 
 
+def _wcs(hdr):
+    try:
+        from astropy.wcs import WCS
+        w = WCS(hdr).celestial
+        return w if w.has_celestial else None
+    except Exception:
+        return None
+
+
+def _differs(w0, w1, shape):
+    """True when the two WCS map the image centre and corners to pixels that differ by more than 0.05 px"""
+    ny, nx = shape
+    pts = np.array([[nx / 2, ny / 2], [0, 0], [nx - 1, ny - 1]], float)
+    ra, de = w1.all_pix2world(pts[:, 0], pts[:, 1], 0)
+    x, y = w0.all_world2pix(ra, de, 0)
+    return float(np.max(np.hypot(x - pts[:, 0], y - pts[:, 1]))) > 0.05
+
+
 def run_stack(a):
-    """combine registered frames excluding each frame's trails"""
+    """combine frames excluding each frame's trails; with --register (default auto) frames with a different WCS are resampled (bilinear) onto the first
+    frame's grid together with their trail masks (detection runs on the native frame, before the resampling)"""
     os.makedirs(a.work, exist_ok=True)
     frames, masks, ntr = [], [], []
-    hdr0 = None
+    hdr0, w0, shape0, nreg = None, None, None, 0
     for i, f in enumerate(a.frames):
         img, hdr = imageio.load_image(f)
-        hdr0 = hdr0 or hdr
+        if hdr0 is None:
+            hdr0, shape0 = hdr, img.shape
+            w0 = _wcs(hdr) if a.register != 'none' else None
         if a.frame_masks and i < len(a.frame_masks) and a.frame_masks[i] != '-':
             m = imageio.load_mask(a.frame_masks[i], img.shape)
         else:
             r = detect(a, img, hdr, None)
             m = T.trail_mask(img.shape, r['trails'], end_extend=a.end_extend) if r['trails'] else np.zeros(img.shape, bool)
             ntr.append(len(r['trails']))
-        frames.append(img); masks.append(m | (img == 0))
+        bad = m | (img == 0)
+        wi = _wcs(hdr) if (w0 is not None and i > 0) else None
+        if wi is not None and (a.register == 'wcs' or img.shape != shape0 or _differs(w0, wi, img.shape)):
+            im2 = TX.wcs_resample(np.where(bad & (img == 0), np.nan, img), wi, w0, shape0, order=1, cval=np.nan)
+            mk, nodata = TX.register_masks(m, wi, w0, shape0, grow=1)
+            img, bad = im2, mk | nodata | ~np.isfinite(im2)
+            nreg += 1
+        elif a.register == 'wcs' and i > 0 and wi is None:
+            sys.stderr.write('frame %s has no usable WCS: not resampled\n' % f)
+        frames.append(img); masks.append(bad)
     out, n = T.stack_frames(frames, masks, method=a.stack_method)
     p = os.path.join(a.work, 'trails_stack.fits')
     write_fits(p, np.nan_to_num(out).astype(np.float32), hdr0)
     write_fits(os.path.join(a.work, 'trails_stack_n.fits'), n.astype(np.int16), sky_header(hdr0))
-    print('#TRAILS_STACK frames=%d method=%s trails_per_frame=%s out=%s' % (len(frames), a.stack_method, ','.join(map(str, ntr)), p))
+    print('#TRAILS_STACK frames=%d method=%s trails_per_frame=%s registered=%d out=%s' % (len(frames), a.stack_method, ','.join(map(str, ntr)), nreg, p))
     return 0
 
 
@@ -191,6 +237,7 @@ def main(argv=None):
     ap.add_argument('--smooth', type=float, default=1.0)
     ap.add_argument('--min-aspect', type=float, default=12.0, help='reject candidates shorter than this many times their FWHM (galaxy chains)')
     ap.add_argument('--max-fwhm', type=float, default=40.0)
+    ap.add_argument('--curved', action='store_true', help='also look for curved / broken (segmented) trails: tile-wise detection and chain linking (slower)')
     ap.add_argument('--keep-bleeds', dest='reject_bleeds', action='store_false', help='do not reject column/row-aligned runs with a saturated core (CCD bleeds)')
     ap.add_argument('--margin', type=float, default=2.0)
     ap.add_argument('--edge-sigma', type=float, default=2.0)
@@ -206,6 +253,7 @@ def main(argv=None):
     ap.add_argument('--meta-out')
     ap.add_argument('--frames', nargs='*')
     ap.add_argument('--frame-masks', nargs='*')
+    ap.add_argument('--register', choices=['none', 'wcs', 'auto'], default='auto', help='stack: resample frames and their trail masks onto the first frame through the WCS (auto = when the WCS differ)')
     ap.add_argument('--stack-method', default='sigclip', choices=['sigclip', 'median', 'mean'])
     a = ap.parse_args(argv)
     return run_stack(a) if a.task == 'stack' else run_detect(a)

@@ -11,7 +11,7 @@ import argparse, json, math, os, sys, time
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..', '..')))
-from ogfkit import trails as T, trailsynth as S
+from ogfkit import trails as T, trailsynth as S, trails_ext as X
 
 HUDF_FULL = os.environ.get('TRAILS_HUDF', '/workspace/fits/hudf_f160w.fits')
 M51 = os.environ.get('TRAILS_M51', '/workspace/fits/m51.fits')
@@ -268,6 +268,79 @@ def run_stack(spec):
     return dict(spec=spec, rows=rows, found=found, nf=nf, pix=pix)
 
 
+
+# ---- extensions: curved / flickering trails, contaminating flux ----------------------------------
+def run_curved(spec):
+    import warnings; warnings.simplefilter('ignore')
+    rng = np.random.default_rng(spec['seed'])
+    img = get_field(spec); sig = sigma_of(img); ny, nx = img.shape
+    th0 = rng.uniform(-35, 35) + (0 if rng.random() < 0.5 else 0)
+    y0 = rng.uniform(0.25, 0.75) * ny
+    flick = spec.get('duty')
+    tr, (cx, cy, cs) = S.curved_trail_image(img.shape, (-5.0, y0), th0, spec['curv'], 1.15 * nx / max(math.cos(math.radians(th0)), 0.5), spec['w'], spec['k'] * sig,
+                                           duty=flick, period=spec.get('period', 60.0))
+    im2 = img + tr
+    res = T.detect_trails(im2)
+    cur = X.detect_curved(im2, res['trails']) if spec.get('curved', True) else []
+    vis = tr > 0.25 * sig
+    # truth footprint (all points of the curve, incl. gaps of a flickering trail)
+    foot = np.zeros(img.shape, bool)
+    ix, iy = np.round(cx).astype(int), np.round(cy).astype(int)
+    ok = (ix >= 0) & (ix < nx) & (iy >= 0) & (iy < ny)
+    foot[iy[ok], ix[ok]] = True
+    from scipy.ndimage import binary_dilation, distance_transform_edt
+    dist = distance_transform_edt(~foot)
+    out = dict(spec=spec, n_straight=len(res['trails']), n_curved=len(cur), sigma=float(sig))
+    for name, tl in (('straight', res['trails']), ('both', res['trails'] + cur)):
+        m = T.trail_mask(img.shape, tl) if tl else np.zeros(img.shape, bool)
+        out['cover_' + name] = float((m & vis).sum() / max(vis.sum(), 1))
+        out['footcover_' + name] = float((m & (dist <= spec['w'] / 2)).sum() / max((dist <= spec['w'] / 2).sum(), 1))
+        out['stray_' + name] = int((m & (dist > spec['w'] / 2 + 12)).sum())
+        out['maskarea_' + name] = int(m.sum())
+    out['vis'] = int(vis.sum())
+    out['found_any'] = out['cover_both'] > 0.5
+    if flick and res['trails']:
+        best = max(res['trails'], key=lambda t: t['length'])
+        ap = X.along_profile(im2, best)
+        out['duty_meas'] = ap['duty']; out['gaps_meas'] = ap['n_gaps']
+    return out
+
+
+def run_flux(spec):
+    import warnings; warnings.simplefilter('ignore')
+    import sep
+    rng = np.random.default_rng(spec['seed'])
+    img = get_field(spec); sig = sigma_of(img); ny, nx = img.shape
+    d = np.ascontiguousarray(img, np.float32)
+    bk = sep.Background(d, bw=32, bh=32)
+    o = sep.extract(d - bk.back(), 4.0, err=sig, minarea=8)
+    if len(o) < 5:
+        return dict(spec=spec, rows=[])
+    big = o[np.argsort(-o['flux'])[:max(5, len(o) // 4)]]
+    c = big[rng.integers(len(big))]
+    theta = rng.uniform(0, 180); rho = rho_through(theta, c['x'], c['y'], nx, ny)
+    w, k = spec['w'], spec['k']
+    im2, tr, ext = inject(img, sig, theta, rho, w, k, False, rng)
+    res = T.detect_trails(im2)
+    cat = dict(NUMBER=list(range(len(o))), X_IMAGE=o['x'] + 1, Y_IMAGE=o['y'] + 1, A_IMAGE=o['a'], B_IMAGE=o['b'], THETA_IMAGE=np.degrees(o['theta']),
+               FLUX_AUTO=o['flux'])
+    rows = []
+    if res['trails']:
+        fl, fr = X.trail_flux(cat, res['trails'], k=2.5)
+        Y, Xg = np.mgrid[0:ny, 0:nx]
+        for i in np.where(fl != 0)[0]:
+            r = int(math.ceil(2.5 * max(o['a'][i], o['b'][i]))) + 1
+            x0, y0 = int(o['x'][i]), int(o['y'][i])
+            sl = (slice(max(y0 - r, 0), min(y0 + r + 1, ny)), slice(max(x0 - r, 0), min(x0 + r + 1, nx)))
+            yy, xx = np.mgrid[sl]
+            cth, sth = math.cos(o['theta'][i]), math.sin(o['theta'][i])
+            u = (xx - o['x'][i]) * cth + (yy - o['y'][i]) * sth; v = -(xx - o['x'][i]) * sth + (yy - o['y'][i]) * cth
+            ins = (u / (2.5 * max(o['a'][i], 0.5))) ** 2 + (v / (2.5 * max(o['b'][i], 0.5))) ** 2 <= 1
+            truth = float(tr[sl][ins].sum())
+            rows.append(dict(model=float(fl[i]), truth=truth, frac=float(fr[i]), flux=float(o['flux'][i]), sap=float(sig * math.sqrt(ins.sum()))))
+    return dict(spec=spec, rows=rows, found=bool(match(res['trails'], theta, rho, w)))
+
+
 def dispatch(spec):
     import warnings; warnings.simplefilter('ignore')
     try:
@@ -280,6 +353,10 @@ def dispatch(spec):
             return run_phot(spec)
         if e == 'stack':
             return run_stack(spec)
+        if e == 'curved':
+            return run_curved(spec)
+        if e == 'flux':
+            return run_flux(spec)
     except Exception as ex:      # keep the run going, count it
         import traceback
         return dict(spec=spec, error=traceback.format_exc()[-400:])
@@ -327,6 +404,23 @@ def campaign(exp, quick):
         for i, wn in enumerate(wins[: (6 if quick else 40)]):
             for k in (0.3, 1.0, 3.0):
                 sp.append(dict(exp='phot', field='hudf', win=wn, size=700, w=6, k=k, seed=5000 + i * 5 + int(k * 3)))
+    elif exp == 'curved':
+        i = 0
+        for field in ('hudf',):
+            for curv in (0.0, 4.0, 8.0):
+                for k in (1.5, 3.0, 6.0):
+                    for r in range(3 if quick else 8):
+                        i += 1
+                        sp.append(dict(exp='curved', field=field, win=wins[i % len(wins)], size=700, w=6, k=k, curv=curv, seed=7000 + i, tag='arc'))
+        for duty in (0.3, 0.5, 0.7):
+            for k in (1.5, 3.0, 6.0):
+                for r in range(3 if quick else 8):
+                    i += 1
+                    sp.append(dict(exp='curved', field='hudf', win=wins[i % len(wins)], size=700, w=6, k=k, curv=0.0, duty=duty, period=60.0, seed=7000 + i, tag='flicker'))
+    elif exp == 'flux':
+        for i, wn in enumerate(wins[: (6 if quick else 40)]):
+            for k in (1.0, 3.0):
+                sp.append(dict(exp='flux', field='hudf', win=wn, size=700, w=6, k=k, seed=8000 + i * 3 + int(k)))
     elif exp == 'stack':
         for i, wn in enumerate(wins[: (4 if quick else 24)]):
             for k in (1.0, 3.0):
@@ -416,6 +510,29 @@ def summarize(exp, R, md):
             if g:
                 md.append('- amp %g sigma, on-trail+edge objects: fractional flux bias median (unmasked %+.3f, masked %+.3f, interpolated %+.3f)' % (
                     k, np.nanmedian([x['unmasked'] / x['f0'] for x in g]), np.nanmedian([x['masked'] / x['f0'] for x in g]), np.nanmedian([x['interp'] / x['f0'] for x in g])))
+    if exp == 'curved':
+        md.append('\n### curved and flickering trails injected into HUDF windows (default detection + `detect_curved`)\n')
+        md.append('Coverage = fraction of the pixels where the trail exceeds 0.25 sigma that lie inside the mask; "straight" = ordinary detector only, "both" = plus the tile-chain curved detector; stray = masked pixels farther than w/2+12 px from the true path.\n')
+        md.append('| set | curvature [deg/100px] / duty | amp [sigma] | n | cover straight (median) | cover both (median) | found (cover>0.5) straight / both | mean stray px both | duty measured (median) |')
+        md.append('|---|---|---|---|---|---|---|---|---|')
+        for tag in ('arc', 'flicker'):
+            sub = [r for r in R if r['spec'].get('tag') == tag]
+            keys = sorted(set((r['spec']['curv'] if tag == 'arc' else r['spec']['duty'], r['spec']['k']) for r in sub))
+            for kk in keys:
+                g = [r for r in sub if (r['spec']['curv'] if tag == 'arc' else r['spec']['duty'], r['spec']['k']) == kk]
+                dm = [r['duty_meas'] for r in g if 'duty_meas' in r]
+                md.append('| %s | %g | %g | %d | %.2f | %.2f | %d / %d | %.0f | %s |' % (tag, kk[0], kk[1], len(g), np.median([r['cover_straight'] for r in g]), np.median([r['cover_both'] for r in g]),
+                          sum(r['cover_straight'] > 0.5 for r in g), sum(r['cover_both'] > 0.5 for r in g), np.mean([r['stray_both'] for r in g]), ('%.2f' % np.median(dm)) if dm else '-'))
+    if exp == 'flux':
+        rows = [dict(x, k=r['spec']['k']) for r in R for x in r['rows']]
+        md.append('\n### contaminating flux per object (`trail_flux`, ellipse 2.5 A x 2.5 B) vs the true injected light in the same ellipse\n')
+        if rows:
+            m = np.array([x['model'] for x in rows]); t = np.array([x['truth'] for x in rows]); sap = np.array([x['sap'] for x in rows])
+            sel = t > 3 * sap
+            md.append('%d objects touched by a detected trail; %d with true contamination > 3 sigma_ap: model/truth median %.3f (16-84%%: %.3f-%.3f), RMS of (model - truth)/sigma_ap %.2f; for the rest RMS %.2f.' % (
+                len(rows), sel.sum(), np.median(m[sel] / t[sel]), np.percentile(m[sel] / t[sel], 16), np.percentile(m[sel] / t[sel], 84), rms((m - t)[sel] / sap[sel]), rms((m - t)[~sel] / sap[~sel])))
+            fr = np.array([x['frac'] for x in rows]); fl = np.array([x['flux'] for x in rows])
+            md.append('Median TRAIL_FRAC (contamination / FLUX_AUTO) of the objects with > 3 sigma_ap contamination: %.3f; 90th percentile %.3f.' % (np.median(fr[sel]), np.percentile(fr[sel], 90)))
     if exp == 'stack':
         md.append('\n### 5-frame stacks, different trail per frame (w=6, frame noise 4x the HUDF pixel noise), objects within 5 px of a trail\n')
         names = ['mean_plain', 'median_plain', 'sigclip_plain', 'mean_masked', 'median_masked', 'sigclip_masked']

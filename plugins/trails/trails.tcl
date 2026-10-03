@@ -47,7 +47,7 @@ proc OGFTrailsAfter {} {
     set ff [file join [OGFTrailsWork] trails_flags.tsv]
     if {[file exists $ff] && [::ogf::cat::has]} {
 	set fd [open $ff r]; set txt [read $fd]; close $fd
-	catch {::ogf::cat::add_columns $txt {TRAIL_FLAG TRAIL_ID TRAIL_DIST}}
+	catch {::ogf::cat::add_columns $txt {TRAIL_FLAG TRAIL_ID TRAIL_DIST TRAIL_FLUX TRAIL_FRAC}}
 	::ogf::cat::set trails,flags_file $ff
     }
     set fi [::ogf::json::get $d filled_image]
@@ -106,9 +106,9 @@ proc OGFTrailsUndo {} {
     catch {OGFMaskAfterEdit}
     if {[::ogf::cat::has]} {
 	set nums [::ogf::cat::values NUMBER]
-	set txt "NUMBER\tTRAIL_FLAG\tTRAIL_ID\tTRAIL_DIST\n"
-	foreach nn $nums {append txt "$nn\t0\t0\t-1\n"}
-	catch {::ogf::cat::add_columns $txt {TRAIL_FLAG TRAIL_ID TRAIL_DIST}}
+	set txt "NUMBER\tTRAIL_FLAG\tTRAIL_ID\tTRAIL_DIST\tTRAIL_FLUX\tTRAIL_FRAC\n"
+	foreach nn $nums {append txt "$nn\t0\t0\t-1\t0\t-1\n"}
+	catch {::ogf::cat::add_columns $txt {TRAIL_FLAG TRAIL_ID TRAIL_DIST TRAIL_FLUX TRAIL_FRAC}}
     }
     catch {destroy .ogftrails}
     ::ogf::status "Remove Trails undone (mask restored, TRAIL_* columns reset)"

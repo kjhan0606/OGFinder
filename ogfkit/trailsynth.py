@@ -58,3 +58,31 @@ def test_field(n=900, seed=3, sky=100.0, sigma=3.0, n_gal=14, n_star=60, corr=0.
         img += gaussian_filter(prof, 1.6)
         truth.append((x, y, f, 'galaxy', re))
     return img.astype(np.float32), truth
+
+
+def curved_trail_image(shape, p0, theta0, curv_per_100, length, fwhm_box, amp, blur=1.2, duty=None, period=60.0, phase=0.0):
+    """additive curved trail: starts at p0 (x, y 0-based) with heading theta0 (deg from +x toward +y), the heading changes by `curv_per_100` degrees per 100 px;
+    `duty` (0-1) makes it flicker: on for duty*period px, off for the rest of each `period`.  Same profile as trail_image."""
+    from scipy.special import erf
+    from scipy.spatial import cKDTree
+    ny, nx = shape
+    n = int(length * 4)
+    s = np.arange(n) / 4.0
+    th = np.radians(theta0 + curv_per_100 * s / 100.0)
+    # integrate the heading
+    x = p0[0] + np.cumsum(np.cos(th)) / 4.0
+    y = p0[1] + np.cumsum(np.sin(th)) / 4.0
+    tree = cKDTree(np.c_[x, y])
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    a = fwhm_box / 2.0
+    near = (np.zeros(shape, bool))
+    pts = np.c_[xx.ravel(), yy.ravel()].astype(float)
+    d, idx = tree.query(pts, distance_upper_bound=a + 8.0)
+    ok = np.isfinite(d)
+    out = np.zeros(ny * nx)
+    prof = 0.5 * (erf((d[ok] + a) / (math.sqrt(2) * blur)) - erf((d[ok] - a) / (math.sqrt(2) * blur)))
+    on = np.ones(ok.sum())
+    if duty is not None:
+        on = (((s[idx[ok]] + phase) % period) < duty * period).astype(float)
+    out[ok] = amp * prof * on
+    return out.reshape(shape).astype(np.float32), (x, y, s)
