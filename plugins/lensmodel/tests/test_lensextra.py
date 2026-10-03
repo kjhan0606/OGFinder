@@ -88,7 +88,8 @@ def test_source_inversion_recovers_source_and_evidence_prefers_truth():
     assert 0.8 < r['chi2'] / (SI.ndata - neff) < 1.4
     g = SI.grid
     xs = g['x0'] + g['pix'] * np.arange(g['n'])
-    BX, BY = np.meshgrid(xs, xs)
+    ys = g['y0'] + g['pix'] * np.arange(g['n'])
+    BX, BY = np.meshgrid(xs, ys)
     ts = S.sersic_source(BX, BY, src['x0'], src['y0'], src['reff'], 1.0, src['q'], src['phi'], 1.0)
     s, mod = SI.images(r)
     cover = np.asarray((X.lens_operator(m, img.shape, ps, org, (0, 0), g)[np.flatnonzero(mask.ravel())] > 0).sum(axis=0)).reshape(g['n'], g['n']) >= 3

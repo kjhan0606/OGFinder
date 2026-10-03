@@ -465,7 +465,7 @@ def source_inversion(a, res, model, cut, scale, origin, hdr):
         blank = ok & (np.hypot(xx - origin[0], yy - origin[1]) * scale > 0.9 * 2.5 * res['params']['theta_E'])
         sig = float(np.nanstd(cut[blank])) if blank.sum() > 100 else float(np.nanstd(cut[ok]))
     work = np.nan_to_num(cut, nan=0.0)
-    mask = lx.arc_mask(work, sig, origin, 1e9) & ok
+    mask = lx.arc_mask(work, sig, origin, 1e9) & ok                       # NaN pixels (--lens-mask) are excluded
     kern = lx.gaussian_kernel(a.psf_sigma) if a.psf_sigma > 0 else None
     S = lx.SourceInversion(model, work, sig, mask, scale, origin, (0.0, 0.0), kernel=kern, n=a.source_n, reg=a.regularisation)
     r = S.best()

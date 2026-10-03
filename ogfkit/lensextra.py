@@ -98,7 +98,7 @@ def fit_multiplane(groups, centre, sigma=0.005, z_l=None, z_ref=None, free=None,
     rng = np.random.default_rng(seed)
     best = None
     trials = []
-    n_starts = max(n_starts, 20) if G > 1 else n_starts
+    n_starts = max(n_starts, 24) if G > 1 else n_starts
     for s in range(n_starts):
         if s == 0 or G == 1:
             v0 = [d0[n] * (1 + (0.05 * rng.standard_normal() if s else 0.0)) if n in ('theta_E', 'q') else d0[n] + (rng.uniform(-5, 5) if s and n in ('phi', 'phi_g') else (0.02 * rng.random() if s and n == 'gamma' else 0.0))
@@ -125,7 +125,7 @@ def fit_multiplane(groups, centre, sigma=0.005, z_l=None, z_ref=None, free=None,
             continue
         trials.append((r.cost, v0, lb, ub, r))
     trials.sort(key=lambda t: t[0])
-    for cost, v0, lb, ub, r0 in trials[:3]:                                                  # ... the best three are polished
+    for cost, v0, lb, ub, r0 in trials[:5]:                                                  # ... the best five are polished
         try:
             r = least_squares(resid, r0.x, bounds=(lb, ub), x_scale='jac', max_nfev=400)
         except Exception:
@@ -233,14 +233,32 @@ def lens_operator(model, shape, pixscale, origin_xy, centre_xy, grid, oversample
     return acc
 
 
-def auto_grid(model, mask, shape, pixscale, origin_xy, centre_xy, n=40, margin=1.25):
+def auto_grid(model, mask, shape, pixscale, origin_xy, centre_xy, n=40, margin=1.3, data=None, sigma=None, pad=0.1):
+    """source grid that holds the rays of the significant pixels: those of ``mask`` whose Gaussian-smoothed data exceed 4 sigma (all of ``mask`` when
+    ``data`` is not given or fewer than 20 qualify); extent = max deviation from the median ray position x ``margin`` + ``pad`` arcsec"""
     ny, nx = shape
     yy, xx = np.mgrid[0:ny, 0:nx]
+    core = mask
+    if data is not None and sigma is not None:
+        from scipy.ndimage import gaussian_filter
+        sg = float(np.median(sigma)) if np.ndim(sigma) else float(sigma)
+        c2 = mask & (gaussian_filter(np.nan_to_num(np.asarray(data, float)), 1.5) > 4.0 * sg / (2 * math.sqrt(math.pi) * 1.5))
+        if c2.sum() >= 20:
+            core = c2
     tx = (xx - origin_xy[0]) * pixscale + centre_xy[0]
     ty = (yy - origin_xy[1]) * pixscale + centre_xy[1]
-    bx, by = model.beta(tx[mask], ty[mask])
-    cx, cy = float(np.median(bx)), float(np.median(by))
-    half = margin * max(np.percentile(np.abs(bx - cx), 99), np.percentile(np.abs(by - cy), 99))
+    bx, by = model.beta(tx[core], ty[core])
+    if data is not None:                                     # flux-weighted: faint stray pixels do not stretch the grid
+        wgt = np.clip(np.nan_to_num(np.asarray(data, float))[core], 0, None) + 1e-12
+    else:
+        wgt = np.ones(len(bx))
+
+    def wq(v, q):
+        o = np.argsort(v)
+        cw = np.cumsum(wgt[o])
+        return v[o][np.searchsorted(cw, q * cw[-1])]
+    cx, cy = float(wq(bx, 0.5)), float(wq(by, 0.5))
+    half = margin * max(wq(np.abs(bx - cx), 0.995), wq(np.abs(by - cy), 0.995)) + pad
     pix = 2 * half / (n - 1)
     return dict(n=n, x0=cx - half, y0=cy - half, pix=pix)
 
@@ -256,7 +274,7 @@ class SourceInversion:
         from scipy.linalg import cho_factor
         self.shape = data.shape
         self.mask = np.asarray(mask, bool) & np.isfinite(data)
-        self.grid = grid or auto_grid(model, self.mask, data.shape, pixscale, origin_xy, centre_xy, n)
+        self.grid = grid or auto_grid(model, self.mask, data.shape, pixscale, origin_xy, centre_xy, n, data=data, sigma=sigma)
         n = self.grid['n']
         L = lens_operator(model, data.shape, pixscale, origin_xy, centre_xy, self.grid, oversample)
         F = L if kernel is None else psf_matrix(kernel, data.shape) @ L
@@ -360,8 +378,8 @@ def fit_lens_pixels(data, sigma, mask, pixscale, origin_xy, centre_xy, start, fr
     return dict(params=build(r.x), evidence=float(-r.fun), nfev=state['n'], success=bool(r.success))
 
 
-def arc_mask(data, sigma, origin_xy, rmax_pix, nsig=4.0, smooth=1.5, dilate=3):
-    """pixels used for the inversion: smoothed data above nsig sigma_smooth (arcs), dilated, inside a circle of radius rmax_pix about the lens"""
+def arc_mask(data, sigma, origin_xy, rmax_pix, nsig=4.0, smooth=1.5, dilate=3, rmin_pix=0.0):
+    """pixels used for the inversion: smoothed data above nsig sigma_smooth (arcs), dilated, inside an annulus rmin_pix..rmax_pix about the lens (the inner region holds the lens-light residuals and the demagnified centre)"""
     from scipy.ndimage import gaussian_filter, binary_dilation
     d = np.nan_to_num(np.asarray(data, float))
     sm = gaussian_filter(d, smooth)
@@ -370,4 +388,5 @@ def arc_mask(data, sigma, origin_xy, rmax_pix, nsig=4.0, smooth=1.5, dilate=3):
     m = sm > nsig * ssm
     m = binary_dilation(m, iterations=int(dilate))
     yy, xx = np.mgrid[0:d.shape[0], 0:d.shape[1]]
-    return m & (np.hypot(xx - origin_xy[0], yy - origin_xy[1]) < rmax_pix)
+    rr = np.hypot(xx - origin_xy[0], yy - origin_xy[1])
+    return m & (rr < rmax_pix) & (rr >= rmin_pix)
