@@ -78,6 +78,12 @@
      ]
     },
     {
+     "if": "curved",
+     "argv": [
+      "--curved"
+     ]
+    },
+    {
      "if_not": "flag-catalog",
      "argv": [
       "--no-flag-catalog"
@@ -153,6 +159,12 @@
      "if": "catalog-check",
      "argv": [
       "--catalog-check"
+     ]
+    },
+    {
+     "if": "curved",
+     "argv": [
+      "--curved"
      ]
     },
     {
@@ -275,6 +287,15 @@
    "default": false,
    "group": "Detection",
    "help": "When a catalogue is loaded, candidates slightly below the threshold are accepted if at least two elongated (A/B>=3), aligned objects lie on them."
+  },
+  {
+   "name": "curved",
+   "label": "Also look for curved / segmented trails",
+   "type": "bool",
+   "default": false,
+   "group": "Detection",
+   "help": "After the straight-line finder, link fainter tile-wise line segments into piecewise-linear chains (curved or broken trails). Adds segments labelled with a group number; slower (about 10-30 s per 3600x3600 frame) and can add false segments on crowded fields.",
+   "expert": true
   },
   {
    "name": "margin",

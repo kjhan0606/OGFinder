@@ -65,7 +65,7 @@ proc run {} {
     set mp [dict get [OGFMaskPaths] bool]
     R icl_lsbg_mask_synced [expr {[::ogf::cat::get icl,mask_file {}] eq $mp && [::ogf::cat::get lsbg,mask_file {}] eq $mp}]
     set cols [::ogf::cat::columns]
-    R catalog_columns [expr {"TRAIL_FLAG" in $cols && "TRAIL_ID" in $cols && "TRAIL_DIST" in $cols}] $cols
+    R catalog_columns [expr {"TRAIL_FLAG" in $cols && "TRAIL_ID" in $cols && "TRAIL_DIST" in $cols && "TRAIL_FLUX" in $cols && "TRAIL_FRAC" in $cols}] $cols
     set fl [::ogf::cat::values TRAIL_FLAG]
     set nflag 0; foreach v $fl {if {$v ne {} && $v > 0} {incr nflag}}
     R some_objects_flagged [expr {$nflag >= 3 && $nflag < [llength $fl]}] "flagged $nflag of [llength $fl]"

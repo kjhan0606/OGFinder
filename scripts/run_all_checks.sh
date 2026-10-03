@@ -146,6 +146,9 @@ EXTRA="$EXTRA trails_tests"
 chk_trails_gui() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_trails.sh" "$OUT/trails_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA trails_gui"
+# cross-night orbit-fit linking (moving/nightlink.py): synthetic injection + decoys, CLI mode, real MPC astrometry when the network is up (also part of moving_tests)
+chk_nightlink_tests() { "$PY" -m pytest -q moving/tests/test_nightlink.py 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA nightlink_tests"
 chk_regression_tests() { "$PY" -m pytest -q regression 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA regression_tests"
 # per-tool regression set on small public data (HUDF F160W crop, SDSS Stripe 82 run 94, HST J0946+1006, SDSS photo-z set): data are fetched on demand

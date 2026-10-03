@@ -159,7 +159,7 @@ def test_cli_end_to_end_with_catalog_and_mask_undo(tmp_path, two_trails):
     for f in ('trails_mask.fits', 'trails_overlay.reg', 'trails_flags.tsv'):
         assert os.path.exists(os.path.join(work, f)), f
     lines = open(os.path.join(work, 'trails_flags.tsv')).read().split('\n')
-    assert lines[0].split('\t') == ['NUMBER', 'TRAIL_FLAG', 'TRAIL_ID', 'TRAIL_DIST']
+    assert lines[0].split('\t') == ['NUMBER', 'TRAIL_FLAG', 'TRAIL_ID', 'TRAIL_DIST', 'TRAIL_FLUX', 'TRAIL_FRAC']
     flags = {l.split('\t')[0]: int(l.split('\t')[1]) for l in lines[1:] if l}
     assert flags['1'] & 2 and flags['2'] == 0 and flags['3'] & 4
     assert '#TRAILS' in r.stdout and 'TRAIL_FLAG' in r.stdout            # add_columns contract on stdout

@@ -356,11 +356,13 @@ def measure_profile(img, valid, theta, rho, s0, s1, sigma_pix, wmax=60.0, a_gues
 
 
 # ------------------------------------------------------------------ main detector
-def bleed_like(img, theta, rho, s0, s1, amp, level, axis_tol=3.0, fac=300.0, spike_ratio=3.0):
+def bleed_like(img, theta, rho, s0, s1, amp, level, axis_tol=3.0, fac=300.0, spike_ratio=2.5, fac_fall=30.0):
     """True when the run is a feature of a very bright compact source rather than a trail: (a) a run within axis_tol degrees of the pixel axes
     through a core brighter than fac x the run amplitude (CCD bleed column, ACS spikes ~2 deg off the axes), or (b) at any angle, a run through
-    such a core whose brightness falls off away from the core (median in 8 px..15 % of the run from the core > spike_ratio x the median beyond
-    30 %): the long diffraction spike of a bright star.  A trail has a constant amplitude along its length."""
+    a core brighter than fac_fall x the run amplitude whose brightness falls off away from the core (median in 8 px..15 % of the run from the core >
+    spike_ratio x the median beyond 30 %): the long diffraction spike of a bright star.  A trail has a constant amplitude along its length.
+    (fac_fall = 30 and spike_ratio = 2.5 were set after the SDSS run-94 held-out check showed that 300 / 3.0 missed the 45/135 deg spikes of saturated
+    stars, whose spike amplitude is itself 50-300 x below the core; see docs/trails.md.)"""
     th = theta % 180.0
     L0 = s1 - s0
     sv = np.arange(s0 - 1.5 * L0, s1 + 1.5 * L0 + 1.0, 1.0)         # the core may lie beyond the part of the spike that was found
@@ -368,9 +370,9 @@ def bleed_like(img, theta, rho, s0, s1, amp, level, axis_tol=3.0, fac=300.0, spi
     with np.errstate(all='ignore'), warnings.catch_warnings():
         warnings.simplefilter('ignore')
         v = np.nanmax(sample_strip(img, theta, rho, sv, np.arange(-3.0, 4.0)), axis=0) - level
-    if not np.isfinite(v).any() or np.nanmax(v) <= fac * max(amp, 1e-9):
+    if not np.isfinite(v).any() or np.nanmax(v) <= fac_fall * max(amp, 1e-9):
         return False
-    if min(abs(th - 90.0), th, 180.0 - th) <= axis_tol:
+    if np.nanmax(v) > fac * max(amp, 1e-9) and min(abs(th - 90.0), th, 180.0 - th) <= axis_tol:
         return True
     d = np.abs(sv - sv[int(np.nanargmax(v))])
     ok = np.isfinite(v)

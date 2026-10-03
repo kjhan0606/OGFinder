@@ -149,9 +149,11 @@ def hudf_task(args):
                 rejected=[(r['reason'], round(r['zscore'], 1)) for r in res.get('rejected', [])])
 
 
-def unseen_windows(n, seed):
-    tuning = V.hudf_windows(700, 40)
-    d = V.fits_data('/workspace/fits/hudf_f160w.fits')
+def unseen_windows(path, n, seed, exclude_tuning=False):
+    """Non-overlapping fully covered 700x700 windows of `path`.  The 40 F160W tuning windows cover essentially all of the covered F160W
+    area, so no F160W window is unseen; F105W / F125W frames were never used for tuning (same sky, independent pixels and noise)."""
+    tuning = V.hudf_windows(700, 40) if exclude_tuning else []
+    d = V.fits_data(path)
     v = (d != 0).astype(np.float32)
     ii = np.cumsum(np.cumsum(np.pad(v, ((1, 0), (1, 0))), 0), 1)
     pos = []
@@ -161,7 +163,6 @@ def unseen_windows(n, seed):
                     all(abs(y - ty) >= 700 or abs(x - tx) >= 700 for ty, tx in tuning):
                 pos.append((y, x))
     rng = np.random.default_rng(seed)
-    # greedy pick of mutually non-overlapping windows
     out = []
     for i in rng.permutation(len(pos)):
         p = pos[i]
@@ -208,18 +209,19 @@ def main():
             md.append('| %s | %d | %d%s | %.1f | %.0f | %.1f | %.1f | %.1f | %.2f | %d/%d (%s) | %s |' % (d['band'], d['field'], d['id'], 'c' if d['curved'] else '', d['theta'], d['length'], d['fwhm'], d['amp_snr'], d['z'], d['duty'],
                       d['n_present'], d['n_cov'], ' '.join('%s%.0f' % (b, m['snr']) for b, m in d['others'].items() if m), d['class']))
     if 'hudf' in a.exp:
-        wins, npool = unseen_windows(20, 5)
-        tasks = [('/workspace/fits/hudf_f160w.fits', w, a.curved, 'F160W-unseen') for w in wins]
+        tasks, npools = [], {}
         for f in ('f105w', 'f125w'):
-            tasks += [('/workspace/fits/hudf_%s.fits' % f, w, a.curved, f.upper()) for w in wins]
+            path = '/workspace/fits/hudf_%s.fits' % f
+            wins, npools[f] = unseen_windows(path, 20, 5)
+            tasks += [(path, w, a.curved, f.upper()) for w in wins]
         t0 = time.time()
         with Pool(a.workers) as p:
             R = p.map(hudf_task, tasks, chunksize=1)
         allres['hudf'] = R
-        md.append('\n## HUDF held-out windows (%d non-overlapping unseen 700x700 windows from %d candidate positions), %.0f s\n' % (len(wins), npool, time.time() - t0))
+        md.append('\n## HUDF held-out windows (non-overlapping 700x700 windows of the F105W / F125W frames, never used for tuning; candidate positions %s), %.0f s\n' % (npools, time.time() - t0))
         md.append('| set | windows | with a detection | detections (straight / curved segments) | best z median / max |')
         md.append('|---|---|---|---|---|')
-        for tag in ('F160W-unseen', 'F105W', 'F125W'):
+        for tag in ('F105W', 'F125W'):
             g = [r for r in R if r['tag'] == tag]
             bz = [r['best_z'] for r in g if r['best_z']]
             md.append('| %s | %d | %d | %d / %d | %.1f / %.1f |' % (tag, len(g), sum(1 for r in g if r['det']), sum(r['n_straight'] for r in g), sum(r['n_curved'] for r in g), np.median(bz or [0]), max(bz or [0])))

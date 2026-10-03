@@ -136,12 +136,14 @@ proc OGFTrailsShowFilled {} {
 proc OGFTrailsStackDialog {} {
     set files [tk_getOpenFile -title "Registered frames to stack (select several)" -multiple 1 -filetypes {{FITS {.fits .fit .fts .gz}} {All *}}]
     if {[llength $files] < 2} {::ogf::status "Trails stack: select at least two frames"; return}
-    set r [OGFForm "Stack excluding trails" {{method "Method (sigclip|median|mean)" sigclip}}]
+    set r [OGFForm "Stack excluding trails" {{method "Method (sigclip|median|mean)" sigclip} {register "Register by WCS (auto|wcs|none)" auto}}]
     if {$r eq {}} return
     set m [dict get $r method]
     if {$m ni {sigclip median mean}} {set m sigclip}
+    set reg [dict get $r register]
+    if {$reg ni {auto wcs none}} {set reg auto}
     set argv [list [OGFPython] [file join [::ogf::step::plugin_dir trails] trails.py] [lindex $files 0] --task stack --frames {*}$files \
-	--work [file join [OGFSessWorkDir] trails_stack] --stack-method $m \
+	--work [file join [OGFSessWorkDir] trails_stack] --stack-method $m --register $reg \
 	--threshold [::ogf::params::get trails threshold] --max-trails [::ogf::params::get trails max-trails]]
     ::ogf::job::run $argv -step trails.stack -class manual -title "Stack excluding trails" -plugin trails \
 	-done [list OGFTrailsStackDone]
