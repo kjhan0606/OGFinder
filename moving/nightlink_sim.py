@@ -79,23 +79,30 @@ def make_field(n_obj, nights, rng, sig=0.3, kind="mainbelt", n_per_night=3, spac
     return trks
 
 
-def score(trks, result):
-    """Recall/precision against truth labels.  A true link = pair of tracklets of one object; a group is 'pure' if all members
-    are the same object; 'complete' if it contains all that object's tracklets."""
+def _score_groups(trks, groups, min_members):
     by_obj = {}
     for t in trks:
         if t.truth is not None and t.truth >= 0:
             by_obj.setdefault(t.truth, []).append(t.id)
-    objs = {o: v for o, v in by_obj.items() if len(v) >= 2}
+    objs = {o: v for o, v in by_obj.items() if len(v) >= min_members}
     tid2truth = {t.id: t.truth for t in trks}
-    pure = 0; wrong = 0; found = set(); complete = 0
-    for g in result["groups"]:
+    pure = wrong = complete = 0; found = set()
+    for g in groups:
         tr = [tid2truth[i] for i in g["ids"]]
         if len(set(tr)) == 1 and tr[0] is not None and tr[0] >= 0:
             pure += 1; found.add(tr[0])
-            if len(g["ids"]) == len(objs.get(tr[0], [])):
+            if len(g["ids"]) == len(by_obj.get(tr[0], [])):
                 complete += 1
         else:
             wrong += 1
-    return dict(n_objects=len(objs), n_groups=len(result["groups"]), pure=pure, wrong=wrong, recovered=len(found), complete=complete,
-                recall=len(found) / max(len(objs), 1), precision=pure / max(len(result["groups"]), 1))
+    return dict(n_objects=len(objs), n_groups=len(groups), pure=pure, wrong=wrong, recovered=len(found & set(objs)), complete=complete,
+                recall=len(found & set(objs)) / max(len(objs), 1), precision=pure / max(len(groups), 1))
+
+
+def score(trks, result):
+    """Truth scoring (SYNTHETIC/known labels).  `groups` (>= 3 tracklets) are scored against objects with >= 3 tracklets; `pairs` against
+    objects with >= 2.  A group is 'pure' when all members are one object, 'wrong' otherwise, 'complete' when it holds all the object's tracklets."""
+    sc = _score_groups(trks, result["groups"], 3)
+    pr = _score_groups(trks, result.get("pairs", []), 2)
+    sc.update(pair_groups=pr["n_groups"], pair_pure=pr["pure"], pair_wrong=pr["wrong"])
+    return sc

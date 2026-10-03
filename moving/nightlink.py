@@ -301,8 +301,11 @@ def link_nights(*a, **k):
 
 
 def _link_nights(trks, max_gap_days=30.0, min_gap_days=0.3, gate_chi2=60.0, chi2_max=4.0, resid_max=6.0, floor0=0.3, floor_rate=0.05,
-                max_motion_deg_day=2.5, n_rho=20, n_rd=13, top=4, one_per_night=True, grow_tol=6.0, progress=None):
+                max_motion_deg_day=2.5, n_rho=20, n_rd=13, top=4, one_per_night=True, grow_tol=6.0, min_tracklets=3, progress=None):
     """Link tracklets from different nights into orbit-consistent groups.
+    Groups with fewer than `min_tracklets` (default 3) tracklets are returned separately as `pairs`: two short-arc tracklets give only 2
+    degrees of freedom of orbit constraint (8 attributable numbers vs 6 orbital parameters), so in a dense field chance pairings pass the fit
+    (measured: see docs/moving_objects.md); >= 3 tracklets leave 6 constraint degrees of freedom.
     Returns dict(groups=[dict(ids, nights, fit, elements, chi2_red, rms_arcsec, max_resid, n_obs, pair_scores)], unlinked=[ids],
     stats=dict(n_pairs_tested, n_gate, n_fit, n_accept))."""
     trks = sorted(trks, key=lambda t: t.t0)
@@ -371,16 +374,22 @@ def _link_nights(trks, max_gap_days=30.0, min_gap_days=0.3, gate_chi2=60.0, chi2
         groups.append(dict(ids=[trks[m].id for m in members], nights=[trks[m].night for m in members],
                            elements=orbit_summary(cur), chi2_red=cur.chi2_red, rms_arcsec=cur.rms_arcsec, max_resid=cur.max_resid,
                            n_obs=cur.n_obs, fit=cur, truth=[trks[m].truth for m in members]))
-    linked = {m for g in groups for m in g["ids"]}
-    return dict(groups=groups, unlinked=[t.id for t in trks if t.id not in linked], stats=stats)
+    pairs = [g for g in groups if len(g["ids"]) < min_tracklets]
+    groups = [g for g in groups if len(g["ids"]) >= min_tracklets]
+    linked = {i for g in groups for i in g["ids"]}
+    return dict(groups=groups, pairs=pairs, unlinked=[t.id for t in trks if t.id not in linked], stats=stats)
 
 
 # ------------------------------------------------------------------------------------------------ vetting
 def vet_with_links(trks, result):
-    """Per-tracklet status: 'linked' (member of an orbit-consistent multi-night group) else 'single'.  Single-night tracklets
+    """Per-tracklet status: 'linked' (member of an orbit-consistent group of >= 3 tracklets), 'pair' (orbit-consistent with exactly one other tracklet: a candidate, false-pair rate
+    is high in dense fields) else 'single'.  Single-night tracklets
     should still go through moving.orbitlink.vet_tracklets (population rate prior); linked ones have been verified with an
     orbit fit over >= 2 nights, which is a much stronger test than the rate prior."""
     st = {}
+    for gi, g in enumerate(result.get("pairs", [])):
+        for tid in g["ids"]:
+            st[tid] = dict(status="pair", group=gi, chi2_red=g["chi2_red"], a=g["elements"].get("a"), e=g["elements"].get("e"))
     for gi, g in enumerate(result["groups"]):
         for tid in g["ids"]:
             st[tid] = dict(status="linked", group=gi, chi2_red=g["chi2_red"], a=g["elements"].get("a"), e=g["elements"].get("e"))

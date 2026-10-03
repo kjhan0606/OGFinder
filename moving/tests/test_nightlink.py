@@ -58,6 +58,17 @@ def test_injection_recovery_and_no_false_links():
     assert sum(1 for v in vet.values() if v["status"] == "linked") >= 2 * sc["recovered"]
 
 
+def test_two_tracklets_are_reported_as_pair_not_group():
+    rng = np.random.default_rng(8)
+    trks = S.make_field(3, [0, 4], rng, sig=0.2)
+    res = N.link_nights(trks)
+    assert len(res["groups"]) == 0 and len(res["pairs"]) == 3
+    assert all(len(g["ids"]) == 2 for g in res["pairs"])
+    assert {v["status"] for v in N.vet_with_links(trks, res).values()} == {"pair"}
+    res2 = N.link_nights(trks, min_tracklets=2)
+    assert len(res2["groups"]) == 3
+
+
 def test_pure_decoys_do_not_link():
     rng = np.random.default_rng(2)
     trks = S.make_field(0, [0, 1, 4], rng, sig=0.3, n_decoy=40)
@@ -69,7 +80,7 @@ def test_same_night_tracklets_never_grouped():
     rng = np.random.default_rng(4)
     trks = S.make_field(5, [0, 0, 3], rng, sig=0.2)
     res = N.link_nights(trks)
-    for g in res["groups"]:
+    for g in res["groups"] + res["pairs"]:
         assert len(set(g["nights"])) == len(g["nights"])
 
 
@@ -105,5 +116,5 @@ def test_cli_nightlink_mode(tmp_path):
                        capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, r.stderr[-600:]
     out = json.load(open(tmp_path / "wd" / "nightlinks.json"))
-    assert len(out["groups"]) >= 5 and all(g["n_tracklets"] >= 2 for g in out["groups"])
+    assert sum(1 for g in out["groups"] if g["kind"] == "linked") >= 5 and all(g["n_tracklets"] >= 2 for g in out["groups"])
     assert os.path.exists(tmp_path / "wd" / "nightlinks.tsv")

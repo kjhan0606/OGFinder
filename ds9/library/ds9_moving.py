@@ -370,21 +370,21 @@ def m_nightlink(a):
             sig = np.maximum(np.asarray(t.get("sig", [a.nl_sigma] * len(mjd)), float), 0.05)
             trks.append(NL.Tracklet(mjd, t["ra"], t["dec"], sig, code=a.obs_code, tid=len(trks), night=None))
             src.append(dict(file=fn, tracklet=t.get("id")))
-    res = NL.link_nights(trks, max_gap_days=a.nl_max_gap, chi2_max=a.nl_chi2, floor0=a.nl_floor)
+    res = NL.link_nights(trks, max_gap_days=a.nl_max_gap, chi2_max=a.nl_chi2, floor0=a.nl_floor, min_tracklets=a.nl_min)
     rows = []
-    for gi, g in enumerate(res["groups"]):
-        rows.append(dict(group=gi, n_tracklets=len(g["ids"]), n_obs=g["n_obs"], nights=",".join(str(x) for x in g["nights"]),
+    for gi, g in enumerate(res["groups"] + res["pairs"]):
+        rows.append(dict(group=gi, kind="linked" if gi < len(res["groups"]) else "pair", n_tracklets=len(g["ids"]), n_obs=g["n_obs"], nights=",".join(str(x) for x in g["nights"]),
                          members=";".join("%s#%s" % (os.path.basename(os.path.dirname(src[i]["file"])) or src[i]["file"], src[i]["tracklet"]) for i in g["ids"]),
                          a_au=round(g["elements"].get("a", float("nan")), 3), e=round(g["elements"].get("e", float("nan")), 3),
                          inc_deg=round(g["elements"].get("inc_deg", float("nan")), 2), chi2_red=round(g["chi2_red"], 3), rms_arcsec=round(g["rms_arcsec"], 3)))
     util.write_json(os.path.join(wd, "nightlinks.json"), dict(groups=rows, unlinked=[src[i] for i in res["unlinked"]], stats=res["stats"],
-                                                               params=dict(obs_code=a.obs_code, chi2_max=a.nl_chi2, floor_arcsec=a.nl_floor, max_gap_days=a.nl_max_gap)))
+                                                               params=dict(obs_code=a.obs_code, min_tracklets=a.nl_min, chi2_max=a.nl_chi2, floor_arcsec=a.nl_floor, max_gap_days=a.nl_max_gap)))
     with open(os.path.join(wd, "nightlinks.tsv"), "w") as f:
-        cols = ["group", "n_tracklets", "n_obs", "nights", "members", "a_au", "e", "inc_deg", "chi2_red", "rms_arcsec"]
+        cols = ["group", "kind", "n_tracklets", "n_obs", "nights", "members", "a_au", "e", "inc_deg", "chi2_red", "rms_arcsec"]
         f.write("\t".join(cols) + "\n")
         for r in rows:
             f.write("\t".join(str(r[c]) for c in cols) + "\n")
-    status(kind="nightlink", n_tracklets=len(trks), n_groups=len(rows), n_unlinked=len(res["unlinked"]),
+    status(kind="nightlink", n_tracklets=len(trks), n_groups=len(res['groups']), n_pairs=len(res['pairs']), n_unlinked=len(res["unlinked"]),
            outputs=[os.path.join(wd, "nightlinks.json"), os.path.join(wd, "nightlinks.tsv")])
 
 
@@ -520,7 +520,7 @@ def main(argv=None):
     ap.add_argument("--tracklet-files", nargs="*", dest="tracklet_files", help="nightlink: tracklets.json files of the different nights/visits")
     ap.add_argument("--obs-code", default="500", help="nightlink: MPC observatory code of the tracklets (500 geocentre, 250 HST, ...)")
     ap.add_argument("--nl-chi2", type=float, default=4.0); ap.add_argument("--nl-floor", type=float, default=0.3, help="nightlink model-error floor [arcsec]")
-    ap.add_argument("--nl-max-gap", type=float, default=30.0); ap.add_argument("--nl-sigma", type=float, default=0.3)
+    ap.add_argument("--nl-max-gap", type=float, default=30.0); ap.add_argument("--nl-min", type=int, default=3, help="nightlink: tracklets needed for a confirmed group (2-tracklet links are reported as pairs)"); ap.add_argument("--nl-sigma", type=float, default=0.3)
     ap.add_argument("--designation"); ap.add_argument("--mjd-min", type=float); ap.add_argument("--mjd-max", type=float)
     ap.add_argument("--no-debias", action="store_true"); ap.add_argument("--samples", type=int, default=400)
     ap.add_argument("--catalog"); ap.add_argument("--min-epochs", type=int, default=2)
