@@ -144,6 +144,39 @@ multifit uses the paper's normalisation, so the total magnitudes of such objects
 no PSF fine sampling (`E) != 1` is refused); only `radial` truncation; rotation only power/log; the broken exponential, `rot_*`/`b*` bounds and amplitudes beyond GALFIT's constrainable set are multifit-only extensions; the catalog mode (`--catalog`) does not use the advanced components;
 the advanced components are numerically sub-sampled and therefore slower than the plain Sersic path (not benchmarked separately).
 
+## Automatic structure decomposition (`ogfkit/autodecomp.py`, step *Auto Decomposition (isophote -> multifit)*, `--model decomp`)
+
+Chain per object: **isophote fit** (`plugins/isophote` engine, neighbours masked) -> **automatic initial guesses** -> **multi-component fits** of the candidate structures -> **model selection**.
+* Guesses (`guess_from_profile`): half-light radius and total flux from the growth curve; 1-D fits of the semi-major-axis profile (r > 0.8 FWHM, free sky) with a single Sersic and a Sersic + exponential
+  (multi-start, bulge more concentrated than the disc); components' axis ratios / PA from the inner (bulge) and outer (disc) isophotes; features: eps / PA twist bar signature, edge-on, concentration.
+  If the profile fails (photutils needs a converging first isophote: three start radii are tried) or the 1-D decomposition is degenerate (B/T outside 0.03-0.97) the preset values of the catalog are used (flags).
+* Candidates, all with a common centre and the PSF: `sersic`; `bulge+disk` (free-n Sersic bulge + exponential disc); `nucleus+bulge+disk` (adds a PSF; `--nucleus off` removes it).
+  Each is fitted with `fit_multistart` (`--decomp-restarts`), neighbours as in the other multifit models (`--neighbours fit|mask`).
+* Selection: a more complex model must win by `--bic-margin` in the **error-rescaled BIC** (errors inflated so that the best model has chi2_red = 1, never deflated; real galaxies leave structured residuals and the plain BIC
+  then accepts any extra component) and pass sanity tests (0.05 < B/T < 0.97, bulge smaller than disc and larger than 0.4 px, bulge n not on its bound, nucleus 0.5-50 % of the light); otherwise the simpler model is kept (reason in `DEC_NOTE`, flag 4).
+* Catalog columns `AD_TYPE` (1 single Sersic, 2 bulge+disc, 3 nucleus+bulge+disc), `AD_MAG` (total), `AD_BT`, `AD_MAGB/MAGD/MAGN`, bulge `AD_REB/NB/QB/PAB`, disc `AD_RED/QD/PAD`, single `AD_RE1/N1`,
+  `AD_DBIC` (scaled BIC of the single Sersic minus the selected model), `AD_CHI2`, `AD_BAR` (bar-like isophote signature, not fitted), `AD_FLAG` (decomposition flags 1 no profile, 2 guess fallback, 4 degenerate model rejected, 8 no fit,
+  16 bar, 64 edge-on; + 256 x the multifit flags).  `multifit_decomp.tsv` has one row per object with the guesses (B/T, bulge R_e, n, disc R_e), the three BICs, the error scale, ellipticities and notes;
+  `multifit_decomp_plot.png` the isophote profiles with the fitted components; the usual `multifit_results.tsv`, model / residual frames and montage.  `--model decomp --columns gf` gives the GF_* columns instead.
+* Batch: any catalog (`--objects`, `--max-objects`, `--n-workers`), GUI step *Auto Decomposition* + *Decomposition Table / Profiles*, session export replays it headless.
+
+Validation (`plugins/multifit/validation/autodecomp_validate.py`, `autodecomp_synth_{hi,lo}_summary.json`; tests `tests/test_autodecomp.py`): synthetic 91 x 91 galaxies, Gaussian PSF FWHM 3 px, white noise, catalog-like
+starts (flux +-20 %, R_e x0.7-1.4, q +-0.15, PA +-15 deg), 40 per class (single Sersic n 1.5-4.5, exponential disc, bulge+disc B/T 0.15-0.7, n_b 1.5-4, nucleus + bulge + disc with 6-20 % nucleus), peak S/N ~150 ("hi"):
+* class recovered in 159/160 (99.4 %): 80/80 single / disc kept single (no false 2-component), 40/40 bulge+disc, 39/40 nucleus+bulge+disc (nucleus false-positive rate 0/120);
+  B/T bias +0.001, scatter 0.027 (NMAD 0.013), all 79 within 0.1; bulge R_e ratio 1.00 (NMAD 0.045), disc R_e 1.00 (0.011), n_b -> +0.007 (0.13), total magnitude +0.0001 (0.004), median chi2_red 0.999.
+* the fixed `bulge+disk` preset (de Vaucouleurs + exponential) from the same starts: median |B/T error| 0.056 vs 0.009, within 0.1 in 59 % vs 100 %; `auto_select` finds the two components in 95 % vs 98.8 %.
+  The 1-D profile guess alone: B/T bias +0.07, scatter 0.16 (a start, not a result).  Median time 13.9 s per object (3 candidate fits, 1 restart) vs 3.2 s for one preset fit.
+* low S/N ("lo", peak S/N ~25, 30 per class): single / disc 60/60 kept single; bulge+disc found 26/30 (4 called single: the BIC refuses what the data cannot support), nucleus classes 20/30 correct, 8 -> bulge+disc, 2 -> single;
+  B/T bias +0.03, scatter 0.08, 85 % within 0.1 (preset: 65 %).
+* a nucleus of 4 % of the light is degenerate with a compact high-n bulge (chi2 differs by 0.5): the step keeps bulge+disc; the 6-20 % nuclei are found.
+* Real HUDF F160W (24 extended objects mag 20-23, 0.06"/px): 10 single, 10 bulge+disc, 4 nucleus+bulge+disc; B/T of the 14 decomposed 0.06-0.73; median chi2_red 24.9 vs 29.9 for a plain single Sersic (real galaxies are not smooth:
+  chi2_red >> 1, median error scale 22), 3 objects with a bar-like signature, 2 without an isophote profile (preset starts).  M51 field (6 brightest catalog objects, mostly stars / compact): all single.
+  For the objects kept single the decomposition fit has a higher chi2 than the plain preset fit (57 vs 47 median): its profile-based start can land in a different local minimum; use `--decomp-restarts` or the `sersic` model when only a single Sersic is wanted.
+
+Limitations: no GALFIT comparison of the decompositions of real galaxies (only the multifit engine itself is compared, above); bulge, disc and nucleus only (no bar, ring, spiral, truncated or edge-disc components; bars are only flagged);
+bulge and disc share centre and are free in PA / q (a bar or a warp can be absorbed by the "bulge"); the selection is by BIC and sanity cuts, not a morphological classification; B/T is a model B/T of the fitted functions;
+isophote start needs a few resolved pixels (r_e < ~1 FWHM objects fall back to the presets); the error rescaling makes the choice conservative for very high S/N galaxies; run time ~10-15 s per object per core.
+
 ## Limitations
 The GALFIT advanced components (next section) are available only in config / feedme fits, not in the catalog mode (`--model` choices unchanged); the PSF of a component is evaluated at its start position (not re-evaluated while fitting);
 the sky is local to the cutout (n ≳ 4 profiles and large galaxies in small cutouts have the usual sky-wing degeneracy: fix the sky for those); errors are formal (no covariance between components in

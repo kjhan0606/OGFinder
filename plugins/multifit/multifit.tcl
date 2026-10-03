@@ -63,3 +63,47 @@ proc OGFMultifitMontage {} {
     pack $w.close -pady 3
     return $w
 }
+
+# ---- automatic structure decomposition (step autodecomp: CLI multifit.py --model decomp --columns ad) -----------------------------------
+proc OGFAutoDecompAfter {} {
+    foreach {k f} {results_file results.tsv model_file model.fits residual_file residual.fits montage_file montage.png decomp_file decomp.tsv decomp_plot decomp_plot.png} {
+	if {[file exists [OGFMultifitFile $f]]} {::ogf::cat::set multifit,$k [OGFMultifitFile $f]}
+    }
+    set f [OGFMultifitFile decomp.tsv]
+    if {[file exists $f]} {
+	set fd [open $f r]; set L [split [string trim [read $fd]] "\n"]; close $fd
+	set h [split [lindex $L 0] "\t"]
+	set it [lsearch $h AD_TYPE]
+	array set n {1 0 2 0 3 0}
+	foreach l [lrange $L 1 end] {
+	    set t [lindex [split $l "\t"] $it]
+	    if {[info exists n($t)]} {incr n($t)}
+	}
+	::ogf::cat::set multifit,decomp_counts [list $n(1) $n(2) $n(3)]
+	::ogf::status "Auto decomposition: $n(1) single Sersic, $n(2) bulge+disc, $n(3) nucleus+bulge+disc"
+    }
+    if {[::ogf::params::get multifit show-frames]} {catch {OGFMultifitOpenFrames {residual.fits model.fits}}}
+}
+
+proc OGFAutoDecompTable {} {
+    set f [OGFMultifitFile decomp.tsv]
+    if {![file exists $f]} {::ogf::status "Auto decomposition: nothing yet - run the step first"; return}
+    set fd [open $f r]; set txt [read $fd]; close $fd
+    OGFTextWindow "Auto decomposition ($f)" $txt
+}
+
+proc OGFAutoDecompPlot {} {
+    set png [OGFMultifitFile decomp_plot.png]
+    if {![file exists $png]} {::ogf::status "Auto decomposition: no plot yet - run the step first"; return}
+    set w .ogfdecompplot
+    if {[winfo exists $w]} {destroy $w}
+    toplevel $w
+    wm title $w "Auto decomposition: isophote profiles and fitted components"
+    catch {image delete ogfdecompimg}
+    image create photo ogfdecompimg -file $png
+    label $w.l -image ogfdecompimg
+    pack $w.l -fill both -expand 1
+    ttk::button $w.close -text Close -command [list destroy $w]
+    pack $w.close -pady 3
+    return $w
+}

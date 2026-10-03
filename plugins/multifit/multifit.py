@@ -26,9 +26,10 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, imageio, psfmodel as pm, multifit as mf, meta as ometa  # noqa: E402
+from ogfkit import tsvio, imageio, psfmodel as pm, multifit as mf, meta as ometa, autodecomp as ad  # noqa: E402
 
 COLUMNS = ['GF_X', 'GF_Y', 'GF_MAG', 'GF_MAGERR', 'GF_RE', 'GF_REERR', 'GF_N', 'GF_NERR', 'GF_Q', 'GF_PA', 'GF_BT', 'GF_MAG2', 'GF_SKY', 'GF_CHI2', 'GF_NCOMP', 'GF_NNEIGH', 'GF_RESFRAC', 'GF_FLAG']
+AD_COLUMNS = ['AD_TYPE', 'AD_MAG', 'AD_BT', 'AD_MAGB', 'AD_MAGD', 'AD_MAGN', 'AD_REB', 'AD_NB', 'AD_QB', 'AD_PAB', 'AD_RED', 'AD_QD', 'AD_PAD', 'AD_RE1', 'AD_N1', 'AD_DBIC', 'AD_CHI2', 'AD_BAR', 'AD_FLAG']
 G = {}
 
 
@@ -134,13 +135,22 @@ def fit_object(i):
             if res is None:
                 name = 'sersic'
                 res, _ = mf.fit_preset(cut, name, lx, ly, s['flux'], s['re'], s['q'], s['pa'], extra=extra, **kw)
+        elif name == 'decomp':
+            fw = max(2.355 * G['psf_sigma'], 1.5)
+            models = ('sersic', 'bulge+disk') + (() if a.nucleus == 'off' else ('nucleus+bulge+disk',))
+            d = ad.decompose(cut, lx, ly, psf=psf, rms=rcut, mask=cm, sky=a.sky, zp=zp, flux0=s['flux'], re0=s['re'], q0=s['q'], pa0=s['pa'], fwhm=fw, extra=extra,
+                             models=models, bic_margin=a.bic_margin, nucleus=a.nucleus, restarts=a.decomp_restarts, max_nfev=a.max_nfev, gain=a.gain or None)
+            if d['res'] is None:
+                raise RuntimeError('; '.join(d['notes']) or 'no decomposition converged')
+            res, name = d['res'], d['name']
+            out['decomp'] = d
         else:
             res, _ = mf.fit_preset(cut, name, lx, ly, s['flux'], s['re'], s['q'], s['pa'], extra=extra, **kw)
     except Exception as e:
         out['GF_FLAG'] = 2048
         out['err'] = str(e)
         return out
-    ncomp_t = len(mf.preset(name, 0, 0, 1, 1))
+    ncomp_t = out['decomp']['ntarget'] if 'decomp' in out else len(mf.preset(name, 0, 0, 1, 1))
     comps = res['components'][:ncomp_t]
     flag |= res['flags']
     if res['chi2_red'] > a.chi2_max:
@@ -164,9 +174,47 @@ def fit_object(i):
                GF_PA=dom.get('pa') if dom['kind'] != 'psf' else None, GF_BT=(first['flux'] / tot) if (len(comps) > 1 and tot > 0) else None,
                GF_MAG2=comps[1]['mag'] if len(comps) > 1 else None, GF_SKY=res['sky'], GF_CHI2=res['chi2_red'], GF_NCOMP=len(comps), GF_NNEIGH=nn, GF_RESFRAC=resfrac, GF_FLAG=flag,
                model_name=nameid, comps=[{k: v for k, v in c.items()} for c in comps], all_comps=[{k: v for k, v in c.items()} for c in res['components']], bbox=(cx0, cx1, cy0, cy1), tmod=tmod.astype(np.float32), nfev=res['nfev'], bic=res['bic'])
+    if 'decomp' in out:
+        out.update(decomp_row(out['decomp'], comps, tot, res, zp, flag))
+        out['decomp_plot'] = decomp_plot_data(out['decomp'], comps, a.mag_zeropoint)
+        out.pop('decomp')
     if a.keep_stamps:
         out['stamps'] = (cut.astype(np.float32), (res['model']).astype(np.float32), (res['residual']).astype(np.float32))
     return out
+
+
+def decomp_row(d, comps, tot, res, zp, flag):
+    """AD_* catalog columns and the rows of multifit_decomp.tsv for one decomposed object."""
+    name = d['name']
+    g = d.get('guess', {})
+    f = d.get('features', {})
+    row = dict(AD_TYPE=ad.TYPES[name], AD_MAG=(zp - 2.5 * math.log10(tot)) if tot > 0 else None, AD_CHI2=res['chi2_red'], AD_FLAG=d['flag'] + 256 * (res['flags'] & 255),
+               AD_BAR=1 if f.get('bar') else 0, DEC_MODEL=name, DEC_NOTE='; '.join(d['notes']))
+    b = d['bic']
+    row['AD_DBIC'] = (b['sersic'] - b[name]) if 'sersic' in b else None
+    if name == 'sersic':
+        c = comps[0]
+        row.update(AD_RE1=c.get('re'), AD_N1=c.get('n'))
+    else:
+        bulge, disc = comps[-2], comps[-1]
+        fb, fd = max(bulge['flux'], 0), max(disc['flux'], 0)
+        row.update(AD_BT=fb / (fb + fd) if fb + fd > 0 else None, AD_MAGB=bulge['mag'], AD_MAGD=disc['mag'], AD_REB=bulge['re'], AD_NB=bulge.get('n'), AD_QB=bulge['q'], AD_PAB=bulge['pa'],
+                   AD_RED=disc['re'], AD_QD=disc['q'], AD_PAD=disc['pa'])
+        if name == 'nucleus+bulge+disk':
+            row['AD_MAGN'] = comps[0]['mag']
+    gcs = g.get('comps', {}).get('bulge+disk') if g else None
+    row.update(DEC_GUESS_BT=g.get('bt_guess') if g else None, DEC_GUESS_BT1D=g.get('bt_1d') if g else None, DEC_NUC_RATIO=g.get('nucleus_ratio') if g else None,
+               DEC_GUESS_REB=gcs[0]['re'] if gcs else None, DEC_GUESS_NB=gcs[0]['n'] if gcs else None, DEC_GUESS_RED=gcs[1]['re'] if gcs else None,
+               DEC_EPS_OUT=f.get('eps_out'), DEC_EPS_IN=f.get('eps_in'), DEC_CONC=f.get('conc'), DEC_R50=g.get('r50') if g else None, DEC_BIC_SERSIC=b.get('sersic'),
+               DEC_BIC_BD=b.get('bulge+disk'), DEC_BIC_NBD=b.get('nucleus+bulge+disk'), DEC_SCALE=d.get('scale'), DEC_EDGEON=1 if f.get('edgeon') else 0, DEC_PROFILE=0 if (d['flag'] & ad.FLAGS['NOPROFILE']) else 1)
+    return row
+
+
+def decomp_plot_data(d, comps, zp):
+    g = d.get('guess', {})
+    gc = g.get('comps', {}).get('bulge+disk') if g else None
+    pr = d.get('profile')
+    return dict(name=d['name'], sma=None if pr is None else [float(v) for v in pr['sma']], I=None if pr is None else [float(v) for v in pr['I']], comps=[{k: c[k] for k in ('kind', 'flux', 're', 'n', 'q', 'pa') if k in c} for c in comps], guess=gc, bic=d['bic'], notes=d['notes'])
 
 
 def pick_objects(rows, sv, a):
@@ -359,6 +407,66 @@ def run_config(a, data, mask, cfg, hdr=None):
     return 0
 
 
+DEC_COLS = ['NUMBER', 'DEC_MODEL', 'AD_TYPE', 'AD_MAG', 'AD_BT', 'AD_MAGB', 'AD_MAGD', 'AD_MAGN', 'AD_REB', 'AD_NB', 'AD_QB', 'AD_PAB', 'AD_RED', 'AD_QD', 'AD_PAD', 'AD_RE1', 'AD_N1', 'AD_DBIC', 'AD_CHI2',
+            'AD_BAR', 'AD_FLAG', 'DEC_BIC_SERSIC', 'DEC_BIC_BD', 'DEC_BIC_NBD', 'DEC_SCALE', 'DEC_GUESS_BT', 'DEC_GUESS_BT1D', 'DEC_GUESS_REB', 'DEC_GUESS_NB', 'DEC_GUESS_RED', 'DEC_NUC_RATIO', 'DEC_EPS_OUT',
+            'DEC_EPS_IN', 'DEC_CONC', 'DEC_R50', 'DEC_EDGEON', 'DEC_PROFILE', 'DEC_NOTE']
+
+
+def write_decomp(a, W, results):
+    rec = [r for r in results if 'DEC_MODEL' in r]
+    rec.sort(key=lambda r: r['i'])
+    tsvio.write_table(W('decomp.tsv'), DEC_COLS, rec)
+    counts = {}
+    for r in rec:
+        counts[r['DEC_MODEL']] = counts.get(r['DEC_MODEL'], 0) + 1
+    sys.stderr.write('autodecomp: %d objects: %s\n' % (len(rec), ', '.join('%s %d' % kv for kv in sorted(counts.items()))))
+    try:
+        decomp_plot(W('decomp_plot.png'), sorted([r for r in results if r.get('decomp_plot')], key=lambda r: r['i']), a.montage or 6)
+    except Exception as e:
+        sys.stderr.write('decomp plot failed: %s\n' % e)
+    try:
+        ometa.update(os.path.join(os.path.dirname(os.path.abspath(a.work)), 'catalog_meta.json'), 'autodecomp',
+                     dict(n=len(rec), **{k.replace('+', '_'): v for k, v in counts.items()}), nrows=None)
+    except Exception:
+        pass
+
+
+def decomp_plot(path, results, n=6):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    results = [r for r in results if r['decomp_plot'].get('sma')][:max(n, 1)]
+    if not results:
+        return
+    nc = min(3, len(results))
+    nr = (len(results) + nc - 1) // nc
+    fig, ax = plt.subplots(nr, nc, figsize=(4.4 * nc, 3.4 * nr), squeeze=False)
+    for k, r in enumerate(results):
+        A = ax[k // nc][k % nc]
+        d = r['decomp_plot']
+        sma = np.array(d['sma']); I = np.array(d['I'])
+        m = I > 0
+        A.semilogy(sma[m], I[m], 'k.', ms=4, label='isophotes')
+        rr = np.linspace(max(sma.min(), 0.3), sma.max(), 200)
+        tot = np.zeros_like(rr)
+        for c in d['comps']:
+            if c['kind'] == 'sersic':
+                ie = ad.sersic_ie_from_flux(c['flux'], c['re'], c['n'], c['q']); y = ad.sersic_profile(rr, ie, c['re'], c['n'])
+            elif c['kind'] == 'exp':
+                y = ad.exp_profile(rr, c['flux'] / (2 * math.pi * (c['re'] / 1.678) ** 2 * c['q']), c['re'] / 1.678)
+            else:
+                continue
+            tot += y
+            A.semilogy(rr, np.maximum(y, 1e-12), '-', lw=1, label='%s re=%.1f' % (c['kind'], c['re']))
+        A.semilogy(rr, np.maximum(tot, 1e-12), 'r-', lw=1.5, label='sum (no PSF)')
+        A.set_ylim(max(I[m].min() * 0.5, I.max() * 1e-5), I.max() * 2)
+        A.set_title('#%s  %s  dBIC(sersic)=%.0f' % (r['NUMBER'], d['name'], (d['bic'].get('sersic', np.nan) - d['bic'][d['name']])), fontsize=8)
+        A.set_xlabel('sma [px]', fontsize=7); A.legend(fontsize=6)
+    for k in range(len(results), nr * nc):
+        ax[k // nc][k % nc].axis('off')
+    fig.tight_layout(); fig.savefig(path, dpi=75); plt.close(fig)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('image')
@@ -369,7 +477,7 @@ def main(argv=None):
     ap.add_argument('--psf-model', default='')
     ap.add_argument('--psf', default='')
     ap.add_argument('--psf-fwhm', type=float, default=0.0)
-    ap.add_argument('--model', default='sersic', choices=['sersic', 'exp', 'dev', 'psf', 'bulge+disk', 'psf+sersic', 'auto'])
+    ap.add_argument('--model', default='sersic', choices=['sersic', 'exp', 'dev', 'psf', 'bulge+disk', 'psf+sersic', 'auto', 'decomp'])
     ap.add_argument('--neighbours', default='fit', choices=['fit', 'mask', 'ignore'])
     ap.add_argument('--objects', default='')
     ap.add_argument('--max-objects', type=int, default=100)
@@ -391,6 +499,9 @@ def main(argv=None):
     ap.add_argument('--restarts', type=int, default=2, help='config / feedme fits: number of extra starts (R_e and n rescaled) tried after the given one; the lowest chi2 is kept (0 = fit only from the given start)')
     ap.add_argument('--mask-catalog', default='', help='config / feedme fits: neighbour masking - TSV catalog (X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE); the ellipses of its objects inside the fitted box are masked, except those within --mask-exclude px of a fitted component')
     ap.add_argument('--mask-exclude', type=float, default=4.0, help='--mask-catalog: objects closer than this (pixels) to a fitted component centre are not masked')
+    ap.add_argument('--columns', default='gf', choices=['gf', 'ad'], help='catalog columns of the result: GF_* (components of the fit) or AD_* (structure decomposition: type, B/T, bulge and disc parameters)')
+    ap.add_argument('--nucleus', default='auto', choices=['auto', 'always', 'off'], help='--model decomp: try a point-source nucleus (auto = when the profile shows a central excess)')
+    ap.add_argument('--decomp-restarts', type=int, default=1, help='--model decomp: extra starts (R_e / n rescaled) per candidate model')
     ap.add_argument('--export-feedme', default='', help='write the fitted model as a GALFIT feedme (file; with --config) or into this directory (catalog mode: one galfit_<NUMBER>.feedme per fitted object)')
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
@@ -442,7 +553,7 @@ def main(argv=None):
     out_rows = []
     for i, r in enumerate(rows):
         res = by.get(i)
-        out_rows.append((r['NUMBER'], {c: (res.get(c) if res else None) for c in COLUMNS}))
+        out_rows.append((r['NUMBER'], {c: (res.get(c) if res else None) for c in (AD_COLUMNS if a.columns == 'ad' else COLUMNS)}))
     full_m = np.zeros(data.shape, np.float32)
     recs = []
     for r in results:
@@ -493,7 +604,9 @@ def main(argv=None):
                      dict(model=a.model, neighbours=a.neighbours, n_fitted=len(results), n_clean=nconv, psf=desc), nrows=len(rows))
     except Exception:
         pass
-    tsvio.write_columns(COLUMNS, out_rows)
+    if any('DEC_MODEL' in r for r in results):
+        write_decomp(a, W, results)
+    tsvio.write_columns(AD_COLUMNS if a.columns == 'ad' else COLUMNS, out_rows)
     return 0
 
 

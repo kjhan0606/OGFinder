@@ -1,0 +1,96 @@
+{
+ "confusion (rows: truth, columns: selected)": {
+  "sersic": {
+   "sersic": 30
+  },
+  "disc": {
+   "sersic": 30
+  },
+  "bulge+disk": {
+   "bulge+disk": 26,
+   "sersic": 4
+  },
+  "nucleus+bulge+disk": {
+   "nucleus+bulge+disk": 20,
+   "bulge+disk": 8,
+   "sersic": 2
+  }
+ },
+ "accuracy_exact": 0.8833333333333333,
+ "single_correct_frac": 1.0,
+ "two_comp_found_frac": 0.9,
+ "baseline_auto_select": {
+  "single_correct": 1.0,
+  "two_comp_found": 0.8333333333333334
+ },
+ "bt_auto": {
+  "n": 54,
+  "bias": 0.027274423854144553,
+  "scatter": 0.07893117351183125,
+  "nmad": 0.0541213101779985,
+  "within_0p1": 0.8518518518518519
+ },
+ "bt_by_truth": {
+  "0.15": {
+   "n": 14,
+   "bias": 0.009060099524366446,
+   "scatter": 0.05030746800994748
+  },
+  "0.3": {
+   "n": 17,
+   "bias": 0.02857598965884098,
+   "scatter": 0.0738345559458256
+  },
+  "0.5": {
+   "n": 13,
+   "bias": 0.06752171017012913,
+   "scatter": 0.09056746768826271
+  },
+  "0.7": {
+   "n": 10,
+   "bias": -0.00175965616292999,
+   "scatter": 0.08217406415908834
+  }
+ },
+ "reb_ratio": {
+  "median": 1.0256515877430934,
+  "nmad": 0.28173998661540034
+ },
+ "red_ratio": {
+  "median": 0.9856923030464931,
+  "nmad": 0.0542540382316926
+ },
+ "nb_diff": {
+  "median": 0.20650057602063132,
+  "nmad": 0.617389468020462
+ },
+ "qd_diff": {
+  "median": -0.00180558967419428,
+  "nmad": 0.027111886062331197
+ },
+ "magtot_err": {
+  "median": -0.004474652070718399,
+  "nmad": 0.017649217209341907
+ },
+ "bt_vs_baseline_fixed_preset (same objects)": {
+  "n": 54,
+  "auto_median_abs": 0.05255822933585144,
+  "baseline_median_abs": 0.05640525516745909,
+  "auto_within_0p1": 0.8518518518518519,
+  "baseline_within_0p1": 0.6481481481481481
+ },
+ "bt_1d_guess": {
+  "n": 59,
+  "bias": 0.04513487738266212,
+  "scatter": 0.19080008359472125,
+  "fallback_frac": 0.016666666666666666
+ },
+ "nucleus_detected_frac (nucleus truth)": 0.6666666666666666,
+ "nucleus_false_frac (no nucleus truth)": 0.0,
+ "chi2_red_median": 0.9999329798866635,
+ "time_auto_median_s": 10.047330021858215,
+ "time_baseline_median_s": 2.595401167869568,
+ "n_per_class": 30,
+ "snr": "lo",
+ "wall_s": 278.28654193878174
+}

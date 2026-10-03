@@ -324,6 +324,34 @@ proc sec_photozq {} {
     R pzq_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_autodecomp {} {
+    ::ogf::params::put multifit max-objects 3
+    ::ogf::params::put multifit neighbours mask
+    ::ogf::params::put multifit psf-fwhm 3.0
+    ::ogf::params::put multifit objects {}
+    ::ogf::params::put multifit ad-restarts 0
+    ::ogf::params::put multifit ad-nucleus auto
+    lassign [run_step multifit autodecomp] ok recs
+    R autodecomp_ran $ok $recs
+    R autodecomp_recorded [expr {[lindex $recs 0 0] eq "analysis.autodecomp"}] $recs
+    set cols [::ogf::cat::columns]
+    R autodecomp_columns [expr {"AD_TYPE" in $cols && "AD_MAG" in $cols && "AD_DBIC" in $cols && "AD_CHI2" in $cols && "AD_FLAG" in $cols && "AD_BT" in $cols}]
+    R autodecomp_rows [expr {[nonempty AD_TYPE] >= 2 && [nonempty AD_TYPE] <= 3}] "rows=[nonempty AD_TYPE]"
+    set types [lsearch -all -inline -not [col_values AD_TYPE] {}]
+    R autodecomp_types [expr {[llength $types] > 0 && [llength [lsearch -all -inline -not $types 1]] + [llength [lsearch -all -inline -not $types 2]] + [llength [lsearch -all -inline -not $types 3]] >= 2 * [llength $types]}] $types
+    set w [file join [OGFSessWorkDir] multifit]
+    foreach f {multifit_decomp.tsv multifit_decomp_plot.png multifit_results.tsv multifit_residual.fits} {
+	R autodecomp_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 50}]
+    }
+    R autodecomp_keys [expr {[::ogf::cat::exists multifit,decomp_file] && [::ogf::cat::exists multifit,decomp_counts]}] [::ogf::cat::get multifit,decomp_counts ?]
+    set pw [OGFAutoDecompPlot]
+    R autodecomp_plot_window [expr {[winfo exists $pw] && [image width ogfdecompimg] > 300}] "[image width ogfdecompimg]x[image height ogfdecompimg]"
+    destroy $pw
+    OGFAutoDecompTable; update
+    R autodecomp_argv_templated [expr {[string match {*--model decomp*} [dict get [lindex [::ogf::session::steps] end] argv_t]] && [string match {*@{WORK}/multifit*} [dict get [lindex [::ogf::session::steps] end] argv_t]]}]
+    R autodecomp_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_sedcodes {} {
     set root [file normalize [file join [::ogf::step::plugin_dir sedcodes] .. ..]]
     set mock [file join $root sed_adapters mocks]
@@ -704,7 +732,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel stacking depth sedcodes photozq cluster spectra xmatch lightcurves batch repro} {
+    foreach sec {isophote completeness daophot psfex multifit autodecomp morphext noisemodel stacking depth sedcodes photozq cluster spectra xmatch lightcurves batch repro} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

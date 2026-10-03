@@ -1,0 +1,5 @@
+{"data":"HUDF F160W crop, 24 extended objects mag 20-23 (A>4); M51 6 brightest catalog objects",
+ "hudf":{"types":{"sersic":10,"bulge+disk":10,"nucleus+bulge+disk":4},"BT_range_decomposed":[0.06,0.73],
+  "median_chi2red_decomp":24.9,"median_chi2red_single_sersic":29.9,"median_chi2red_kept_single_decomp":57.4,"median_chi2red_kept_single_plain":47.4,
+  "bar_signatures":3,"no_profile":2,"median_error_scale":22.1},
+ "m51":{"types":{"sersic":6}}}

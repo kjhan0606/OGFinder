@@ -1,0 +1,94 @@
+{
+ "confusion (rows: truth, columns: selected)": {
+  "sersic": {
+   "sersic": 40
+  },
+  "disc": {
+   "sersic": 40
+  },
+  "bulge+disk": {
+   "bulge+disk": 40
+  },
+  "nucleus+bulge+disk": {
+   "nucleus+bulge+disk": 39,
+   "sersic": 1
+  }
+ },
+ "accuracy_exact": 0.99375,
+ "single_correct_frac": 1.0,
+ "two_comp_found_frac": 0.9875,
+ "baseline_auto_select": {
+  "single_correct": 1.0,
+  "two_comp_found": 0.95
+ },
+ "bt_auto": {
+  "n": 79,
+  "bias": 0.0007721847770720961,
+  "scatter": 0.026958779508902686,
+  "nmad": 0.01338503641994903,
+  "within_0p1": 1.0
+ },
+ "bt_by_truth": {
+  "0.15": {
+   "n": 20,
+   "bias": 0.005707363147685736,
+   "scatter": 0.029845788028685878
+  },
+  "0.3": {
+   "n": 23,
+   "bias": -0.003191547583671338,
+   "scatter": 0.02991490967804364
+  },
+  "0.5": {
+   "n": 17,
+   "bias": 0.008517315728385067,
+   "scatter": 0.02095890351656643
+  },
+  "0.7": {
+   "n": 19,
+   "bias": -0.006554391501217078,
+   "scatter": 0.021350812066847864
+  }
+ },
+ "reb_ratio": {
+  "median": 1.000879400899381,
+  "nmad": 0.04477583260141385
+ },
+ "red_ratio": {
+  "median": 0.9985321910531668,
+  "nmad": 0.010937453934958489
+ },
+ "nb_diff": {
+  "median": 0.0070077753497770345,
+  "nmad": 0.13193446125206154
+ },
+ "qd_diff": {
+  "median": 0.00020407765776919717,
+  "nmad": 0.005161374482118272
+ },
+ "magtot_err": {
+  "median": 0.0001326169973321356,
+  "nmad": 0.0036970110320624326
+ },
+ "bt_vs_baseline_fixed_preset (same objects)": {
+  "n": 79,
+  "auto_median_abs": 0.009195139141351505,
+  "baseline_median_abs": 0.056270393599812424,
+  "auto_within_0p1": 1.0,
+  "baseline_within_0p1": 0.5949367088607594
+ },
+ "bt_1d_guess": {
+  "n": 80,
+  "bias": 0.07237724680060938,
+  "scatter": 0.1573157196800707,
+  "fallback_frac": 0.0
+ },
+ "nucleus_detected_frac (nucleus truth)": 0.975,
+ "nucleus_false_frac (no nucleus truth)": 0.0,
+ "chi2_red_median": 0.9987388023037687,
+ "time_auto_median_s": 13.882152438163757,
+ "time_baseline_median_s": 3.2164013385772705,
+ "n_per_class": 40,
+ "snr": "hi",
+ "wall_s": 421.93155097961426
+}

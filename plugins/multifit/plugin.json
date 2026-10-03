@@ -229,6 +229,144 @@
    "label": "Component Table...",
    "proc": "OGFMultifitTable",
    "session": "NONE"
+  },
+  {
+   "id": "autodecomp",
+   "label": "Auto Decomposition (isophote -> multifit)",
+   "title": "Auto structure decomposition",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.autodecomp",
+   "catalog_tmp": "autodecomp",
+   "done_status": "structure decomposition done",
+   "after": "OGFAutoDecompAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/multifit.py",
+    "{image}",
+    "--work",
+    "{work}/multifit",
+    "--catalog",
+    "{catalog}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,model}",
+     "argv": [
+      "--psf-model",
+      "{cat:psf,model}"
+     ]
+    },
+    {
+     "if_file": "{cat:psf,file}",
+     "argv": [
+      "--psf",
+      "{cat:psf,file}"
+     ]
+    },
+    "--psf-fwhm",
+    "{psf-fwhm}",
+    "--model",
+    "decomp",
+    "--columns",
+    "ad",
+    "--nucleus",
+    "{ad-nucleus}",
+    "--decomp-restarts",
+    "{ad-restarts}",
+    "--neighbours",
+    "{neighbours}",
+    "--sky",
+    "{sky}",
+    "--objects",
+    "{objects}",
+    "--max-objects",
+    "{max-objects}",
+    "--max-neighbours",
+    "{max-neighbours}",
+    "--neighbour-radius",
+    "{neighbour-radius}",
+    "--size-scale",
+    "{size-scale}",
+    "--min-size",
+    "{min-size}",
+    "--max-size",
+    "{max-size}",
+    "--rms",
+    "{rms}",
+    "--gain",
+    "{gain}",
+    "--chi2-max",
+    "{chi2-max}",
+    "--bic-margin",
+    "{bic-margin}",
+    "--max-nfev",
+    "{max-nfev}",
+    "--montage",
+    "{montage}",
+    {
+     "if": "no-residual",
+     "argv": [
+      "--no-residual"
+     ]
+    },
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--n-workers",
+    "{extract:n-workers}",
+    {
+     "if": "export-feedme",
+     "argv": [
+      "--export-feedme",
+      "{work}/multifit/galfit"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "AD_TYPE",
+     "AD_MAG",
+     "AD_BT",
+     "AD_MAGB",
+     "AD_MAGD",
+     "AD_MAGN",
+     "AD_REB",
+     "AD_NB",
+     "AD_QB",
+     "AD_PAB",
+     "AD_RED",
+     "AD_QD",
+     "AD_PAD",
+     "AD_RE1",
+     "AD_N1",
+     "AD_DBIC",
+     "AD_CHI2",
+     "AD_BAR",
+     "AD_FLAG"
+    ]
+   }
+  },
+  {
+   "id": "decomptable",
+   "label": "Decomposition Table...",
+   "proc": "OGFAutoDecompTable",
+   "session": "NONE"
+  },
+  {
+   "id": "decompplot",
+   "label": "Decomposition Profiles...",
+   "proc": "OGFAutoDecompPlot",
+   "session": "NONE"
   }
  ],
  "params": [
@@ -238,7 +376,7 @@
    "type": "choice",
    "default": "sersic",
    "group": "Model",
-   "help": "sersic = free Sersic; exp / dev = exponential / de Vaucouleurs; psf = point source; bulge+disk = de Vaucouleurs + exponential with a common centre (B/T in GF_BT); psf+sersic = point source + host galaxy (common centre); auto = lowest BIC of psf / sersic / bulge+disk (a more complex model must win by the BIC margin).",
+   "help": "sersic = free Sersic; exp / dev = exponential / de Vaucouleurs; psf = point source; bulge+disk = de Vaucouleurs + exponential with a common centre (B/T in GF_BT); psf+sersic = point source + host galaxy (common centre); auto = lowest BIC of psf / sersic / bulge+disk (a more complex model must win by the BIC margin). decomp = automatic structure decomposition: isophote profile -> starting guesses -> sersic / bulge+disc (free-n Sersic bulge + exponential disc) / nucleus+bulge+disc fits, lowest BIC with sanity tests (see the Auto Decomposition step).",
    "choices": [
     "sersic",
     "exp",
@@ -246,7 +384,8 @@
     "psf",
     "bulge+disk",
     "psf+sersic",
-    "auto"
+    "auto",
+    "decomp"
    ]
   },
   {
@@ -468,6 +607,29 @@
    "default": false,
    "group": "GALFIT",
    "help": "Write the fitted model as GALFIT feedme files (galfit_<NUMBER>.feedme + PSF stamp, or galfit.feedme for a config fit) into <work>/multifit/galfit, so the same fit can be run or checked with GALFIT."
+  },
+  {
+   "name": "ad-nucleus",
+   "label": "Nucleus (point source)",
+   "type": "choice",
+   "default": "auto",
+   "group": "Auto decomposition",
+   "help": "auto = fit a PSF nucleus + bulge + disc when the isophote profile shows a central excess; always; off.",
+   "choices": [
+    "auto",
+    "always",
+    "off"
+   ]
+  },
+  {
+   "name": "ad-restarts",
+   "label": "Extra starts per model",
+   "type": "int",
+   "default": 1,
+   "group": "Auto decomposition",
+   "help": "Extra fits per candidate model from rescaled R_e / n starts (the lowest chi2 wins); 0 = only the profile-based start.",
+   "min": 0,
+   "max": 4
   }
  ]
 }
