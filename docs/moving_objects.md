@@ -362,6 +362,46 @@ Real BB89 end-to-end with `--source-noise --astrom measure` (CLI, as the earlier
 * No colour term, no differential chromatic refraction, no handling of correlated noise from drizzle/resampling.
 * The options are exposed in the CLI/GUI (next section) and are recorded in the session argv only when they differ from the default.
 
+## Linking precision: orbit-population prior and known-asteroid comparison (precision batch item 4)
+
+`moving/orbitlink.py` adds a precision stage to the tracklet linker for **fixed-observer** (ground-based) data: a synthetic population of bound two-body orbits
+(JPL SBDB elements, `a` 1.5-5.5 AU, H <= 19.5, 1.42 M objects; random mean anomaly, real Earth state at the epoch, HG magnitudes, V < 22) is propagated to the
+field to give the density of apparent motion vectors (east, north; arcsec/h).  A Gaussian kernel density (bandwidth 3 arcsec/h) defines a highest-density
+region; tracklets whose rate vector lies outside the 99 % region are dropped.  No data of the field are used and the known objects are not in the prior.
+Use: `P.link_detections(..., orbit_prior='auto'|elements.npz|RatePrior, orbit_prior_fraction=0.99)` or `ds9_moving.py --mode link --orbit-prior auto`
+(default off, the HST path keeps its parallax-based `bound_orbit` cut).  `fetch_elements` downloads the table once (~145 MB query) to
+`~/.cache/ogfinder_regression/sbdb_elements_H19.5.npz`.  Tests: `moving/tests/test_orbitlink.py` (synthetic elements, no network).
+
+**Real-field comparison** (`moving/validation/sdss_known_asteroids.py`, reports `ska_c3.json`, `ska_c4.json`): SDSS run 94 (Stripe 82, 1998-09-19, near opposition),
+fields 136-167, camcols 3 and 4, five exposures (r, i, u, z, g) 72 s apart, detections from the existing detector, linker `link_exposures` tile by tile in RA with
+fixed observer, rates 10-80 arcsec/h, tolerance 0.8 arcsec.  Truth: IMCCE SkyBoT (observer 645) objects, matched by *predicted motion* (offset <= 3 arcsec,
+tolerance 0.6 arcsec, moves >= 1.2 arcsec); the **ceiling** is the number of known objects detected in >= 3 bands.  Precision is a **lower bound** (an unmatched tracklet
+can be an unknown real asteroid or a SkyBoT-faint object).
+
+| field | ceiling (>=4 / 5 bands) | stage | tracklets | true | precision (lower bound) | recall |
+|---|---|---|---|---|---|---|
+| camcol 3 (39,525 det, 231 known) | 60 (33 / 19) | baseline linker | 342 | 49 | 0.14 | 0.82 |
+| | | orbit prior 95 % | 70 | 47 | 0.67 | 0.78 |
+| | | **orbit prior 99 %** | 83 | 49 | 0.59 | 0.82 |
+| | | 99.9 % | 108 | 49 | 0.45 | 0.82 |
+| camcol 4 (38,869 det, 222 known), nothing fitted | 69 (23 / 14) | baseline linker | 350 | 67 | 0.19 | 0.97 |
+| | | 95 % | 88 | 63 | 0.72 | 0.91 |
+| | | **99 %** | 110 | 67 | 0.61 | 0.97 |
+| | | 99.9 % | 129 | 67 | 0.52 | 0.97 |
+
+Kept tracklets by number of members (true / total, 99 %): camcol 3: 5 members 18/21, 4: 14/21, 3: 17/41; camcol 4: 5: 14/16, 4: 10/15, 3: 43/79 - the >= 4-exposure
+tracklets are > 85 % real, the 3-exposure ones are where the remaining false links are.  Link time ~65 s per camcol.  The 99 % level was chosen on camcol 3 and applied
+unchanged to camcol 4.  At the 99 % level the prior removes 76 % / 69 % of the baseline tracklets (camcol 3 / 4) without losing any matched one (49 -> 49, 67 -> 67); the population median rate at the field
+(-31, -13) arcsec/h agrees with the known objects (-31, -14).
+
+**Limitations / not done**
+* This is *rate-prior vetting from an orbit population*, **not** orbit-fit linking across nights: SDSS gives five exposures within 5 min, so no orbit can be determined, and the
+  cross-night (e.g. HST multi-visit or survey-night) orbit-fit linker (IOD + fit over tracklet pairs) is **not implemented**.
+* Osculating two-body population with a in 1.5-5.5 AU and H <= 19.5: NEOs, comets, Centaurs/TNOs and objects fainter in H (but near enough to be detected) are not in the prior and
+  would be dropped when their motion lies outside the region (SkyBoT shows none of the matched ones lost at 99 % in these two fields, but both are near opposition at low ecliptic latitude).
+  The prior is specific to the field position and epoch (recomputed per call, ~tens of seconds with the 1.4 M table).
+* Two fields of one night and one survey; truth from SkyBoT (MPC-known only); precision is a lower bound; the 3-exposure subset is still dominated by false links.
+
 ## Session recorder: Moving Objects steps
 
 The eight steps (`moving.align/difference/link/identify/orbit/transients/lightcurve/export`) are recorded and exported by

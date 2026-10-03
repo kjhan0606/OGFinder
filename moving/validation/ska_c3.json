@@ -1,0 +1,60 @@
+{
+ "camcol": 3,
+ "n_detections": 39525,
+ "n_known": 231,
+ "ceiling": 60,
+ "ceiling_ge4": 33,
+ "ceiling_5": 19,
+ "link_seconds": 67.11780619621277,
+ "baseline": {
+  "n_tracklets": 342,
+  "n_true": 49,
+  "n_other": 293,
+  "precision_lower_bound": 0.14327485380116958,
+  "recovered": 49,
+  "ceiling": 60,
+  "recall": 0.8166666666666667
+ },
+ "orbit_stage_0.95": {
+  "n_tracklets": 70,
+  "n_true": 47,
+  "n_other": 23,
+  "precision_lower_bound": 0.6714285714285714,
+  "recovered": 47,
+  "ceiling": 60,
+  "recall": 0.7833333333333333
+ },
+ "orbit_stage_0.99": {
+  "n_tracklets": 83,
+  "n_true": 49,
+  "n_other": 34,
+  "precision_lower_bound": 0.5903614457831325,
+  "recovered": 49,
+  "ceiling": 60,
+  "recall": 0.8166666666666667
+ },
+ "orbit_stage_0.999": {
+  "n_tracklets": 108,
+  "n_true": 49,
+  "n_other": 59,
+  "precision_lower_bound": 0.4537037037037037,
+  "recovered": 49,
+  "ceiling": 60,
+  "recall": 0.8166666666666667
+ },
+ "kept_by_members_true_total": {
+  "5": [
+   18,
+   21
+  ],
+  "4": [
+   14,
+   21
+  ],
+  "3": [
+   17,
+   41
+  ]
+ },
+ "prior_population_size": 22306
+}

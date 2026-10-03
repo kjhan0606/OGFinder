@@ -148,12 +148,15 @@ def detection_veto(dets, chip_shapes=None, stationary_arcsec=0.2, stationary_min
 
 def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_exposures=3,
                     classes=("trail", "point", "artefact_cr", "artefact_edge"), max_per_exposure=400, veto=True, chip_shapes=None,
-                    veto_stats=None, use_rb=True, rb_min=0.0, rb_snr_min=6.0, use_lac_cr=True, **kw):
+                    veto_stats=None, use_rb=True, rb_min=0.0, rb_snr_min=6.0, use_lac_cr=True, orbit_prior=None, orbit_prior_fraction=0.99, **kw):
     """Select detections and link them across exposures (see tracklet.link_exposures).
 
     `veto` (default True; or a dict of `detection_veto` options) removes stationary / template-residual / chip-edge detections from the pool
     before the per-exposure cap; `veto_stats` (dict) receives the counts.  `chip_shapes` {chip name: (ny, nx)} enables the edge rule.
-    The single-exposure class is only a soft veto here (sharpness test instead): in data with a dense archive cosmic-ray flag a real mover is often
+    `orbit_prior` (RatePrior, element table dict / .npz path, or 'auto') vets the tracklets against the apparent-motion distribution of a bound
+    main-belt/Hilda/Trojan orbit population seen from the observer at the field (moving.orbitlink): tracklets outside the `orbit_prior_fraction` highest-density
+    region are dropped (`log_prior` is added to each kept tracklet).  Off by default; meant for fixed-observer data (ground-based surveys); HST data
+    already have the parallax-based `bound_orbit` cut.  The single-exposure class is only a soft veto here (sharpness test instead): in data with a dense archive cosmic-ray flag a real mover is often
     labelled `artefact_cr`/`artefact_edge` in one or two exposures, whereas random CR hits never line up on a constant-motion
     track.  Instead the brightest `max_per_exposure` positive detections of the allowed classes enter the linker, and the
     class of each member is reported with the tracklet (a tracklet needs >= min_exposures members, so a single mislabelled
@@ -208,6 +211,14 @@ def link_detections(dets, chips_by_ex_offsets, snr_min=8.0, tol_arcsec=1.5, min_
                             x_chip=_f(d.get("x_chip")), y_chip=_f(d.get("y_chip")), chip=d.get("chip"), neg_frac=_f(d.get("neg_frac")),
                             a_pix=_f(d.get("a_pix")), elong=_f(d.get("elong")), rb=_f(d.get("rb"))))
     trs = T.link_exposures(sel, tol_arcsec=tol_arcsec, min_exposures=min_exposures, obs_off_au=chips_by_ex_offsets, **kw)
+    if orbit_prior is not None and trs:
+        from . import orbitlink as OL
+        pr = OL.resolve_prior(orbit_prior, trs)
+        if pr is not None:
+            n0 = len(trs)
+            trs = OL.vet_tracklets(trs, pr, orbit_prior_fraction, drop=True)
+            if veto_stats is not None:
+                veto_stats["orbit_prior_dropped"] = n0 - len(trs)
     return trs
 
 

@@ -219,7 +219,7 @@ def m_link(a):
     shapes = {c.name: tuple(c.shape) for c in chips}
     vst = {}
     trs = P.link_detections(dets, obs_off, snr_min=a.snr, tol_arcsec=a.tol, min_exposures=a.min_exposures, max_per_exposure=a.max_per_exposure,
-                            chip_shapes=shapes, veto_stats=vst)
+                            chip_shapes=shapes, veto_stats=vst, orbit_prior=a.orbit_prior, orbit_prior_fraction=a.orbit_prior_fraction)
     trs = trs[:a.max_tracklets]
     if vst:
         util.log("veto: " + ", ".join("%s=%d" % kv for kv in sorted(vst.items())))
@@ -478,6 +478,8 @@ def main(argv=None):
     ap.add_argument("--template-psf", default="target", choices=["target", "measure"], help="difference: PSF of the template (default: the target PSF)")
     ap.add_argument("--tol", type=float, default=0.5)
     ap.add_argument("--min-exposures", type=int, default=3)
+    ap.add_argument("--orbit-prior", default=None, help="link: vet tracklets against the apparent-motion distribution of a bound-orbit population: element table .npz or 'auto' (SBDB, cached)")
+    ap.add_argument("--orbit-prior-fraction", type=float, default=0.99, help="link: keep tracklets inside this highest-density fraction of the population (default 0.99)")
     ap.add_argument("--max-per-exposure", type=int, default=900)
     ap.add_argument("--max-tracklets", type=int, default=400)
     ap.add_argument("--tracklet", type=int)

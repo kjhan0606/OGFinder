@@ -124,3 +124,9 @@ New plugin (chip Lens, 7 CLI steps + results dialog, docs/lensmodel.md): SIE + s
 ### R18 (precision batch item 3) - unified photometric error model (`ogfkit/photerr.py`; Noise plugin `--sky-annulus --psf`; DAOPHOT `--noise-meta`)
 * One module adds sky (correlated law or measured local-sky law), Poisson, sky-estimation, background-systematic, neighbour-contamination and aperture-correction terms. Duplicates replaced without changing numbers (noise.flux_error, depth blank-circle sampler, daophot.phot variance); new Noise columns NM_SKYERR / NM_FLUXERR_LOC / NM_CONTAM / NM_FLUXERR_TOT only when the new options are set (cat_behavior golden unchanged).
 * Blank-aperture pull std (ideal 1): naive 1.7-3.7, measured local law 0.94-1.07 (synthetic) and 0.97-1.00 (real HUDF F160W; the global-sky law gives 0.46-0.72 there). Injection-recovery: isolated stars 0.95-1.07; close pairs 4.3-4.6 -> 1.8-2.0 with the contamination model (residual from undetected neighbours); real-image injection aperture correction off by 2-8 %. Docs: docs/noisemodel.md; 7 new tests (noisemodel_tests 15), validation/photerr_report.json.
+
+### R19 (precision batch item 4) - moving-object linking precision: orbit-population prior (`moving/orbitlink.py`, `link_detections(orbit_prior=...)`, `ds9_moving.py --mode link --orbit-prior`)
+* Bound-orbit population (SBDB elements, 1.42 M objects) -> density of apparent rate vectors at the field -> tracklets outside the 99 % highest-density region dropped; default off.
+* Real SDSS Stripe 82 run 94 (camcols 3, 4; five exposures) vs IMCCE SkyBoT: precision (lower bound) 0.14 -> 0.59 / 0.19 -> 0.61 at recall 0.82 -> 0.82 / 0.97 -> 0.97 (ceiling 60 / 69 objects in >= 3 bands); level chosen on camcol 3, applied unchanged to camcol 4.
+* Not done: cross-night orbit-fit (IOD) linking; NEOs/comets/TNOs not in the prior.  Details in docs/moving_objects.md.
+
