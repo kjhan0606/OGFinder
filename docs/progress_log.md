@@ -144,3 +144,9 @@ New plugin (chip Lens, 7 CLI steps + results dialog, docs/lensmodel.md): SIE + s
 * 11 cases (extract, noisemodel x2, depth, psfex, stacking, isophote, multifit, moving, photo-z, lens) on a HUDF12 F160W crop, SDSS Stripe 82 run 94, SDSS photo-z set and HST J0946+1006; data fetched on demand into `$OGF_DATA_CACHE`; unreachable data -> SKIP.
 * `regression/baselines.json` holds self-baselines (current code), not truth; wired into `scripts/run_all_checks.sh` as `regression_tests` (offline pytest) and `regression_data` (long).  Not covered: ai_bridge, cluster, spectra, sedcodes, lightcurves, xmatch, daophot, morph_ext, batch/repro.
 
+
+### R23 - satellite / aircraft trail removal button (`plugins/trails`, `ogfkit/trails.py`, docs/trails.md, docs/trails_report.md)
+* One-click **Remove Trails** (Detect tab + menu): Radon candidates verified by a contrast scan statistic against random null lines, greedy acceptance with deflation, profile-based mask width, shape/bleed/spike rejection; writes the trail bit (32) of the shared mask manager (Auto Mask keeps it, undo/redo/`trails-clear` work), catalogue columns TRAIL_FLAG/TRAIL_ID/TRAIL_DIST in the catalogue panel, fill modes mask / interpolate / stack (MEF + stack task).
+* Validation on HUDF F160W and M51 pixels with injected trails (50 % detection at ~1-2 pixel-sigma peak, 0 false trails in 88 trail-free images, angle RMS 0.2-0.6 deg, offset 0.4-1.6 px, masked photometry and masked stacks unbiased) and on the real HST ACS/WFC exposure jc8m32j5q (3 real trails found, bleed/spike features rejected, masks inside the acstools MRT masks).
+* Tests: `plugins/trails/tests` (13), GUI check `scripts/verify_trails.sh`; registered in `run_all_checks.sh` as `trails_tests`, `trails_gui`.
+* Not done: curved trails, SDSS real-trail check (detections not inspected), per-object contaminating-flux estimate.
