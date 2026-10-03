@@ -141,6 +141,11 @@ EXTRA="$EXTRA lensmodel_tests"
 chk_lensmodel_gui() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_lensmodel.sh" "$OUT/lensmodel_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA lensmodel_gui"
+chk_trails_tests() { "$PY" -m pytest -q plugins/trails/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA trails_tests"
+chk_trails_gui() { need_x || { echo "no X server"; return 77; }
+  DISPLAY_OVERRIDE=$DISP "$HERE/verify_trails.sh" "$OUT/trails_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA trails_gui"
 chk_regression_tests() { "$PY" -m pytest -q regression 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA regression_tests"
 # per-tool regression set on small public data (HUDF F160W crop, SDSS Stripe 82 run 94, HST J0946+1006, SDSS photo-z set): data are fetched on demand
