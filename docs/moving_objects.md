@@ -66,7 +66,7 @@ themselves and pass `--lsst-local-dir`; that path was **not** tested with real D
 ## Files
 
 * `moving/` Python package (`tests/` pytest suite, `validation/` the scripts used for the numbers below)
-* `ds9/library/ds9_moving.py` CLI (`--mode setup|fetch|align|difference|link|identify|orbit|transients|lightcurve|export`);
+* `ds9/library/ds9_moving.py` CLI (`--mode setup|fetch|align|difference|link|nightlink|identify|orbit|transients|lightcurve|export`);
   prints `#MOVING {json}` status lines; `plugins/moving/moving.tcl` GUI (plugin; manifest `plugins/moving/plugin.json`)
 * `scripts/run_moving_pipeline.py` standard-library driver that runs align → difference → link → identify and writes a
   manifest with the command lines, package versions and sha256 of inputs and outputs
@@ -153,7 +153,7 @@ Test field: HST ACS/WFC F814W, COSMOS, 2004-04-19, `j8pu38c7q/caq/ceq/ciq` (MAST
     Delta 4.4 AU) was *injected* unbound (ratio 2.3); the linker finds it at rank 20 without the cut and drops it with the cut.  Without the cut
     inj4 recovers 9 and the total is 67 instead of 66 (`link_bench.py --no-bound`).  The injection generator draws rate and Delta independently, so 6 of the 30
     objects of inj4 are unbound by construction; real small bodies are not.  Not a clustering by heliocentric distance: with one HST orbit (0.025 d) there is
-    no baseline for that (`helio_linc` needs >= 2 nights and is not wired into the linker).
+    no baseline for that (`helio_linc` needs >= 2 nights and is not wired into the single-exposure linker; the multi-night case is handled by `moving/nightlink.py`, below).
   * **Tracklet-level logistic score**: features and coefficients in `tracklet.LLR_MODEL`; the dominant terms are the fraction of members on
     archive-CR-flagged pixels (-10.2 per unit; 91 % of all S/N >= 8 detections are CR-flagged, but only 0.4 % of injected-object candidates have all
     members CR-flagged and no trail), the number of members (+4.8; 4 vs 3), a negative log-rate term (-0.83; slow objects are rarer to align by chance) and
@@ -395,12 +395,35 @@ unchanged to camcol 4.  At the 99 % level the prior removes 76 % / 69 % of the b
 (-31, -13) arcsec/h agrees with the known objects (-31, -14).
 
 **Limitations / not done**
-* This is *rate-prior vetting from an orbit population*, **not** orbit-fit linking across nights: SDSS gives five exposures within 5 min, so no orbit can be determined, and the
-  cross-night (e.g. HST multi-visit or survey-night) orbit-fit linker (IOD + fit over tracklet pairs) is **not implemented**.
+* This is *rate-prior vetting from an orbit population*: SDSS gives five exposures within 5 min, so no orbit can be determined there.  Cross-night orbit-fit linking now exists as a separate stage
+  (`moving/nightlink.py`, next section) for data with tracklets on several nights; it is not applied to the SDSS fields (single night) and the rate prior remains the only vetting for single-night tracklets.
 * Osculating two-body population with a in 1.5-5.5 AU and H <= 19.5: NEOs, comets, Centaurs/TNOs and objects fainter in H (but near enough to be detected) are not in the prior and
   would be dropped when their motion lies outside the region (SkyBoT shows none of the matched ones lost at 99 % in these two fields, but both are near opposition at low ecliptic latitude).
   The prior is specific to the field position and epoch (recomputed per call, ~tens of seconds with the 1.4 M table).
 * Two fields of one night and one survey; truth from SkyBoT (MPC-known only); precision is a lower bound; the 3-exposure subset is still dominated by false links.
+
+## Cross-night orbit-fit linking (`moving/nightlink.py`, R24)
+
+**What it does.**  Takes tracklets (>= 2 detections within a night/visit) from different nights (and optionally different stations) and returns groups of >= 3 tracklets that are consistent with ONE Sun-bound two-body orbit, with the fitted
+state, a, e, i, chi2/dof and rms.  CLI: `ds9_moving.py --mode nightlink --tracklet-files night1/tracklets.json night2/tracklets.json ... [--obs-code 500|250|...] [--nl-chi2 4] [--nl-floor 0.3] [--nl-min 3]` -> `nightlinks.json`, `nightlinks.tsv`
+(kind = linked | pair).  Python: `nightlink.Tracklet`, `link_nights`, `vet_with_links`; synthetic generator `nightlink_sim.py`; validation `moving/validation/nightlink_validate.py`; tests `moving/tests/test_nightlink.py` (run_all_checks: `nightlink_tests`, also inside `moving_tests`).
+**Method** (linear + gravity, Herget/HelioLinC-flavoured): (1) tracklet -> attributable (ra, dec, rates, with covariance from the linear tangent-plane fit); (2) pair gate: a grid of 20 x 13 (log rho, rho_dot/v_esc) heliocentric states, Sun-bound only (E < 0, r > 0.15 AU), is propagated with universal-variable two-body motion and
+light-time to the later tracklet and compared with its position and rate, using both attributable uncertainties grown over the gap plus a model floor; (3) the best 4 hypotheses of each surviving pair start a 6-parameter least-squares orbit fit (Levenberg-Marquardt; soft prior v < 0.98 v_esc) on all observations, with
+sigma_eff^2 = sigma^2 + 0.3"^2 + (0.05"/day x |t - t_ref|)^2 (this floor absorbs planetary perturbations and the geocentre/parallax approximations); a pair is accepted at chi2/dof <= 4 and max residual <= 6 sigma_eff; (4) accepted pairs are grown greedily: a tracklet is added if the orbit predicts it within 6 sigma_eff (or it
+formed an accepted pair with a member) and the refit still passes; one tracklet per night and station per group.  Observer = Earth-Moon barycentre from the astropy built-in ephemeris plus the station offset from the MPC parallax constants when `--obs-code` is a ground code.  `vet_with_links` marks tracklets `linked` / `pair` / `single`: a linked
+tracklet has passed an orbit fit over >= 2 nights, which replaces the population rate prior for it (the rate prior in `orbitlink.py` is still what vets single-night tracklets).
+**Why >= 3 tracklets.**  Two short-arc tracklets give 8 attributable numbers for 6 orbital parameters, i.e. only 2 degrees of freedom of constraint; in a dense field chance pairings pass the fit.  Measured earlier with pair links allowed (Horizons set, long baselines): 3-10 wrong groups per run; with >= 3 tracklets required there were 0 wrong groups in every test below, and 2-tracklet links are returned separately as `pairs` (candidates only; at 1" noise and nights {0,1,7,14} 9 of 13 pairs were wrong, see below).
+**Validation** (numbers from this box; truth labels known in all of them):
+* SYNTHETIC two-body truth (exact dynamics, so optimistic), 30 objects with p_detect 0.9 per night + 30 random single-night decoy tracklets per night, one 6x6 deg field (RA 100-106, Dec 0-6), 3 exposures 0.5 h apart per night, 2 seeds per row, near-circular bound main-belt-like states: recall of objects with >= 3 tracklets 1.000 at 0.1" and 0.3" noise for nights {0,1,3}, {0,2,6}, {0,1,7,14}, {0,3,10} (47-56 groups per row), 0.979-1.000 at 1.0"; **0 wrong groups in all 12 configurations** (24 fields); 2-tracklet pairs: 49 of 49 pure (two-night sets) at 0.1", 1 wrong of 49 at 0.3" and 3 of 51 at 1.0" for a 7-day gap.  Run time 14-42 s per 170-230 tracklets (321 s at 1.0" with a 14-day span).
+* SEMI-SYNTHETIC with REAL dynamics: JPL Horizons n-body positions of 70 real numbered asteroids in one 8x8 deg window (SBDB elements picked the window, RA 190 Dec -4; MJD 60950 = 2025-10-02), Gaussian noise added, decoys = real tracklets copied from other epochs and shifted to random positions in the window (realistic rates; 70 per night), 420 tracklets: noise 0.3": nights {0,1,3}: 67 of 70 objects recovered (recall 0.957), 0 wrong groups; nights {0,2,6}: 64 of 70 (0.914), 0 wrong groups, 6 pure and 4 wrong pairs.
+  The 3-6 missed objects were not analysed individually (candidate causes: model floor too small for them, coarse hypothesis grid, a tracklet lost to the one-per-night rule).  The {0,1,7,14} set and 1.0" noise were started but not finished (runtime), so there is no semi-synthetic number for baselines > 6 days; the real-MPC set below covers 5-14 days.
+* REAL astrometry (MPC `get-obs` archive of 48 numbered near-Earth asteroids; tracklets = >= 2 observations from one station within 3 h; the 14-day window starting MJD 59246 with the most objects on >= 3 station-nights; real astrometric errors, parallax for each station via the MPC constants, sigma from `obs.station_sigma`; truth = designation, objects pre-selected as known and well observed):
+  5 days: 27 tracklets of 11 objects, recall 1.000 (3 of 3 objects with >= 3 tracklets), 0 wrong groups; 10 days: 112 tracklets of 18 objects, recall 0.933 (14 of 15), 0 wrong, 1 pure pair; 14 days: 176 tracklets of 21 objects, recall 0.944 (17 of 18), 0 wrong, 1 pure pair.  Sky density is low (objects are spread over the sky, not in one field), so this tests model
+  errors and real astrometric noise, **not** confusion; the confusion test is the semi-synthetic one above.  The network test `test_real_mpc_astrometry_links_known_asteroids` (12 of these objects, 10 days) passes (about 2 min with a cold cache).
+**Limits.**  Two-body Sun-only dynamics: planetary perturbations and non-gravitational forces are covered only by the error floor (0.3" + 0.05"/day), so arcs of more than ~2-4 weeks, close approaches to planets and fast NEOs at small distances degrade; there is no ASSIST/N-body refinement in this stage (`orbit.py` needs ASSIST ephemeris files that are not installed on this box, so the n-body polish was not run).
+Tracklets need >= 2 detections and short arcs (hours); the (rho, rho_dot) grid is coarse (the LM fit from the 4 best hypotheses does the real work); hypothesis generation and gate cost O(pairs x 160 states): ~10-60 s for ~200 tracklets, it has not been run on 10^4-10^5 tracklets and would need a spatial pre-index (HelioLinC-style) for that;
+`max_motion_deg_day` (2.5) rejects faster pairs; the group assignment is greedy; 2-tracklet candidates have a high false rate in dense fields; no covariance-based (Mahalanobis) acceptance, only chi2/dof and max-residual thresholds that were chosen on the synthetic and Horizons sets (the MPC set was not used to choose them; the Horizons set was used during development);
+a missed night splits an object into pairs or singletons; moving-object tracklets with a wrong within-night association poison the group.  Not applied automatically by the pipeline `run` mode: the user supplies several `tracklets.json`.
 
 ## Session recorder: Moving Objects steps
 
@@ -419,6 +442,7 @@ is "whichever tracklet is rank 0" - on new data that is not necessarily a known 
 
 ## Limitations (summary)
 
+* Cross-night orbit-fit linking is two-body only and was validated on synthetic, Horizons-based and a small real MPC set (section above); no n-body refinement.
 * LSST provider unavailable without an RSP login; test field outside DP1. No real DP1 FITS tested.
 * No absolute astrometric tie for the test field; Gaussian PSF; dense archive CR flag; recovery limited to mag ≲ 23 in the first injection test (new linker: see the benchmark, ceiling set by detection);
   the true BB89 tracklet is not the best-scored candidate.

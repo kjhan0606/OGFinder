@@ -388,7 +388,7 @@ def _binning(shape, maxdim):
 
 
 def detect_trails(img, valid=None, threshold=8.0, min_length=None, max_trails=8, smooth=1.0, clip=3.0, cand=4.0, maxdim=768,
-                  margin=2.0, edge_sigma=2.0, catalog=None, catalog_rescue=None, seed=1, n_null=100, mesh=32, min_aspect=12.0, max_fwhm=40.0, reject_bleeds=True):
+                  margin=2.0, edge_sigma=2.0, catalog=None, catalog_rescue=None, seed=1, n_null=100, mesh=32, min_aspect=12.0, max_fwhm=40.0, reject_bleeds=True, spike_fac=30.0):
     """-> dict(trails=[...], sigma_pix, binning, n_candidates, ...).  Each trail: id, x1,y1,x2,y2 (1-based FITS pixels), theta_deg, rho, length,
     halfwidth (mask half-width = box half-width + edge_sigma * blur + margin), box_halfwidth, blur, amp, amp_snr, zscore, run_score, s0, s1."""
     img = np.asarray(img, np.float32)
@@ -489,7 +489,7 @@ def detect_trails(img, valid=None, threshold=8.0, min_length=None, max_trails=8,
         if fw > max_fwhm or (f['s1'] - f['s0']) < min_aspect * fw:
             out.setdefault('rejected', []).append(dict(theta=f['theta'], rho=f['rho'], length=f['s1'] - f['s0'], fwhm=fw, zscore=f['zscore'], reason='shape'))
             continue
-        if reject_bleeds and prof is not None and bleed_like(img, f['theta'], f['rho'], f['s0'], f['s1'], prof['amp'], level):
+        if reject_bleeds and prof is not None and bleed_like(img, f['theta'], f['rho'], f['s0'], f['s1'], prof['amp'], level, fac_fall=spike_fac):
             out.setdefault('rejected', []).append(dict(theta=f['theta'], rho=f['rho'], length=f['s1'] - f['s0'], fwhm=fw, zscore=f['zscore'], reason='bleed'))
             deflate(f, -diag, diag)
             reverify()

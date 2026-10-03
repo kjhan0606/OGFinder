@@ -26,7 +26,7 @@ threshold 8 (robust z of the best run against trail-free parallel lines), min-le
 min-aspect 12 (length / FWHM), max-fwhm 40 px, catalog-check (accept z >= 0.7 x threshold when >= 2 elongated aligned catalogue objects lie on the line),
 margin 2 px and edge-sigma 2 (mask half-width = box half-width + edge-sigma x blur + margin), end-extend 3 px, fill, fill-noise, flag-catalog, touch-k 2.5
 (footprint ellipse scale for the touch test), show-overlay, confirm-panel, show-filled.  CLI only: `--keep-bleeds`, `--pixel-scale/--mag-zeropoint`
-(adds peak surface brightness and width in arcsec to `trails.json`).
+(adds peak surface brightness and width in arcsec to `trails.json`), `--spike-fac` (default 30, see step 6), `--curved` (also a manifest checkbox "Also look for curved / segmented trails"), `--register {none,wcs,auto}` for the stack step (the stack dialog has a "Register by WCS" field).
 
 ## Algorithm
 1. *Standardise*: background mesh (32 px) subtraction, local high-pass-MAD noise map (floored at 0.7 x the global value so that galaxies are down-weighted),
@@ -39,11 +39,23 @@ margin 2 px and edge-sigma 2 (mask half-width = box half-width + edge-sigma x bl
 4. *Greedy acceptance with deflation*: after a trail is accepted its band is blanked and the remaining candidates are re-verified (no ghost trails along the wings).
 5. *Profile*: median cross-profile along the run fitted with box (x) Gaussian -> centre, width, blur, amplitude.  Mask half-width = box half-width + 2 blur + margin.
 6. *Rejections*: broad short ridges (galaxy chains: length < 12 x FWHM or FWHM > 40 px) and **linear features of very bright stars** (CCD bleed columns near the pixel
-   axes, and diffraction spikes at any angle: run through a core > 300 x the run amplitude whose brightness falls off along the line).
-7. *Catalogue flags*: bit 1 = footprint (touch-k x A x B ellipse) reaches the mask band, bit 2 = centre inside the band, bit 4 = elongated (A/B >= 3) and aligned
+   axes: core > 300 x the run amplitude; diffraction spikes at any angle: run through a core > `--spike-fac` (30) x the run amplitude whose brightness falls off along the line by a
+   factor > 2.5).  30 / 2.5 replaced 300 / 3.0 after the SDSS held-out check (below) showed that 53 of 56 straight detections in 160 SDSS frames were saturated-star spikes; the price on HUDF injections is
+   a lower recall (4 sigma: 35/40 -> 32/40, 2 sigma: 26/40 -> 22/40) because trails that cross a bright core are sometimes read as spikes; `--spike-fac 300` restores most of the old recall.
+7. *Curved / segmented trails* (`--curved`, `ogfkit/trails_ext.py:detect_curved`): the straight finder is run tile-wise (tile = half of the smaller image side, >= 200 px, 50 % overlap) with a low
+   threshold (z 6) and minimum segment length 0.45 tile; segments are linked into a chain when the gap between their ends is <= 0.6 tile and the direction changes by <= 30 deg per link; a chain (2-8 segments) is accepted when
+   sum(z)/sqrt(n) >= 8.  Accepted segments are added as trails with a `group` number (same group = one curved trail) and `curved` = total turn >= 3 deg; the mask is the union of the segment masks (piecewise linear).  Straight trails
+   already found are not duplicated.  *Flicker*: `trails.json` gets `duty` (fraction of 12 px bins along the track above half the median amplitude of the brightest half), `n_gaps`, `cv` and a `flicker` flag (duty < 0.8) from `along_profile`;
+   the straight finder tolerates gaps through its best-contiguous-run statistic, there is no extra gap-bridging rule.
+8. *Contaminating flux* (`trail_flux`, catalogue columns `TRAIL_FLUX`, `TRAIL_FRAC`): the fitted box x Gaussian cross-profile (centre, width, blur, amplitude) is evaluated over the object's 2.5A x 2.5B ellipse
+   (from A_IMAGE/B_IMAGE/THETA_IMAGE, scale k = 2.5) and summed = the light the trail adds to the object's aperture (image flux units); `TRAIL_FRAC` = that / `FLUX_AUTO` (or `FLUX_ISO`) when present.  Objects whose ellipse does not reach the trail get 0.
+9. *Stack registration* (`--task stack --register auto|wcs`): a frame whose WCS differs from the first frame's (or whose shape differs) is resampled onto the first frame's grid with `wcs_resample` (bilinear), and its trail mask
+   with `register_masks` (bilinear mask > 0.05, grown by 1 px; pixels without coverage are excluded from the stack); `auto` leaves already registered frames untouched, `wcs` forces it, `none` = old behaviour.
+   The output line reports `registered=N`.
+10. *Catalogue flags*: bit 1 = footprint (touch-k x A x B ellipse) reaches the mask band, bit 2 = centre inside the band, bit 4 = elongated (A/B >= 3) and aligned
    with the trail (a fragment of the trail itself); `TRAIL_DIST` = distance of the centre to the band edge (negative inside).
 
-## Validation (code rev 58f69ec69; `plugins/trails/validation/`, tables in `trails_validation.md`, raw numbers reproducible with `trails_validate.py`)
+## Validation (code rev 58f69ec69 for the straight-trail tables - the detection-rate numbers below are from before the spike-rule change, see "Held-out" for the effect; `plugins/trails/validation/`, tables in `trails_validation.md`, raw numbers reproducible with `trails_validate.py`)
 Synthetic trails (box FWHM 3/6/12/24 px convolved with a 1.2 px Gaussian, random angle/offset, half full-chord and half partial = 40-60 % of the chord)
 are added to **real pixels**: 40 random 700x700 windows of the HUDF12 F160W mosaic (sky sigma 4.2e-4 e/s/px, 0.06"/px, AB zp 25.94) and the 600x600 M51 image.
 Amplitude = peak per pixel in units of the pixel sigma measured by the pipeline; HUDF mag/arcsec^2 uses the peak per pixel.  Default parameters, 10 trials per cell.
@@ -69,12 +81,30 @@ Amplitude = peak per pixel in units of the pixel sigma measured by the pipeline;
 * **Real trails: HST ACS/WFC exposure `jc8m32j5q_flc.fits`** (MACS J0717, F606W, 1207 s; the acstools `findsat_mrt` example; `real_acs.py`, DQ flags masked): chip 1: a narrow bright trail (FWHM 2.6 px, peak 332 e-, 2014 px, z 94) and a wide faint one
   (FWHM 21 px, peak 8.5 e- = 0.54 pixel sigma, 3468 px, z 18); chip 2: the continuation of the narrow trail (FWHM 2.5, 2603 px, z 96).  Three near-vertical candidates (z 10-21) are the bleed/diffraction spikes of saturated stars and were rejected (before the bleed/spike rules they were reported as trails).
   Against acstools 3.8.2 MRT masks (chip 1): our masks lie 98 % (narrow) / 100 % (wide) inside the MRT masks, IoU 0.48 / 0.78 (MRT masks are about twice as wide); residual excess in the 4 px just outside our mask: +0.002 / -0.03 of the trail peak (0.04 pixel sigma for the narrow trail).
-  There is no labelled truth for this exposure, so no recall/precision number; an SDSS r-band frame set (run 94) gave detections in 2 of 6 frames that were **not inspected** (unknown whether real satellite/asteroid trails or artefacts).
+  There is no labelled truth for this exposure, so no recall/precision number.
+
+### Extensions and held-out checks (rev 24bd44d51; tables in `trails_validation.md`, per-detection list `heldout_sdss_prefix.md`)
+* **Curved arcs** (SYNTHETIC arcs, w = 6 px, injected into 700x700 HUDF windows, 8 per cell, coverage = fraction of the visible trail pixels inside the mask): straight trails (curvature 0): median coverage 0.99-1.00.  Curvature 4 deg/100 px (heading change ~28 deg over 700 px):
+  median coverage of the straight finder alone 0.00 / 0.55 / 0.39 at 1.5 / 3 / 6 sigma, with `--curved` 0.00 / 0.89 / 0.70 (runs with coverage > 0.5: 0 / 4 / 3 of 8 -> 1 / 8 / 6 of 8 - the table lists them as "straight / both", note that the counts are over all 8 runs); curvature 8: median coverage 0.00 / 0.00 / 0.29 -> 0.00 / 0.44 / 0.73 (runs > 0.5: 0 / 1 / 3 -> 1 / 4 / 8).
+  Faint (1.5 sigma) curved trails are not recovered.  At 6 sigma and curvature 8 the chain finder produced spurious extra segments in some runs (mean 492 stray masked pixels per run, i.e. a mask that is partly wrong - inspect before using on crowded fields).
+* **Flickering trails** (SYNTHETIC, period 60 px, duty = fraction on): duty 0.7: covered at all amplitudes (7/8 found, coverage 0.98-0.99); duty 0.5: 3 and 6 sigma 7/8 (coverage 0.95-0.96), 1.5 sigma 2/8; duty 0.3: only 3/8 at 6 sigma and none below.  Measured duty (median) 0.41 / 0.51-0.59 / 0.61-0.68 for true 0.3 / 0.5 / 0.7: it is biased high because the bins are 12 px wide.
+* **Contaminating flux** (`TRAIL_FLUX`; SYNTHETIC trails of 0.3-3 sigma, HUDF windows, 721 catalogue objects touched by a detected trail): for the 282 objects with true contamination (injected light inside the 2.5A x 2.5B ellipse) > 3 aperture sigma, model/truth median 1.05 (16-84 %: 0.90-1.33);
+  the RMS of (model - truth) is 24.6 aperture sigma (dominated by large bright objects, where a few-percent mismatch of the profile is many sigma), 11.3 sigma for the others.  Median `TRAIL_FRAC` of the contaminated objects 0.062 (90th percentile 0.28).  The estimate is the trail model's light, not a measured quantity of the object itself, and ignores the local sky subtraction of the catalogue.
+* **Dithered stack registration**: tested with three synthetic frames dithered by (0,0), (7.3,-4.6), (-5.1,9.4) px through their WCS (`test_stack_registers_dithered_frames_through_the_wcs`): `--register auto` reports `registered=2` and the stacked star peak is > 0.7 of the ideal single-frame peak (and at least 0.8 of the `none` stack), whereas `none` smears it.  Only integer-free shifts, no rotation, noise-free stars: a functional test, not a photometric accuracy measurement.  No real dithered data set was run.
+* **Held-out check 1 - SDSS run 94 camcol 3, 160 REAL frames (32 fields x ugriz)** with the straight detector as frozen at rev 58f69ec69 and the (untuned, first-guess) curved finder; multi-band consistency through the WCS of each frame (a feature seen in another band at SNR >= 6 is "static").
+  Result: 37 of 160 frames had >= 1 straight detection (56 detections) and 10 had curved-chain segments (22): 60 of the 78 are present in other bands (static), 18 are single-band candidates.  **53 of the 56 straight detections were within 3 deg of 45/135 deg**: diffraction spikes of saturated stars (SDSS spike directions).
+  That is, the straight finder's false-detection rate on SDSS was **23 % of frames (37/160)** before the change, not zero.  Looking at single-band candidates through an image-description tool (not by eye) also gave bright stars on the line.  After changing the spike rule (30 x / 2.5; this was done after seeing these frames, so it is no longer blind):
+  11 straight detections in 11 frames (7 %) and 18 curved segments in 8 frames remain, 9 of the 11 straight at spike angles; I could not confirm any of them as a satellite trail.  No SDSS satellite-trail truth exists for these frames.
+* **Held-out check 2 - HUDF F105W / F125W** (REAL, never used for tuning, same sky as F160W but independent pixels): 8 non-overlapping 700x700 windows (the 40 F160W tuning windows cover all fully covered F160W area, so no unseen F160W window exists), 0 detections (straight or curved).  This is a small sample (upper 95 % limit ~31 % per window).
+* **Cost of the spike-rule change**: HUDF injection recall 35/40 -> 32/40 at 4 sigma and 26/40 -> 22/40 at 2 sigma; false trails stay 0/88.
 
 ## Limitations
-* Straight trails only (curved, tumbling/flickering or strongly varying amplitude trails are partly found or cut into pieces); trails wider than ~40 px FWHM or shorter than 12 x their width are rejected on purpose.
+
+## Limitations
+* Curved trails are only handled as piecewise-linear chains (`--curved`, opt-in): recall 44-89 % at 3 sigma for 4-8 deg/100 px, none at 1.5 sigma, with occasional spurious segments; low-duty (<= 0.3) flickering trails are mostly missed; trails wider than ~40 px FWHM or shorter than 12 x their width are rejected on purpose.
+* On real wide-field frames with saturated stars (SDSS) the false-detection rate was 23 % of frames (before the spike rule change) and 7 % after; the remaining ones are mostly spikes with a core < 30 x their amplitude and chains of aligned stars.  Trails crossing a bright star core may be read as spikes (lower recall).
 * Sensitivity is set by the correlated noise and the galaxies: about 1-2 pixel-sigma peak amplitude (HUDF F160W: ~28 mag/arcsec^2) for 50 %; faint partial trails inside a galaxy disc (M51) are often missed.
 * The 32 px background mesh subtracts part of very wide faint trails (> ~30 px) before detection; the mask width then comes from the fitted profile, not the full trail.
-* Bleed/spike rejection is a heuristic; a genuine trail running along a column or through a saturated star core with falling brightness would be rejected (`--keep-bleeds`).  Spikes that stay below 300 x the run amplitude are reported as trails.
-* Interpolation destroys objects on the trail and perturbs objects within ~15 px of it; use masks for photometry.  Stack uses registered frames; no resampling of masks between frames (use the mask reproject mode of the mask manager first).
-* The masks are binary, the catalogue flag is geometric (it does not estimate the contaminating flux).
+* Bleed/spike rejection is a heuristic; a genuine trail running along a column or through a saturated star core with falling brightness would be rejected (`--keep-bleeds`).  Spikes that stay below 30 x the run amplitude (`--spike-fac`) are reported as trails.
+* Interpolation destroys objects on the trail and perturbs objects within ~15 px of it; use masks for photometry.  The stack step resamples frames and masks through the WCS (bilinear, so it correlates the noise slightly and smooths narrow features); frames without a usable WCS are assumed registered.
+* The masks are binary; `TRAIL_FLUX`/`TRAIL_FRAC` model the trail's light in the object's aperture (median +5 % bias, 16-84 % spread 0.9-1.33 of the truth) but are not a measurement of the object's own corrected flux.

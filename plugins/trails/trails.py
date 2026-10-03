@@ -76,7 +76,7 @@ def sky_header(hdr):
 
 def detect(a, img, hdr, cat):
     return T.detect_trails(img, threshold=a.threshold, min_length=a.min_length or None, max_trails=a.max_trails, smooth=a.smooth,
-                           margin=a.margin, edge_sigma=a.edge_sigma, min_aspect=a.min_aspect, reject_bleeds=a.reject_bleeds, max_fwhm=a.max_fwhm, catalog=cat if a.catalog_check else None, catalog_rescue=0.7 if a.catalog_check else None)
+                           margin=a.margin, edge_sigma=a.edge_sigma, min_aspect=a.min_aspect, reject_bleeds=a.reject_bleeds, spike_fac=a.spike_fac, max_fwhm=a.max_fwhm, catalog=cat if a.catalog_check else None, catalog_rescue=0.7 if a.catalog_check else None)
 
 
 def run_detect(a):
@@ -238,6 +238,7 @@ def main(argv=None):
     ap.add_argument('--min-aspect', type=float, default=12.0, help='reject candidates shorter than this many times their FWHM (galaxy chains)')
     ap.add_argument('--max-fwhm', type=float, default=40.0)
     ap.add_argument('--curved', action='store_true', help='also look for curved / broken (segmented) trails: tile-wise detection and chain linking (slower)')
+    ap.add_argument('--spike-fac', type=float, default=30.0, help='diffraction-spike rule: a run through a core brighter than this x the run amplitude whose brightness falls off along the line is rejected (300 = the pre-SDSS value: fewer spikes rejected, ~10 %% more faint HUDF trails kept)')
     ap.add_argument('--keep-bleeds', dest='reject_bleeds', action='store_false', help='do not reject column/row-aligned runs with a saturated core (CCD bleeds)')
     ap.add_argument('--margin', type=float, default=2.0)
     ap.add_argument('--edge-sigma', type=float, default=2.0)
