@@ -196,7 +196,7 @@ def denoise_wings(p, core=4.0, rmax=12):
     return q / q.sum()
 
 
-def stack_star_psf(data, xy, size=31, bkg=None, core=4.0, flux_radius=6.0, nmax=60):
+def stack_star_psf(data, xy, size=31, bkg=None, core=4.0, flux_radius=6.0, nmax=60, rmax=12):
     """Median stack of the given stars (0-based x, y), each recentred by a windowed centroid + cubic shift, sky = median of the outer ring, normalised inside flux_radius; wings from the
     azimuthal median (see denoise_wings).  -> (psf [size x size, unit sum], n_used)"""
     import sep
@@ -227,4 +227,4 @@ def stack_star_psf(data, xy, size=31, bkg=None, core=4.0, flux_radius=6.0, nmax=
     if len(cut) < 3:
         raise ValueError('too few usable stars (%d)' % len(cut))
     p = np.median(np.array(cut), axis=0)[4:-4, 4:-4]
-    return denoise_wings(p, core=core, rmax=min(size // 2, 12)), len(cut)
+    return denoise_wings(p, core=core, rmax=min(size // 2, rmax)), len(cut)
