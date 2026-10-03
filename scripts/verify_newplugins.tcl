@@ -227,6 +227,46 @@ proc sec_stacking {} {
     R stacking_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_depth {} {
+    ::ogf::params::put completeness dp-aper-radius 3
+    ::ogf::params::put completeness dp-box-arcsec 20
+    ::ogf::params::put completeness dp-tile 150
+    lassign [run_step completeness depth] ok recs
+    R depth_ran $ok $recs
+    R depth_recorded [expr {[lindex $recs 0 0] eq "analysis.depth_maps"}] $recs
+    R depth_columns [expr {"DEPTH_LIM" in [::ogf::cat::columns] && "DEPTH_SBLIM" in [::ogf::cat::columns] && "DEPTH_RMS" in [::ogf::cat::columns]}]
+    R depth_rows_filled [expr {[nonempty DEPTH_LIM] >= 50}] "rows=[nonempty DEPTH_LIM]"
+    set w [file join [OGFSessWorkDir] depth]
+    foreach f {depth_mag_map.fits depth_sb_map.fits depth_rms_map.fits depth_tiles.tsv depth_summary.json depth_plot.png} {
+	R depth_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 100}]
+    }
+    R depth_keys [expr {[::ogf::cat::exists depth,mag_map] && [::ogf::cat::exists depth,mag_limit_median]}]
+    ::ogf::params::put completeness detector sep
+    ::ogf::params::put completeness dp-regions grid
+    ::ogf::params::put completeness dp-grid 2x2
+    ::ogf::params::put completeness dp-per-bin 60
+    ::ogf::params::put completeness n-bins 5
+    ::ogf::params::put completeness mag-min 12.5
+    ::ogf::params::put completeness mag-max 17.5
+    ::ogf::params::put completeness dp-maps-at 15
+    lassign [run_step completeness compmap] ok recs
+    R compmap_ran $ok $recs
+    R compmap_columns [expr {"COMPL_REGION" in [::ogf::cat::columns] && "COMPL_LOC" in [::ogf::cat::columns] && "COMPL_LIM50_LOC" in [::ogf::cat::columns]}]
+    R compmap_rows_filled [expr {[nonempty COMPL_REGION] >= 50}] "rows=[nonempty COMPL_REGION]"
+    foreach f {compmap_lim50_map.fits compmap_regions.tsv compmap_summary.json compmap_frac_m15.fits compmap_plot.png} {
+	R compmap_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 100}]
+    }
+    set pw [OGFDepthPlot]
+    R depth_plot_window [expr {[winfo exists $pw] && [image width ogfdepthimg] > 300}] "[image width ogfdepthimg]x[image height ogfdepthimg]"
+    destroy $pw
+    OGFDepthTable; update
+    set f0 [llength $::ds9(frames)]
+    set n [OGFDepthShow]
+    R depth_frames [expr {$n >= 2 && [llength $::ds9(frames)] == $f0 + $n}] "$n frames, $f0 -> [llength $::ds9(frames)]"
+    R depth_argv_templated [expr {[string match {*@{WORK}/depth*} [dict get [lindex [::ogf::session::steps] end] argv_t]]}]
+    R depth_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_sedcodes {} {
     set root [file normalize [file join [::ogf::step::plugin_dir sedcodes] .. ..]]
     set mock [file join $root sed_adapters mocks]
@@ -607,7 +647,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel stacking sedcodes cluster spectra xmatch lightcurves batch repro} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel stacking depth sedcodes cluster spectra xmatch lightcurves batch repro} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

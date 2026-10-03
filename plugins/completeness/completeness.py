@@ -96,9 +96,10 @@ class SextractDetector:
 class SepDetector:
     """SEP (Source Extractor as a library): background + extract + elliptical Kron-like aperture photometry."""
 
-    def __init__(self, zp=25.0, thresh=1.5, minarea=5, back_size=64, deblend_cont=0.005, filter=True):
+    def __init__(self, zp=25.0, thresh=1.5, minarea=5, back_size=64, deblend_cont=0.005, filter=True, local_rms=False):
         self.zp, self.thresh, self.minarea, self.bs, self.dc = zp, thresh, minarea, back_size, deblend_cont
         self.filter = filter
+        self.local_rms = local_rms          # threshold relative to the local rms map instead of the global rms (varying depth)
 
     def __call__(self, img, mask=None):
         import sep
@@ -111,8 +112,10 @@ class SepDetector:
             m = bad.astype(np.uint8) if m is None else (m | bad.astype(np.uint8))
         bkg = sep.Background(a, mask=m, bw=self.bs, bh=self.bs)
         sub = a - bkg.back()
-        o = sep.extract(sub, self.thresh, err=bkg.globalrms, minarea=self.minarea, mask=m, deblend_cont=self.dc,
+        o = sep.extract(sub, self.thresh, err=(bkg.rms() if self.local_rms else bkg.globalrms), minarea=self.minarea, mask=m, deblend_cont=self.dc,
                         **({} if self.filter else {'filter_kernel': None}))
+        if len(o):
+            o = o[np.isfinite(o['a']) & np.isfinite(o['b']) & np.isfinite(o['theta']) & np.isfinite(o['x']) & np.isfinite(o['y'])]
         if len(o) == 0:
             return dict(x=[], y=[], mag=[], a=[], b=[])
         oa = np.maximum(o['a'], 0.8)
@@ -131,7 +134,7 @@ def load_detector(spec, **kw):
     if spec in ('sextract', '', None):
         return SextractDetector(**{k: v for k, v in kw.items() if k in ('zp', 'thresh', 'minarea', 'binary', 'extra')})
     if spec == 'sep':
-        return SepDetector(**{k: v for k, v in kw.items() if k in ('zp', 'thresh', 'minarea', 'back_size', 'deblend_cont', 'filter')})
+        return SepDetector(**{k: v for k, v in kw.items() if k in ('zp', 'thresh', 'minarea', 'back_size', 'deblend_cont', 'filter', 'local_rms')})
     mod, _, fn = spec.partition(':')
     if not fn:
         raise ValueError('detector spec must be sextract, sep or module:function')
@@ -341,7 +344,7 @@ def summarize(records, edges, n_fp_neg, area_pix, n_unmatched, n_images, pixel_s
 def run_completeness(data, detect, mask=None, kind='star', mag_min=22.0, mag_max=29.0, n_bins=14, per_bin=60, per_image=25,
                      zp=25.0, psf=None, psf_fwhm=3.0, match_radius=3.0, re_edges=(2.0, 4.0, 8.0, 16.0), n_sersic=(1.0, 4.0),
                      q_range=(0.4, 1.0), seed=1, gain=0.0, pixel_scale=None, avoid_detected=True, min_sep=None, n_workers=0,
-                     progress=None):
+                     progress=None, return_records=False):
     """Full completeness measurement.  `detect` is the detection callback (see module docstring).  Returns a JSON-serialisable dict:
     config, bins (per magnitude bin: n_inj, n_rec, frac + Wilson interval, bias, scatter), by_size (galaxies), fit, lim50, lim90, false_positive."""
     data = np.asarray(data, dtype=np.float32)
@@ -393,6 +396,8 @@ def run_completeness(data, detect, mask=None, kind='star', mag_min=22.0, mag_max
     neg = _norm(detect((2.0 * med - data).astype(np.float32), mask))
     area = int(good.sum())
     res = summarize(records, edges, len(neg['x']), area, n_unmatched, len(jobs), pixel_scale)
+    if return_records:
+        res['records'] = records          # every injected object (x, y, mag, recovered, mag_out, ...); not JSON-cleaned
     res['config'] = dict(kind=kind, mag_min=mag_min, mag_max=mag_max, n_bins=n_bins, per_bin=per_bin, per_image=per_image, zp=zp,
                          match_radius=match_radius, seed=seed, avoid_detected=bool(avoid_detected), n_baseline_detections=int(len(base['x'])),
                          min_sep=float(min_sep), psf_size=int(psf.shape[0]), detector=type(detect).__name__,

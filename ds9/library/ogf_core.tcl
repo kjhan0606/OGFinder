@@ -334,6 +334,7 @@ namespace eval ::ogf::cat {
         {morph,*                list   galaxy_model rw "per NUMBER: {type description confidence color}"}
         {isophote,*             any    isophote  rw   "isophote plugin: last output files (model_file, resid_file, table_file, plot_file) and the show-frames state"}
         {completeness,*         any    completeness rw "completeness plugin: result files and the 50 % / 90 % limiting magnitudes (lim50, lim90) of the last run"}
+        {depth,*                any    completeness rw "completeness plugin, depth / completeness maps: map files (mag_map, sb_map, rms_map, lim50_map, lim90_map, regions_map), tiles_file, regions_file, json_file, plot_file and the median limits"}
         {daophot,*              any    daophot   rw   "daophot plugin: last output files (stars_file, psf_file, resid_file, diag_file, cmd_file)"}
         {psfex,*                any    psfex     rw   "psfex plugin: last output files (model_file, center_file, stars_file, maps_file, plot_file)"}
         {multifit,*             any    multifit  rw   "multifit plugin: output files (results_file, model_file, residual_file, montage_file)"}

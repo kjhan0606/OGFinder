@@ -120,6 +120,232 @@
    "label": "Completeness Table...",
    "proc": "OGFCompletenessTable",
    "session": "NONE"
+  },
+  {
+   "id": "depth",
+   "label": "Depth Maps (limiting mag / SB)",
+   "title": "Depth maps",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.depth_maps",
+   "catalog_tmp": "depthmaps",
+   "done_status": "depth maps done",
+   "after": "OGFDepthAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/depthmap.py",
+    "{image}",
+    "--work",
+    "{work}/depth",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--mode",
+    "depth",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--pixel-scale",
+    "{extract:pixel-scale}",
+    "--aper-radius",
+    "{dp-aper-radius}",
+    "--nsigma",
+    "{dp-nsigma}",
+    "--apcorr",
+    "{dp-apcorr}",
+    "--box-arcsec",
+    "{dp-box-arcsec}",
+    "--box-nsigma",
+    "{dp-box-nsigma}",
+    "--tile",
+    "{dp-tile}",
+    "--bw",
+    "{dp-bw}",
+    "--seed",
+    "{seed}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if_file": "{dp-rms-file}",
+     "argv": [
+      "--rms-file",
+      "{dp-rms-file}"
+     ]
+    },
+    {
+     "if_file": "{dp-weight-file}",
+     "argv": [
+      "--weight-file",
+      "{dp-weight-file}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "DEPTH_RMS",
+     "DEPTH_LIM",
+     "DEPTH_SBLIM"
+    ]
+   }
+  },
+  {
+   "id": "compmap",
+   "label": "Completeness Map by Region",
+   "title": "Completeness by region and depth",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog",
+    "image"
+   ],
+   "record": "analysis.completeness_map",
+   "catalog_tmp": "compmap",
+   "done_status": "completeness map done",
+   "after": "OGFDepthAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/depthmap.py",
+    "{image}",
+    "--work",
+    "{work}/depth",
+    "--catalog",
+    "{catalog}",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--mode",
+    "compmap",
+    "--mag-zeropoint",
+    "{extract:mag-zeropoint}",
+    "--pixel-scale",
+    "{extract:pixel-scale}",
+    "--aper-radius",
+    "{dp-aper-radius}",
+    "--nsigma",
+    "{dp-nsigma}",
+    "--apcorr",
+    "{dp-apcorr}",
+    "--box-arcsec",
+    "{dp-box-arcsec}",
+    "--box-nsigma",
+    "{dp-box-nsigma}",
+    "--tile",
+    "{dp-tile}",
+    "--bw",
+    "{dp-bw}",
+    "--seed",
+    "{seed}",
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    },
+    {
+     "if_file": "{dp-rms-file}",
+     "argv": [
+      "--rms-file",
+      "{dp-rms-file}"
+     ]
+    },
+    {
+     "if_file": "{dp-weight-file}",
+     "argv": [
+      "--weight-file",
+      "{dp-weight-file}"
+     ]
+    },
+    "--regions",
+    "{dp-regions}",
+    "--grid",
+    "{dp-grid}",
+    "--rms-classes",
+    "{dp-rms-classes}",
+    {
+     "if_file": "{dp-region-file}",
+     "argv": [
+      "--region-file",
+      "{dp-region-file}"
+     ]
+    },
+    "--maps-at",
+    "{dp-maps-at}",
+    "--detector",
+    "{detector}",
+    "--kind",
+    "{kind}",
+    "--mag-min",
+    "{mag-min}",
+    "--mag-max",
+    "{mag-max}",
+    "--n-bins",
+    "{n-bins}",
+    "--per-bin",
+    "{dp-per-bin}",
+    "--per-image",
+    "{per-image}",
+    "--psf-fwhm",
+    "{psf-fwhm}",
+    "--match-radius",
+    "{match-radius}",
+    "--re-bins",
+    "{re-bins}",
+    "--detect-thresh",
+    "{extract:detect-thresh}",
+    "--detect-minarea",
+    "{extract:detect-minarea}",
+    "--n-workers",
+    "{extract:n-workers}",
+    {
+     "if": "allow-blends",
+     "argv": [
+      "--allow-blends"
+     ]
+    },
+    {
+     "if": "dp-global-threshold",
+     "argv": [
+      "--global-threshold"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "COMPL_REGION",
+     "COMPL_LOC",
+     "COMPL_LIM50_LOC",
+     "COMPL_LIM90_LOC"
+    ]
+   }
+  },
+  {
+   "id": "depthplot",
+   "label": "Depth / Completeness Map Plot...",
+   "proc": "OGFDepthPlot",
+   "session": "NONE"
+  },
+  {
+   "id": "depthtable",
+   "label": "Depth Tile / Region Table...",
+   "proc": "OGFDepthTable",
+   "session": "NONE"
+  },
+  {
+   "id": "depthshow",
+   "label": "Show Depth Maps",
+   "proc": "OGFDepthShow",
+   "session": "NONE"
   }
  ],
  "params": [
@@ -250,6 +476,160 @@
    "min": 0,
    "max": 2147483647,
    "group": "Detection",
+   "expert": true
+  },
+  {
+   "name": "dp-aper-radius",
+   "label": "Aperture radius (px)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Depth maps",
+   "help": "Radius of the circular aperture of the point-source depth (blank-aperture noise law). About 1 FWHM.",
+   "min": 0.5,
+   "max": 100
+  },
+  {
+   "name": "dp-nsigma",
+   "label": "Depth significance (sigma)",
+   "type": "float",
+   "default": 5.0,
+   "group": "Depth maps",
+   "help": "Limiting magnitude = zeropoint - 2.5 log10(nsigma x sigma_aperture) - aperture correction.",
+   "min": 1,
+   "max": 20
+  },
+  {
+   "name": "dp-apcorr",
+   "label": "Aperture correction (mag)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Depth maps",
+   "help": "Magnitude difference total - aperture (>= 0) subtracted from the limit for point sources.",
+   "min": 0,
+   "max": 3
+  },
+  {
+   "name": "dp-box-arcsec",
+   "label": "SB box size (arcsec)",
+   "type": "float",
+   "default": 10.0,
+   "group": "Depth maps",
+   "help": "Surface-brightness limit for a box x box arcsec^2 region (needs the pixel scale of the extraction parameters).",
+   "min": 0.5,
+   "max": 600
+  },
+  {
+   "name": "dp-box-nsigma",
+   "label": "SB significance (sigma)",
+   "type": "float",
+   "default": 3.0,
+   "group": "Depth maps",
+   "help": "",
+   "min": 1,
+   "max": 20
+  },
+  {
+   "name": "dp-tile",
+   "label": "Tile size for the empirical check (px)",
+   "type": "int",
+   "default": 128,
+   "group": "Depth maps",
+   "help": "Blank apertures per tile are compared with the model from the local rms.",
+   "min": 32,
+   "max": 4096,
+   "expert": true
+  },
+  {
+   "name": "dp-bw",
+   "label": "Mesh size of the local rms (px)",
+   "type": "int",
+   "default": 64,
+   "group": "Depth maps",
+   "help": "Mesh of the local rms map (sep).",
+   "min": 16,
+   "max": 1024,
+   "expert": true
+  },
+  {
+   "name": "dp-rms-file",
+   "label": "Rms map (optional)",
+   "type": "file",
+   "default": "",
+   "group": "Depth inputs",
+   "help": "FITS rms map in the image units (scaled to the measured pixel rms); replaces the mesh rms."
+  },
+  {
+   "name": "dp-weight-file",
+   "label": "Weight map (optional)",
+   "type": "file",
+   "default": "",
+   "group": "Depth inputs",
+   "help": "FITS inverse-variance weight map (rms ~ 1/sqrt(w), scaled to the measured pixel rms). Ignored when an rms map is given."
+  },
+  {
+   "name": "dp-regions",
+   "label": "Regions",
+   "type": "choice",
+   "default": "rms",
+   "group": "Regions",
+   "help": "grid = rectangular grid; rms = classes of equal area of the depth map (non-contiguous regions of equal depth); file = integer label image.",
+   "choices": [
+    "grid",
+    "rms",
+    "file"
+   ]
+  },
+  {
+   "name": "dp-grid",
+   "label": "Grid (columns x rows)",
+   "type": "string",
+   "default": "3x3",
+   "group": "Regions",
+   "help": "e.g. 3x3."
+  },
+  {
+   "name": "dp-rms-classes",
+   "label": "Depth classes",
+   "type": "int",
+   "default": 4,
+   "group": "Regions",
+   "help": "Number of equal-area depth classes.",
+   "min": 2,
+   "max": 20
+  },
+  {
+   "name": "dp-region-file",
+   "label": "Region label image",
+   "type": "file",
+   "default": "",
+   "group": "Regions",
+   "help": "Integer FITS image of the same size (0 = excluded)."
+  },
+  {
+   "name": "dp-per-bin",
+   "label": "Injections per magnitude bin",
+   "type": "int",
+   "default": 200,
+   "group": "Regions",
+   "help": "Total over all regions; each region needs >= 60 injections to get a limit, scale with the number of regions.",
+   "min": 20,
+   "max": 20000
+  },
+  {
+   "name": "dp-maps-at",
+   "label": "Completeness maps at magnitudes",
+   "type": "string",
+   "default": "",
+   "group": "Regions",
+   "help": "Comma separated magnitudes: writes compmap_frac_mXX.fits (completeness at that magnitude per pixel)."
+  },
+  {
+   "name": "dp-global-threshold",
+   "label": "Sep detector: global threshold",
+   "type": "bool",
+   "default": false,
+   "group": "Regions",
+   "help": "Threshold relative to the global rms (default: local rms map, as SExtractor).",
    "expert": true
   }
  ]
