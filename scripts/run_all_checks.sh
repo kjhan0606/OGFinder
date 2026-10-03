@@ -30,7 +30,13 @@ chk_tools_syntax() { local bad=0 f
   command -v tclsh >/dev/null && { tclsh tools/tclprocs.tcl plugins/mask/mask.tcl >/dev/null 2>&1 || { echo "tclprocs.tcl failed"; bad=1; }; }
   "$PY" tools/compare_menus.py tools/data/menu_baseline.tsv tools/data/menu_new3.tsv >/dev/null 2>&1 || { echo "compare_menus.py failed"; bad=1; }
   "$PY" tools/steps_sig.py >/dev/null 2>&1; [ $bad = 0 ]; }
-chk_ai_bridge_tests() { "$PY" -m pytest -q ai_bridge/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+# the live-agent tests (grok / codex / claude / agy / TAP) talk to real services and are flaky under load: run_all_checks skips them unless OGF_LIVE=1
+# (plain `pytest ai_bridge/tests` still runs them when the CLIs are installed and logged in); with OGF_LIVE=1 a failed run is repeated once for the failed tests only
+chk_ai_bridge_tests() { local r
+  if [ "${OGF_LIVE:-0}" = 1 ]; then "$PY" -m pytest -q ai_bridge/tests 2>&1 | tail -3; r=${PIPESTATUS[0]}
+    [ $r = 0 ] || { echo "-- repeating the failed tests once"; "$PY" -m pytest -q --lf ai_bridge/tests 2>&1 | tail -3; r=${PIPESTATUS[0]}; }
+  else OGF_AI_OFFLINE=1 "$PY" -m pytest -q ai_bridge/tests 2>&1 | tail -3; r=${PIPESTATUS[0]}; echo "(live-agent tests skipped; OGF_LIVE=1 includes them)"; fi
+  [ $r = 0 ]; }
 chk_moving_tests() { "$PY" -m pytest -q moving/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 chk_ai_gui() { need_x || { echo "no X server"; return 77; }
   "$PY" scripts/verify_ai_gui.py --python "$PY" --display $DISP --workdir "$OUT/ai_gui_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
