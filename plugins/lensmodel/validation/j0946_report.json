@@ -1,0 +1,28 @@
+{
+ "pixscale": 0.049999999999998906,
+ "noise": 0.007772432753582795,
+ "psf_sigma_pix": 0.9000000000000197,
+ "lens_centre_pix": [
+  250.3726439027392,
+  250.2822976343348
+ ],
+ "fit": {
+  "theta_E": 1.3894342465003982,
+  "q": 0.9375964567015691,
+  "phi": 21.996116120594873,
+  "gamma": 0.06628787569372208,
+  "phi_g": 45.11696129156894,
+  "x0": 0.0,
+  "y0": 0.0
+ },
+ "evidence": -21045.893059661874,
+ "nfev": 353,
+ "chi2": 37692.89163437854,
+ "ndata": 4644,
+ "neff": 488.8354744006865,
+ "chi2_red": 9.071335539702117,
+ "lam": 75.75269078499805,
+ "pa_sky_deg": 40.648334560404635,
+ "seconds": 1264.412920475006,
+ "note": "SIE+shear fitted by evidence maximisation to the lens-light-subtracted F814W arcs (r>0.55 arcsec mask); literature: Gavazzi+2008 inner ring 1.43+-0.01 arcsec, Collett & Auger 2014 theta_E 1.397 arcsec"
+}
