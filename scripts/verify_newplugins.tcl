@@ -324,6 +324,30 @@ proc sec_photozq {} {
     R pzq_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_structure {} {
+    ::ogf::params::put multifit max-objects 2
+    ::ogf::params::put multifit neighbours mask
+    ::ogf::params::put multifit psf-fwhm 3.0
+    ::ogf::params::put multifit objects {}
+    ::ogf::params::put multifit st-features bar,spiral
+    lassign [run_step multifit structure] ok recs
+    R structure_ran $ok $recs
+    R structure_recorded [expr {[lindex $recs 0 0] eq "analysis.structure"}] $recs
+    set cols [::ogf::cat::columns]
+    R structure_columns [expr {"ST_TYPE" in $cols && "ST_MAG" in $cols && "ST_BT" in $cols && "ST_BARFRAC" in $cols && "ST_RINGR" in $cols && "ST_SPTHETA" in $cols && "ST_DBIC" in $cols && "ST_FLAG" in $cols}]
+    R structure_rows [expr {[nonempty ST_TYPE] >= 1 && [nonempty ST_TYPE] <= 2}] "rows=[nonempty ST_TYPE]"
+    set types [lsearch -all -inline -not [col_values ST_TYPE] {}]
+    R structure_types [expr {[llength $types] > 0 && [llength [lsearch -all -inline -not [lsearch -all -inline -not [lsearch -all -inline -not [lsearch -all -inline -not $types 0] 1] 2] 3]] == 0}] $types
+    set w [file join [OGFSessWorkDir] multifit]
+    foreach f {multifit_results.tsv multifit_residual.fits multifit_model.fits} {
+	R structure_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 50}]
+    }
+    R structure_key [::ogf::cat::exists multifit,structure_file]
+    OGFStructureTable; update
+    R structure_argv_templated [expr {[string match {*--model structure*} [dict get [lindex [::ogf::session::steps] end] argv_t]] && [string match {*--st-features bar,spiral*} [dict get [lindex [::ogf::session::steps] end] argv_t]]}]
+    R structure_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_autodecomp {} {
     ::ogf::params::put multifit max-objects 3
     ::ogf::params::put multifit neighbours mask
@@ -732,7 +756,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit autodecomp morphext noisemodel stacking depth sedcodes photozq cluster spectra xmatch lightcurves batch repro} {
+    foreach sec {isophote completeness daophot psfex multifit autodecomp structure morphext noisemodel stacking depth sedcodes photozq cluster spectra xmatch lightcurves batch repro} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

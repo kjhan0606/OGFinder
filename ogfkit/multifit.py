@@ -24,7 +24,7 @@ PARAMS = {'sersic': ('x', 'y', 'flux', 're', 'n', 'q', 'pa'), 'exp': ('x', 'y', 
           'moffat': ('x', 'y', 'flux', 'fwhm', 'beta', 'q', 'pa'), 'ferrer': ('x', 'y', 'i0', 'rout', 'alpha', 'beta', 'q', 'pa'),
           'king': ('x', 'y', 'i0', 'rc', 'rt', 'alpha', 'q', 'pa'), 'nuker': ('x', 'y', 'ib', 'rb', 'alpha', 'beta', 'gamma', 'q', 'pa'),
           'edgedisk': ('x', 'y', 'i0', 'hs', 'rs', 'pa'), 'brokenexp': ('x', 'y', 'i0', 'h1', 'h2', 'rbreak', 'alpha', 'q', 'pa'),
-          'trunc': ('rbreak', 'dsoft')}
+          'gring': ('x', 'y', 'flux', 'rring', 'sring', 'q', 'pa'), 'trunc': ('rbreak', 'dsoft')}
 FIXED_N = {'exp': 1.0, 'dev': 4.0}
 FIXED_DEFAULT = {'brokenexp': ('alpha',)}                 # parameters that are held fixed unless the component says otherwise
 SB_NORM = {'center': 'i0', 're': 'i0', 'break': 'i0'}     # sersic-family flux normalisations other than the total flux ('sersic1/2/3' of GALFIT): the 'flux' parameter becomes the surface brightness `i0` [counts per pixel]
@@ -139,7 +139,7 @@ def render_model(comps, shape, psf=None, sky=0.0, sky_grad=(0.0, 0.0)):
 # ------------------------------------------------------------------------------------------------------------------ parameter handling
 DEFAULT_BOUNDS = dict(re=(0.3, 500.0), n=(0.3, 8.0), q=(0.05, 1.0), pa=(-360.0, 360.0))
 # bounds / scales of the parameters of the advanced components: (kind, name) overrides name
-ADV_BOUNDS = {'fwhm': (0.3, 500.0), 'rout': (1.0, 2000.0), 'rc': (0.2, 500.0), 'rt': (1.0, 2000.0), 'rb': (0.2, 500.0), 'hs': (0.2, 500.0), 'rs': (0.3, 2000.0), 'h1': (0.3, 2000.0), 'h2': (0.3, 2000.0),
+ADV_BOUNDS = {'rring': (0.5, 2000.0), 'sring': (0.3, 1000.0), 'fwhm': (0.3, 500.0), 'rout': (1.0, 2000.0), 'rc': (0.2, 500.0), 'rt': (1.0, 2000.0), 'rb': (0.2, 500.0), 'hs': (0.2, 500.0), 'rs': (0.3, 2000.0), 'h1': (0.3, 2000.0), 'h2': (0.3, 2000.0),
               'rbreak': (0.5, 2000.0), 'dsoft': (0.05, 2000.0), 'gamma': (0.0, 2.5), 'c0': (-1.5, 3.0), 'rot_in': (-500.0, 500.0), 'rot_out': (0.5, 2000.0), 'rot_theta': (-3600.0, 3600.0),
               'rot_alpha': (-3.0, 3.0), 'rot_ws': (0.1, 1000.0), 'rot_incl': (0.0, 85.0), 'rot_pa': (-720.0, 720.0)}
 KIND_BOUNDS = {('moffat', 'beta'): (0.6, 20.0), ('ferrer', 'beta'): (-2.0, 1.95), ('ferrer', 'alpha'): (0.02, 10.0), ('king', 'alpha'): (0.5, 10.0), ('nuker', 'alpha'): (0.3, 10.0),
@@ -173,6 +173,8 @@ def _normalise(c, zp):
         c.setdefault('n', FIXED_N.get(kind, 1.5))
         if kind == 'moffat':
             c.setdefault('fwhm', 3.0); c.setdefault('beta', 2.5)
+        if kind == 'gring':
+            c.setdefault('rring', 8.0); c.setdefault('sring', 2.0)
         if kind == 'brokenexp':
             c.setdefault('alpha', 0.5); c.setdefault('h1', 5.0); c.setdefault('h2', 2.0); c.setdefault('rbreak', 10.0)
     c['fixed'] = set(c.get('fixed', ())) | set(FIXED_DEFAULT.get(kind, ())) - set(c.get('free', ()))
@@ -217,7 +219,7 @@ def _scale(c, name, box):
         return 1.0
     if name in FLUXLIKE:
         return max(abs(c[name]), 1e-3)
-    if name in ('re', 'fwhm', 'rout', 'rc', 'rt', 'rb', 'hs', 'rs', 'h1', 'h2', 'rbreak', 'rot_out'):
+    if name in ('re', 'fwhm', 'rring', 'sring', 'rout', 'rc', 'rt', 'rb', 'hs', 'rs', 'h1', 'h2', 'rbreak', 'rot_out'):
         return max(c[name], 0.5)
     if name in ('dsoft', 'rot_in'):
         return max(abs(c[name]), 1.0)
@@ -458,7 +460,7 @@ def fit_multistart(data, comps, restarts=2, **kw):
 
 
 def preset(name, x, y, flux, re, q=0.8, pa=0.0, n=2.0, zp=25.0, psf_frac=0.1):
-    """Starting components for a catalog object.  Names: sersic, exp, dev, psf, bulge+disk, psf+sersic."""
+    """Starting components for a catalog object.  Names: sersic, exp, dev, psf, bulge+disk, psf+sersic, and the structure presets bar (Ferrers), ring (Gaussian ring), spiral (disc with logarithmic spiral arms), bulge+disk+bar, bulge+disk+ring."""
     f = flux
     if name == 'psf':
         return [dict(kind='psf', x=x, y=y, flux=f)]
@@ -469,10 +471,38 @@ def preset(name, x, y, flux, re, q=0.8, pa=0.0, n=2.0, zp=25.0, psf_frac=0.1):
                 dict(kind='exp', x=x, y=y, flux=0.7 * f, re=1.2 * re, q=q, pa=pa)]
     if name == 'psf+sersic':
         return [dict(kind='psf', x=x, y=y, flux=psf_frac * f), dict(kind='sersic', x=x, y=y, flux=(1 - psf_frac) * f, re=re, q=q, pa=pa, n=n)]
+    if name == 'bar':
+        return [bar_component(x, y, f, re, pa)]
+    if name == 'ring':
+        return [dict(kind='gring', x=x, y=y, flux=f, rring=re, sring=0.25 * re, q=q, pa=pa)]
+    if name == 'spiral':
+        return [spiral_disc(x, y, f, re, q, pa)]
+    if name == 'bulge+disk+bar':
+        return [dict(kind='sersic', x=x, y=y, flux=0.2 * f, re=0.3 * re, n=2.0, q=min(1.0, q + 0.2), pa=pa, bounds=dict(q=(0.3, 1.0))),
+                dict(kind='exp', x=x, y=y, flux=0.55 * f, re=1.3 * re, q=q, pa=pa),
+                bar_component(x, y, 0.25 * f, 0.6 * re, pa + 30.0)]
+    if name == 'bulge+disk+ring':
+        return [dict(kind='sersic', x=x, y=y, flux=0.2 * f, re=0.3 * re, n=2.0, q=min(1.0, q + 0.2), pa=pa, bounds=dict(q=(0.3, 1.0))),
+                dict(kind='exp', x=x, y=y, flux=0.6 * f, re=1.3 * re, q=q, pa=pa),
+                dict(kind='gring', x=x, y=y, flux=0.2 * f, rring=1.2 * re, sring=0.25 * re, q=q, pa=pa)]
     raise ValueError('unknown preset %r' % name)
 
 
-TIES = {'bulge+disk': [('1.x', '0.x'), ('1.y', '0.y')], 'psf+sersic': [('0.x', '1.x'), ('0.y', '1.y')]}
+def bar_component(x, y, flux, length, pa, q=0.3, c0=1.0):
+    """Ferrers bar (GALFIT 'ferrer': alpha = 2, beta = 0 held fixed, truncation radius `length`, boxy/discy shape c0 free in [0, 3]); `flux` is the integrated flux."""
+    return dict(kind='ferrer', x=x, y=y, i0=PF.ferrers_i0_for_flux(flux, length, 2.0, 0.0, q, c0), rout=length, alpha=2.0, beta=0.0, q=q, pa=pa, c0=c0, fixed=['alpha', 'beta'],
+                bounds=dict(c0=(0.0, 3.0), q=(0.08, 0.7)))
+
+
+def spiral_disc(x, y, flux, re, q, pa, theta=-200.0, ampl=0.15):
+    """Exponential disc with two logarithmic spiral arms: Fourier mode m = 2 (amplitude free) and GALFIT's coordinate rotation with the logarithmic winding function
+    (rot_theta = rotation reached at rot_out, both free; r_in = 0, face-on spiral plane: inclination handled by q / pa)."""
+    return dict(kind='exp', x=x, y=y, flux=flux, re=re, q=q, pa=pa, f2a=ampl, f2p=0.0, rot_func='log', rot_in=0.0, rot_out=3.0 * re, rot_theta=theta, rot_ws=0.5 * re,
+                rot_incl=0.0, rot_pa=0.0, fixed=['rot_in', 'rot_ws', 'rot_incl', 'rot_pa'], bounds=dict(f2a=(0.0, 0.9)))
+
+
+TIES = {'bulge+disk': [('1.x', '0.x'), ('1.y', '0.y')], 'psf+sersic': [('0.x', '1.x'), ('0.y', '1.y')],
+        'bulge+disk+bar': [('1.x', '0.x'), ('1.y', '0.y'), ('2.x', '0.x'), ('2.y', '0.y')], 'bulge+disk+ring': [('1.x', '0.x'), ('1.y', '0.y'), ('2.x', '0.x'), ('2.y', '0.y')]}
 
 
 def fit_preset(data, name, x, y, flux, re, q, pa, extra=(), tie_extra=(), **kw):

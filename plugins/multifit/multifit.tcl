@@ -107,3 +107,25 @@ proc OGFAutoDecompPlot {} {
     pack $w.close -pady 3
     return $w
 }
+
+# ---- bar / ring / spiral fit (step structure: CLI multifit.py --model structure --columns st) ---------------------------------------------
+proc OGFStructureAfter {} {
+    foreach {k f} {results_file results.tsv model_file model.fits residual_file residual.fits montage_file montage.png} {
+	if {[file exists [OGFMultifitFile $f]]} {::ogf::cat::set multifit,$k [OGFMultifitFile $f]}
+    }
+    set f [OGFMultifitFile results.tsv]
+    if {[file exists $f]} {
+	set fd [open $f r]; set L [split [string trim [read $fd]] "\n"]; close $fd
+	set h [split [lindex $L 0] "\t"]
+	::ogf::cat::set multifit,structure_file $f
+	::ogf::status "Bar / ring / spiral fit: [expr {[llength $L] - 1}] objects fitted (ST_TYPE 0 bulge+disc, 1 bar, 2 ring, 3 spiral in the catalog)"
+    }
+    if {[::ogf::params::get multifit show-frames]} {catch {OGFMultifitOpenFrames {residual.fits model.fits}}}
+}
+
+proc OGFStructureTable {} {
+    set f [OGFMultifitFile results.tsv]
+    if {![file exists $f]} {::ogf::status "Bar / ring / spiral fit: nothing yet - run the step first"; return}
+    set fd [open $f r]; set txt [read $fd]; close $fd
+    OGFTextWindow "Bar / ring / spiral fit ($f)" $txt
+}

@@ -2,7 +2,7 @@
 """Multi-component galaxy fitting (GALFIT-like) for the catalog objects of the current image.
 
     multifit.py IMAGE --catalog TSV --work DIR [--mask FITS] [--psf-model JSON | --psf FITS | --psf-fwhm PX]
-        [--model sersic|exp|dev|psf|bulge+disk|psf+sersic|auto] [--neighbours fit|mask|ignore] [--objects "1;5;9"] [--max-objects 100] ...
+        [--model sersic|exp|dev|psf|bulge+disk|psf+sersic|auto|decomp|bar|ring|spiral|bulge+disk+bar|bulge+disk+ring|structure] [--neighbours fit|mask|ignore] [--objects "1;5;9"] [--max-objects 100] ...
     multifit.py IMAGE --config FILE.json --work DIR          (explicit components of one object, GALFIT-feedme-like)
 
 With --catalog the add_columns contract is followed: stdout = `NUMBER` + GF_* columns, logs on stderr.
@@ -26,9 +26,10 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, imageio, psfmodel as pm, multifit as mf, meta as ometa, autodecomp as ad  # noqa: E402
+from ogfkit import tsvio, imageio, psfmodel as pm, multifit as mf, meta as ometa, autodecomp as ad, structfit as sf  # noqa: E402
 
 COLUMNS = ['GF_X', 'GF_Y', 'GF_MAG', 'GF_MAGERR', 'GF_RE', 'GF_REERR', 'GF_N', 'GF_NERR', 'GF_Q', 'GF_PA', 'GF_BT', 'GF_MAG2', 'GF_SKY', 'GF_CHI2', 'GF_NCOMP', 'GF_NNEIGH', 'GF_RESFRAC', 'GF_FLAG']
+ST_COLUMNS = ['ST_TYPE', 'ST_MAG', 'ST_BT', 'ST_BARFRAC', 'ST_BARLEN', 'ST_BARPA', 'ST_BARQ', 'ST_BARC0', 'ST_RINGR', 'ST_RINGW', 'ST_RINGFRAC', 'ST_SPTHETA', 'ST_SPAMP', 'ST_DBIC', 'ST_CHI2', 'ST_FLAG']
 AD_COLUMNS = ['AD_TYPE', 'AD_MAG', 'AD_BT', 'AD_MAGB', 'AD_MAGD', 'AD_MAGN', 'AD_REB', 'AD_NB', 'AD_QB', 'AD_PAB', 'AD_RED', 'AD_QD', 'AD_PAD', 'AD_RE1', 'AD_N1', 'AD_DBIC', 'AD_CHI2', 'AD_BAR', 'AD_FLAG']
 G = {}
 
@@ -144,14 +145,26 @@ def fit_object(i):
                 raise RuntimeError('; '.join(d['notes']) or 'no decomposition converged')
             res, name = d['res'], d['name']
             out['decomp'] = d
+        elif name == 'structure':
+            if extra:
+                raise RuntimeError('--model structure fits one galaxy: use --neighbours mask')
+            sr = sf.fit_structure(cut, lx, ly, s['flux'], s['re'], s['q'], s['pa'], features=tuple(a.st_features.split(',')) if a.st_features != 'all' else ('bar', 'ring', 'spiral'),
+                                  bic_margin=a.bic_margin, geometry=a.st_geometry, psf=psf, rms=rcut, mask=cm, sky=a.sky, zp=zp, gain=a.gain or None, max_nfev=a.max_nfev)
+            if sr['res'] is None:
+                raise RuntimeError('; '.join(sr['notes']) or 'no structure fit converged')
+            res, name = sr['res'], 'structure:' + sr['name']
+            out['structure'] = sr
         else:
             res, _ = mf.fit_preset(cut, name, lx, ly, s['flux'], s['re'], s['q'], s['pa'], extra=extra, **kw)
     except Exception as e:
         out['GF_FLAG'] = 2048
         out['err'] = str(e)
         return out
-    ncomp_t = out['decomp']['ntarget'] if 'decomp' in out else len(mf.preset(name, 0, 0, 1, 1))
+    ncomp_t = out['decomp']['ntarget'] if 'decomp' in out else len(res['components']) if 'structure' in out else len(mf.preset(name, 0, 0, 1, 1))
     comps = res['components'][:ncomp_t]
+    for c in comps:
+        if 'flux' not in c:                                              # surface-brightness normalised components (Ferrers bar): integrated flux from the magnitude
+            c['flux'] = 10 ** (-0.4 * (c['mag'] - zp)) if c.get('mag') == c.get('mag') else 0.0
     flag |= res['flags']
     if res['chi2_red'] > a.chi2_max:
         flag |= mf.FLAGS['CHI2']
@@ -178,9 +191,30 @@ def fit_object(i):
         out.update(decomp_row(out['decomp'], comps, tot, res, zp, flag))
         out['decomp_plot'] = decomp_plot_data(out['decomp'], comps, a.mag_zeropoint)
         out.pop('decomp')
+    if 'structure' in out:
+        out.update(structure_row(out['structure'], comps, tot, res, flag, zp))
+        out.pop('structure')
     if a.keep_stamps:
         out['stamps'] = (cut.astype(np.float32), (res['model']).astype(np.float32), (res['residual']).astype(np.float32))
     return out
+
+
+def structure_row(r, comps, tot, res, flag, zp=25.0):
+    """ST_* catalog columns of one bar / ring / spiral fit (multifit.py --model structure)."""
+    name = r['name']
+    fl = [max(c['flux'], 0.0) for c in comps]
+    row = dict(ST_MAG=(zp - 2.5 * math.log10(tot)) if tot > 0 else None, ST_TYPE={'base': 0, 'bar': 1, 'ring': 2, 'spiral': 3, 'bar+ring': 4}[name], ST_BT=fl[0] / tot if tot > 0 else None, ST_CHI2=res['chi2_red'], ST_FLAG=r['flag'] + 256 * (res['flags'] & 255),
+               ST_DBIC=r['bic']['base'] - r['bic'][name] if 'base' in r['bic'] else None)
+    if name in ('bar', 'bar+ring'):
+        b = comps[2]
+        row.update(ST_BARFRAC=fl[2] / tot, ST_BARLEN=b['rout'], ST_BARPA=b['pa'], ST_BARQ=b['q'], ST_BARC0=b.get('c0'))
+    if name in ('ring', 'bar+ring'):
+        b = comps[-1]
+        row.update(ST_RINGR=b['rring'], ST_RINGW=b['sring'], ST_RINGFRAC=fl[-1] / tot)
+    elif name == 'spiral':
+        row.update(ST_SPTHETA=comps[1].get('rot_theta'), ST_SPAMP=comps[1].get('f2a'))
+    row['ST_NOTE'] = '; '.join(r['notes'])
+    return row
 
 
 def decomp_row(d, comps, tot, res, zp, flag):
@@ -477,7 +511,7 @@ def main(argv=None):
     ap.add_argument('--psf-model', default='')
     ap.add_argument('--psf', default='')
     ap.add_argument('--psf-fwhm', type=float, default=0.0)
-    ap.add_argument('--model', default='sersic', choices=['sersic', 'exp', 'dev', 'psf', 'bulge+disk', 'psf+sersic', 'auto', 'decomp'])
+    ap.add_argument('--model', default='sersic', choices=['sersic', 'exp', 'dev', 'psf', 'bulge+disk', 'psf+sersic', 'auto', 'decomp', 'bar', 'ring', 'spiral', 'bulge+disk+bar', 'bulge+disk+ring', 'structure'])
     ap.add_argument('--neighbours', default='fit', choices=['fit', 'mask', 'ignore'])
     ap.add_argument('--objects', default='')
     ap.add_argument('--max-objects', type=int, default=100)
@@ -499,8 +533,10 @@ def main(argv=None):
     ap.add_argument('--restarts', type=int, default=2, help='config / feedme fits: number of extra starts (R_e and n rescaled) tried after the given one; the lowest chi2 is kept (0 = fit only from the given start)')
     ap.add_argument('--mask-catalog', default='', help='config / feedme fits: neighbour masking - TSV catalog (X_IMAGE Y_IMAGE A_IMAGE B_IMAGE THETA_IMAGE); the ellipses of its objects inside the fitted box are masked, except those within --mask-exclude px of a fitted component')
     ap.add_argument('--mask-exclude', type=float, default=4.0, help='--mask-catalog: objects closer than this (pixels) to a fitted component centre are not masked')
-    ap.add_argument('--columns', default='gf', choices=['gf', 'ad'], help='catalog columns of the result: GF_* (components of the fit) or AD_* (structure decomposition: type, B/T, bulge and disc parameters)')
+    ap.add_argument('--columns', default='gf', choices=['gf', 'ad', 'st'], help='catalog columns of the result: GF_* (components of the fit) or AD_* (structure decomposition: type, B/T, bulge and disc parameters)')
     ap.add_argument('--nucleus', default='auto', choices=['auto', 'always', 'off'], help='--model decomp: try a point-source nucleus (auto = when the profile shows a central excess)')
+    ap.add_argument('--st-geometry', default='given', choices=['given', 'outer'], help='--model structure: start the disc axis ratio / PA from the catalog (given) or from the outer isophotes (outer; for galaxies whose bar / ring dominate the inner light)')
+    ap.add_argument('--st-features', default='all', help='--model structure: features to try (all or a comma list of bar,ring,spiral)')
     ap.add_argument('--decomp-restarts', type=int, default=1, help='--model decomp: extra starts (R_e / n rescaled) per candidate model')
     ap.add_argument('--export-feedme', default='', help='write the fitted model as a GALFIT feedme (file; with --config) or into this directory (catalog mode: one galfit_<NUMBER>.feedme per fitted object)')
     a = ap.parse_args(argv)
@@ -553,7 +589,7 @@ def main(argv=None):
     out_rows = []
     for i, r in enumerate(rows):
         res = by.get(i)
-        out_rows.append((r['NUMBER'], {c: (res.get(c) if res else None) for c in (AD_COLUMNS if a.columns == 'ad' else COLUMNS)}))
+        out_rows.append((r['NUMBER'], {c: (res.get(c) if res else None) for c in (AD_COLUMNS if a.columns == 'ad' else ST_COLUMNS if a.columns == 'st' else COLUMNS)}))
     full_m = np.zeros(data.shape, np.float32)
     recs = []
     for r in results:
@@ -606,7 +642,7 @@ def main(argv=None):
         pass
     if any('DEC_MODEL' in r for r in results):
         write_decomp(a, W, results)
-    tsvio.write_columns(AD_COLUMNS if a.columns == 'ad' else COLUMNS, out_rows)
+    tsvio.write_columns(AD_COLUMNS if a.columns == 'ad' else ST_COLUMNS if a.columns == 'st' else COLUMNS, out_rows)
     return 0
 
 

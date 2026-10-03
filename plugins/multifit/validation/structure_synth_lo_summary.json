@@ -1,0 +1,81 @@
+{
+ "snr": "lo",
+ "n_per_class": 20,
+ "elapsed_s": 948.4028961658478,
+ "summary": {
+  "errors": 0,
+  "control": {
+   "n": 20,
+   "selected": {
+    "base": 20,
+    "bar": 0,
+    "ring": 0,
+    "spiral": 0
+   },
+   "correct": 1.0,
+   "time_median": 26.87801492214203,
+   "BT_err_base_fit_median": 0.005120818409564423,
+   "BT_err_selected_median": 0.005120818409564423,
+   "BT_abs_err_base_median": 0.043280804269519094,
+   "BT_abs_err_selected_median": 0.043280804269519094
+  },
+  "bar": {
+   "n": 20,
+   "selected": {
+    "base": 1,
+    "bar": 19,
+    "ring": 0,
+    "spiral": 0
+   },
+   "correct": 0.95,
+   "time_median": 17.743323922157288,
+   "BT_err_base_fit_median": 0.19703973361095345,
+   "BT_err_selected_median": 0.07392200150928574,
+   "BT_abs_err_base_median": 0.19703973361095345,
+   "BT_abs_err_selected_median": 0.11196655245257273,
+   "bar_pa_err_deg_median": 67.51796225033044,
+   "bar_pa_err_deg_p90": 84.65923252883782,
+   "bar_len_ratio_median": 0.32234552540897493,
+   "bar_len_ratio_nmad": 0.1618860243388653,
+   "bar_frac_diff_median": -0.12740055575961248,
+   "bar_frac_diff_p90_abs": 0.2202804126944751
+  },
+  "ring": {
+   "n": 20,
+   "selected": {
+    "base": 0,
+    "bar": 1,
+    "ring": 19,
+    "spiral": 0
+   },
+   "correct": 0.95,
+   "time_median": 73.74866855144501,
+   "BT_err_base_fit_median": -0.11448429614738712,
+   "BT_err_selected_median": -0.0020978892241897418,
+   "BT_abs_err_base_median": 0.11448429614738712,
+   "BT_abs_err_selected_median": 0.031193005629730347,
+   "ring_r_ratio_median": 1.0004385628555508,
+   "ring_s_ratio_median": 0.9718351823260498,
+   "ring_frac_diff_median": 0.004571322637057396
+  },
+  "spiral": {
+   "n": 20,
+   "selected": {
+    "base": 6,
+    "bar": 0,
+    "ring": 0,
+    "spiral": 14
+   },
+   "correct": 0.7,
+   "time_median": 19.328081488609314,
+   "BT_err_base_fit_median": 0.059557325941588024,
+   "BT_err_selected_median": -0.020965537171344792,
+   "BT_abs_err_base_median": 0.06199644532474931,
+   "BT_abs_err_selected_median": 0.04679950431327744,
+   "spiral_sign_correct": 1.0,
+   "spiral_theta_ratio_median": 0.9682131355188672,
+   "spiral_amp_diff_median": 0.04069987279035461
+  },
+  "false_positive_rate_controls": 0.0
+ }
+}

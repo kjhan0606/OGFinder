@@ -1,0 +1,347 @@
+{
+ "elapsed_s": 927.6427457332611,
+ "n_fits": 186,
+ "models": {
+  "sersic": {
+   "n": 93,
+   "galfit_failed": 0,
+   "multifit_failed": 0,
+   "both": 93,
+   "galfit_flagged_params": 0,
+   "galfit_time_median": 0.4331090450286865,
+   "multifit_time_median": 2.383730888366699,
+   "galfit_failures": [],
+   "multifit_failures": [],
+   "multifit_minus_galfit": {
+    "c0.dx": {
+     "n": 93,
+     "median": -0.0002999999999957481,
+     "nmad": 0.0019273800000007752,
+     "p90_abs": 0.028020000000000767,
+     "max_abs": 0.2073999999999998
+    },
+    "c0.dy": {
+     "n": 93,
+     "median": 0.00030000000000285354,
+     "nmad": 0.0020756399999951624,
+     "p90_abs": 0.018900000000000715,
+     "max_abs": 10.768500000000003
+    },
+    "c0.dmag": {
+     "n": 93,
+     "median": 0.0007000000000019213,
+     "nmad": 0.002372159999999739,
+     "p90_abs": 0.014260000000000507,
+     "max_abs": 0.9390000000000001
+    },
+    "c0.re_rel": {
+     "n": 93,
+     "median": -0.0006021375884388558,
+     "nmad": 0.0023284441228002633,
+     "p90_abs": 0.015689556493764464,
+     "max_abs": 5.597384665367121
+    },
+    "c0.dq": {
+     "n": 93,
+     "median": 0.00019999999999997797,
+     "nmad": 0.0005930399999999347,
+     "p90_abs": 0.003900000000000009,
+     "max_abs": 0.10120000000000001
+    },
+    "c0.dpa": {
+     "n": 88,
+     "median": 0.0017500000000012506,
+     "nmad": 0.021868350000009605,
+     "p90_abs": 0.16138000000000968,
+     "max_abs": 65.02590000000001
+    },
+    "c0.n_rel": {
+     "n": 93,
+     "median": -0.0008706587984910197,
+     "nmad": 0.0037662827295834663,
+     "p90_abs": 0.009834463925738675,
+     "max_abs": 0.11737500000000001
+    }
+   },
+   "chi2_arbiter": {
+    "n": 93,
+    "chi2red_galfit_median": 8.777645907924024,
+    "chi2red_multifit_median": 8.779265038077055,
+    "diff_median": 9.343047550530173,
+    "rel_diff_median": 5.256709077839015e-05,
+    "within_0p5pct": 0.8924731182795699,
+    "within_2pct": 0.946236559139785,
+    "multifit_lower_by_gt_0p5pct": 0.053763440860215055,
+    "galfit_lower_by_gt_0p5pct": 0.053763440860215055,
+    "worst_rel": 0.11433271279730221,
+    "best_rel": -0.18791872136795104
+   },
+   "cross_chi2": {
+    "n": 93,
+    "renderer_agreement_galfit_solution_median_rel": 0.0005393095943815318,
+    "renderer_agreement_multifit_solution_median_rel": 0.00025302658093950825,
+    "renderer_agreement_p90_abs": 0.020197046405741714,
+    "in_ogfkit_multifit_lower_frac": 0.13978494623655913,
+    "in_ogfkit_galfit_lower_frac": 0.010752688172043012,
+    "in_ogfkit_within_0p5pct_frac": 0.8494623655913979,
+    "in_galfit_multifit_lower_frac": 0.053763440860215055,
+    "in_galfit_galfit_lower_frac": 0.053763440860215055
+   },
+   "mag_within_0p05_frac": 0.9139784946236559,
+   "mag_within_0p1_frac": 0.9354838709677419,
+   "by_band": {
+    "f105w": {
+     "n": 27,
+     "dmag": {
+      "n": 27,
+      "median": 0.0007000000000019213,
+      "nmad": 0.0016308600000014663,
+      "p90_abs": 0.007440000000001142,
+      "max_abs": 0.09169999999999945
+     }
+    },
+    "f125w": {
+     "n": 28,
+     "dmag": {
+      "n": 28,
+      "median": 0.0008000000000016882,
+      "nmad": 0.0014825999999991783,
+      "p90_abs": 0.0066599999999986895,
+      "max_abs": 0.21080000000000254
+     }
+    },
+    "f160w": {
+     "n": 27,
+     "dmag": {
+      "n": 27,
+      "median": 0.0008999999999979025,
+      "nmad": 0.0037064999999966287,
+      "p90_abs": 0.016380000000001657,
+      "max_abs": 0.3599000000000032
+     }
+    },
+    "m51": {
+     "n": 11,
+     "dmag": {
+      "n": 11,
+      "median": -0.01130000000000031,
+      "nmad": 0.018532500000000264,
+      "p90_abs": 0.7792000000000012,
+      "max_abs": 0.9390000000000001
+     }
+    }
+   }
+  },
+  "devexp": {
+   "n": 93,
+   "galfit_failed": 9,
+   "multifit_failed": 0,
+   "both": 84,
+   "galfit_flagged_params": 0,
+   "galfit_time_median": 7.074758768081665,
+   "multifit_time_median": 30.88921308517456,
+   "galfit_failures": [
+    {
+     "band": "f160w",
+     "k": 1,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "f160w",
+     "k": 10,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "f105w",
+     "k": 1,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "f105w",
+     "k": 5,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "m51",
+     "k": 1,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "m51",
+     "k": 5,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "m51",
+     "k": 6,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "m51",
+     "k": 7,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    },
+    {
+     "band": "m51",
+     "k": 8,
+     "err": "uker powerlaw too small/big.  If frustrated or \n   problem should persist, email for help or report problem to: \n                     Chien.Y.Peng@gmail.com \n\n\u0007"
+    }
+   ],
+   "multifit_failures": [],
+   "multifit_minus_galfit": {
+    "c0.dx": {
+     "n": 84,
+     "median": 0.0007499999999964757,
+     "nmad": 0.014826000000002316,
+     "p90_abs": 0.07373999999999654,
+     "max_abs": 3.6488999999999976
+    },
+    "c0.dy": {
+     "n": 84,
+     "median": 0.0,
+     "nmad": 0.015863820000005167,
+     "p90_abs": 0.08129999999999923,
+     "max_abs": 11.523599999999995
+    },
+    "c0.dmag": {
+     "n": 84,
+     "median": 0.007550000000000168,
+     "nmad": 0.14581371000000254,
+     "p90_abs": 1.8210000000000033,
+     "max_abs": 46.0298
+    },
+    "c0.re_rel": {
+     "n": 84,
+     "median": 0.0,
+     "nmad": 0.08764142697864528,
+     "p90_abs": 2.280981016404058,
+     "max_abs": 14.035897435897436
+    },
+    "c0.dq": {
+     "n": 84,
+     "median": 0.0009499999999999925,
+     "nmad": 0.04025258999999999,
+     "p90_abs": 0.7611100000000003,
+     "max_abs": 0.9968
+    },
+    "c0.dpa": {
+     "n": 73,
+     "median": -0.09120000000000061,
+     "nmad": 1.4421250200000257,
+     "p90_abs": 33.40038000000001,
+     "max_abs": 87.1834
+    },
+    "c1.dx": {
+     "n": 84,
+     "median": 0.0007499999999964757,
+     "nmad": 0.014826000000002316,
+     "p90_abs": 0.07373999999999654,
+     "max_abs": 3.6488999999999976
+    },
+    "c1.dy": {
+     "n": 84,
+     "median": 0.0,
+     "nmad": 0.015863820000005167,
+     "p90_abs": 0.08129999999999923,
+     "max_abs": 11.523599999999995
+    },
+    "c1.dmag": {
+     "n": 84,
+     "median": 0.0005500000000004945,
+     "nmad": 0.014900129999996877,
+     "p90_abs": 0.4192800000000004,
+     "max_abs": 15.7725
+    },
+    "c1.re_rel": {
+     "n": 84,
+     "median": -0.0006001279697802064,
+     "nmad": 0.008541426767667082,
+     "p90_abs": 0.15422235753370475,
+     "max_abs": 37.94780896110291
+    },
+    "c1.dq": {
+     "n": 84,
+     "median": -0.0004499999999999782,
+     "nmad": 0.006523440000000022,
+     "p90_abs": 0.12759000000000006,
+     "max_abs": 0.995
+    },
+    "c1.dpa": {
+     "n": 76,
+     "median": 0.02599999999999625,
+     "nmad": 0.32743220999998746,
+     "p90_abs": 2.949449999999999,
+     "max_abs": 89.58190000000002
+    }
+   },
+   "chi2_arbiter": {
+    "n": 84,
+    "chi2red_galfit_median": 8.584096404755089,
+    "chi2red_multifit_median": 8.970739004448706,
+    "diff_median": 97.22157119179974,
+    "rel_diff_median": 0.0005665341219093442,
+    "within_0p5pct": 0.5238095238095238,
+    "within_2pct": 0.6666666666666666,
+    "multifit_lower_by_gt_0p5pct": 0.11904761904761904,
+    "galfit_lower_by_gt_0p5pct": 0.35714285714285715,
+    "worst_rel": 0.955751116568859,
+    "best_rel": -0.5737272994957292
+   },
+   "cross_chi2": {
+    "n": 84,
+    "renderer_agreement_galfit_solution_median_rel": 0.0018789753836284673,
+    "renderer_agreement_multifit_solution_median_rel": -0.0023050034554734644,
+    "renderer_agreement_p90_abs": 0.07264346039622112,
+    "in_ogfkit_multifit_lower_frac": 0.47619047619047616,
+    "in_ogfkit_galfit_lower_frac": 0.047619047619047616,
+    "in_ogfkit_within_0p5pct_frac": 0.47619047619047616,
+    "in_galfit_multifit_lower_frac": 0.11904761904761904,
+    "in_galfit_galfit_lower_frac": 0.35714285714285715
+   },
+   "mag_within_0p05_frac": 0.40476190476190477,
+   "mag_within_0p1_frac": 0.5,
+   "by_band": {
+    "f105w": {
+     "n": 25,
+     "dmag": {
+      "n": 25,
+      "median": 0.010600000000000165,
+      "nmad": 0.09162468000000241,
+      "p90_abs": 0.6078600000000014,
+      "max_abs": 26.876799999999996
+     }
+    },
+    "f125w": {
+     "n": 28,
+     "dmag": {
+      "n": 28,
+      "median": 0.005550000000001276,
+      "nmad": 0.14062460999999882,
+      "p90_abs": 2.4004500000000015,
+      "max_abs": 29.399399999999993
+     }
+    },
+    "f160w": {
+     "n": 25,
+     "dmag": {
+      "n": 25,
+      "median": -0.011600000000001387,
+      "nmad": 0.1365474599999978,
+      "p90_abs": 0.7774,
+      "max_abs": 2.7012
+     }
+    },
+    "m51": {
+     "n": 6,
+     "dmag": {
+      "n": 6,
+      "median": 0.5019,
+      "nmad": 1.6270052400000006,
+      "p90_abs": 38.6362,
+      "max_abs": 46.0298
+     }
+    }
+   }
+  }
+ }
+}

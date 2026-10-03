@@ -19,8 +19,8 @@ import numpy as np
 
 from . import models as M
 
-EXTRA_KINDS = ('moffat', 'ferrer', 'king', 'nuker', 'edgedisk', 'brokenexp')
-SHAPE_KINDS = ('sersic', 'exp', 'dev', 'moffat', 'ferrer', 'king', 'nuker', 'edgedisk', 'brokenexp')
+EXTRA_KINDS = ('moffat', 'ferrer', 'king', 'nuker', 'edgedisk', 'brokenexp', 'gring')
+SHAPE_KINDS = ('sersic', 'exp', 'dev', 'moffat', 'ferrer', 'king', 'nuker', 'edgedisk', 'brokenexp', 'gring')
 EXP_RE = 1.678346990016661              # b_1 : R_e = EXP_RE R_s for the exponential profile
 ROT_KEYS = ('rot_in', 'rot_out', 'rot_theta', 'rot_alpha', 'rot_ws', 'rot_incl', 'rot_pa')
 TRUNC_PARAMS = ('x', 'y', 'rbreak', 'dsoft', 'q', 'pa')
@@ -120,7 +120,7 @@ def rscale_of(c):
         return c['re']
     if k == 'moffat':
         return moffat_rd(c['fwhm'], c['beta'])
-    return {'ferrer': c.get('rout'), 'king': c.get('rc'), 'nuker': c.get('rb'), 'edgedisk': c.get('rs'), 'brokenexp': c.get('h1')}[k]
+    return {'ferrer': c.get('rout'), 'king': c.get('rc'), 'nuker': c.get('rb'), 'edgedisk': c.get('rs'), 'brokenexp': c.get('h1'), 'gring': c.get('rring')}[k]
 
 
 def moffat_rd(fwhm, beta):
@@ -175,7 +175,27 @@ def radial(c, r):
         S = (1.0 + math.exp(-al * rb)) ** (-ex)
         u = np.clip(al * (r - rb), -500, 500)
         return c['i0'] * S * np.exp(-r / h1) * (1.0 + np.exp(u)) ** ex
+    if k == 'gring':                                                             # Gaussian ring: I(r) = I0 exp(-(r - r_ring)^2 / (2 s^2)) in the generalised radius, normalised to the total flux
+        rr, sg = c['rring'], c['sring']
+        q = min(max(c.get('q', 1.0), 0.02), 1.0)
+        I0 = c['flux'] / (flux_factor(c, 1.0) * gring_unit_flux(rr, sg, q))
+        return I0 * np.exp(-0.5 * ((r - rr) / sg) ** 2)
     raise ValueError('unknown kind %r' % k)
+
+
+def gring_unit_flux(rring, sring, q):
+    """Total flux of the Gaussian ring for I0 = 1: 2 pi q int_0^inf r exp(-(r - r_ring)^2 / (2 s^2)) dr (the generalised-radius shape factor is applied by flux_factor)."""
+    from scipy.special import erf
+    z = rring / (sring * math.sqrt(2.0))
+    return 2.0 * math.pi * q * (sring ** 2 * math.exp(-z * z) + rring * sring * math.sqrt(math.pi / 2.0) * (1.0 + erf(z)))
+
+
+def ferrers_i0_for_flux(flux, rout, alpha, beta, q, c0=0.0):
+    """Central surface brightness of a Ferrers bar carrying `flux` (numerical radial integral; shape modifiers through flux_factor)."""
+    x = (np.arange(4000) + 0.5) / 4000.0
+    v = np.clip(1.0 - x ** (2.0 - beta), 0.0, None) ** alpha
+    area = 2.0 * math.pi * q * rout * rout * float(np.sum(x * v) / 4000.0)
+    return flux / (area * flux_factor(dict(c0=c0), 1.0))
 
 
 def sersic_unit_flux(re, n, q):
