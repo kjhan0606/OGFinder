@@ -141,6 +141,13 @@ EXTRA="$EXTRA lensmodel_tests"
 chk_lensmodel_gui() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_lensmodel.sh" "$OUT/lensmodel_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA lensmodel_gui"
+chk_regression_tests() { "$PY" -m pytest -q regression 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA regression_tests"
+# per-tool regression set on small public data (HUDF F160W crop, SDSS Stripe 82 run 94, HST J0946+1006, SDSS photo-z set): data are fetched on demand
+# into $OGF_DATA_CACHE (docs/testing.md); a case whose data are unreachable is SKIP, and the whole check is skipped (77) when nothing could run
+chk_regression_data() { local o rc; o=$("$PY" regression/run_regression.py --report "$OUT/regression_report.json" 2>&1); rc=$?; echo "$o" | tail -14
+  [ $rc != 0 ] && return 1; echo "$o" | grep -q 'regression: 0 pass, 0 fail' && return 77; return 0; }
+LONG="$LONG regression_data"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc

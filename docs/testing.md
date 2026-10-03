@@ -43,6 +43,8 @@
 | `manifests` | `tools/validate_manifests.py` (static check of all plugin manifests and `cli` templates) + `pytest tools/tests` (13 mistake classes are detected) | venv | yes |
 | `cli_templates` | `scripts/verify_cli_templates.tcl` (Xvfb, fake interpreter `scripts/fake_python_for_templates.sh`): the five converted steps vs. their legacy procs - argv, recorder record, resulting catalog, status | X server | yes |
 | `cli_headless` | `scripts/verify_cli_headless.tcl` (Xvfb, fake interpreter): legacy GUI proc vs. the step's `headless` block for 14 steps (extract, dual, multiband, crossmatch, segmap, completeness, photo-z, SED, deconvolution, ICL ×3, mask.auto, LSBG) - argv, recorder record, catalog and status identical. The real-driver counterpart `scripts/verify_headless_real.py` (m51, ~2 min, not in `run_all_checks.sh`) compares catalogs/images of the GUI path and the batch path byte for byte. | X server | yes |
+| `regression_tests` | `pytest regression` (4 offline tests of the regression-set machinery: range comparison, every case has a baseline, every case is documented here, unavailable data -> SKIP) |
+| `regression_data` | (long) `regression/run_regression.py`: 11 per-tool cases on small public data compared with `regression/baselines.json` (see "Regression-validation set" below); a case whose data cannot be fetched is SKIP, the check is skipped when nothing could run |
 | `moving_session` | self-contained by default (`scripts/verify_moving_session_auto.sh`): a real ds9 runs the Moving Objects GUI steps on the 4 cached BB89 exposures (`scripts/verify_moving_record.tcl`), saves the session script, and `verify_moving_session.sh` replays it and compares detections / movers / tracklets / identified / orbit / transients / light curves / export byte for byte; with `OGF_MOVING_SESSION`, `OGF_MOVING_REF`, `OGF_MOVING_FIELD` set it replays that session instead. SKIPs (77) without the cached exposures, an X server, or (network or `~/.ds9/moving_cache`); ~10 min | cache (+ network when uncached) | no (long) |
 
 Test data location: `OGF_TEST_FITS` (default `/workspace/fits`).  `docs/windows_macos_build.md` lists what is *not* verified on
@@ -55,3 +57,41 @@ other platforms.  The generator/compare scripts are in `tools/` (see `tools/READ
   `sedcodes_tests` uses mock codes plus the real eazy-py / Bagpipes when installed.
 * Plugin tests print their measured numbers (`pytest -s`); the values quoted in `docs/<plugin>.md` and `docs/progress_log.md` come from those runs.
 * Do not edit repository files or plugins while `run_all_checks.sh` is running: the stages read them live.
+
+
+## Regression-validation set (`regression/`, checks `regression_tests` and `regression_data`)
+
+One or two cases per analysis tool, run on small **real public data** (not synthetic images), each producing a few headline numbers that must stay inside the
+ranges of `regression/baselines.json`.  `python3 regression/run_regression.py [--list] [--only a,b] [--tool t] [--report out.json] [--record]`
+(`--record` prints the observed metrics instead of comparing - use it to write or refresh a baseline).  Exit 1 = a metric left its range or a case crashed.
+
+**Data and data path.**  Everything lives in `$OGF_DATA_CACHE` (default `~/.cache/ogfinder_regression`) and is fetched on demand, once:
+* HUDF12 WFC3/IR F160W mosaic (HLSP `hlsp_hudf12_hst_wfc3ir_udfmain_f160w_v1.0_drz.fits`, https://archive.stsci.edu/hlsps/hudf12/, ~0.5 GB; `/workspace/fits/hudf_f160w.fits` or `$OGF_FITS_DIR/hudf_f160w.fits` is used instead when present) -> a 1400 x 1400 crop `hudf12_f160w_crop.fits` (pixel box [1000:2400,1000:2400]) is cut and cached;
+* SDSS J0946+1006 (SLACS), HST ACS/WFC F814W, MAST product `j9op14010_drc.fits` (program 10886; 215 MB) -> 500 x 500 cutout in `lens/`;
+* SDSS Stripe 82 run 94 frames and the SkyBoT truth for camcol 3 in `sdss_run94/` (written by `moving/validation/sdss_known_asteroids.py`; NOT downloaded automatically - the case is SKIP until that script has been run once);
+* `photo_z/data/sdss_specphoto.h5` + the MDN checkpoint in the repository (the photo-z case needs torch).
+Unreachable data (offline box, MAST down) give SKIP, never FAIL.
+
+| case | tool | what is measured (headline metrics) |
+|---|---|---|
+| `extract_hudf` | `bin/ds9_sextract` | source count, count brighter than 24, brightest and median MAG_AUTO on the crop |
+| `noise_blank_apertures` | noisemodel | blank-aperture pull std with the local noise law (ideal 1) and with the naive law; pixel sigma |
+| `photerr_injection` | noisemodel / `ogfkit.photerr` | injected-source pull std (isolated) and naive pull std, fraction measured |
+| `depth_hudf` | completeness | median, p10, p90 5-sigma limiting magnitude in a 3-pixel-radius aperture |
+| `psf_heldout_residual` | psfex | residual of held-out stars for PSF degree 0/1/2/3 and rank 1 |
+| `stack_null_calibration` | stacking | z-score mean/std of 17 null stacks (calibration of the quoted errors) |
+| `isophote_bright_galaxy` | isophote | median over 3 bright galaxies of number of isophotes, total magnitude, outer ellipticity / PA |
+| `multifit_sersic` | multifit | 6 faint extended galaxies, Sersic fit: median Re, n, offset from MAG_AUTO |
+| `moving_sdss_run94` | moving | SDSS run 94 camcol 3, orbit-prior linking: true tracklets, number of tracklets, precision lower bound, recall |
+| `photoz_closure_sdss` | photoz_sed | PIT KS p, 68 % coverage and CRPS before / after the recalibration map and cross-fitted; injected-width recovery |
+| `lens_j0946_evidence` | lensmodel | HST J0946+1006: chi2_red of the stored SIE+shear model and the evidence loss when theta_E +3 % or q -0.05 |
+
+**What these baselines are.**  They are *self-baselines*: the ranges were set around the values the current code produces on this data (generous, 3-10 sigma of the
+case-to-case spread seen between runs or wide where few objects enter), so they detect regressions and silent behaviour changes, **not** accuracy against truth.  Accuracy
+against truth is established by the dedicated validations (`docs/progress_log.md` R1-R22; GALFIT cross-check, SkyBoT comparison, SDSS photo-z truth, literature lens model).
+Several cases deliberately record uncomfortable values (e.g. `stack_null_calibration` z mean about +0.7, `photerr_injection` only 7 evaluable injections) - the ranges are wide there and the
+docs of the tool say why.
+
+**Not covered** (no public-data regression case yet): ai_bridge, cluster (red-sequence), spectra, sedcodes (needs the EAZY/FSPS environments; the photo-z case disables EAZY), lightcurves, xmatch, daophot PSF photometry,
+morph_ext, batch/repro, the GUI plugins themselves (covered by the Xvfb checks above) and the GALFIT wrapper (GALFIT binary not redistributable).  Typical run time: about 4-5 minutes with the data cached on a quiet box
+(`moving_sdss_run94` 1-3 min, `multifit_sersic` 1 min, `photoz_closure_sdss` 1 min, the HUDF cases a few minutes).

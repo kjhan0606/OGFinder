@@ -135,3 +135,12 @@ New plugin (chip Lens, 7 CLI steps + results dialog, docs/lensmodel.md): SIE + s
 * SDSS 3000 held-out: PIT KS p 5e-4 -> 0.18 on an independent half (CRPS unchanged 0.0261: the MDN is nearly calibrated); injected x0.5 / x2 widths recovered (coverage 0.463 / 0.932 -> 0.677 / 0.680).
 * EAZY (eazy-py 0.8.7, no prior) vs MDN: 2.9 % flagged, 95 % of flagged are EAZY outliers; the merged estimate is not better than the MDN.  No GUI step; one survey.
 
+### R21 (precision batch item 6) - strong-lens extensions (`ogfkit/lensextra.py`, `lensmodel.py --task multiplane`, `--task source --source-method inversion`)
+* Pixelated linear source inversion with evidence-optimised regularisation; 18 synthetic lenses: chi2_red 1.02, source correlation 0.9993, centroid 2.3 mas, flux ratio 1.001; pixel-level lens fit (start offset 3 % / 0.05 / 5 deg) lands within 1 % in theta_E in 14/18 (robust sigma 0.2 %), 4 doubles end 3-13 % off.
+* Multi-source-plane (Jackpot-like, 24 lenses): joint fit theta_E scatter 0.16 % vs 0.52 % (plane 1 alone), q 0.009 vs 0.054, phi 1.8 vs 17 deg; free second-plane weight recovered 1.0006 +- 0.0028.
+* Real lens SDSS J0946+1006 (HST F814W via MAST): theta_E 1.389 arcsec (literature 1.40-1.43), q 0.94 (0.87-0.95), chi2_red 9.1 - Gaussian PSF, white-noise assumption and lens-light residuals; outer ring not modelled.  Commits 42737073c, f3c403134 + docs/validation commit.
+
+### R22 (precision batch item 7) - per-tool regression set on public data (`regression/`, docs/testing.md)
+* 11 cases (extract, noisemodel x2, depth, psfex, stacking, isophote, multifit, moving, photo-z, lens) on a HUDF12 F160W crop, SDSS Stripe 82 run 94, SDSS photo-z set and HST J0946+1006; data fetched on demand into `$OGF_DATA_CACHE`; unreachable data -> SKIP.
+* `regression/baselines.json` holds self-baselines (current code), not truth; wired into `scripts/run_all_checks.sh` as `regression_tests` (offline pytest) and `regression_data` (long).  Not covered: ai_bridge, cluster, spectra, sedcodes, lightcurves, xmatch, daophot, morph_ext, batch/repro.
+

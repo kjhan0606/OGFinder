@@ -1,0 +1,350 @@
+{
+ "extract_hudf": {
+  "tool": "extract",
+  "recorded": {
+   "n_sources": 1071.0,
+   "n_mag_lt_24": 194.0,
+   "brightest_mag": 17.336,
+   "median_mag": 26.08
+  },
+  "ranges": {
+   "n_sources": [
+    985.32,
+    1156.68
+   ],
+   "n_mag_lt_24": [
+    170.72,
+    217.28
+   ],
+   "brightest_mag": [
+    17.036,
+    17.636
+   ],
+   "median_mag": [
+    25.78,
+    26.38
+   ]
+  }
+ },
+ "noise_blank_apertures": {
+  "tool": "noisemodel",
+  "recorded": {
+   "pull_std_local_r3": 0.967841,
+   "pull_std_local_r5": 0.925223,
+   "pull_std_naive_r3": 1.919123,
+   "sigma_pix": 0.000464
+  },
+  "ranges": {
+   "pull_std_local_r3": [
+    0.847841,
+    1.087841
+   ],
+   "pull_std_local_r5": [
+    0.775223,
+    1.075223
+   ],
+   "pull_std_naive_r3": [
+    1.519123,
+    2.319123
+   ],
+   "sigma_pix": [
+    0.000417,
+    0.00051
+   ]
+  }
+ },
+ "photerr_injection": {
+  "tool": "noisemodel",
+  "recorded": {
+   "pull_std_isolated": 0.786057,
+   "pull_std_naive_isolated": 5.478818,
+   "frac_measured": 0.834937
+  },
+  "ranges": {
+   "pull_std_isolated": [
+    0.336057,
+    1.236057
+   ],
+   "pull_std_naive_isolated": [
+    3.478818,
+    7.478818
+   ],
+   "frac_measured": [
+    0.714937,
+    0.954937
+   ]
+  }
+ },
+ "depth_hudf": {
+  "tool": "completeness",
+  "recorded": {
+   "depth_5sigma_r3_median": 29.790441,
+   "depth_p10": 29.745035,
+   "depth_p90": 29.823876,
+   "aperture_noise_factor": 13.567782
+  },
+  "ranges": {
+   "depth_5sigma_r3_median": [
+    29.640441,
+    29.940441
+   ],
+   "depth_p10": [
+    29.545035,
+    29.945035
+   ],
+   "depth_p90": [
+    29.623876,
+    30.023876
+   ],
+   "aperture_noise_factor": [
+    12.211004,
+    14.92456
+   ]
+  }
+ },
+ "psf_heldout_residual": {
+  "tool": "psfex",
+  "recorded": {
+   "n_stars": 70.0,
+   "resid_deg0": 0.258052,
+   "resid_deg1": 0.279329,
+   "resid_deg3_rank1": 0.269592
+  },
+  "ranges": {
+   "n_stars": [
+    63.0,
+    77.0
+   ],
+   "resid_deg0": [
+    0.198052,
+    0.318052
+   ],
+   "resid_deg1": [
+    0.219329,
+    0.339329
+   ],
+   "resid_deg3_rank1": [
+    0.209592,
+    0.329592
+   ]
+  }
+ },
+ "stack_null_calibration": {
+  "tool": "stacking",
+  "recorded": {
+   "n_sets": 17.0,
+   "z_std": 0.918137,
+   "z_mean": 0.732084
+  },
+  "ranges": {
+   "n_sets": [
+    13.6,
+    20.4
+   ],
+   "z_std": [
+    0.568137,
+    1.268137
+   ],
+   "z_mean": [
+    0.132084,
+    1.332084
+   ]
+  }
+ },
+ "isophote_bright_galaxy": {
+  "tool": "isophote",
+  "recorded": {
+   "n_fitted": 3.0,
+   "iso_niso": 56.0,
+   "iso_mag_tot": 20.91605,
+   "iso_eps_out": 0.477743,
+   "iso_pa_out": 31.03132,
+   "iso_r50": 57.53265
+  },
+  "ranges": {
+   "n_fitted": [
+    2.5,
+    3.5
+   ],
+   "iso_niso": [
+    47.6,
+    64.4
+   ],
+   "iso_mag_tot": [
+    20.76605,
+    21.06605
+   ],
+   "iso_eps_out": [
+    0.417743,
+    0.537743
+   ],
+   "iso_pa_out": [
+    25.03132,
+    37.03132
+   ],
+   "iso_r50": [
+    51.779385,
+    63.285915
+   ]
+  }
+ },
+ "multifit_sersic": {
+  "tool": "multifit",
+  "recorded": {
+   "n_fitted": 6.0,
+   "median_abs_dmag_vs_mag_auto": 0.57165,
+   "median_gf_re": 9.36756,
+   "median_gf_n": 1.138241
+  },
+  "ranges": {
+   "n_fitted": [
+    5.5,
+    6.5
+   ],
+   "median_abs_dmag_vs_mag_auto": [
+    0.22165,
+    0.92165
+   ],
+   "median_gf_re": [
+    7.02567,
+    11.70945
+   ],
+   "median_gf_n": [
+    0.638241,
+    1.638241
+   ]
+  }
+ },
+ "moving_sdss_run94": {
+  "tool": "moving",
+  "recorded": {
+   "ceiling": 60.0,
+   "baseline_true": 49.0,
+   "baseline_tracklets": 342.0,
+   "orbit_true": 49.0,
+   "orbit_tracklets": 83.0,
+   "orbit_precision_lb": 0.590361,
+   "orbit_recall": 0.816667
+  },
+  "ranges": {
+   "ceiling": [
+    59.5,
+    60.5
+   ],
+   "baseline_true": [
+    46.0,
+    52.0
+   ],
+   "baseline_tracklets": [
+    307.8,
+    376.2
+   ],
+   "orbit_true": [
+    46.0,
+    52.0
+   ],
+   "orbit_tracklets": [
+    70.55,
+    95.45
+   ],
+   "orbit_precision_lb": [
+    0.490361,
+    0.690361
+   ],
+   "orbit_recall": [
+    0.736667,
+    0.896667
+   ]
+  }
+ },
+ "photoz_closure_sdss": {
+  "tool": "photoz_sed",
+  "recorded": {
+   "ks_p_before": 0.000515,
+   "ks_p_after": 0.184977,
+   "cov68_before": 0.726,
+   "cov68_after": 0.691333,
+   "crps_before": 0.02611,
+   "crps_after": 0.026083,
+   "cov68_crossfit_after": 0.679,
+   "crps_crossfit_after": 0.028252,
+   "x2_injected_cov68_after": 0.68,
+   "x05_injected_cov68_after": 0.677
+  },
+  "ranges": {
+   "ks_p_before": [
+    0,
+    0.01
+   ],
+   "ks_p_after": [
+    0.02,
+    1.0
+   ],
+   "cov68_before": [
+    0.696,
+    0.756
+   ],
+   "cov68_after": [
+    0.661333,
+    0.721333
+   ],
+   "crps_before": [
+    0.02411,
+    0.02811
+   ],
+   "crps_after": [
+    0.024083,
+    0.028083
+   ],
+   "cov68_crossfit_after": [
+    0.649,
+    0.709
+   ],
+   "crps_crossfit_after": [
+    0.026252,
+    0.030252
+   ],
+   "x2_injected_cov68_after": [
+    0.65,
+    0.71
+   ],
+   "x05_injected_cov68_after": [
+    0.647,
+    0.707
+   ],
+   "ks_p_crossfit_after": [
+    0.05,
+    1.0
+   ]
+  },
+  "notes": "ks_p_before must stay < 0.01 (uncalibrated MDN is detectably off) and the recalibrated ones above 0.02/0.05"
+ },
+ "lens_j0946_evidence": {
+  "tool": "lensmodel",
+  "recorded": {
+   "chi2_red": 9.0713,
+   "dlnE_thetaE_p3pct": -23185,
+   "dlnE_q_m005": -2876,
+   "evidence": -20056
+  },
+  "ranges": {
+   "chi2_red": [
+    8.3,
+    9.9
+   ],
+   "dlnE_thetaE_p3pct": [
+    -60000,
+    -5000
+   ],
+   "dlnE_q_m005": [
+    -9000,
+    -500
+   ],
+   "evidence": [
+    -21500,
+    -18500
+   ]
+  },
+  "notes": "the stored lens (theta_E 1.389, q 0.94, gamma 0.066 from j0946_report.json) must stay a strong evidence maximum; chi2_red ~9 is the (poor) fit quality, see docs/lensmodel.md"
+ }
+}
