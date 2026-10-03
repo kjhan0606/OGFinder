@@ -213,3 +213,19 @@ def test_manifest_params_match_cli():
     h = subprocess.run([sys.executable, CLI, '--help'], capture_output=True, text=True).stdout
     for p in man['params']:
         assert '--' + p['name'] in h or p['name'] in ('catalog-check', 'flag-catalog', 'show-overlay', 'confirm-panel', 'show-filled', 'fill') or True
+
+
+def test_oblique_trail_through_star_is_kept_but_spike_is_rejected():
+    img = field(23, n_gal=2)
+    yy, xx = np.mgrid[0:N, 0:N]
+    star = (3e4 * np.exp(-0.5 * ((xx - 300) ** 2 + (yy - 280) ** 2) / 2.0 ** 2)).astype(np.float32)
+    th, x0, y0 = 40.0, 300.0, 280.0
+    rho = -(x0 - (N - 1) / 2) * np.sin(np.radians(th)) + (y0 - (N - 1) / 2) * np.cos(np.radians(th))
+    flat = S.trail_image(img.shape, th, rho, 4, 3 * SIG)
+    res = T.detect_trails(img + star + flat)
+    assert len(res['trails']) == 1 and abs(res['trails'][0]['theta_deg'] - th) < 0.5      # constant amplitude along the line: a trail
+    d = (xx - x0) * np.cos(np.radians(th)) + (yy - y0) * np.sin(np.radians(th))
+    u = -(xx - x0) * np.sin(np.radians(th)) + (yy - y0) * np.cos(np.radians(th))
+    spike = (np.exp(-0.5 * (u / 1.3) ** 2) * 150.0 / (1.0 + np.abs(d) / 6.0)).astype(np.float32)   # falls off as 1/distance from the star
+    res2 = T.detect_trails(img + star + spike)
+    assert res2['trails'] == []
