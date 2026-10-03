@@ -87,3 +87,23 @@ def test_real_mpc_astrometry_links_known_asteroids():
     sc = S.score(trks, res)
     assert sc["wrong"] == 0, sc
     assert sc["recall"] >= 0.7, sc
+
+
+def test_cli_nightlink_mode(tmp_path):
+    """ds9_moving.py --mode nightlink on three per-night tracklets.json files (SYNTHETIC)."""
+    import json, subprocess
+    rng = np.random.default_rng(21)
+    trks = S.make_field(6, [0, 2, 5], rng, sig=0.2, n_decoy=4)
+    files = []
+    for nt in (0, 2, 5):
+        d = tmp_path / ("night%d" % nt); d.mkdir()
+        rows = [dict(id=t.id, t=t.mjd.tolist(), ra=t.ra.tolist(), dec=t.dec.tolist(), sig=t.sig.tolist()) for t in trks if t.night == nt]
+        (d / "tracklets.json").write_text(json.dumps(rows))
+        files.append(str(d / "tracklets.json"))
+    cli = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "ds9", "library", "ds9_moving.py")
+    r = subprocess.run([sys.executable, cli, "--mode", "nightlink", "--workdir", str(tmp_path / "wd"), "--tracklet-files"] + files + ["--nl-sigma", "0.2"],
+                       capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0, r.stderr[-600:]
+    out = json.load(open(tmp_path / "wd" / "nightlinks.json"))
+    assert len(out["groups"]) >= 5 and all(g["n_tracklets"] >= 2 for g in out["groups"])
+    assert os.path.exists(tmp_path / "wd" / "nightlinks.tsv")

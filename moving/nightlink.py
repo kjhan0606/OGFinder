@@ -12,7 +12,7 @@ Method (a "linear + gravity" linker in the spirit of Gauss/Herget IOD, HelioLinC
   3. the best grid hypotheses of each surviving pair seed a full 6-parameter least-squares fit (Levenberg-Marquardt, state
      at A's epoch) of all observations of A and B; the pair is accepted when chi2/dof and the largest residual pass;
   4. accepted pairs are grown greedily into chains: another tracklet is added when the current orbit predicts it within
-     tolerance and the refit of all observations stays acceptable; at most one tracklet per night per chain.
+     tolerance and the refit of all observations stays acceptable; at most one tracklet per night and station per chain.
 Model errors (planetary perturbations, topocentric parallax approximations, light-time) are covered by an additive error
 floor sigma_eff^2 = sigma^2 + floor0^2 + (floor_rate * |t - t_ref|)^2 (arcsec, days).
 
@@ -94,7 +94,16 @@ class Tracklet:
         self.mjd = np.asarray(mjd, float)[o]; self.ra = np.asarray(ra, float)[o]; self.dec = np.asarray(dec, float)[o]
         self.sig = np.broadcast_to(np.asarray(sig, float), self.mjd.shape).copy()[o] if np.ndim(sig) else np.full(len(o), float(sig))
         self.code = code; self.id = tid; self.truth = truth
-        self.night = int(np.floor(np.mean(self.mjd) + 0.5 - 0.0)) if night is None else night
+        if night is None:
+            lon = 0.0
+            if code not in (None, "500", ""):
+                try:
+                    from . import obs as O
+                    lon = O.obscodes().get(code, (0.0,))[0] or 0.0
+                except Exception:
+                    lon = 0.0
+            night = int(np.floor(np.mean(self.mjd) + lon / 360.0 + 0.5))      # local noon-to-noon "night" index of the station
+        self.night = night
         self._fit()
         self._obs = None
 
@@ -119,6 +128,13 @@ class Tracklet:
         self.ra_c = (self.ra0 + cx / 3600.0 / cd) % 360.0; self.dec_c = self.dec0 + cy / 3600.0
         self.arc_days = float(t.max() - t.min())
 
+    def obs_t0(self):
+        """(position, velocity) of the observer at the tracklet's reference time (cached)."""
+        if getattr(self, "_obs0", None) is None:
+            p, v = observer_helio(self.t0, self.code)
+            self._obs0 = (p[0], v[0])
+        return self._obs0
+
     def obs(self):
         if self._obs is None:
             self._obs = observer_helio(self.mjd, self.code)
@@ -138,10 +154,10 @@ def tracklets_from_json(trs, night_of=None, sig_default=0.3):
 
 
 # ------------------------------------------------------------------------------------------------ hypotheses
-def hypotheses(trk, n_rho=26, n_rd=17, rho_range=(0.02, 8.0), amax=100.0):
+def hypotheses(trk, n_rho=20, n_rd=13, rho_range=(0.02, 8.0), amax=100.0):
     """Admissible heliocentric states (energy < 0, a < amax) for tracklet attributable on a (log rho, rho_dot/v_esc) grid.
     Returns r (H,3), v (H,3), rho (H,), rhod (H,)."""
-    op, ov = observer_helio(trk.t0, trk.code); op = op[0]; ov = ov[0]
+    op, ov = trk.obs_t0()
     los = _los(trk.ra_c, trk.dec_c); ea, ed = _basis(trk.ra_c, trk.dec_c)
     cd = np.cos(np.radians(trk.dec_c))
     mu_a = trk.mu_x * ARC; mu_d = trk.mu_y * ARC                  # rad/day (east incl. cos dec, north)
@@ -172,10 +188,12 @@ def pair_gate(A, B, hyp=None, model_pos=3.0, model_rate_floor=1.0, top=4, **hkw)
     R, V = hyp[0], hyp[1]
     if len(R) == 0:
         return np.inf, [], hyp
-    ob, ovb = observer_helio(B.t0, B.code); ob = ob[0]; ovb = ovb[0]
-    ra, de, _ = predict(R, V, A.t0, B.t0, ob)
-    h = 0.02
-    ra2, de2, _ = predict(R, V, A.t0, B.t0 + h, ob + ovb * h)
+    ob, ovb = B.obs_t0()
+    h = 0.02                                                     # position and rate from one stacked propagation (t_B and t_B + h)
+    tt = np.array([B.t0, B.t0 + h])[:, None]
+    oo = np.stack([ob, ob + ovb * h])[:, None, :]
+    ra_, de_, _ = predict(R[None], V[None], A.t0, tt, oo)
+    ra, de, ra2, de2 = ra_[0], de_[0], ra_[1], de_[1]
     px, py = sky_diff(ra, de, B.ra_c, B.dec_c)                     # predicted minus measured
     qx, qy = sky_diff(ra2, de2, ra, de); qx /= h; qy /= h         # predicted rate, arcsec/day
     dtg = abs(B.t0 - A.t0)
@@ -283,7 +301,7 @@ def link_nights(*a, **k):
 
 
 def _link_nights(trks, max_gap_days=30.0, min_gap_days=0.3, gate_chi2=60.0, chi2_max=4.0, resid_max=6.0, floor0=0.3, floor_rate=0.05,
-                max_motion_deg_day=2.5, n_rho=26, n_rd=17, top=4, one_per_night=True, grow_tol=6.0, progress=None):
+                max_motion_deg_day=2.5, n_rho=20, n_rd=13, top=4, one_per_night=True, grow_tol=6.0, progress=None):
     """Link tracklets from different nights into orbit-consistent groups.
     Returns dict(groups=[dict(ids, nights, fit, elements, chi2_red, rms_arcsec, max_resid, n_obs, pair_scores)], unlinked=[ids],
     stats=dict(n_pairs_tested, n_gate, n_fit, n_accept))."""
@@ -299,7 +317,7 @@ def _link_nights(trks, max_gap_days=30.0, min_gap_days=0.3, gate_chi2=60.0, chi2
             dt = B.t0 - A.t0
             if dt > max_gap_days:
                 break
-            if dt < min_gap_days or (one_per_night and A.night == B.night):
+            if dt < min_gap_days or (one_per_night and A.night == B.night and A.code == B.code):
                 continue
             sep = np.hypot(*sky_diff(B.ra_c, B.dec_c, A.ra_c, A.dec_c))
             if sep / 3600.0 > max_motion_deg_day * dt + 0.2:
@@ -326,12 +344,12 @@ def _link_nights(trks, max_gap_days=30.0, min_gap_days=0.3, gate_chi2=60.0, chi2
             continue
         members = [i, j]; cur = f; scores = [f.chi2_red]; rejected = set()
         while True:
-            nights = {trks[k].night for k in members}
+            nights = {(trks[k].night, trks[k].code) for k in members}
             best = None
             for k in range(n):
                 if k in used or k in members or k in rejected:
                     continue
-                if one_per_night and trks[k].night in nights:
+                if one_per_night and (trks[k].night, trks[k].code) in nights:
                     continue
                 if abs(trks[k].t0 - cur.t_ref) > max_gap_days:
                     continue
