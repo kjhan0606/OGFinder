@@ -2,7 +2,7 @@
 
 Status: **design proposal, nothing of it is implemented.**  Revision 2 (2026-10-03): the UI decision is taken - **shared UI components plus
 user-selectable layout presets** (sections 6.1, 6.4-6.7, 9, 10).  The three mock-ups behind it are in `/workspace/webdesign/` (`README.md`,
-`proposal_A.html`, `proposal_B.html`, `proposal_C.html`, PNG screenshots); they are not part of this repository and use example data only.  Revision 3 (2026-10-03): the product is **commercial** with a user-chosen compute mode (local flat subscription / server with tokens and limits, chapter 13), and every feature is developed for **both the stand-alone and the web version** (chapter 12).  Target repository: `github.com/kjhan0606/ds10-web` (new, to be created by
+`proposal_A.html`, `proposal_B.html`, `proposal_C.html`, PNG screenshots); they are not part of this repository and use example data only.  Revision 4 (2026-10-03): the **default layout preset is Guided** (proposal C); Classic (A) and Workspace (B) are user-selectable alternatives (6.5, 6.6, 9, 10).  Revision 3 (2026-10-03): the product is **commercial** with a user-chosen compute mode (local flat subscription / server with tokens and limits, chapter 13), and every feature is developed for **both the stand-alone and the web version** (chapter 12).  Target repository: `github.com/kjhan0606/ds10-web` (new, to be created by
 the owner; this document does not push anywhere).  Numbers marked *measured* were taken on the development box (8 cores, 16 GB) with the
 test images in `/workspace/fits`; everything else is an estimate and says so.
 
@@ -17,7 +17,7 @@ Phase I is OGFinder as a customized SAOImageDS9 8.7: a Tk GUI around Python/C ba
 * **both paths drive one viewer interface**: the viewer asks an *image source* for pixels and never knows where they come from;
 * **one set of independent UI components, several layouts**: viewer, catalog table, parameter panel, object inspector, command palette,
   light-curve/tracklet dock, job list and status bar - plus, for the commercial model, the cost-estimate dialog, the account/usage page and the usage meter (13.11) - are built once and arranged by a *layout preset* that the user chooses
-  (Classic = ds9-like, Guided = pipeline stepper, Workspace = icon rail + drawer + dock).  A preset arranges components and owns no analysis logic (section 6);
+  (**Guided** = pipeline stepper, the default; Classic = ds9-like; Workspace = icon rail + drawer + dock).  A preset arranges components and owns no analysis logic (section 6);
 * **one product, two shells, developed together**: the stand-alone (ds9/Tk) version and the web version share one compute core per tool, one plugin manifest and one test suite; a tool is not done until both have an entry (chapter 12);
 * **the user chooses where a job runs**: locally (flat subscription, stand-alone-like, no metering) or on the servers (tokens with daily/weekly/monthly limits) - chapter 13.
 
@@ -281,7 +281,7 @@ interface AppState {
   jobs:     { byId: Record<string, Job>; order: string[] };  session: { steps: SessionStep[]; recording: boolean };   // Job gains mode: "local"|"server", estimate, hold (ch. 13)
   account:  { plan: Plan; entitlements: Entitlements; license: LicenseState };                              // written by server events only (ch. 13)
   usage:    { windows: Record<"day"|"week"|"month", { limit: string; used: string; held: string; resetsAt: string }>; topupBalance: string };
-  ui:       { preset: "classic"|"guided"|"workspace"; theme: "dark"|"light"; locale: "en"|"ko"; computeDefault: "local"|"server"|"ask";
+  ui:       { preset: "guided"|"classic"|"workspace";  /* default "guided" */ theme: "dark"|"light"; locale: "en"|"ko"; computeDefault: "local"|"server"|"ask";
               paletteOpen: boolean; panels: Record<string, PanelState> };                                   // per-preset layout, see 6.6
 }
 ```
@@ -306,42 +306,46 @@ A preset is a shell: a CSS-grid template, the list of components it mounts with 
 that exist only to navigate (built from manifests and commands, holding no analysis logic).  Presets are the only place where components
 are arranged; none of them forks a component.  The three mock-ups in `/workspace/webdesign/` illustrate them.
 
-| | **Classic** (`proposal_A`) | **Guided** (`proposal_C`) | **Workspace** (`proposal_B`) |
+| | **Guided** (`proposal_C`) - **default** | **Classic** (`proposal_A`) | **Workspace** (`proposal_B`) |
 |---|---|---|---|
-| idea | ds9 and OGFinder Phase I, almost no re-learning | a pipeline you can follow and replay: *what do I do next?* | modes + tool drawer + dock for multi-band, time-domain and tablets |
-| default theme | dark | light | dark, light toggle |
-| shell widgets | menu bar (File ... Analysis ... Window); workflow tabs *Detect / Classify / Measure / Low-SB / Time-domain / Results* with a **plugin ribbon** (one chip per plugin: primary step, step list, gear = settings); info panel (File, Object, Value, fk5 alpha/delta, x, y, Zoom); button bar; frame tabs (Single/Tile/Blink); colorbar | left **stepper** (Load, Calibrate, Detect, Measure, Review, Report) with sub-steps, status and progress from `session.steps`/`jobs`; step **"cell" header** (title, parameter chips, Run); result strip (counts, histogram); recorded **session log**; split-compare toolbar | left **icon rail** of modes (Detect, Morph, LSB/ICL, Moving, Photo-z, Trails, AI, Stack); **collapsible drawer** (steps of the mode + parameter form); top bar (file chip, Local / Analyse-on-server switch, theme, language); floating viewer toolbar |
-| components | viewer (1), catalog table (2) with Galaxy/Moving/Transient/All tabs, parameter panel as a dialog (3), a reduced inspector as selected-object summary (4), palette (5, optional), job list + status in the status bar (7, 8) | viewer with split compare (1), inspector as right column (4), parameter panel inline in the cell (3), palette (5, always), job list inside the stepper (7), status/log (8); catalog table as a drawer/modal (2) | viewer (1), parameter panel in the drawer (3), table (2) and light curve/tracklet/jobs (6, 7) in the bottom **dock**, status bar (8), palette (5) |
-| manifest fields used | `tab`, `order`, `short`, `primary`, `steps`, `params` (already present) | plus an optional **`ui.stage`** (`load\|calibrate\|detect\|measure\|review\|report`); default derived from `tab` (Detect -> detect; trails and mask -> calibrate; Classify, Measure, Low-SB, Time-domain -> measure; Results -> review/report) | plus optional **`ui.mode`** and **`ui.icon`**; default: the plugin grouping of the mock-up, the rest under a "More..." flyout |
-| minimum window | 1280 x 720 | 1024 x 700 (panels collapse to drawers below 1280) | 1024 x 700 (rail only below 1100; **best tablet landscape**) |
-| strengths | cheapest, ds9-familiar, best catalog density | review, reporting, teaching; the log is the exported script | layers, time-domain and jobs visible at once; touch-friendly |
-| delivery | **Phase 1** (default preset) | **Phase 2** | **Phase 3**, after the viewer is stable (9.1) |
+| idea | a pipeline you can follow and replay: *what do I do next?* | ds9 and OGFinder Phase I, almost no re-learning | modes + tool drawer + dock for multi-band, time-domain and tablets |
+| for whom | first-time users, routine review and reporting, teaching (the default for everyone until they choose otherwise) | **ds9 veterans** and dense catalog work; one click away (Layout control, palette, first-run chooser 6.6) | multi-band / time-domain work, tablets |
+| default theme | light | dark | dark, light toggle |
+| shell widgets | left **stepper** (Load, Calibrate, Detect, Measure, Review, Report) with sub-steps, status and progress from `session.steps`/`jobs`; step **"cell" header** (title, parameter chips, Run); result strip (counts, histogram); recorded **session log**; split-compare toolbar | menu bar (File ... Analysis ... Window); workflow tabs *Detect / Classify / Measure / Low-SB / Time-domain / Results* with a **plugin ribbon** (one chip per plugin: primary step, step list, gear = settings); info panel (File, Object, Value, fk5 alpha/delta, x, y, Zoom); button bar; frame tabs (Single/Tile/Blink); colorbar | left **icon rail** of modes (Detect, Morph, LSB/ICL, Moving, Photo-z, Trails, AI, Stack); **collapsible drawer** (steps of the mode + parameter form); top bar (file chip, Local / Analyse-on-server switch, theme, language); floating viewer toolbar |
+| components | viewer with split compare (1), inspector as right column (4), parameter panel inline in the cell (3), palette (5, always), job list inside the stepper (7), status/log (8); **catalog table (2) as a resizable bottom sheet** opened from the result strip or key `T` (open by default once a catalog exists, pinnable) - the table must never be more than one action away in the default preset | viewer (1), catalog table (2) with Galaxy/Moving/Transient/All tabs, parameter panel as a dialog (3), a reduced inspector as selected-object summary (4; the full inspector can be docked, since it already exists), palette (5, optional), job list + status in the status bar (7, 8) | viewer (1), parameter panel in the drawer (3), table (2) and light curve/tracklet/jobs (6, 7) in the bottom **dock**, status bar (8), palette (5) |
+| manifest fields used | an optional **`ui.stage`** (`load\|calibrate\|detect\|measure\|review\|report`); default derived from `tab` (Detect -> detect; trails and mask -> calibrate; Classify, Measure, Low-SB, Time-domain -> measure; Results -> review/report) | `tab`, `order`, `short`, `primary`, `steps`, `params` (already present) | optional **`ui.mode`** and **`ui.icon`**; default: the plugin grouping of the mock-up, the rest under a "More..." flyout |
+| minimum window | 1024 x 700 (panels collapse to drawers below 1280) | 1280 x 720 | 1024 x 700 (rail only below 1100; **best tablet landscape**) |
+| strengths | review, reporting, teaching; the log is the exported script; works on tablets | cheapest to build, ds9-familiar, best catalog density | layers, time-domain and jobs visible at once; touch-friendly |
+| delivery | **Phase 1** (M4; the default and primary preset) | **Phase 2** (M9) | **Phase 3** (M10), after the viewer is stable (9.1) |
 
 `ui.stage`, `ui.mode` and `ui.icon` are additive manifest fields: the desktop loader ignores unknown keys, and a plugin without them still
 appears (derived defaults).  Plugins that fit no stage (`lensmodel`, `spectra`, `cluster`, `xmatch`, ...) are listed under *Other tools* in
-Guided and are reachable through the palette in every preset.
+Guided (the default preset) and are reachable through the palette in every preset.
 
 **Deferred in Workspace v1** (backlog, not in the first Workspace release): RGB composite and per-band blend layers, the overview minimap, and free
 docking (drag/split/float).  v1 uses one fixed, drag-resizable dock below the viewer and one band visible at a time.  Reason: these are the expensive
 parts of proposal B (9.2) and neither of the other two presets needs them.
 
-Preset switch: a "Layout: Classic | Guided | Workspace" control and a palette command ("Layout: Guided").  Switching re-mounts the shell, not the
+**Why Guided is the default** (decision of 2026-10-03): it is the only preset that serves new users, tablets and the reproducibility story (the visible log is the exported script) at once.  Its price is that dense catalog work is slower than in Classic, hence the table sheet rule above, the one-click switch to Classic and the first-run chooser (6.6).  Guided is the **primary preset**: the reference for acceptance tests (6.7) and the first one built (M4).
+
+Preset switch: a "Layout: Guided | Classic | Workspace" control and a palette command ("Layout: Classic").  Switching re-mounts the shell, not the
 viewer: the viewer's canvas element is *moved* into the new shell rather than re-created, so tiles stay in the texture cache without a re-fetch
 (risk: browsers that lose a WebGL context on re-parenting, section 10).
 
 ### 6.6 Persistence of the layout choice (localStorage + URL parameter)
 
-* **Key and value**: `localStorage["ogf.ui.v1"] = { preset, theme, locale, layouts: { classic: {...}, guided: {...}, workspace: {...} } }`.
+* **Key and value**: `localStorage["ogf.ui.v1"] = { preset, firstRunDone, theme, locale, layouts: { guided: {...}, classic: {...}, workspace: {...} } }`.  **Default value of `preset` is `"guided"`** (and of `theme` the preset's own default, 6.5).
   `layouts[name]` holds only that preset's panel state (panel widths, collapsed drawers, dock height, open stepper steps).
   Nothing else - no file names, ids, paths, catalog data or tokens - is written to this key (a mirror of `computeDefault` is allowed; local-mode results live in OPFS/IndexedDB, 13.8, and are not part of this key).
-* **URL parameter**: `?layout=classic|guided|workspace` (also `&theme=dark|light`, `&lang=en|ko`).  Precedence at start-up: **URL parameter >
-  localStorage > default (`classic`)**.  A URL value applies to that page load and is written to localStorage only when the user then switches the
+* **URL parameter**: `?layout=guided|classic|workspace` (also `&theme=dark|light`, `&lang=en|ko`).  Precedence at start-up: **URL parameter >
+  localStorage > default (`guided`)** (precedence unchanged; only the default changed).  A URL value applies to that page load and is written to localStorage only when the user then switches the
   layout explicitly, so following a link never silently changes the stored preference.  The URL is updated with `history.replaceState` when the user
   switches, so a copied address reopens the same layout.  There is no per-file or per-session link in Phase II (section 7.2); these are the only
   parameters the application reads.
-* **Robustness**: unknown or invalid values fall back to the default with one console warning; the stored object is schema-versioned (`v1`) and
+* **First-run chooser (첫 실행 선택)**: when no stored object exists and no `?layout=` is given, Guided is applied immediately (no blocking dialog) and a dismissible, non-blocking card "Choose your layout / 레이아웃 선택" is shown once, with a thumbnail of Guided (selected), **Classic ("ds9 style", for ds9 users)** and, once M10 ships, Workspace.  Choosing writes `preset` and `firstRunDone: true`; dismissing keeps Guided and also sets `firstRunDone`; the card can be reopened from the Layout control.  It is not shown when `?layout=` is present (a link already chose a layout; `firstRunDone` stays unset).  Whether to show the card at all is an owner option (10, open decisions).
+* **Robustness**: unknown or invalid values (URL, stored preset, missing `layouts` entry) fall back to the default **`guided`** with one console warning; the stored object is schema-versioned (`v1`) and
   validated field by field (a bad `layouts.guided` resets only that preset); storage that is disabled, full or blocked (private mode, enterprise
-  policy) falls back to an in-memory store with a one-line notice; a `storage` event from another tab updates the *stored* preference but does not
+  policy) falls back to an in-memory store (preset `guided`) with a one-line notice; a `storage` event from another tab updates the *stored* preference but does not
   re-layout an open tab.  A preset whose minimum window size (6.5) is not met is offered but flagged, and a compatible one is suggested; it is never forced.
 * **Reset**: "Reset layout" clears `layouts[current]`; "Reset all UI settings" removes the key.  A server-side copy per account is a later option (section 10).
 
@@ -349,7 +353,7 @@ viewer: the viewer's canvas element is *moved* into the new shell rather than re
 
 The mock-ups were checked with a Playwright/headless-Chrome script (`/workspace/webdesign/_src/shot.py`, `extra_checks.py`, `overlap.py`); it is the
 starting point of the CI job.  The same checks run **for every preset x every tested state**, at 1440x900 (all presets), 1280x720 (all),
-and 1024x768 / 1180x820 tablet landscape (Guided and Workspace).  Already measured on the mock-ups at 1440x900: 0 overflowing or out-of-bounds elements,
+and 1024x768 / 1180x820 tablet landscape (Guided and Workspace).  **Guided is the primary preset**: the full matrix runs on every pull request and its golden screenshots are the reference; Classic and Workspace run the full matrix nightly and at release, plus a smoke subset (layout, images, hygiene, state) on every pull request that touches shared components or their shell.  Already measured on the mock-ups at 1440x900: 0 overflowing or out-of-bounds elements,
 all images loaded, no console errors, no external requests, no overlapping floating pieces.
 
 | layer | check | applies to |
@@ -360,8 +364,8 @@ all images loaded, no console errors, no external requests, no overlapping float
 | images | every viewer/cut-out image or texture loads (`naturalWidth > 0`, WebGL context created, first tile drawn); the cursor readout over the viewer returns RA/Dec and a pixel value | all presets |
 | hygiene | no console errors/warnings; **no request to an external host** (only the application's own API); no CSP violations | all presets |
 | state | the same scripted scenario in each preset ends with the same store snapshot for `selection`, `view`, `catalog.filter`, `params` (select an object in the table -> marker highlighted, inspector/summary updated, dock shows the light curve for a transient and the tracklet for a moving object) | all presets |
-| switching | Classic -> Guided -> Workspace -> Classic with a selected object, a changed scale, a running job and an edited, unsaved parameter: all survive; the viewer canvas is the same element (identity test) and no tile is re-fetched | all |
-| persistence | choose a preset, reload: same preset (localStorage); open `?layout=guided` with a stored `classic`: Guided is shown and the stored value is unchanged; invalid parameter -> default + one warning; blocked storage -> in-memory fallback, no exception; corrupted JSON -> reset | all |
+| switching | Guided -> Classic -> Workspace -> Guided with a selected object, a changed scale, a running job and an edited, unsaved parameter: all survive; the viewer canvas is the same element (identity test) and no tile is re-fetched | all |
+| persistence | empty storage, no parameter: **Guided** is shown and the first-run card appears once (dismiss and choose Classic both tested; not shown again after reload); choose a preset, reload: same preset (localStorage); open `?layout=classic` with a stored `guided`: Classic is shown and the stored value is unchanged (no first-run card); invalid parameter or stored value -> **Guided** + one warning; blocked storage -> in-memory Guided, no exception; corrupted JSON -> reset to Guided | all (default case: Guided) |
 | i18n | long Korean strings (breadcrumb, step names, tooltips) and a 30-character English parameter label do not break the checks above; Noto Sans CJK / Nanum Gothic / system fallback present | all, `lang=ko` |
 | theme | dark and light: contrast of text and of the marker colours on the image; the viewer background stays dark | Workspace, Guided |
 | billing UI | usage meter, run-on selector, estimate dialog and account page in each state of 13.11 (normal, near limit, over limit, estimate failed, payment past due, tool server-only) render without overflow; the over-limit dialog offers local mode only for local-capable tools; no price or token number is hard-coded in the DOM (all from the API) | all presets |
@@ -434,34 +438,34 @@ Phase II, and the retention default short.  Because of this the design contains 
 ## 9. Milestones, phases and cost
 
 Effort numbers are estimates in person-weeks for one experienced developer who knows the code base; they are ranges, not commitments.
-M0-M8 deliver the shared components and the **Classic** preset; **M9** adds Guided, **M10** Workspace.  "(+x)" is the extra cost of building with independent
+M0-M8 deliver the shared components and the **Guided** preset (the default and primary preset, built first); **M9** adds Classic (the second preset), **M10** Workspace.  "(+x)" is the extra cost of building with independent
 components, a state store and preset plumbing instead of one fixed layout; it is already included in the range shown.
 
 | M | content | deliverable and acceptance test | estimate (extra) |
 |---|---|---|---|
-| **M0** spikes | (1) FITS parse + WebGL2 render of the 52 MB HUDF image with scale/colormap, (2) tile endpoint over the existing numpy code, (3) WCS in WASM vs hand-written, (4) the 200 MB threshold on three browsers, (5) **state store + command registry skeleton and two throw-away shells** (Classic grid, Guided grid) around a stub viewer, to confirm the component contract and the canvas hand-over of 6.5 | go/no-go notes with measurements; decisions in section 8 closed (store library included) | 2 (0) |
-| **M1** viewer + local files | `ImageSource`, `LocalFileSource`, WebGL renderer, pan/zoom/scale/colormap, pixel readout, WCS coordinates, image tabs, Tile mode; **viewer and status bar as stand-alone components** with the store contract (6.1, 6.4); split-compare uniform (small; used from M9) | open m51 and the HUDF crop offline; scale changes at 60 fps on a 4k tile set; test against ds9 pixel values (exact); component tests at minimum size | 6-8 (+1) |
+| **M0** spikes | (1) FITS parse + WebGL2 render of the 52 MB HUDF image with scale/colormap, (2) tile endpoint over the existing numpy code, (3) WCS in WASM vs hand-written, (4) the 200 MB threshold on three browsers, (5) **state store + command registry skeleton and two throw-away shells** (Guided grid first, Classic grid) around a stub viewer, to confirm the component contract and the canvas hand-over of 6.5 | go/no-go notes with measurements; decisions in section 8 closed (store library included) | 2 (0) |
+| **M1** viewer + local files | `ImageSource`, `LocalFileSource`, WebGL renderer, pan/zoom/scale/colormap, pixel readout, WCS coordinates, image tabs, Tile mode; **viewer and status bar as stand-alone components** with the store contract (6.1, 6.4); split-compare uniform (small; used by Guided from M4) | open m51 and the HUDF crop offline; scale changes at 60 fps on a 4k tile set; test against ds9 pixel values (exact); component tests at minimum size | 6-8 (+1) |
 | **M2** server core | auth (OIDC), resumable upload (5.1), ingest job, pyramid, tile API (5.2), `RemoteTileSource`, quotas, retention purge, delete | upload a 1.6 GB FITS over a throttled connection with a forced disconnect; resume; tiles identical to the local path for the same file | 5-6 (0) |
 | **M3** jobs + plugins | job runner, manifests API, **parameter panel and job list components** (modal / drawer / inline hosting), `cli` blocks for all `proc` analysis steps, SSE progress, cancel; steps `extract`, `mask` auto, photo-z/SED, morphology, ICL, LSBG | each plugin's CLI step reproduces the desktop output byte-identically on m51/HUDF (re-use `scripts/verify_*`) | 6.5-8.5 (+0.5) |
-| **M4** catalog + table + **Classic preset** | catalog API (5.4), virtual grid, markers, selection link, kind filter, click chooser, review columns + filter, report export; **Classic shell** (menu bar, workflow tabs + plugin ribbon from manifests, info panel, button bar, frame tabs, colorbar); **preset plumbing: layout switch, localStorage + URL parameter (6.6)**; the 6.7 matrix for Classic | the `verify_review_gui`/`verify_click_*` scenarios re-written for the browser (Playwright); 6.7 matrix green for Classic at 1440x900 and 1280x720 | 6-7 (+1) |
+| **M4** catalog + table + **Guided preset (default)** | catalog API (5.4), virtual grid, markers, selection link, kind filter, click chooser, review columns + filter, report export; **Guided shell**: stepper with the `ui.stage` mapping (status from jobs/session steps on the client until M6 makes it recorder-driven), step "cell" header, result strip, session log view, split-compare toolbar, catalog table as bottom sheet, collapse rules for 1024-1280 px; **object inspector** (cut-out, model/residual from multifit/isophote outputs, radial profile, p(z), review + note); **command palette** (registry from the manifests); **preset plumbing: layout switch, default `guided`, localStorage + URL parameter, first-run chooser (6.6)**; the 6.7 matrix for Guided | the `verify_review_gui`/`verify_click_*` scenarios re-written for the browser (Playwright); the scenario "accept 20 objects, export report"; 6.7 matrix green for Guided at 1440x900, 1280x720 and 1024x768 | 7-8 (+1) |
 | **M5** mask + editing | mask API (5.5), polygon/ellipse editing, objects plugin (delete/merge/separate/add/AI-merge) | operations produce the same catalog as `ds9_catalog_edit.py` golden cases (`scripts/golden/`) | 4-5 (0) |
-| **M6** sessions | server-side recorder, export of the Python script (`ogf_session_template.py`), replay check; the session log later feeds the Guided stepper | exported script from a web session passes the same replay checks as the desktop (`verify_session_replay.py` equivalent) | 3-4 (0) |
-| **M7** time-domain | `moving` plugin jobs, MAST cache, orbit/lightcurve views, Moving/Transient kinds in the table; **light-curve / tracklet dock component** (a bottom/side tab in Classic) | the BB89 HST field gives the same tracklet as the desktop (`moving/tests`, `scripts/run_moving_pipeline.py`) | 4.5-5.5 (+0.5) |
+| **M6** sessions | server-side recorder, export of the Python script (`ogf_session_template.py`), replay check; the Guided stepper and session log switch from the client-side view to the recorder | exported script from a web session passes the same replay checks as the desktop (`verify_session_replay.py` equivalent) | 3-4 (0) |
+| **M7** time-domain | `moving` plugin jobs, MAST cache, orbit/lightcurve views, Moving/Transient kinds in the table; **light-curve / tracklet dock component** (a tab beside the inspector or a bottom sheet in Guided; the dock of Workspace later) | the BB89 HST field gives the same tracklet as the desktop (`moving/tests`, `scripts/run_moving_pipeline.py`) | 4.5-5.5 (+0.5) |
 | **M8** hardening | sandbox, rate limits, backups, monitoring, load test, security review, documentation, accessibility pass; preset-matrix CI job (6.7) | pen-test checklist, 20 concurrent users on the reference VM | 4.5 (+0.5) |
-| **M9** Guided preset | stepper with the `ui.stage` mapping and recorder-driven status, step "cell" header, result strip, session log, split-compare toolbar, **object inspector** (cut-out, model/residual from multifit/isophote outputs, radial profile, p(z), review + note), **command palette** (registry from the manifests), collapse rules for 1024-1280 px | 6.7 matrix green for Guided; the scenario "accept 20 objects, export report" runs identically in Classic and Guided and exports the same script | 3-4 |
+| **M9** Classic preset (second) | Classic shell: menu bar, workflow tabs + plugin ribbon from the manifests, info panel, button bar, frame tabs, colorbar, catalog panel with Galaxy/Moving/Transient/All tabs, parameter panel as a dialog; reuses the inspector (as an optional docked panel) and the palette that M4 built; the 6.7 matrix for Classic | 6.7 matrix green for Classic at 1440x900 and 1280x720; the scenario "accept 20 objects, export report" runs identically in Guided and Classic and exports the same script | 2-3 |
 | **M10** Workspace preset (v1) | icon rail with the mode grouping, drawer (steps + parameter panel), top bar, fixed resizable dock (table, light curve/tracklet, jobs), light/dark theme, tablet layout; **no** RGB composite, minimap or free docking | 6.7 matrix green for Workspace at 1440x900, 1280x720, 1180x820; touch test on a tablet | 3-4 |
 
-Totals: **M0-M8 (Classic, shared components): 41.5-50.5** person-weeks (a single fixed layout was 38-48); with **M9** (3-4) and **M10** (3-4):
-**47.5-58.5**.  A useful first release (M0-M3 + extraction + table, Classic only) is about **20-26** (was 18-24).
+Totals: **M0-M8 (shared components + Guided, the default preset): 42.5-51.5** person-weeks (a single fixed layout was 38-48); with **M9** Classic (2-3) and **M10** (3-4):
+**47.5-58.5** - unchanged by the revision of the default: the Guided shell, inspector and palette (3-4, formerly M9) moved into M4 while the Classic shell (2-3) moved out of it.  A useful first release (M0-M3 + extraction + table, **Guided only**) is about **21-27** (was 20-26 for a Classic-only release; +1 because the Guided shell, inspector and palette are bigger than the Classic shell).
 
 Chapters 12 and 13 add the tracks **M3p** (parity harness) and **M11-M17** (metering/limits, payments, billing UI, local mode in waves): +39-57 person-weeks, total 86.5-115.5 (13.12).  They are not in the totals above.
 
 ### 9.1 Phased roadmap
 
-1. **Phase 1 - Classic (M0-M8).**  Default preset and the reference for all acceptance tests.  Built *as components* from the first day, so Phase 2
-   needs no refactoring.  Release 1 = Classic.
-2. **Phase 2 - Guided (M9)**, starts when M3, M4 and M6 are done (it needs the parameter panel, table/selection and the recorder).  It brings the inspector and
-   the palette, which are then also offered in Classic (Ctrl-K, and the inspector as an optional right-hand panel).  Release 1.x.
+1. **Phase 1 - Guided (M0-M8).**  The default and primary preset and the reference for all acceptance tests.  Built *as components* from the first day (viewer, table,
+   parameter panel, inspector, palette, job list, status bar), so that the next presets only add shells.  Release 1 = Guided (Classic may be added to it as soon as M9 is done).
+2. **Phase 2 - Classic (M9)**, can start as soon as M4 is done (it needs only the parameter panel, table/selection and the inspector/palette that M4 delivers) and is mostly shell work.
+   Its purpose is familiarity for ds9 veterans and dense catalog work; reachable from the first-run chooser and the Layout control.  Release 1.x.
 3. **Phase 3 - Workspace (M10)**, starts only when the **viewer-stable gate** is met: the `ImageSource`/renderer API unchanged for two releases, M1 acceptance
    tests green on the three target browsers, tile cache and WebGL context survive a canvas move (preset switch) without leaks, and the multi-band layer API
    specified (even if RGB/minimap are not built).  Backlog after M10: RGB composite with per-band blend, minimap, free docking.
@@ -469,10 +473,10 @@ Chapters 12 and 13 add the tracks **M3p** (parity harness) and **M11-M17** (mete
 ### 9.2 Cost estimate: about +20-30 % over a single layout
 
 Baseline (one fixed layout) 38-48 person-weeks.  Extra for the decision: component/store discipline and preset plumbing inside M1, M3, M4, M7, M8 = about
-**2.5-3.5**; Guided (M9) **3-4**; Workspace v1 (M10) **3-4**; total roughly **9-11.5 person-weeks**, i.e. **about +20-30 %** of the baseline (about +21-27 % of its
-mid-point, 43).  The components are built once; the extra is the shells, the test matrix (6.7) and the two navigation widgets (stepper, rail/drawer).
+**2.5-3.5**; Guided shell, inspector and palette being larger than the baseline's single fixed layout (inside M4) **1**; Classic as the second preset (M9) **2-3**; Workspace v1 (M10) **3-4**; total roughly **9-11.5 person-weeks**, i.e. **about +20-30 %** of the baseline (about +21-27 % of its
+mid-point, 43).  The components are built once; the extra is the shells, the test matrix (6.7) and the two other navigation widgets (menu bar + ribbon, rail/drawer) in addition to the stepper of the default preset.
 What would raise it: Workspace with the deferred RGB/minimap/docking (+4-6, not included), a fourth preset, or per-preset forks of a component (excluded by
-the rules in 6.1).  What would lower it: shipping Guided without the split-compare toolbar or the inspector's model/residual tabs in its first release.
+the rules in 6.1).  What would lower it: shipping Guided (M4) without the split-compare toolbar or the inspector's model/residual tabs in its first release.
 
 ## 10. Risks and open questions
 
@@ -496,17 +500,18 @@ the rules in 6.1).  What would lower it: shipping Guided without the split-compa
 * **Viewer canvas hand-over on preset switch**: moving a WebGL canvas between shells may lose the context or flash on some browsers/GPUs.  Mitigation: tested in the M0 spike (5); fallback is re-creating the canvas and re-uploading from the tile cache (slower, still no network).
 * **Manifest additions** (`ui.stage`, `ui.mode`, `ui.icon`) must stay optional and ignored by the desktop loader; wrong defaults misplace a step but never hide it (the palette always lists every step).
 * **Layout preference storage**: localStorage can be blocked, cleared by the browser, or shared by two accounts on one machine; only layout, theme and language are stored there (6.6); an account-level copy is a later option.
-* **Tablet and touch** are designed for Guided and Workspace only; Classic is desktop-only (1280 x 720 minimum); phone layouts are out of scope for Phase II.
+* **Tablet and touch** are designed for Guided (the default, so part of release 1) and Workspace; Classic is desktop-only (1280 x 720 minimum); phone layouts are out of scope for Phase II.
 * **Korean UI text**: glosses are partial (stage names, a few labels); a full translation, input-method (IME) handling in the palette/search and CJK line breaking in tables are not budgeted.
 * **Mock-ups are not specifications**: they use example data and plain DOM (no WebGL); sizes, colours and wording will change.  What is decided is the component split and the state/preset rules above.
 * **Dual-shell parity** (chapter 12): the rule that no tool is done without desktop and web entries slows early tools; legacy Tcl logic must move into Python cores first; native-vs-WASM float differences need tolerance classes (12.6).
 * **Commercial model** (chapter 13): local-mode porting is the largest and least certain cost; distributing compiled GPL/LGPL-derived code needs a licence review; metering correctness, payment/tax law and abuse are new risk areas (13.13).
-* **Open decisions for the owner**: login method, quota/retention numbers, the first deployment target (institutional server vs cloud), whether the web version must support offline use (PWA), whether the layout preference also belongs to the account (server copy), the default preset for first-time users (Classic is assumed), licence, and the name of the repository (`ds10-web` is assumed here); the billing and compute-mode decisions are listed in 13.14.
+* **Default preset (resolved, 2026-10-03)**: Guided is the default for first-time users; ds9 veterans can switch to Classic with one action; a **first-run chooser** is offered (6.6) - the owner may still decide to drop it or to make it blocking.  Risk: veterans who never find the switch judge the product by Guided's slower catalog work; mitigation: the table-sheet rule (6.5), the visible Layout control and the first-run card.
+* **Open decisions for the owner**: login method, quota/retention numbers, the first deployment target (institutional server vs cloud), whether the web version must support offline use (PWA), whether the layout preference also belongs to the account (server copy), licence, and the name of the repository (`ds10-web` is assumed here); the billing and compute-mode decisions are listed in 13.14.
 
 ## 11. First concrete steps (when the owner approves)
 
 1. Create `ds10-web` (owner action); copy `plugins/*/plugin.json`, `ai_bridge/`, `moving/`, `ds9/library/ds9_*.py`, `ogf_session_template.py` as a **git submodule or a vendored directory with a sync script** so the desktop repo stays the single source of truth for algorithms; do not fork them.
-2. M0 spikes (section 9), including the state-store/command-registry skeleton and the Classic/Guided throw-away shells.  Copy the three mock-ups from `/workspace/webdesign/` (and the DOM-check scripts in its `_src/`) into `ds10-web/docs/ui/` as the visual reference and the first golden screenshots (owner action; not done here).
+2. M0 spikes (section 9), including the state-store/command-registry skeleton and the Guided/Classic throw-away shells.  Copy the three mock-ups from `/workspace/webdesign/` (and the DOM-check scripts in its `_src/`) into `ds10-web/docs/ui/` as the visual reference and the first golden screenshots (owner action; not done here).
 3. Write the OpenAPI document for section 5 first; generate the TypeScript client and the FastAPI stubs from it, so that the browser and server work in parallel.
 4. Add a `docs/` index in the new repository that points back to this file.
 5. Before any billing code: settle the blocking items of 13.14 (plan structure, launch order, local runtime incl. the licence review) and fix the parity schemas of chapter 12 in M0 (result envelope, case format, `surface`/`compute` manifest fields).
@@ -839,14 +844,14 @@ The shared component list of 6.1 gains two components (#9, #10) and extends two 
 | 9 | **Estimate and approval dialog** (13.5) | tokens p50/p90 and cap, resources, upload size, retention/delete date, windows after hold, alternatives, Approve / Run locally / Cancel; the over-limit variant (13.7) | estimate ok, no calibration, over limit (which window, reset time), upload required, auto-approved toast |
 | 10 | **Account, usage and settings page** | route `/account` (full page, not a modal): plan and licence (devices), usage windows and history chart, **ledger table** (filters, CSV), top-up and payment (provider portal), **default compute mode** and per-tool overrides, auto-approve threshold, retention default and pinned files, notifications | loading, empty ledger, payment failed, licence expired, after top-up |
 
-Placement per preset (all components read the same `account`/`usage` state, 13.15 of the state store below):
+Placement per preset (all components read the same `account`/`usage` state, see the state store additions below):
 
-| | **Classic** | **Guided** | **Workspace** |
+| | **Guided** (default) | **Classic** | **Workspace** |
 |---|---|---|---|
-| usage meter | right side of the status bar; menu `File > Account...` | pill in the header (next to the avatar) and in the cell header; status bar shows the running job's tokens | pill in the top bar; run bar of the drawer shows the estimate |
-| run-on selector | in the parameter dialog next to *Run*; ribbon chips run with the default mode (right-click: "Run on ...") | in the step cell next to *Run* | in the drawer run bar |
-| estimate dialog | modal | modal (the cell shows the estimate inline before the dialog) | modal (popover from the run bar for the quick view) |
-| settings page | `Edit > Preferences...` -> Account tab; full page route | avatar menu -> Account | avatar menu -> Account |
+| usage meter | pill in the header (next to the avatar) and in the cell header; status bar shows the running job's tokens | right side of the status bar; menu `File > Account...` | pill in the top bar; run bar of the drawer shows the estimate |
+| run-on selector | in the step cell next to *Run* | in the parameter dialog next to *Run*; ribbon chips run with the default mode (right-click: "Run on ...") | in the drawer run bar |
+| estimate dialog | modal (the cell shows the estimate inline before the dialog) | modal | modal (popover from the run bar for the quick view) |
+| settings page | avatar menu -> Account | `Edit > Preferences...` -> Account tab; full page route | avatar menu -> Account |
 
 State store (6.4) additions: `account: { plan, entitlements, license }`, `usage: { windows: { day, week, month: { limit, used, held, resetsAt } }, topupBalance }` (written only by usage events from the server), `jobs.byId[id].{mode, estimate, hold}`,
 `ui.computeDefault: "local"|"server"|"ask"` (server copy in the account, mirrored in the browser, 6.6).  Verification (6.7) gets the rows for these states.
@@ -861,7 +866,7 @@ Dependencies: the server track needs M2 (storage, auth) and M3 (jobs); the UI co
 | **M3p** (with M3) | parity harness (12.3): result envelope, case format, CLI/API runners, `surface` and `compute` fields, PR checklist; conversion tooling for `proc` -> `cli` | the first 10 plugins' cases pass on CLI and API runners; CI blocks a plugin without entries/exemption | 3-4 |
 | **M11** | metering and ledger: resource counters, cost-model framework + calibration of the first tools, estimate API, hold/settle/release/refund, limit manager (3 windows, resets), rate limits and concurrency, usage events, disk-day accrual and auto-delete rule | simulated accounts: holds never exceed limits, settlement reconciles to the byte counters, failure refund, nightly ledger-vs-window check, retention purge test | 5-7 |
 | **M12** | billing integration: `PaymentProvider` interface + one provider adapter (placeholder), subscriptions, entitlements via webhooks, top-ups, invoices/portal, dunning, trial grant, licence token service | test-mode purchase end to end; webhook replay is idempotent; entitlement changes only through webhooks | 4-6 |
-| **M13** | UI components of 13.11 in **Classic**, then Guided (with M9) and Workspace (with M10): +0.5 each; account page; 6.7 matrix rows | all billing states pass layout/DOM checks in each preset at 1440x900 and 1280x720 | 3-4 (+1 over the presets) |
+| **M13** | UI components of 13.11 in **Guided** (the default preset), then Classic (with M9) and Workspace (with M10): +0.5 each; account page; 6.7 matrix rows | all billing states pass layout/DOM checks in each preset at 1440x900 and 1280x720 | 3-4 (+1 over the presets) |
 | **M14** | local runtime: worker pool, Pyodide/WASM loader, licence check and offline grace, signed/cached bundles, capability negotiation (`compute` blocks), WASM parity runner; spikes: SEP in WASM, ds9_sextract in WASM, COOP/COEP, companion-over-localhost, ONNX feasibility, measured native-vs-WASM timings that decide the capability table | spike report with numbers; `extract` parity case green on the WASM runner | 4-6 |
 | **M15** | local wave 1 (L tools, 13.10) | parity cases on the WASM runner for each tool | 6-10 |
 | **M16** | local wave 2 (B tools) | same | 6-8 |
@@ -869,7 +874,7 @@ Dependencies: the server track needs M2 (storage, auth) and M3 (jobs); the UI co
 
 **Added cost** over the 47.5-58.5 person-weeks of chapter 9 (single layout x 3 presets): M3p 3-4 + M11 5-7 + M12 4-6 + M13 3-4 + M14 4-6 + M15 6-10 + M16 6-8 + M17 8-12 = **39-57 person-weeks**, giving **86.5-115.5** in total (roughly +70 to +120 %).
 Breakdown: parity principle 3-4; server billing (M11-M13) 12-17; local mode 24-36 (**the dominant and the most uncertain part**).  Recurring: about 10-15 % extra on every new tool (12.6) and operations/support.
-Suggested order: M3p -> M11 -> M12 -> M13 (Classic) = a sellable **server-mode** product (about 15-21 person-weeks on top of the base release); in parallel M14 and wave 1 so that the flat local plan can be sold with a meaningful tool set; waves 2-3 or the companion afterwards.
+Suggested order: M3p -> M11 -> M12 -> M13 (Guided) = a sellable **server-mode** product (about 15-21 person-weeks on top of the base release); in parallel M14 and wave 1 so that the flat local plan can be sold with a meaningful tool set; waves 2-3 or the companion afterwards.
 If local mode is cut to wave 1 only (no M16, M17), the added cost is about 25-37.
 
 ### 13.13 Risks
