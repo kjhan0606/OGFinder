@@ -355,6 +355,8 @@
     "{sky-inner}",
     "--sky-outer",
     "{sky-outer}",
+    "--noise-meta",
+    "{work}/catalog_meta.json",
     "--sky-mode",
     "{sky-mode}",
     "--psf-kind",

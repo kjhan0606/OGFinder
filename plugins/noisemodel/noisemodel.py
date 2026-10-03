@@ -22,9 +22,9 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, imageio, noise as nz, meta as ometa  # noqa: E402
+from ogfkit import tsvio, imageio, noise as nz, meta as ometa, photerr as pe  # noqa: E402
 
-COLUMNS = ['NM_SKY', 'NM_RMS', 'NM_NAPER', 'NM_CORR', 'NM_FLUXERR', 'NM_MAGERR', 'NM_SNR', 'NM_FLUX_AP', 'NM_MAG_AP', 'NM_MAGERR_AP']
+COLUMNS = ['NM_SKY', 'NM_RMS', 'NM_NAPER', 'NM_CORR', 'NM_FLUXERR', 'NM_MAGERR', 'NM_SNR', 'NM_FLUX_AP', 'NM_MAG_AP', 'NM_MAGERR_AP', 'NM_SKYERR', 'NM_FLUXERR_LOC', 'NM_CONTAM', 'NM_FLUXERR_TOT']
 
 
 def build_model(data, bad, model='mesh', bw=64, fw=3, poly_order=2, grow=3.0, thresh=2.0, minarea=8):
@@ -109,6 +109,14 @@ def catalog_errors(rows, data, arrays, summary, a):
         Nap = math.pi * (a.kron_fact * K * A) * (a.kron_fact * K * B)
         npx = np.array([tsvio.fnum(r.get('NPIX_ISO')) for r in rows])
         Nap = np.where(np.isfinite(Nap), Nap, npx)
+    model = pe.NoiseModel(sp, law['alpha'], law['beta'], bool(law.get('ok')))
+    ann = _annulus(a)
+    extra = {}
+    if ann:
+        radii = [float(v) for v in a.radii.replace(';', ',').split(',') if v.strip() and float(v) <= ann[0] - 2]
+        model.add_local(sub, arrays['mask'], radii + [r for r in (2.0, 3.0, 5.0, 8.0) if r <= ann[0] - 2 and r not in radii], ann, 'median', n=a.n_aper, seed=a.seed)
+        extra = unified_errors(rows, model, ann, xs, ys, ok, flux, Nap, loc_rms, sp, a)
+        arrays['local'] = model.local
     ratio = np.where(np.isfinite(loc_rms), loc_rms / sp, 1.0)
     for i, r in enumerate(rows):
         d = {}
@@ -119,7 +127,7 @@ def catalog_errors(rows, data, arrays, summary, a):
                 corr = nz.noise_law_sigma(n_, law, 1.0) / math.sqrt(n_) if law.get('ok') else 1.0
                 d['NM_CORR'] = corr
                 f = flux[i]
-                e = float(nz.flux_error(f if np.isfinite(f) else 0.0, n_, loc_rms[i], law if law.get('ok') else None, a.gain or None, True))
+                e = float(pe.aperture_error(f if np.isfinite(f) else 0.0, n_, loc_rms[i], model, a.gain or None)['ap'])
                 d['NM_FLUXERR'] = e
                 if np.isfinite(f) and f > 0:
                     d['NM_MAGERR'] = 1.0857 * e / f
@@ -129,7 +137,62 @@ def catalog_errors(rows, data, arrays, summary, a):
                     if f > 0:
                         d['NM_MAG_AP'] = a.mag_zeropoint - 2.5 * math.log10(f)
                         d['NM_MAGERR_AP'] = 1.0857 * e / f
+        for k, v in extra.items():
+            if ok[i] and np.isfinite(v[i]):
+                d[k] = float(v[i])
         out.append((r['NUMBER'], d))
+    return out
+
+
+def _annulus(a):
+    t = [v for v in (getattr(a, 'sky_annulus', '') or '').replace(';', ',').split(',') if v.strip()]
+    return (float(t[0]), float(t[1])) if len(t) == 2 and 0 < float(t[0]) < float(t[1]) else None
+
+
+def _psf_callable(path):
+    """PSFModel json (psfex) -> callable(x, y, dx, dy) -> unit-sum stamp; FITS -> constant stamp."""
+    if not path or not os.path.isfile(path):
+        return None
+    if path.lower().endswith('.json'):
+        from ogfkit import psfmodel as pm
+        mdl = pm.load_model(path)
+        return lambda x, y, dx, dy: mdl.stamp(x, y, dx, dy)
+    from astropy.io import fits
+    st = np.nan_to_num(np.asarray(fits.getdata(path), float))
+    st = np.clip(st, 0, None)
+    return st / st.sum()
+
+
+def unified_errors(rows, model, ann, xs, ys, ok, flux, Nap, loc_rms, sp, a):
+    """Columns of the unified error model (ogfkit.photerr): NM_SKYERR (sky-estimation error N * sigma_sky, counts, from the annulus factor), NM_FLUXERR_LOC (error of the
+    local-sky-subtracted aperture flux: measured blank-aperture law with the same annulus, + Poisson), NM_CONTAM (flux the PSF wings of the other catalogue sources
+    put into the aperture net of the annulus sky, counts; needs --psf), NM_FLUXERR_TOT (NM_FLUXERR_LOC and the contamination uncertainty in quadrature).  Apertures with N outside
+    [N_min/2, 2 N_max] of the measured local law are left empty."""
+    n = len(rows)
+    nan = lambda: np.full(n, np.nan)
+    out = dict(NM_SKYERR=nan(), NM_FLUXERR_LOC=nan(), NM_CONTAM=nan(), NM_FLUXERR_TOT=nan())
+    if not (model.local and model.local.get('ok')):
+        return out
+    lo, hi = min(model.local['N']) / 2, max(model.local['N']) * 2
+    good = ok & np.isfinite(Nap) & (Nap >= lo) & (Nap <= hi)
+    N = np.where(good, Nap, 1.0)
+    f = np.where(np.isfinite(flux), flux, 0.0)
+    e = pe.aperture_error(f, N, np.where(np.isfinite(loc_rms), loc_rms, sp), model, a.gain or None, local=True)
+    out['NM_FLUXERR_LOC'] = np.where(good, e['ap'], np.nan)
+    nsky = math.pi * (ann[1] ** 2 - ann[0] ** 2)
+    out['NM_SKYERR'] = np.where(good, N * pe.sky_est_sigma(nsky, np.where(np.isfinite(loc_rms), loc_rms, sp), model), np.nan)
+    out['NM_FLUXERR_TOT'] = out['NM_FLUXERR_LOC'].copy()
+    psf = _psf_callable(getattr(a, 'psf', ''))
+    if psf is not None and np.isfinite(flux).any():
+        xy = np.c_[np.where(ok, xs, 0), np.where(ok, ys, 0)]
+        rr = np.round(np.sqrt(np.where(good, N, 1.0) / math.pi) * 2) / 2
+        fe = e['ap'] / 1.0
+        for r in np.unique(rr[good]):
+            tg = np.where(good & (rr == r))[0]
+            r_use = min(float(r), ann[0] - 1.0)
+            c = pe.neighbour_contamination(xy, np.where(np.isfinite(flux) & ok, flux, 0.0), r_use, psf, sky_annulus=ann, flux_err=np.where(ok, fe, 0.0), psf_rel_err=0.1, targets=tg)
+            out['NM_CONTAM'][tg] = c['contam'][tg]
+            out['NM_FLUXERR_TOT'][tg] = np.sqrt(out['NM_FLUXERR_LOC'][tg] ** 2 + c['err'][tg] ** 2)
     return out
 
 
@@ -156,6 +219,8 @@ def main(argv=None):
     ap.add_argument('--correct', action='store_true')
     ap.add_argument('--mag-zeropoint', type=float, default=25.0)
     ap.add_argument('--seed', type=int, default=1)
+    ap.add_argument('--sky-annulus', default='', help='R_IN,R_OUT of the local sky annulus: adds NM_SKYERR / NM_FLUXERR_LOC (unified error model)')
+    ap.add_argument('--psf', default='', help='PSF model json (psfex) or FITS stamp: adds NM_CONTAM / NM_FLUXERR_TOT (needs --sky-annulus)')
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
     W = lambda n: os.path.join(a.work, 'noisemodel_' + n)
@@ -183,10 +248,10 @@ def main(argv=None):
         'flatness (6x6 sky blocks): peak-to-peak %.3g before -> %.3g after, chi2 %.1f -> %.1f, plane %.3g' % (summary['flatness_before']['peak_to_peak'], f1['peak_to_peak'], summary['flatness_before']['chi2_flat'], f1['chi2_flat'], f1['plane_amp'])]
     if a.catalog:
         cols, rows = tsvio.read_catalog(a.catalog)
+        out = catalog_errors(rows, data, arr, summary, a)
         if a.meta_out:
             ometa.update(a.meta_out, 'noisemodel', dict(sigma_pix=summary['sigma_pix'], alpha=law['alpha'], beta=law['beta'], rho1=summary['acf']['rho1'], model=a.model,
-                         kernel_fwhm_px=summary['acf']['kernel_fwhm_px']), nrows=len(rows))
-        out = catalog_errors(rows, data, arr, summary, a)
+                         kernel_fwhm_px=summary['acf']['kernel_fwhm_px'], local=arr.get('local')), nrows=len(rows))
         for t in lines:
             sys.stderr.write(t + '\n')
         tsvio.write_columns(COLUMNS, out)

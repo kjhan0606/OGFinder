@@ -41,25 +41,8 @@ def rms_from_file(rms_map, valid, mesh_rms, kind='rms'):
 
 
 def blank_circle_positions(mask, r, n, rng, box=None, max_tries=40):
-    """Random aperture centres (x, y) whose circle of radius r has no masked pixel; box = (x0, y0, x1, y1) restricts the centres."""
-    ny, nx = mask.shape
-    m = r + 1.0
-    x0, y0, x1, y1 = (m, m, nx - 1 - m, ny - 1 - m) if box is None else (max(box[0], m), max(box[1], m), min(box[2], nx - 1 - m), min(box[3], ny - 1 - m))
-    if x1 <= x0 or y1 <= y0:
-        return np.zeros((0, 2))
-    import sep
-    m8 = np.ascontiguousarray(mask, np.float64)
-    out = []
-    for _ in range(max_tries):
-        k = max(4 * (n - len(out)), 100)
-        x = rng.uniform(x0, x1, k)
-        y = rng.uniform(y0, y1, k)
-        bad, _, _ = sep.sum_circle(m8, x, y, r, subpix=1)
-        good = bad < 0.5
-        out.extend(zip(x[good], y[good]))
-        if len(out) >= n:
-            break
-    return np.array(out[:n]).reshape(-1, 2)
+    """Random aperture centres (x, y) whose circle of radius r has no masked pixel; box = (x0, y0, x1, y1) restricts the centres (shared implementation: noise.blank_positions)."""
+    return nz.blank_positions(mask, r, n, rng, box=box, max_tries=max_tries, kmin=100)
 
 
 def circle_sums(sub, pos, r):

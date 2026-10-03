@@ -75,6 +75,10 @@
     "{kron-fact}",
     "--gain",
     "{gain}",
+    "--sky-annulus",
+    "{sky-annulus}",
+    "--psf",
+    "{psf}",
     "--seed",
     "{seed}",
     {
@@ -98,7 +102,11 @@
      "NM_SNR",
      "NM_FLUX_AP",
      "NM_MAG_AP",
-     "NM_MAGERR_AP"
+     "NM_MAGERR_AP",
+     "NM_SKYERR",
+     "NM_FLUXERR_LOC",
+     "NM_CONTAM",
+     "NM_FLUXERR_TOT"
     ]
    }
   },
@@ -286,6 +294,22 @@
    "min": 0,
    "max": 2147483647,
    "expert": true
+  },
+  {
+   "name": "sky-annulus",
+   "label": "Local sky annulus R_in,R_out (px)",
+   "type": "string",
+   "default": "",
+   "group": "Photometric errors",
+   "help": "Empty = off. With an annulus (e.g. 12,18) the unified error model measures the noise of blank apertures after local-sky subtraction and adds NM_SKYERR (sky-estimation error) and NM_FLUXERR_LOC (error of the local-sky-subtracted aperture flux, includes the pixel correlation)."
+  },
+  {
+   "name": "psf",
+   "label": "PSF for neighbour contamination (json / FITS)",
+   "type": "string",
+   "default": "",
+   "group": "Photometric errors",
+   "help": "PSF model json (PSF plugin) or FITS stamp. With a sky annulus: NM_CONTAM = flux the wings of the other catalogue sources put into each aperture (net of the annulus sky, counts, a bias to subtract) and NM_FLUXERR_TOT = NM_FLUXERR_LOC plus the contamination uncertainty. Neighbours are treated as point sources with FLUX_AUTO."
   }
  ]
 }

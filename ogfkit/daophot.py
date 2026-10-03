@@ -79,10 +79,13 @@ def _sky_stats(vals, mode):
     return float(v), float(sd), int(vals.size)
 
 
-def phot(data, xy, radii=(3.0, 5.0, 8.0), sky_inner=12.0, sky_outer=18.0, sky_mode='median', bkg=None, rms=None, zp=25.0, gain=None):
+def phot(data, xy, radii=(3.0, 5.0, 8.0), sky_inner=12.0, sky_outer=18.0, sky_mode='median', bkg=None, rms=None, zp=25.0, gain=None, noise=None):
     """PHOT: circular-aperture photometry (exact pixel overlap) with a local sky annulus.
 
+    Errors come from the unified model (ogfkit.photerr): sky noise N sigma^2 + sky-estimation N^2 sigma^2 / nsky + Poisson; with `noise` (a photerr.NoiseModel
+    measured on this image; its `.local` law for this annulus if present) the pixel correlation of the image is included.
     Returns a list of dicts: sky, skysig, nsky, flux[], fluxerr[], mag[], magerr[] (one entry per aperture)."""
+    from . import photerr
     from photutils.aperture import CircularAperture, CircularAnnulus
     d = np.asarray(data, float)
     xy = np.asarray(xy, float).reshape(-1, 2)
@@ -117,10 +120,12 @@ def phot(data, xy, radii=(3.0, 5.0, 8.0), sky_inner=12.0, sky_outer=18.0, sky_mo
             ok = np.isfinite(cut)
             area = float((w * ok).sum())
             f = float(((cut - sky) * w)[ok].sum())
-            var = area * (sd ** 2) * (1.0 + (area / max(nsky, 1)) if nsky else 1.0)
-            if gain:
-                var += max(f, 0.0) / gain
-            e = math.sqrt(max(var, 0.0))
+            if (noise is not None and noise.local and noise.local.get('ok') and sky_mode != 'global' and noise.local.get('mode') == sky_mode
+                    and abs(noise.local['ann'][0] - sky_inner) < 1e-6 and abs(noise.local['ann'][1] - sky_outer) < 1e-6):
+                e = float(photerr.aperture_error(f, area, sd, noise, gain or None, local=True)['ap'])
+            else:
+                e = float(photerr.aperture_error(f, area, sd, noise, gain or None, nsky=nsky if sky_mode != 'global' else 0)['ap'])
+            e = e if math.isfinite(e) else float('nan')
             fl.append(f); fe.append(e)
             mg.append(-2.5 * math.log10(f) + zp if f > 0 else float('nan'))
             me.append(1.0857 * e / f if f > 0 else float('nan'))

@@ -179,6 +179,18 @@ def read_find(path):
     return dict(x=g('X_IMAGE') - 1, y=g('Y_IMAGE') - 1, peak=g('PEAK'), flux=g('FLUX'), snr=g('SNR'), sharp=g('SHARP'), round1=g('ROUND1'), round2=g('ROUND2'), npix=np.zeros(len(rows)))
 
 
+def load_noise(path):
+    if not path or not os.path.isfile(path):
+        return None
+    from ogfkit import photerr
+    try:
+        with open(path) as fh:
+            d = json.load(fh)
+        return photerr.NoiseModel.from_meta(d) if 'noisemodel' in d else None
+    except Exception:
+        return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('image')
@@ -212,6 +224,7 @@ def main(argv=None):
     ap.add_argument('--fit-radius', type=float, default=0.0)
     ap.add_argument('--no-fit-sky', action='store_true')
     ap.add_argument('--gain', type=float, default=0.0)
+    ap.add_argument('--noise-meta', default='', help='catalog_meta.json written by the Noise plugin: pixel correlation (and local-sky law for the same annulus) enter the PHOT errors')
     ap.add_argument('--n-iter', type=int, default=3)
     ap.add_argument('--chi-max', type=float, default=3.0)
     ap.add_argument('--snr-min', type=float, default=3.0)
@@ -273,7 +286,7 @@ def main(argv=None):
     elif mode == 'phot':
         f = get_find()
         bkg, rms = pm.background(data, mask)
-        ph = dp.phot(data, np.c_[f['x'], f['y']], radii=kw['radii'], sky_inner=a.sky_inner, sky_outer=a.sky_outer, sky_mode=a.sky_mode, bkg=bkg, rms=rms, zp=a.mag_zeropoint, gain=a.gain or None)
+        ph = dp.phot(data, np.c_[f['x'], f['y']], radii=kw['radii'], sky_inner=a.sky_inner, sky_outer=a.sky_outer, sky_mode=a.sky_mode, bkg=bkg, rms=rms, zp=a.mag_zeropoint, gain=a.gain or None, noise=load_noise(a.noise_meta))
         rows = []
         for i, p in enumerate(ph):
             r = dict(ID=i + 1, X_IMAGE=f['x'][i] + 1, Y_IMAGE=f['y'][i] + 1, SKY=p['sky'], SKYSIG=p['skysig'], NSKY=p['nsky'])

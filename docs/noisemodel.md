@@ -38,3 +38,34 @@ CLI (also what the session script replays): `python3 plugins/noisemodel/noisemod
 * Source masking at low threshold biases the sky low and sigma_pix slightly (see above); the default 2 sigma / 8 px keeps that below 0.1 counts (0.02 sigma) in the tests, but real extended faint emission is still absorbed into the mesh at `bw` px.
 * `NM_FLUXERR` is a sky + Poisson error of a given aperture; it does not include background-model error (~0.2 counts per pixel in the tests, correlated over the mesh), PSF/aperture-loss errors or the error of the zero point. `gain` is only meaningful for images in electron-like units.
 * The mean flux pull in the star test is +0.16 sigma (background low by ~0.06 counts/pixel from masked noise peaks).
+
+## Unified photometric error model (`ogfkit/photerr.py`, precision batch item 3)
+Several tools estimated aperture errors separately (noise plugin: sky + correlation law; DAOPHOT `phot`: `N sigma^2 (1 + N/nsky)`; stacking: bootstrap; depth maps: own copy of the blank-aperture sampler). `photerr.aperture_error` is now the one place where the terms are added:
+
+| term | meaning |
+|---|---|
+| sky | `sigma_pix sqrt(N)` times the correlation factor of the blank-aperture law (`alpha N^(beta-1/2)`), or the measured law of the *local-sky-subtracted* aperture (`NoiseModel.add_local`, includes the next term) |
+| poisson | `flux / gain` |
+| sky_est | error of the annulus sky level times N (`N^2 sigma^2 kappa^2 / nsky`; kappa from the law or measured with `annulus_factor`: median of white noise 1.25, correlated noise 3-5) |
+| sky_sys | per-pixel background-model error times N |
+| contam | `neighbour_contamination`: flux the PSF wings of the other sources put into the aperture, net of the over-subtracted annulus sky (a bias, positive or negative) and its uncertainty (`c_ij sigma_fj` in quadrature + 10 % of the contamination) |
+| apcorr | `aperture_fraction` (net of the source's own wings in the sky annulus), `frac_err` of the correction enters `total = f_ap/frac` |
+
+Replaced duplicates: `noise.flux_error` (wrapper, identical numbers), `depth.blank_circle_positions` (now `noise.blank_positions(box=...)`, bit-identical positions), `daophot.phot` variance (identical numbers without a noise model, tested against the old formula). New optional inputs: Noise plugin parameters *Local sky annulus* (`--sky-annulus 12,18`: columns `NM_SKYERR`, `NM_FLUXERR_LOC`, and the measured local law is stored in `catalog_meta.json`) and *PSF for neighbour contamination* (`--psf`: `NM_CONTAM`, `NM_FLUXERR_TOT`); DAOPHOT PHOT reads the meta (`--noise-meta`, used only when the stored annulus/sky mode match). Defaults leave all existing columns unchanged. Not replaced: stacking bootstrap errors (they measure source-to-source scatter, a different quantity), multifit covariance errors, moving-object detection S/N (`sqrt(npix) rms`, uncorrelated; changing it would move detection thresholds).
+
+### Validation (`validation/photerr_validate.py`, `photerr_report.json`; tests `tests/test_photerr.py`, 7)
+Blank apertures with local annulus sky (12-18 px, median), positions independent of those used for the law; pull = flux/error, ideal std 1:
+| image | r (px) | naive `sigma sqrt(N)` | legacy DAOPHOT | global law + annulus | measured local law |
+|---|---|---|---|---|---|
+| synthetic, kernel 1 px | 2 / 3 / 5 / 8 | 2.5 / 3.0 / 3.4 / 3.7 | 2.5 / 2.9 / 3.2 / 3.2 | 1.05 / 1.11 / 1.09 / 0.99 | 1.06 / 1.07 / 1.02 / 0.94 |
+| real HUDF F160W (1400^2) | 2 / 3 / 5 / 8 | 1.7 / 2.0 / 2.3 / 2.7 | 1.7 / 1.9 / 2.2 / 2.3 | 0.72 / 0.64 / 0.54 / 0.46 | 1.00 / 1.00 / 0.98 / 0.97 |
+On the real drizzled image the global-sky law *over*-estimates the local-sky error by 1.4-2.2x (large-scale noise is removed by the local sky); the measured local law is correct to 3 %. Use `--sky-annulus` whenever the photometry uses a local sky.
+Injection-recovery (Moffat FWHM 3 px stars, flux 100-10^4 x sigma/5, source Poisson noise, aperture r 4, annulus 8-14, aperture correction from a stacked-star PSF with bootstrap error; pull of the total-flux estimate, std / mean):
+| sample | naive | legacy | unified, no contamination | unified + contamination |
+|---|---|---|---|---|
+| synthetic, isolated (n 138 / 281 / 316 in sparse / moderate / crowded fields) | 3.4 / 3.6 / 3.3 | 2.7 / 2.7 / 2.8 | 1.07 / 1.07 / 0.95 | same |
+| synthetic, a neighbour within 22 px (n 10 / 127 / 804) | 1.8 / 14.8 / 18.9 | 1.5 / 11.1 / 13.3 | 0.57 / 4.6 / 4.3 | 0.58 / 1.84 / 1.97 (mean pull +0.4 / +1.0 / +0.75) |
+The contamination correction brings the pull of close pairs from 4.3-4.6 to 1.8-2.0, not to 1: neighbours below the detection cut (S/N 3) and the 10 % PSF-model uncertainty are not modelled, and the neighbours' fluxes are themselves measured. Real HUDF injection (inside the real, source-masked image; only 20 isolated + 52 close samples): pull std 0.65-0.96 isolated, 1.8 close pairs with +0.9...+1.4 mean pull; there the aperture correction from 40 injected stars measured in the real background was off by 2-8 % (0.757-0.803 vs 0.820 true), which dominates the bright-star pulls - the aperture-correction term is only as good as its `frac_err`. Verified on synthetic data for the contamination; on real data only the blank-aperture test is solid.
+
+### Limits
+Neighbours are point sources of the catalogue flux (extended neighbours' wings are wrong); the annulus factor/local law is stationary over the image; the local law is only valid for apertures within the measured radii (outside half/twice the area range `NM_*_LOC` is left empty); the Poisson term assumes a known gain; no covariance between aperture and annulus pixels; the 10 % PSF-model uncertainty of the contamination is an assumption, not measured.

@@ -171,18 +171,22 @@ def correlation_summary(acf):
 
 
 # ---------------------------------------------------------------------------------------------------------------- blank apertures
-def blank_positions(mask, r, n, rng, margin=None, max_tries=60):
-    """Random circle centres whose aperture (radius r, plus margin) contains no masked pixel and lies fully inside the image."""
+def blank_positions(mask, r, n, rng, margin=None, max_tries=60, box=None, kmin=200):
+    """Random circle centres whose aperture (radius r, plus margin) contains no masked pixel and lies fully inside the image;
+    box = (x0, y0, x1, y1) restricts the centres.  (The single implementation: depth.py used a copy.)"""
     sep = _sep()
     ny, nx = mask.shape
     margin = r + 1.0 if margin is None else margin
+    x0, y0, x1, y1 = (margin, margin, nx - 1 - margin, ny - 1 - margin) if box is None else (max(box[0], margin), max(box[1], margin), min(box[2], nx - 1 - margin), min(box[3], ny - 1 - margin))
+    if x1 <= x0 or y1 <= y0:
+        return np.zeros((0, 2))
     out = []
     tries = 0
     m8 = np.ascontiguousarray(mask, np.float64)
     while len(out) < n and tries < max_tries:
-        k = max(4 * (n - len(out)), 200)
-        x = rng.uniform(margin, nx - 1 - margin, k)
-        y = rng.uniform(margin, ny - 1 - margin, k)
+        k = max(4 * (n - len(out)), kmin)
+        x = rng.uniform(x0, x1, k)
+        y = rng.uniform(y0, y1, k)
         bad, _, _ = sep.sum_circle(m8, x, y, r, subpix=1)
         good = bad < 0.5
         out.extend(zip(x[good], y[good]))
@@ -223,16 +227,11 @@ def noise_law_sigma(N, law, sigma_pix):
 
 # ---------------------------------------------------------------------------------------------------------------- photometric errors
 def flux_error(flux, N, sigma_pix, law=None, gain=None, correlated=True):
-    """Aperture flux error: sky term (correlated law, or sigma_pix sqrt(N) when `correlated` is False) plus Poisson term of the source (flux / gain)."""
-    N = np.asarray(N, float)
-    if correlated and law is not None:
-        sky = noise_law_sigma(N, law, sigma_pix)
-    else:
-        sky = sigma_pix * np.sqrt(N)
-    var = sky ** 2
-    if gain:
-        var = var + np.clip(flux, 0, None) / gain
-    return np.sqrt(var)
+    """Aperture flux error: sky term (correlated law, or sigma_pix sqrt(N) when `correlated` is False) plus Poisson term of the source (flux / gain).
+    Thin wrapper of ogfkit.photerr.aperture_error (the unified error model, which adds sky-estimation, neighbour and aperture-correction terms)."""
+    from . import photerr
+    model = photerr.NoiseModel(1.0, law['alpha'], law['beta'], True) if (correlated and law is not None and law.get('ok', True)) else None
+    return photerr.aperture_error(flux, N, sigma_pix, model, gain or None)['ap']
 
 
 def sample_map(m, x, y):
