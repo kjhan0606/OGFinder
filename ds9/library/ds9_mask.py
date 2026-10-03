@@ -8,7 +8,8 @@ Bits of the flag image (uint8):
      4  manual add (regions, grow, invert)
      8  manual erase / protect  (wins over every masking bit)
     16  imported / reprojected from another mask or band
-A pixel is *masked* when (flags & 23) != 0 and (flags & 8) == 0.
+    32  satellite / aircraft trail (plugins/trails, ogfkit/trails.py); survives Auto Mask, removable with --mode trails-clear
+A pixel is *masked* when (flags & 55) != 0 and (flags & 8) == 0.
 
 Files (MASK = ~/.ds9/mask_<base>.fits):
     MASK                       flag image (this program's master copy)
@@ -24,6 +25,8 @@ Usage:
     ds9_mask.py IMAGE --mode add|erase --mask MASK --regions file.reg
     ds9_mask.py IMAGE --mode grow|shrink --mask MASK --pixels N
     ds9_mask.py IMAGE --mode invert|clear|undo|redo|stats --mask MASK
+    ds9_mask.py IMAGE --mode trails --mask MASK --file trailmask.fits [--fresh]   (set bit 32 where the file is non-zero; --fresh first clears old trail bits)
+    ds9_mask.py IMAGE --mode trails-clear --mask MASK                            (clear bit 32)
     ds9_mask.py IMAGE --mode import --mask MASK --file other.fits
     ds9_mask.py IMAGE --mode export --mask MASK --file out.fits [--boolean]
     ds9_mask.py IMAGE --mode reproject --mask MASK --target-image band.fits --output band_mask.fits
@@ -43,9 +46,9 @@ _root = os.path.abspath(os.path.join(_script_dir, '..', '..'))
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
-SRC, STAR, ADD, ERASE, IMPORT = 1, 2, 4, 8, 16
-MASKBITS = SRC | STAR | ADD | IMPORT
-KEEP_ON_AUTO = ADD | ERASE | IMPORT
+SRC, STAR, ADD, ERASE, IMPORT, TRAIL = 1, 2, 4, 8, 16, 32
+MASKBITS = SRC | STAR | ADD | IMPORT | TRAIL
+KEEP_ON_AUTO = ADD | ERASE | IMPORT | TRAIL
 MAX_UNDO = 10
 
 WCS_KEYS = ['CRPIX1', 'CRPIX2', 'CRVAL1', 'CRVAL2', 'CD1_1', 'CD1_2',
@@ -113,7 +116,7 @@ def save_mask(flags, header, path):
     flags = flags.astype(np.uint8)
     write_fits(flags, header, path,
                {'OGFMASK': (1, 'OGFinder bit-flag mask'),
-                'MSKBITS': ('1src 2star 4add 8erase 16imp', 'flag meaning')})
+                'MSKBITS': ('1src 2star 4add 8erase 16imp 32trail', 'flag meaning')})
     write_fits(effective(flags).astype(np.uint8), header, bool_path(path),
                {'OGFBOOL': (1, 'effective boolean mask')})
 
@@ -181,10 +184,11 @@ def stats_line(flags, data=None, mask_path=None, note=''):
     n = int(eff.sum())
     tot = flags.size
     s = ("#MASK_STATS N_MASKED=%d FRACTION=%.6f N_PIXELS=%d EXISTS=1 "
-         "N_SRC=%d N_STAR=%d N_ADD=%d N_ERASE=%d N_IMPORT=%d" %
+         "N_SRC=%d N_STAR=%d N_ADD=%d N_ERASE=%d N_IMPORT=%d N_TRAIL=%d" %
          (n, n / tot, tot, int(((flags & SRC) != 0).sum()),
           int(((flags & STAR) != 0).sum()), int(((flags & ADD) != 0).sum()),
-          int(((flags & ERASE) != 0).sum()), int(((flags & IMPORT) != 0).sum())))
+          int(((flags & ERASE) != 0).sum()), int(((flags & IMPORT) != 0).sum()),
+          int(((flags & TRAIL) != 0).sum())))
     if data is not None:
         nodata = (data == 0) | ~np.isfinite(data)
         s += " N_NODATA=%d FRAC_OF_VALID=%.6f" % (
@@ -474,6 +478,29 @@ def mode_import(a):
     print(stats_line(new, data, a.mask))
 
 
+def mode_trails(a, clear=False):
+    from astropy.io import fits
+    data, header = load_image(a.image)
+    flags, _ = load_mask(a.mask, data.shape)
+    if flags is None:
+        flags = np.zeros(data.shape, np.uint8)
+    push_snapshot(a.mask, flags)
+    new = flags.copy()
+    if clear or a.fresh:
+        new &= np.uint8(~TRAIL & 0xFF)
+    if not clear:
+        with fits.open(a.file) as hdul:
+            tm = np.asarray(hdul[0].data)
+        while tm.ndim > 2:
+            tm = tm[0]
+        if tm.shape != data.shape:
+            sys.exit("ERROR: trail mask shape %s != image shape %s" % (tm.shape, data.shape))
+        new[tm != 0] |= TRAIL
+        new[tm != 0] &= ~np.uint8(ERASE)
+    save_mask(new, header, a.mask)
+    print(stats_line(new, data, a.mask, 'trails_cleared' if clear else 'trails_set'))
+
+
 def mode_export(a):
     data, header = load_image(a.image)
     flags, _ = load_mask(a.mask, data.shape)
@@ -522,7 +549,7 @@ def main():
     p.add_argument('image')
     p.add_argument('--mode', required=True, choices=['auto', 'add', 'erase', 'grow', 'shrink', 'invert',
                                     'clear', 'undo', 'redo', 'stats', 'import', 'export',
-                                    'reproject', 'masked'])
+                                    'reproject', 'masked', 'trails', 'trails-clear'])
     p.add_argument('--mask', required=True)
     p.add_argument('--regions')
     p.add_argument('--pixels', type=float, default=1)
@@ -558,6 +585,8 @@ def main():
     elif m == 'shrink': mode_grow(a, True)
     elif m == 'invert': mode_invert(a)
     elif m == 'clear': mode_clear(a)
+    elif m == 'trails': mode_trails(a)
+    elif m == 'trails-clear': mode_trails(a, clear=True)
     elif m == 'undo': mode_undo_redo(a, False)
     elif m == 'redo': mode_undo_redo(a, True)
     elif m == 'stats': mode_stats(a)

@@ -2,12 +2,12 @@
 import numpy as np
 
 # bits of the flag image written by ds9_mask.py
-SRC, STAR, ADD, ERASE, IMPORT = 1, 2, 4, 8, 16
-MASKBITS = SRC | STAR | ADD | IMPORT
+SRC, STAR, ADD, ERASE, IMPORT, TRAIL = 1, 2, 4, 8, 16, 32
+MASKBITS = SRC | STAR | ADD | IMPORT | TRAIL
 
 
 def effective_mask(flags):
-    """Bit-flag mask -> boolean 'masked' array: (flags & 23) != 0 and (flags & 8) == 0 (same rule as ds9_mask.py)."""
+    """Bit-flag mask -> boolean 'masked' array: (flags & 55) != 0 and (flags & 8) == 0 (same rule as ds9_mask.py)."""
     f = np.asarray(flags).astype(np.int64)
     return ((f & MASKBITS) != 0) & ((f & ERASE) == 0)
 
