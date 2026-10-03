@@ -177,6 +177,43 @@ Limitations: no GALFIT comparison of the decompositions of real galaxies (only t
 bulge and disc share centre and are free in PA / q (a bar or a warp can be absorbed by the "bulge"); the selection is by BIC and sanity cuts, not a morphological classification; B/T is a model B/T of the fitted functions;
 isophote start needs a few resolved pixels (r_e < ~1 FWHM objects fall back to the presets); the error rescaling makes the choice conservative for very high S/N galaxies; run time ~10-15 s per object per core.
 
+## Real-galaxy cross-check against GALFIT (`validation/galfit_real_compare.py`, `galfit_real_report.json`)
+
+93 real cutouts, each fitted by GALFIT 3.0.5 and by multifit from the same feedme (same data, sigma, mask, PSF, start values, constraints): 30 extended galaxies of the HUDF (F160W-selected, mag 19.5-23.5, r_half > 4 px)
+in F105W / F125W / F160W (82 cutouts; 0.06"/px, AB zero points from PHOTFLAM / PHOTPLAM) and 11 extended objects of the M51 image.  Sigma = constant per-cutout rms of the source-free pixels, mask = the other detected
+objects (sep segmentation dilated by 2 px), PSF = median stack of ~30 isolated stars of the band with azimuthally averaged wings (the wing pixels of a stack of faint stars are pure noise: a first version with the raw stack
+had a PSF sum of -0.46 in the negative pixels and made the two programs disagree by factors of 10 in chi2 - fixed and noted because it shows how PSF noise alone dominates such a comparison).  Models: `sersic` (n in 0.3-8, R_e <= 3 x box half-size) and
+`devexp` (de Vaucouleurs + exponential, tied centre) on every cutout.  Each solution is also re-rendered by GALFIT (P=1) and by multifit's renderer to separate optimiser differences from renderer differences.
+There is NO truth for real galaxies: the numbers measure agreement between the programs and the chi2 reached, not accuracy.
+* single Sersic (93 fits): GALFIT 0 failures, multifit 0; magnitudes agree within 0.05 mag in 91 % (multifit - GALFIT: median +0.0007, NMAD 0.0024 mag), R_e ratio -0.06 % (NMAD 0.23 %), n -0.09 % (NMAD 0.38 %), q +0.0002 (NMAD 0.0006),
+  PA median +0.002 deg (NMAD 0.02, 90th percentile 0.16 deg); chi2 (GALFIT renderer) within 0.5 % in 89 % and 2 % in 95 %, multifit lower by > 0.5 % in 5 %, GALFIT lower in 5 %.  All the large deviations (8 of 93) are fits with n on its
+  bound (8 or 0.3), i.e. galaxies the single Sersic does not describe; there multifit reached the lower chi2 in 5 of the 8 cases (up to 19 % lower).  Median reduced chi2 8.8 for both (real galaxies are not smooth Sersics).
+  The two renderers agree on a given solution to a median 0.05 % (90th percentile 2 % in chi2), at S/N up to 250 per pixel.
+* bulge + disc (`devexp`, 93 fits): GALFIT failed on 9 (10 %; it stops with numerical-problem messages), multifit on 0; of the 84 pairs the dominant-component magnitude agrees within 0.05 mag in only 40 % (NMAD 0.15 mag, 90th percentile
+  1.8 mag): two-component decompositions of real galaxies are degenerate, both programs wander along the valley; chi2 within 0.5 % in 52 %, GALFIT lower by > 0.5 % in 36 %, multifit lower in 12 % (GALFIT finds the deeper minimum more often here;
+  use `--restarts` / `--decomp-restarts`).
+* speed (8 workers busy): GALFIT 0.4 s (Sersic) / 7 s (devexp) per fit, multifit 2.4 / 31 s: multifit is 5 times slower.
+* Not done: independent truth for the real galaxies; per-pixel noise (Poisson) weighting is not used (constant sigma); PSF stacked from 30 stars, not a full PSF model.
+
+## Bar, ring and spiral components (`ogfkit/profiles.py`, `ogfkit/structfit.py`)
+
+* Components: **bar** = Ferrers profile (`ferrer`, alpha 2, beta 0 held fixed, truncation radius, q, PA and the generalised-ellipse C0 = boxy / discy free in 0-3; exportable to GALFIT as `ferrer` + C0), **ring** = new kind `gring`
+  (Gaussian ring in the generalised radius, flux normalised: parameters `rring`, `sring`, q, PA, C0 and Fourier modes allowed; no GALFIT equivalent, the export refuses it), **spiral** = exponential disc with GALFIT's logarithmic rotation
+  function plus a Fourier m = 2 mode (`spiral_disc`; rot_theta and rot_out, m = 2 amplitude and phase free).  Presets (`--model`): `bar`, `ring`, `spiral`, `bulge+disk+bar`, `bulge+disk+ring`.
+* `--model structure` (`fit_structure`): bulge + exponential disc base fit; bar from the second-moment ellipse of the positive residual, ring from the azimuthal residual profile in the disc frame, spiral from both winding senses;
+  candidates base, +bar, +ring, +bar+ring, +spiral are refitted with all parameters free and chosen by the error-rescaled BIC (as in autodecomp) and sanity cuts (bar 3-60 % of the light, q < 0.7, length < 2.2 disc R_e; ring 2-60 %, width > 0.5 px;
+  spiral |rotation| > 25 deg, m = 2 amplitude > 0.03).  `--st-geometry outer` starts the disc axis ratio / PA from the outer isophotes (needed when the bar / ring dominate the inner light).
+  Catalog columns `ST_TYPE` (0 bulge+disc, 1 bar, 2 ring, 3 spiral, 4 bar+ring), `ST_MAG`, `ST_BT`, `ST_BARFRAC/LEN/PA/Q/C0`, `ST_RINGR/W/FRAC`, `ST_SPTHETA/AMP`, `ST_DBIC`, `ST_CHI2`, `ST_FLAG`; GUI step *Bar / Ring / Spiral Fit*.
+* Synthetic truth (101 x 101, PSF 3 px, 20 galaxies per class; `validation/structure_validate.py`): high S/N (total flux 9-20 k, rms 0.5): classes right 77/80 (0/20 false features on bulge+disc controls); bar PA error median 0.25 deg
+  (but 90th percentile 88 deg: 2 of 20 bars fitted along the wrong axis), length ratio 0.99 (NMAD 0.03), bar fraction bias -0.05; ring radius ratio 1.00, width 1.01; spiral winding sense 19/19, rotation ratio 1.00;
+  B/T error when the feature is ignored 0.20 (bar) / 0.12 (ring) / 0.10 (spiral) vs 0.05 / 0.01 / 0.01 with the feature.  Low S/N (3-5 k): 72/80 correct (0/20 false features; spiral recall 70 %).  A bar is also an m = 2 mode: 1-2 bars per set are called spiral and vice versa.
+* Real barred galaxy: NGC 3351 (M95) in SDSS r (frame 3836-4-84, public; `validation/barred_real.py` downloads and caches it), binned 2 x 2, 201 x 201 cutout, stars masked, PSF from frame stars: selected **bar + ring** (BIC 39.8 k vs 57.9 k base,
+  41.5 k ring only).  Bar PA 108 deg E of N (literature ~112 deg), disc q 0.78 (inclination 39 deg; literature 41 deg), disc PA 172 deg (literature ~12 / 192 deg: 20 deg off).  Ferrers truncation radius 80" while the visible bar
+  semi-major axis is ~50": the Ferrers length is a truncation radius and overestimates the bar; the fit has chi2_red 325 (spiral arms, star-forming knots, nuclear ring unmodelled), so the parameters are indicative.
+  Without `--st-geometry outer` the base bulge + disc fit takes the bar for the disc (disc PA = bar PA).  No GALFIT comparison for the bar fit (the ring has no GALFIT equivalent).
+* Limits: one bar / one ring only; ring and bar are centred on the galaxy; spiral arms are a 2-arm logarithmic spiral in the disc plane (inclination only through q / PA); nuclear rings, pseudo-bulges, truncated discs are not modelled;
+  bar detection depends on a bulge + disc base fit that is itself degenerate; ~1 min per object per core.
+
 ## Limitations
 The GALFIT advanced components (next section) are available only in config / feedme fits, not in the catalog mode (`--model` choices unchanged); the PSF of a component is evaluated at its start position (not re-evaluated while fitting);
 the sky is local to the cutout (n ≳ 4 profiles and large galaxies in small cutouts have the usual sky-wing degeneracy: fix the sky for those); errors are formal (no covariance between components in
