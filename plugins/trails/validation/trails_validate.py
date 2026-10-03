@@ -208,6 +208,7 @@ def run_phot(spec):
     mask = T.trail_mask(img.shape, res['trails']) if res['trails'] else np.zeros(img.shape, bool)
     fi = T.fill_interpolate(im2, res['trails'], mask, noise=False) if res['trails'] else im2
     fn = T.fill_interpolate(im2, res['trails'], mask, noise=True, seed=spec['seed']) if res['trails'] else im2
+    fc = T.fill_interpolate(img, res['trails'], mask, noise=False) if res['trails'] else img      # controls: same treatment on the trail-free image
     th = math.radians(theta)
     hw = float(m.get('halfwidth', w / 2 + 4.4)) if m else w / 2 + 4.4
     rows = []
@@ -218,7 +219,7 @@ def run_phot(spec):
             continue
         base = aper(img, x, y)
         row = dict(d=float(d), f0=float(base), snr=float(base / sap), unmasked=aper(im2, x, y) - base,
-                   masked=aper(im2, x, y, mask) - base, interp=aper(fi, x, y) - base, interp_noise=aper(fn, x, y) - base,
+                   masked=aper(im2, x, y, mask) - base, interp=aper(fi, x, y) - base, interp_noise=aper(fn, x, y) - base, masked_ctrl=aper(img, x, y, mask) - base, interp_ctrl=aper(fc, x, y) - base,
                    grp='on' if d < hw else ('edge' if d < hw + 5.0 else 'near'), sap=float(sap))
         rows.append(row)
     return dict(spec=spec, rows=rows, found=m is not None, n_det=len(res['trails']))
@@ -395,9 +396,9 @@ def summarize(exp, R, md):
             for row in r['rows']:
                 rows.setdefault(r['spec']['k'], []).append(dict(row, found=r['found']))
         md.append('\n### aperture-photometry bias of objects near an injected trail (r=5 px aperture, local sky annulus, targets S/N>8, trail w=6 px through a bright object)\n')
-        md.append('Bias = F(with trail, treatment) - F(original), in units of the nominal aperture noise sigma_ap (sigma_pix*sqrt(N_ap)). on = object centre inside the masked band; edge = aperture reaches the band; near = band >5 px away, within 45 px.\n')
-        md.append('| amp [sigma] | group | n objs | unmasked med / RMS | masked med / RMS (n lost) | interp med / RMS | interp+noise med / RMS | trails found |')
-        md.append('|---|---|---|---|---|---|---|---|')
+        md.append('Bias = F(with trail, treatment) - F(original); the trail-free control applies the same mask / interpolation to the image without the trail (cost of the treatment itself: lost sky-annulus pixels, interpolated-over object light); units of the nominal aperture noise sigma_ap (sigma_pix*sqrt(N_ap)). on = object centre inside the masked band; edge = aperture reaches the band; near = band >5 px away, within 45 px.\n')
+        md.append('| amp [sigma] | group | n objs | unmasked med / RMS | masked med / RMS (n lost) | masked, trail-free control | interp med / RMS | interp, trail-free control | interp+noise | trails found |')
+        md.append('|---|---|---|---|---|---|---|---|---|---|')
         for k in sorted(rows):
             nt = len([r for r in R if r['spec']['k'] == k]); nf = sum(r['found'] for r in R if r['spec']['k'] == k)
             for grp in ('on', 'edge', 'near'):
@@ -408,7 +409,7 @@ def summarize(exp, R, md):
                     v = np.array([x[name] / x['sap'] for x in g], float)
                     return '%+.2f / %.2f' % (np.nanmedian(v), rms(v)) if np.isfinite(v).any() else 'n/a'
                 lost = sum(not np.isfinite(x['masked']) for x in g)
-                md.append('| %g | %s | %d | %s | %s (%d) | %s | %s | %d/%d |' % (k, grp, len(g), cell('unmasked'), cell('masked'), lost, cell('interp'), cell('interp_noise'), nf, nt))
+                md.append('| %g | %s | %d | %s | %s (%d) | %s | %s | %s | %s | %d/%d |' % (k, grp, len(g), cell('unmasked'), cell('masked'), lost, cell('masked_ctrl'), cell('interp'), cell('interp_ctrl'), cell('interp_noise'), nf, nt))
         md.append('')
         for k in sorted(rows):
             g = [x for x in rows[k] if x['grp'] != 'near' and x['f0'] > 0]

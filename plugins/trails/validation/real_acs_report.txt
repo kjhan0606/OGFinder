@@ -1,0 +1,8 @@
+chip1: 2 trails, 1 rejected (bleed/spike/shape), best z 94.5, sigma_pix 15.9, 32 s
+  trail 1: theta 128.43 rho 1258.2 length 2014 FWHM 2.6 px peak 331.9 e- (20.94 sigma_pix) z 94.5 mask half-width 4.6; median excess 0-4 px outside the mask +0.65 e- (+0.0019 of peak)
+  trail 2: theta 15.22 rho -55.9 length 3468 FWHM 21.0 px peak 8.5 e- (0.54 sigma_pix) z 18.0 mask half-width 24.3; median excess 0-4 px outside the mask -0.23 e- (-0.0273 of peak)
+  rejected: theta 92.0 length 641 z 21.0 reason bleed
+chip2: 1 trails, 2 rejected (bleed/spike/shape), best z 96.1, sigma_pix 15.6, 30 s
+  trail 1: theta 128.28 rho -41.3 length 2603 FWHM 2.5 px peak 484.7 e- (31.07 sigma_pix) z 96.1 mask half-width 4.5; median excess 0-4 px outside the mask +2.07 e- (+0.0043 of peak)
+  rejected: theta 92.2 length 760 z 16.5 reason bleed
+  rejected: theta 92.7 length 548 z 10.4 reason bleed

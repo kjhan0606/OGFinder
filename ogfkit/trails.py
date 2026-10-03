@@ -364,7 +364,9 @@ def bleed_like(img, theta, rho, s0, s1, amp, level, axis_tol=3.0, fac=300.0, spi
     th = theta % 180.0
     L0 = s1 - s0
     sv = np.arange(s0 - 1.5 * L0, s1 + 1.5 * L0 + 1.0, 1.0)         # the core may lie beyond the part of the spike that was found
-    with np.errstate(all='ignore'):
+    import warnings
+    with np.errstate(all='ignore'), warnings.catch_warnings():
+        warnings.simplefilter('ignore')
         v = np.nanmax(sample_strip(img, theta, rho, sv, np.arange(-3.0, 4.0)), axis=0) - level
     if not np.isfinite(v).any() or np.nanmax(v) <= fac * max(amp, 1e-9):
         return False
