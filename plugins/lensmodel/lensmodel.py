@@ -5,6 +5,8 @@
     lensmodel.py --task curves  --work DIR [--image FITS]          (critical curves + caustics -> lens_curves.json, lens_overlay.reg)
     lensmodel.py --task magmap  --work DIR --image FITS            (magnification map FITS on the image grid)
     lensmodel.py --task source  --work DIR --image FITS            (source-plane reconstruction + forward model + residual)
+    lensmodel.py --task source  --work DIR --image FITS --source-method inversion [--psf-sigma PX --noise SIG --regularisation gradient]
+    lensmodel.py --task multiplane --work DIR --pixscale S --lens-x X --lens-y Y --mp-groups "x,y;x,y;x,y;x,y|x,y;..." --mp-z 0.6,2.0 --z-lens 0.22
     lensmodel.py --task predict --work DIR [--source-x PX --source-y PY]   (counter-images, magnifications, time delays)
     lensmodel.py --task simulate --work DIR [--seed N ...]         (synthetic lens: FITS + catalog + truth)
 
@@ -35,7 +37,7 @@ COLUMNS = ['LENS_ROLE', 'LENS_MU', 'LENS_RES', 'LENS_DT', 'LENS_PARITY']
 
 def pa_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--task', required=True, choices=['fit', 'curves', 'magmap', 'source', 'predict', 'simulate'])
+    p.add_argument('--task', required=True, choices=['fit', 'curves', 'magmap', 'source', 'predict', 'simulate', 'multiplane'])
     p.add_argument('--catalog', default='')
     p.add_argument('--image', default='')
     p.add_argument('--work', required=True)
@@ -70,6 +72,14 @@ def pa_args():
     p.add_argument('--source-pix', type=float, default=0.0, help='source-plane pixel (arcsec; 0 = half the image pixel)')
     p.add_argument('--cutout', type=float, default=0.0, help='source: image radius (arcsec) around the lens centre (0 = 2.5 theta_E)')
     p.add_argument('--lens-mask', type=float, default=0.0, help='source: mask pixels closer than this (arcsec) to the lens centre (lens-galaxy light must be removed or masked)')
+    p.add_argument('--source-method', choices=['backproject', 'inversion'], default='backproject',
+                   help='source: back-projection (default) or regularised linear inversion on a pixel grid with PSF and noise (ogfkit.lensextra)')
+    p.add_argument('--psf-sigma', type=float, default=0.0, help='source/inversion: Gaussian PSF sigma (image pixels)')
+    p.add_argument('--noise', type=float, default=0.0, help='source/inversion: pixel noise sigma (0 = rms of the blank pixels)')
+    p.add_argument('--regularisation', choices=['gradient', 'curvature', 'zero'], default='gradient')
+    p.add_argument('--source-n', type=int, default=40, help='source/inversion: source grid size (n x n)')
+    p.add_argument('--mp-groups', default='', help='multiplane: image sets "x,y;x,y;...|x,y;..." (1-based pixels), first set = reference source plane')
+    p.add_argument('--mp-z', default='', help='multiplane: source redshift of each set, comma list; "free" fits the weight of that plane')
     p.add_argument('--max-mu', type=float, default=100.0, help='magmap: |mu| is clipped to this value')
     p.add_argument('--check-lenstronomy', action='store_true', help='compare the deflection with lenstronomy when it is installed')
     p.add_argument('--seed', type=int, default=1)
@@ -416,6 +426,8 @@ def task_source(a):
     if a.lens_mask > 0:
         yy, xx = np.mgrid[0:cut.shape[0], 0:cut.shape[1]]
         cut[np.hypot(xx - origin[0], yy - origin[1]) * scale < a.lens_mask] = np.nan
+    if a.source_method == 'inversion':
+        return source_inversion(a, res, model, cut, scale, origin, hdr)
     sp = a.source_pix if a.source_pix > 0 else 0.5 * scale
     rec = lm.ray_trace_image(model, cut, scale, origin, (0.0, 0.0), src_pix=sp)
     fwd = lm.lens_source_map(model, rec, cut.shape, scale, origin, (0.0, 0.0))
@@ -441,6 +453,62 @@ def task_source(a):
     json.dump(res, open(jpath(a, 'lens_model.json'), 'w'), indent=1, default=float)
     print('source plane: %s  %dx%d px of %.4f arcsec, centroid (%.4f, %.4f) arcsec, residual rms %.4g vs image rms %.4g' % (
         os.path.basename(jpath(a, 'lens_source.fits')), s.shape[1], s.shape[0], rec['pix'], cx, cy, rms, out['image_rms_in_mapped']))
+
+
+def source_inversion(a, res, model, cut, scale, origin, hdr):
+    from ogfkit import lensextra as lx
+    from astropy.io import fits
+    ok = np.isfinite(cut)
+    sig = a.noise
+    if sig <= 0:
+        yy, xx = np.mgrid[0:cut.shape[0], 0:cut.shape[1]]
+        blank = ok & (np.hypot(xx - origin[0], yy - origin[1]) * scale > 0.9 * 2.5 * res['params']['theta_E'])
+        sig = float(np.nanstd(cut[blank])) if blank.sum() > 100 else float(np.nanstd(cut[ok]))
+    work = np.nan_to_num(cut, nan=0.0)
+    mask = lx.arc_mask(work, sig, origin, 1e9) & ok
+    kern = lx.gaussian_kernel(a.psf_sigma) if a.psf_sigma > 0 else None
+    S = lx.SourceInversion(model, work, sig, mask, scale, origin, (0.0, 0.0), kernel=kern, n=a.source_n, reg=a.regularisation)
+    r = S.best()
+    src, mod = S.images(r)
+    resid = np.where(mask, work - mod, 0.0)
+    g = S.grid
+    h = fits.Header()
+    h['CDELT1'] = g['pix']; h['CDELT2'] = g['pix']; h['CRPIX1'] = 1; h['CRPIX2'] = 1
+    h['CRVAL1'] = g['x0']; h['CRVAL2'] = g['y0']; h['CUNIT1'] = 'arcsec'; h['CUNIT2'] = 'arcsec'
+    h['COMMENT'] = 'pixelated source inversion (%s regularisation, lambda %.4g); coordinates in arcsec of the lens frame' % (a.regularisation, r['lam'])
+    fits.PrimaryHDU(src.astype(np.float32), header=h).writeto(jpath(a, 'lens_source.fits'), overwrite=True)
+    fits.PrimaryHDU(mod.astype(np.float32)).writeto(jpath(a, 'lens_model_image.fits'), overwrite=True)
+    fits.PrimaryHDU(resid.astype(np.float32)).writeto(jpath(a, 'lens_residual.fits'), overwrite=True)
+    neff = S.n_eff(r)
+    out = dict(method='inversion', regularisation=a.regularisation, lam=float(r['lam']), noise=sig, psf_sigma_pix=a.psf_sigma, source_pixel_arcsec=g['pix'], source_shape=[g['n'], g['n']],
+               n_data=int(S.ndata), n_eff=neff, chi2=r['chi2'], chi2_red=r['chi2'] / max(S.ndata - neff, 1), log_evidence=r['evidence'],
+               source_flux_sum=float(src.sum() * g['pix'] ** 2), residual_rms=float(np.sqrt(np.mean(resid[mask] ** 2))))
+    res['source_reconstruction'] = out
+    json.dump(res, open(jpath(a, 'lens_model.json'), 'w'), indent=1, default=float)
+    print('source inversion: %dx%d px of %.4f arcsec, lambda %.3g, chi2/dof %.3f (N_eff %.0f of %d pixels), residual rms %.4g (noise %.4g)' % (
+        g['n'], g['n'], g['pix'], r['lam'], out['chi2_red'], neff, S.ndata, out['residual_rms'], sig))
+
+
+def task_multiplane(a):
+    from ogfkit import lensextra as lx
+    scale, hdr = read_header_scale(a)
+    if not a.mp_groups or not (a.lens_x or a.lens_y or a.lens_number):
+        raise SystemExit('lensmodel: multiplane needs --mp-groups and the lens centre (--lens-x/--lens-y)')
+    ref = np.array([a.lens_x - 1.0, a.lens_y - 1.0])
+    groups = []
+    zs = [t.strip() for t in a.mp_z.split(',')] if a.mp_z else []
+    for k, g in enumerate(a.mp_groups.split('|')):
+        pts = np.array([[float(v) for v in t.split(',')] for t in g.split(';') if t.strip()]) - 1.0
+        z = zs[k] if k < len(zs) else 'free'
+        groups.append(dict(xy=(pts - ref) * scale, z=(None if z in ('free', '', '-') else float(z))))
+    if groups[0]['z'] is None:
+        raise SystemExit('lensmodel: the first set defines the reference plane and needs a redshift')
+    r = lx.fit_multiplane(groups, (0.0, 0.0), sigma=a.sigma_pos, z_l=a.z_lens or None, H0=a.h0, Om=a.omega_m, n_starts=a.n_starts)
+    out = dict(params={k: float(v) for k, v in r['params'].items()}, weights=[float(w) for w in r['weights']], errors=r['errors'], chi2=r['chi2'], dof=r['dof'],
+               rms_arcsec=r['rms_arcsec'], sources_arcsec=[[float(x), float(y)] for x, y in r['sources']], pixscale=scale, success=r['success'])
+    json.dump(out, open(jpath(a, 'lens_multiplane.json'), 'w'), indent=1)
+    p = out['params']
+    print('multiplane: theta_E(ref) %.4f  q %.3f  phi %.1f  gamma %.4f  weights %s  chi2 %.2f / dof %d' % (p['theta_E'], p['q'], p['phi'], p['gamma'], ','.join('%.4f' % w for w in out['weights']), r['chi2'], r['dof']))
 
 
 def task_predict(a):
@@ -515,7 +583,7 @@ def task_simulate(a):
 def main():
     a = pa_args()
     os.makedirs(a.work, exist_ok=True)
-    {'fit': task_fit, 'curves': task_curves, 'magmap': task_magmap, 'source': task_source, 'predict': task_predict, 'simulate': task_simulate}[a.task](a)
+    {'fit': task_fit, 'curves': task_curves, 'magmap': task_magmap, 'source': task_source, 'predict': task_predict, 'simulate': task_simulate, 'multiplane': task_multiplane}[a.task](a)
 
 
 if __name__ == '__main__':
