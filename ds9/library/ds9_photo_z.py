@@ -112,16 +112,18 @@ def estimate_photoz_empirical(mags, mag_errs, band_names):
     return z_point, z_err, z_q68, z_outlier
 
 
-def estimate_photoz_mdn(mags, mag_errs, band_names, checkpoint):
-    """Photo-z with trained MDN model."""
+def estimate_photoz_mdn(mags, mag_errs, band_names, checkpoint, mixture=None):
+    """Photo-z with trained MDN model.  `mixture` (a dict) receives pi / mu / sigma (Gaussian-mixture parameters per source) when given."""
     try:
-        from photo_z.features import extract_features
+        from photo_z.features import extract_features_block
         from photo_z.predict import predict_photoz
         from photo_z.config import PhotoZConfig
 
         cfg = PhotoZConfig()
-        features = extract_features(mags, mag_errs, band_names)
-        result = predict_photoz(features, checkpoint, cfg)
+        features = extract_features_block(mags, mag_errs)
+        result = predict_photoz(features, checkpoint, cfg, return_mixture=mixture is not None)
+        if mixture is not None:
+            mixture.update(pi=result['mix_pi'], mu=result['mix_mu'], sigma=result['mix_sigma'])
 
         # Quality Head v2: flag outliers using P(reliable)
         p_reliable = result.get('p_reliable', None)
@@ -150,6 +152,8 @@ def main():
                         help='Path to MDN checkpoint')
     parser.add_argument('--n-workers', type=int, default=1,
                         help='Number of workers (unused for photo-z)')
+    parser.add_argument('--mixture-out', default=None,
+                        help='Write the MDN Gaussian-mixture parameters (npz: number, pi, mu, sigma) for the photo-z calibration tools')
     args = parser.parse_args()
 
     # Parse catalog
@@ -232,9 +236,17 @@ def main():
     p_reliable = None
     if args.checkpoint and os.path.exists(args.checkpoint):
         print(f"Using MDN model: {args.checkpoint}", file=sys.stderr)
+        mix = {} if args.mixture_out else None
         result = estimate_photoz_mdn(
-            mags, mag_errs, bands, args.checkpoint)
+            mags, mag_errs, bands, args.checkpoint, mixture=mix)
         z_point, z_err, z_q68, z_outlier, p_reliable = result
+        if mix:
+            try:
+                nn = np.array([int(float(x)) for x in numbers])
+                np.savez(args.mixture_out, number=nn, **mix)
+                print(f"  Mixture parameters written: {args.mixture_out}", file=sys.stderr)
+            except Exception as e:
+                print(f"WARNING: cannot write mixture file ({e})", file=sys.stderr)
     else:
         print("Using empirical color-z relation (no checkpoint)", file=sys.stderr)
         z_point, z_err, z_q68, z_outlier = estimate_photoz_empirical(

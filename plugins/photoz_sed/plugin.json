@@ -60,6 +60,13 @@
        "{photoz-checkpoint}"
       ]
      },
+     {
+      "if": "photoz-mixture-out",
+      "argv": [
+       "--mixture-out",
+       "{photoz-mixture-out}"
+      ]
+     },
      "--n-workers",
      "{extract:n-workers}"
     ],
@@ -165,6 +172,166 @@
      ]
     }
    }
+  },
+  {
+   "id": "pzquality",
+   "label": "Photo-z Calibration (PIT, accuracy)",
+   "title": "Photo-z calibration",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.photoz_quality",
+   "catalog_tmp": "photozquality",
+   "done_status": "photo-z calibration done",
+   "after": "OGFPzqAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/photoz_quality.py",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/photoz_quality",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--zspec-col",
+    "{pq-zspec-col}",
+    "--zphot-col",
+    "{pq-zphot-col}",
+    "--zerr-col",
+    "{pq-zerr-col}",
+    "--zmin={pq-zmin}",
+    "--outlier",
+    "{pq-outlier}",
+    "--mode",
+    "quality",
+    "--mag-col",
+    "{pq-mag-col}",
+    {
+     "if": "pq-q16-col",
+     "argv": [
+      "--q16-col",
+      "{pq-q16-col}"
+     ]
+    },
+    {
+     "if": "pq-q84-col",
+     "argv": [
+      "--q84-col",
+      "{pq-q84-col}"
+     ]
+    },
+    {
+     "if_file": "{pq-mixture-file}",
+     "argv": [
+      "--mixture-file",
+      "{pq-mixture-file}"
+     ]
+    },
+    {
+     "if_file": "{pq-zspec-file}",
+     "argv": [
+      "--zspec-file",
+      "{pq-zspec-file}"
+     ]
+    },
+    {
+     "if": "pq-weights-col",
+     "argv": [
+      "--weights-col",
+      "{pq-weights-col}"
+     ]
+    },
+    "--pdf-kind",
+    "{pq-pdf-kind}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "PZ_PIT",
+     "PZ_CRPS",
+     "PZ_ZSCORE",
+     "PZ_DZ",
+     "PZ_INCI68",
+     "PZ_OUTLIER"
+    ]
+   }
+  },
+  {
+   "id": "pzrepr",
+   "label": "Spec-z Sample Representativeness",
+   "title": "Spec-z representativeness",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.photoz_repr",
+   "catalog_tmp": "photozrepr",
+   "done_status": "representativeness check done",
+   "after": "OGFPzqAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/photoz_quality.py",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/photoz_quality",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--zspec-col",
+    "{pq-zspec-col}",
+    "--zphot-col",
+    "{pq-zphot-col}",
+    "--zerr-col",
+    "{pq-zerr-col}",
+    "--zmin={pq-zmin}",
+    "--outlier",
+    "{pq-outlier}",
+    "--mode",
+    "repr",
+    {
+     "if": "pq-features",
+     "argv": [
+      "--features",
+      "{pq-features}"
+     ]
+    },
+    {
+     "if_file": "{pq-zspec-file}",
+     "argv": [
+      "--zspec-file",
+      "{pq-zspec-file}"
+     ]
+    },
+    "--target",
+    "{pq-target}",
+    "--knn",
+    "{pq-knn}",
+    "--coverage-q",
+    "{pq-coverage-q}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "PZ_SPECDIST",
+     "PZ_INSPEC",
+     "PZ_SPECW"
+    ]
+   }
+  },
+  {
+   "id": "pzqplot",
+   "label": "Photo-z Calibration Plot...",
+   "proc": "OGFPzqPlot",
+   "session": "NONE"
+  },
+  {
+   "id": "pzqtable",
+   "label": "Photo-z Calibration Report...",
+   "proc": "OGFPzqTable",
+   "session": "NONE"
   }
  ],
  "short": "Photo-z/SED",
@@ -257,6 +424,178 @@
    "group": "SED fit",
    "help": "Inverse-model checkpoint (used only when it exists).",
    "key": "sed,param,checkpoint-inverse"
+  },
+  {
+   "name": "photoz-mixture-out",
+   "label": "Photo-z: write MDN mixture file",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z",
+   "help": "Path of an npz file receiving the Gaussian-mixture parameters (number, pi, mu, sigma) of the MDN photo-z; the input of the calibration (PIT) tools. Only used with a checkpoint.",
+   "key": "photoz,param,mixture-out"
+  },
+  {
+   "name": "pq-zspec-col",
+   "label": "Spec-z column",
+   "type": "string",
+   "default": "Z_SPEC",
+   "group": "Photo-z calibration",
+   "help": "Catalog column with the spectroscopic redshift (empty / missing values are objects without one). Also tried: ZSPEC, SPEC_Z, REDSHIFT.",
+   "key": "pzq,param,zspec-col"
+  },
+  {
+   "name": "pq-zspec-file",
+   "label": "Spec-z file (optional)",
+   "type": "file",
+   "default": "",
+   "group": "Photo-z calibration",
+   "help": "TSV with a NUMBER column and the spec-z column (used instead of the catalog column).",
+   "key": "pzq,param,zspec-file"
+  },
+  {
+   "name": "pq-zphot-col",
+   "label": "Photo-z column",
+   "type": "string",
+   "default": "PHOTO_Z",
+   "group": "Photo-z calibration",
+   "help": "Point estimate (median / mean) column.",
+   "key": "pzq,param,zphot-col"
+  },
+  {
+   "name": "pq-zerr-col",
+   "label": "Photo-z error column",
+   "type": "string",
+   "default": "PHOTO_Z_ERR",
+   "group": "Photo-z calibration",
+   "help": "1-sigma error: Gaussian predictive distribution N(zphot, err).",
+   "key": "pzq,param,zerr-col"
+  },
+  {
+   "name": "pq-q16-col",
+   "label": "16th percentile column",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z calibration",
+   "help": "With the 84th percentile column: asymmetric predictive distribution from the percentiles (e.g. EZ_Z16 / EZ_Z84 of the EAZY step, PHOTOZ_P16 of the AI bridge).",
+   "key": "pzq,param,q16-col"
+  },
+  {
+   "name": "pq-q84-col",
+   "label": "84th percentile column",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z calibration",
+   "help": "See the 16th percentile column.",
+   "key": "pzq,param,q84-col"
+  },
+  {
+   "name": "pq-mixture-file",
+   "label": "Mixture file (MDN)",
+   "type": "file",
+   "default": "",
+   "group": "Photo-z calibration",
+   "help": "npz written by the photo-z step (--mixture-out): full MDN predictive distributions.",
+   "key": "pzq,param,mixture-file"
+  },
+  {
+   "name": "pq-pdf-kind",
+   "label": "Predictive distribution",
+   "type": "choice",
+   "default": "auto",
+   "group": "Photo-z calibration",
+   "help": "auto = mixture file, else percentiles when both columns are set, else Gaussian.",
+   "key": "pzq,param,pdf-kind",
+   "choices": [
+    "auto",
+    "gauss",
+    "split",
+    "mixture",
+    "grid"
+   ]
+  },
+  {
+   "name": "pq-zmin",
+   "label": "Lowest allowed redshift",
+   "type": "float",
+   "default": 0.0,
+   "group": "Photo-z calibration",
+   "help": "The predictive distributions are truncated at this redshift and renormalised.",
+   "key": "pzq,param,zmin",
+   "min": -1,
+   "max": 5
+  },
+  {
+   "name": "pq-outlier",
+   "label": "Outlier threshold |dz|/(1+z)",
+   "type": "float",
+   "default": 0.15,
+   "group": "Photo-z calibration",
+   "help": "Catastrophic outlier definition.",
+   "key": "pzq,param,outlier",
+   "min": 0.01,
+   "max": 2
+  },
+  {
+   "name": "pq-mag-col",
+   "label": "Magnitude column for bins",
+   "type": "string",
+   "default": "MAG_AUTO",
+   "group": "Photo-z calibration",
+   "help": "Accuracy and calibration are also binned in this magnitude (empty = skip).",
+   "key": "pzq,param,mag-col"
+  },
+  {
+   "name": "pq-weights-col",
+   "label": "Weights column (optional)",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z calibration",
+   "help": "Representativeness weights (PZ_SPECW of the representativeness step): weighted accuracy for the target sample.",
+   "key": "pzq,param,weights-col"
+  },
+  {
+   "name": "pq-features",
+   "label": "Features (repr.)",
+   "type": "string",
+   "default": "",
+   "group": "Photo-z representativeness",
+   "help": "Comma list of catalog columns or colours A-B used to compare the spec and target samples (empty = MAG_AUTO and the colours between the MAG_* columns).",
+   "key": "pzq,param,features"
+  },
+  {
+   "name": "pq-target",
+   "label": "Target sample",
+   "type": "choice",
+   "default": "all",
+   "group": "Photo-z representativeness",
+   "help": "all = every catalog object; nospec = only the objects without spec-z.",
+   "key": "pzq,param,target",
+   "choices": [
+    "all",
+    "nospec"
+   ]
+  },
+  {
+   "name": "pq-knn",
+   "label": "k of the density-ratio weights",
+   "type": "int",
+   "default": 5,
+   "group": "Photo-z representativeness",
+   "help": "Lima et al. (2008) k-nearest-neighbour weights.",
+   "key": "pzq,param,knn",
+   "min": 1,
+   "max": 50
+  },
+  {
+   "name": "pq-coverage-q",
+   "label": "Support percentile",
+   "type": "float",
+   "default": 95.0,
+   "group": "Photo-z representativeness",
+   "help": "A target object is outside the spec support if its distance to the nearest spec object exceeds this percentile of the spec nearest-neighbour distances.",
+   "key": "pzq,param,coverage-q",
+   "min": 50,
+   "max": 100
   }
  ]
 }

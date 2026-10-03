@@ -326,3 +326,55 @@ proc OGFPhotozSedSave {} {
     CatalogPanelPhotoZParamSave
     CatalogPanelSEDParamSave
 }
+
+# ---- photo-z distribution tools (steps pzquality / pzrepr; CLI photoz_quality.py) -----------------------------------------------------
+proc OGFPzqFile {name} {return [file join [OGFSessWorkDir] photoz_quality $name]}
+
+proc OGFPzqAfter {} {
+    foreach {k f} {report_file pzq_report.json plot_file pzq_plot.png table_file pzq_binned.tsv pit_file pzq_pit.tsv
+		   repr_report pzr_report.json repr_plot pzr_plot.png repr_table pzr_features.tsv} {
+	set p [OGFPzqFile $f]
+	if {[file exists $p]} {::ogf::cat::set pzq,$k $p}
+    }
+    set jf [OGFPzqFile pzq_report.json]
+    if {[file exists $jf]} {
+	set fd [open $jf r]; set txt [read $fd]; close $fd
+	if {[regexp {"sigma_nmad": ([-0-9.eE+]+)} $txt -> v]} {::ogf::cat::set pzq,nmad $v}
+	if {[regexp {"outlier_frac": ([-0-9.eE+]+)} $txt -> v]} {::ogf::cat::set pzq,outlier $v}
+	if {[regexp {"ks_p": ([-0-9.eE+]+)} $txt -> v]} {::ogf::cat::set pzq,pit_ks_p $v}
+	::ogf::status "Photo-z calibration: sigma_NMAD [::ogf::cat::get pzq,nmad ?], outliers [::ogf::cat::get pzq,outlier ?], PIT KS p [::ogf::cat::get pzq,pit_ks_p ?]"
+    }
+    set jr [OGFPzqFile pzr_report.json]
+    if {[file exists $jr]} {
+	set fd [open $jr r]; set txt [read $fd]; close $fd
+	if {[regexp {"verdict": "([^"]*)"} $txt -> v]} {::ogf::cat::set pzq,verdict $v; ::ogf::status "Spec-z sample: $v"}
+    }
+}
+
+proc OGFPzqTable {} {
+    set txt {}
+    foreach nm {pzq_binned.tsv pzq_pit.tsv pzr_features.tsv} {
+	set f [OGFPzqFile $nm]
+	if {![file exists $f]} continue
+	set fd [open $f r]; append txt "== $nm ==\n[read $fd]\n"; close $fd
+    }
+    if {$txt eq {}} {::ogf::status "Photo-z calibration: nothing yet - run Photo-z Calibration first"; return}
+    OGFTextWindow "Photo-z calibration and representativeness" $txt
+}
+
+proc OGFPzqPlot {} {
+    set png [OGFPzqFile pzq_plot.png]
+    if {![file exists $png]} {set png [OGFPzqFile pzr_plot.png]}
+    if {![file exists $png]} {::ogf::status "Photo-z calibration: no plot yet"; return}
+    set w .ogfpzqplot
+    if {[winfo exists $w]} {destroy $w}
+    toplevel $w
+    wm title $w "Photo-z calibration (PIT, coverage, accuracy)"
+    catch {image delete ogfpzqimg}
+    image create photo ogfpzqimg -file $png
+    label $w.l -image ogfpzqimg
+    pack $w.l -fill both -expand 1
+    ttk::button $w.close -text Close -command [list destroy $w]
+    pack $w.close -pady 3
+    return $w
+}

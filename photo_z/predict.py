@@ -7,7 +7,7 @@ from .config import PhotoZConfig
 from .models.mlp_mdn import PhotoZMDN
 
 
-def predict_photoz(features, checkpoint_path, config=None):
+def predict_photoz(features, checkpoint_path, config=None, return_mixture=False):
     """
     Run photometric redshift inference on extracted features.
 
@@ -20,6 +20,10 @@ def predict_photoz(features, checkpoint_path, config=None):
     config : PhotoZConfig or None
         Model configuration. If None, loaded from checkpoint metadata
         or defaults are used.
+    return_mixture : bool
+        Also return the Gaussian-mixture parameters of every source
+        ('mix_pi', 'mix_mu', 'mix_sigma', each (n_sources, K)): the full
+        predictive distribution used by the calibration (PIT) tools.
 
     Returns
     -------
@@ -61,8 +65,11 @@ def predict_photoz(features, checkpoint_path, config=None):
     feat_mean = ckpt.get('feat_mean', None)
     feat_std = ckpt.get('feat_std', None)
 
-    # Prepare features
+    # Prepare features (columns the catalog cannot supply, e.g. petroR50_r, are filled with the training mean = 0 after normalisation)
     features = np.array(features, dtype=np.float32)
+    if features.shape[1] < n_features and feat_mean is not None:
+        pad = np.tile(np.array(feat_mean, dtype=np.float32)[features.shape[1]:n_features], (features.shape[0], 1))
+        features = np.hstack([features, pad])
     if feat_mean is not None and feat_std is not None:
         feat_mean = np.array(feat_mean, dtype=np.float32)
         feat_std = np.array(feat_std, dtype=np.float32)
@@ -76,12 +83,17 @@ def predict_photoz(features, checkpoint_path, config=None):
     z_err_all = []
     z_q68_all = []
     p_reliable_all = []
+    mix_all = []
 
     for start in range(0, n_sources, batch_size):
         end = min(start + batch_size, n_sources)
         batch = torch.from_numpy(features[start:end]).to(device)
 
         z_point, z_err, z_q68, p_reliable = model.predict(batch)
+        if return_mixture:
+            with torch.no_grad():
+                fwd = model.forward(batch)
+            mix_all.append([t.cpu().numpy() for t in fwd[:3]])
 
         z_point_all.append(z_point.cpu().numpy())
         z_err_all.append(z_err.cpu().numpy())
@@ -95,5 +107,9 @@ def predict_photoz(features, checkpoint_path, config=None):
         'z_q68': np.concatenate(z_q68_all),
         'p_reliable': np.concatenate(p_reliable_all) if p_reliable_all else None,
     }
+
+    if return_mixture:
+        for i, key in enumerate(('mix_pi', 'mix_mu', 'mix_sigma')):
+            results[key] = np.concatenate([m[i] for m in mix_all])
 
     return results

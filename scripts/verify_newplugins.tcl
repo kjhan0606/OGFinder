@@ -267,6 +267,63 @@ proc sec_depth {} {
     R depth_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
 }
 
+proc sec_photozq {} {
+    # photo-z distribution tools on the M51 catalog: the toy EAZY photo-z (EZ_Z with 16/84 percentiles) against a synthetic spec-z file for every 3rd object
+    if {"EZ_Z" ni [::ogf::cat::columns]} {
+    set root [file normalize [file join [::ogf::step::plugin_dir sedcodes] .. ..]]
+    set mock [file join $root sed_adapters mocks]
+    ::ogf::params::put sedcodes mag-columns {MAG_AUTO:F606W,MAG_ISOCOR:F775W,MAG_APER:F850LP,MAG_APER_2:F105W,MAG_APER_3:F125W,MAG_APER_5:F160W}
+    ::ogf::params::put sedcodes max-objects 60
+    ::ogf::params::put sedcodes engine external
+    ::ogf::params::put sedcodes command "[OGFPython] [file join $mock mock_eazy.py]"
+    ::ogf::params::put sedcodes filters-res [file join $mock FILTER.RES.toy]
+    ::ogf::params::put sedcodes z-step 0.05
+    ::ogf::params::put sedcodes z-max 4.0
+    lassign [run_step sedcodes photoz] ok recs
+    R pzq_prep $ok $recs
+    }
+    set nums [::ogf::cat::values NUMBER]
+    set ez [col_values EZ_Z]
+    set zf [file join $::dir pzq_specz.tsv]
+    set fd [open $zf w]; puts $fd "NUMBER\tZ_SPEC"
+    set k 0
+    foreach n $nums z $ez {
+	incr k
+	if {$k % 2} continue
+	if {$z eq {}} {set z [expr {0.3 + rand()}]}                   ;# objects without a toy photo-z still get a spec-z (representativeness only)
+	puts $fd "$n\t[format %.4f [expr {$z + 0.03*(1+$z)*(rand()+rand()+rand()-1.5)*2}]]"
+    }
+    close $fd
+    ::ogf::params::put photoz_sed pq-zspec-file $zf
+    ::ogf::params::put photoz_sed pq-zphot-col EZ_Z
+    ::ogf::params::put photoz_sed pq-q16-col EZ_Z16
+    ::ogf::params::put photoz_sed pq-q84-col EZ_Z84
+    lassign [run_step photoz_sed pzquality] ok recs
+    R pzq_ran $ok $recs
+    R pzq_recorded [expr {[lindex $recs 0 0] eq "analysis.photoz_quality"}] $recs
+    R pzq_columns [expr {"PZ_PIT" in [::ogf::cat::columns] && "PZ_CRPS" in [::ogf::cat::columns] && "PZ_INCI68" in [::ogf::cat::columns]}]
+    R pzq_rows [expr {[nonempty PZ_PIT] >= 8}] "rows=[nonempty PZ_PIT]"
+    set w [file join [OGFSessWorkDir] photoz_quality]
+    foreach f {pzq_report.json pzq_plot.png pzq_binned.tsv pzq_pit.tsv} {
+	R pzq_file_$f [expr {[file exists [file join $w $f]] && [file size [file join $w $f]] > 50}]
+    }
+    R pzq_keys [expr {[::ogf::cat::exists pzq,nmad] && [::ogf::cat::exists pzq,pit_ks_p]}]
+    set pw [OGFPzqPlot]
+    R pzq_plot_window [expr {[winfo exists $pw] && [image width ogfpzqimg] > 300}] "[image width ogfpzqimg]x[image height ogfpzqimg]"
+    destroy $pw
+    OGFPzqTable; update
+    ::ogf::params::put photoz_sed pq-features {MAG_AUTO,FLUX_RADIUS}
+    ::ogf::params::put photoz_sed pq-knn 3
+    lassign [run_step photoz_sed pzrepr] ok recs
+    R pzr_ran $ok $recs
+    R pzr_recorded [expr {[lindex $recs 0 0] eq "analysis.photoz_repr"}] $recs
+    R pzr_columns [expr {"PZ_SPECW" in [::ogf::cat::columns] && "PZ_SPECDIST" in [::ogf::cat::columns] && "PZ_INSPEC" in [::ogf::cat::columns]}]
+    R pzr_rows [expr {[nonempty PZ_SPECDIST] >= 30 && [nonempty PZ_SPECW] >= 8}] "dist=[nonempty PZ_SPECDIST] w=[nonempty PZ_SPECW]"
+    R pzr_verdict [::ogf::cat::exists pzq,verdict] [::ogf::cat::get pzq,verdict ?]
+    R pzq_argv_templated [expr {[string match {*@{WORK}/photoz_quality*} [dict get [lindex [::ogf::session::steps] end] argv_t]]}]
+    R pzq_geometry [expr {[geom] eq "181 769 154 1300x950"}] [geom]
+}
+
 proc sec_sedcodes {} {
     set root [file normalize [file join [::ogf::step::plugin_dir sedcodes] .. ..]]
     set mock [file join $root sed_adapters mocks]
@@ -647,7 +704,7 @@ proc run {} {
     set t0 [clock milliseconds]; while {![::ogf::cat::has] && [clock milliseconds]-$t0 < 90000} {update; after 100}
     wait_idle 500
     R extracted [expr {[::ogf::cat::nrows] > 50}] "rows=[::ogf::cat::nrows]"
-    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel stacking depth sedcodes cluster spectra xmatch lightcurves batch repro} {
+    foreach sec {isophote completeness daophot psfex multifit morphext noisemodel stacking depth sedcodes photozq cluster spectra xmatch lightcurves batch repro} {
 	if {[want $only $sec]} {
 	    if {[catch {sec_$sec} err]} {R ${sec}_error 0 "$err [string range $::errorInfo 0 300]"}
 	}

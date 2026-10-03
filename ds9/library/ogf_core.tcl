@@ -330,6 +330,8 @@ namespace eval ::ogf::cat {
         {bd,param,*             scalar morphology rw  "bulge+disk parameters; persisted in ~/.ds9/bulge_disk.prf"}
         {photoz,param,*         scalar photoz_sed rw  "photo-z dialog values; persisted in ~/.ds9/photo_z.prf"}
         {sed,param,*            scalar photoz_sed rw  "SED-fit dialog values; persisted in ~/.ds9/sed_fit.prf"}
+        {pzq,param,*            scalar photoz_sed rw  "photo-z calibration / representativeness step parameters"}
+        {pzq,*                  any    photoz_sed rw  "photo-z calibration results: report_file, plot_file, table_file, repr_report, repr_plot and the headline numbers (nmad, outlier, pit_ks_p)"}
         {morph,map              list   galaxy_model rw "NUMBERs that have a CNN morphology"}
         {morph,*                list   galaxy_model rw "per NUMBER: {type description confidence color}"}
         {isophote,*             any    isophote  rw   "isophote plugin: last output files (model_file, resid_file, table_file, plot_file) and the show-frames state"}
