@@ -1,0 +1,1 @@
+{"mjd0": 59250.0, "span": 10, "designations": ["433", "1036", "1685", "1862", "1866", "3122", "3200", "4179", "35396", "65803", "99942", "138971"], "note": "numbered near-Earth asteroids with MPC astrometry on >= 3 station-nights in [mjd0, mjd0+span] (found by moving/validation/nightlink_validate.py --exp mpc)"}

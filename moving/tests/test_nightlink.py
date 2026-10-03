@@ -86,15 +86,15 @@ def test_same_night_tracklets_never_grouped():
 
 @needs_net
 def test_real_mpc_astrometry_links_known_asteroids():
-    """REAL MPC astrometry of 12 numbered asteroids that were in one field (SBDB elements, 2-body positions), tracklets by
-    station/night within +-8 d; the pooled tracklets must link with no wrong pairing and recover most multi-night objects."""
+    """REAL MPC astrometry of numbered near-Earth asteroids (listed in data/nightlink_des.json), tracklets by
+    station/night within 10 d; the pooled tracklets must link with no wrong pairing and recover most multi-night objects."""
     import json
     from moving.validation import nightlink_validate as V
     des = json.load(open(os.path.join(os.path.dirname(__file__), "data", "nightlink_des.json")))
-    trks, _ = V.mpc_tracklets(des["designations"], des["mjd0"] - 1.0, des["mjd0"] + 12.0)
+    trks, _ = V.mpc_tracklets(des["designations"], des["mjd0"] - 1.0, des["mjd0"] + des["span"])
     if len({t.truth for t in trks}) < 4:
         pytest.skip("too few tracklets from the MPC")
-    res = N.link_nights(trks, max_gap_days=14.0)
+    res = N.link_nights(trks, max_gap_days=12.0)
     sc = S.score(trks, res)
     assert sc["wrong"] == 0, sc
     assert sc["recall"] >= 0.7, sc

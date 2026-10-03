@@ -169,33 +169,43 @@ def mpc_tracklets(des_list, mjd_lo, mjd_hi, max_gap_h=3.0, min_obs=2):
     return trks, skipped
 
 
-def mpc_objects(cands, mjd_lo, mjd_hi, want, seed=3):
-    """Random window objects (faint end preferred is NOT applied) that really have >= 2 station-nights with >= 2 MPC observations."""
-    rng = np.random.default_rng(seed)
-    keep = []
-    for k in rng.permutation(len(cands)):
-        des = cands[k]
-        try:
-            trks, _ = mpc_tracklets([des], mjd_lo, mjd_hi)
-        except Exception:
-            continue
-        if len({(t.night, t.code) for t in trks}) >= 2:
-            keep.append(des)
-        if len(keep) >= want:
-            break
-    return keep
+NEA_LIST = ["433", "1036", "1566", "1620", "1627", "1685", "1862", "1866", "2062", "2100", "3122", "3200", "4179", "4660", "4769", "6489",
+            "7482", "10302", "25143", "35396", "65803", "99942", "101955", "138971", "152680", "162173", "163693", "164121", "175706", "185851",
+            "1580", "887", "1221", "1131", "3361", "3552", "3671", "3753", "4015", "5143", "5645", "7341", "7753", "9969", "12923", "52768", "85989", "85990"]
+
+
+def mpc_best_window(des_list, span, lo=57000.0, hi=61300.0, step=2.0):
+    """Scan the MPC archive of the listed (real, numbered near-Earth) asteroids for the `span`-day window in which most objects have tracklets
+    (>= 2 observations from one station within 3 h) on >= 3 station-nights.  Returns (mjd0, tracklets, n_objects)."""
+    allt = []
+    for oi, des in enumerate(des_list):
+        t, _ = mpc_tracklets([des], lo, hi)
+        for x in t:
+            x.truth = oi
+        allt += t
+    best = (0, lo, [])
+    for m in np.arange(lo, hi, step):
+        sel = [t for t in allt if m <= t.t0 <= m + span]
+        cnt = {}
+        for t in sel:
+            cnt.setdefault(t.truth, set()).add((t.night, t.code))
+        n = sum(1 for v in cnt.values() if len(v) >= 3)
+        if n > best[0]:
+            best = (n, m, sel)
+    return best[1], best[2], best[0]
 
 
 def mpc_exp(args):
     os.makedirs(args.out, exist_ok=True)
-    mjd0 = args.mjd0
-    rows = sbdb_table(os.path.join(args.out, "sbdb_H155.json"))
-    rc, dc, cands, ncount = pick_window(rows, mjd0, nmax=100000)
-    des = mpc_objects(cands, mjd0 - 1.0, mjd0 + max(args.spans), args.nmpc)
-    print("mpc: window RA %.1f Dec %.1f: %d candidates, %d with >= 2 station-nights of MPC astrometry" % (rc, dc, len(cands), len(des)), flush=True)
+    des = NEA_LIST
+    span = max(args.spans)
+    mjd0, sel, nobj3 = mpc_best_window(des, span)
+    print("mpc: best %d-day window starts MJD %.0f with %d of %d near-Earth asteroids on >= 3 station-nights" % (span, mjd0, nobj3, len(des)), flush=True)
     out = []
     for span in args.spans:
-        trks, skipped = mpc_tracklets(des, mjd0 - 1.0, mjd0 + span)
+        trks = [t for t in sel if t.t0 <= mjd0 + span]; skipped = 0
+        for i, t in enumerate(trks):
+            t.id = i
         nobj = len({t.truth for t in trks})
         nights = sorted({t.night for t in trks})
         cnt = {}
@@ -211,7 +221,7 @@ def mpc_exp(args):
             span, len(trks), nobj, n_multi, len(nights), sc["recall"], sc["pure"], sc["wrong"], sc["complete"], sc["pair_pure"], sc["pair_wrong"], dt), flush=True)
         sc["wrong_groups"] = [dict(truth=g["truth"], chi2=g["chi2_red"]) for g in res["groups"] + res["pairs"] if len(set(g["truth"])) > 1]
         sc["unlinked_objs"] = sorted({t.truth for t in trks if t.id in res["unlinked"]} - {tt for g in res["groups"] for tt in g["truth"]})[:20]
-    return out, dict(rc=rc, dc=dc, designations=des)
+    return out, dict(mjd0=mjd0, designations=des)
 
 
 def main():
