@@ -356,12 +356,25 @@ def measure_profile(img, valid, theta, rho, s0, s1, sigma_pix, wmax=60.0, a_gues
 
 
 # ------------------------------------------------------------------ main detector
+def bleed_like(img, theta, rho, s0, s1, amp, level, axis_tol=3.0, fac=300.0, min_px=1):
+    """True for a column/row-aligned run (within axis_tol degrees of the pixel axes) that passes through a very bright compact core (peak above
+    fac x the run amplitude): CCD bleed columns and the long diffraction spikes of saturated stars (tilted by ~2 deg in ACS pixel space) are linear
+    features that are not satellite trails."""
+    th = theta % 180.0
+    if min(abs(th - 90.0), th, 180.0 - th) > axis_tol:
+        return False
+    sv = np.arange(s0, s1 + 1.0, 1.0)
+    with np.errstate(all='ignore'):
+        v = np.nanmax(sample_strip(img, theta, rho, sv, np.arange(-3.0, 4.0)), axis=1) - level
+    return bool(np.sum(v > fac * max(amp, 1e-9)) >= min_px)
+
+
 def _binning(shape, maxdim):
     return max(1, int(math.ceil(max(shape) / float(maxdim))))
 
 
 def detect_trails(img, valid=None, threshold=8.0, min_length=None, max_trails=8, smooth=1.0, clip=3.0, cand=4.0, maxdim=768,
-                  margin=2.0, edge_sigma=2.0, catalog=None, catalog_rescue=None, seed=1, n_null=100, mesh=32, min_aspect=8.0, max_fwhm=40.0):
+                  margin=2.0, edge_sigma=2.0, catalog=None, catalog_rescue=None, seed=1, n_null=100, mesh=32, min_aspect=12.0, max_fwhm=40.0, reject_bleeds=True):
     """-> dict(trails=[...], sigma_pix, binning, n_candidates, ...).  Each trail: id, x1,y1,x2,y2 (1-based FITS pixels), theta_deg, rho, length,
     halfwidth (mask half-width = box half-width + edge_sigma * blur + margin), box_halfwidth, blur, amp, amp_snr, zscore, run_score, s0, s1."""
     img = np.asarray(img, np.float32)
@@ -424,6 +437,24 @@ def detect_trails(img, valid=None, threshold=8.0, min_length=None, max_trails=8,
     # greedy acceptance with deflation: after a trail is accepted its band is blanked and the remaining candidates are re-verified, so that lines
     # that merely cross an accepted trail (or run along its wings) do not count as further trails
     accepted = []
+    level = float(np.median(img[valid][::7])) if valid.any() else 0.0
+    def deflate(f, sa, sb):
+        """blank the band of a run in the scan arrays so that pieces/wings of the same line are not found again"""
+        p1 = to_xy(f['theta'], f['rho'], sa, 0, nx, ny); p2 = to_xy(f['theta'], f['rho'], sb, 0, nx, ny)
+        band = trail_mask(z.shape, [dict(x1=p1[0] + 1, y1=p1[1] + 1, x2=p2[0] + 1, y2=p2[1] + 1, halfwidth=f['width_strip'] / 2.0 + 6.0)])
+        sc.z = np.where(band, 0.0, sc.z).astype(np.float32); sc.w = np.where(band, 0.0, sc.w).astype(np.float32); sc.allvalid = False
+
+    def reverify():
+        for k in list(cur):
+            if cur[k]['zscore'] >= 0.5 * threshold:
+                e = evaluate(cl[k])
+                if e is None:
+                    cur.pop(k)
+                else:
+                    cur[k] = e
+            else:
+                cur.pop(k)
+
     while len(accepted) < max_trails and cur:
         i = max(cur, key=lambda k: cur[k]['zscore'])
         f = cur.pop(i)
@@ -444,21 +475,15 @@ def detect_trails(img, valid=None, threshold=8.0, min_length=None, max_trails=8,
         if fw > max_fwhm or (f['s1'] - f['s0']) < min_aspect * fw:
             out.setdefault('rejected', []).append(dict(theta=f['theta'], rho=f['rho'], length=f['s1'] - f['s0'], fwhm=fw, zscore=f['zscore'], reason='shape'))
             continue
+        if reject_bleeds and prof is not None and bleed_like(img, f['theta'], f['rho'], f['s0'], f['s1'], prof['amp'], level):
+            out.setdefault('rejected', []).append(dict(theta=f['theta'], rho=f['rho'], length=f['s1'] - f['s0'], fwhm=fw, zscore=f['zscore'], reason='bleed'))
+            deflate(f, -diag, diag)
+            reverify()
+            continue
         f['prof'] = prof
         accepted.append(f)
-        band = trail_mask(z.shape, [dict(x1=to_xy(f['theta'], f['rho'], f['s0'], 0, nx, ny)[0] + 1, y1=to_xy(f['theta'], f['rho'], f['s0'], 0, nx, ny)[1] + 1,
-                                         x2=to_xy(f['theta'], f['rho'], f['s1'], 0, nx, ny)[0] + 1, y2=to_xy(f['theta'], f['rho'], f['s1'], 0, nx, ny)[1] + 1,
-                                         halfwidth=f['width_strip'] / 2.0 + 6.0)])
-        sc.z = np.where(band, 0.0, sc.z).astype(np.float32); sc.w = np.where(band, 0.0, sc.w).astype(np.float32); sc.allvalid = False
-        for k in list(cur):
-            if cur[k]['zscore'] >= 0.5 * threshold:
-                e = evaluate(cl[k])
-                if e is None:
-                    cur.pop(k)
-                else:
-                    cur[k] = e
-            else:
-                cur.pop(k)
+        deflate(f, f['s0'], f['s1'])
+        reverify()
     for i, f in enumerate(accepted, 1):
         th, rho, s0, s1 = f['theta'], f['rho'], f['s0'], f['s1']
         prof = f.get('prof')

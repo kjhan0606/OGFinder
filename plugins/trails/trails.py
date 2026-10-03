@@ -73,7 +73,7 @@ def sky_header(hdr):
 
 def detect(a, img, hdr, cat):
     return T.detect_trails(img, threshold=a.threshold, min_length=a.min_length or None, max_trails=a.max_trails, smooth=a.smooth,
-                           margin=a.margin, edge_sigma=a.edge_sigma, min_aspect=a.min_aspect, max_fwhm=a.max_fwhm, catalog=cat if a.catalog_check else None, catalog_rescue=0.7 if a.catalog_check else None)
+                           margin=a.margin, edge_sigma=a.edge_sigma, min_aspect=a.min_aspect, reject_bleeds=a.reject_bleeds, max_fwhm=a.max_fwhm, catalog=cat if a.catalog_check else None, catalog_rescue=0.7 if a.catalog_check else None)
 
 
 def run_detect(a):
@@ -189,8 +189,9 @@ def main(argv=None):
     ap.add_argument('--min-length', type=float, default=0.0, help='minimum trail length in pixels (0 = 12 percent of the diagonal)')
     ap.add_argument('--max-trails', type=int, default=8)
     ap.add_argument('--smooth', type=float, default=1.0)
-    ap.add_argument('--min-aspect', type=float, default=8.0, help='reject candidates shorter than this many times their FWHM (galaxy chains)')
+    ap.add_argument('--min-aspect', type=float, default=12.0, help='reject candidates shorter than this many times their FWHM (galaxy chains)')
     ap.add_argument('--max-fwhm', type=float, default=40.0)
+    ap.add_argument('--keep-bleeds', dest='reject_bleeds', action='store_false', help='do not reject column/row-aligned runs with a saturated core (CCD bleeds)')
     ap.add_argument('--margin', type=float, default=2.0)
     ap.add_argument('--edge-sigma', type=float, default=2.0)
     ap.add_argument('--end-extend', type=float, default=3.0)

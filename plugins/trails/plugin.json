@@ -249,7 +249,7 @@
    "name": "min-aspect",
    "label": "Minimum length / width",
    "type": "float",
-   "default": 8.0,
+   "default": 12.0,
    "group": "Detection",
    "help": "Reject candidates that are shorter than this many times their measured FWHM (chains of galaxies make broad, short ridges).",
    "min": 2.0,
