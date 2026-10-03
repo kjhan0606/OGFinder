@@ -30,10 +30,11 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, photoz_stats as ps, meta as ometa  # noqa: E402
+from ogfkit import tsvio, photoz_stats as ps, meta as ometa, pz_closure as pcl  # noqa: E402
 
 QCOLS = ['PZ_PIT', 'PZ_CRPS', 'PZ_ZSCORE', 'PZ_DZ', 'PZ_INCI68', 'PZ_OUTLIER']
 RCOLS = ['PZ_SPECDIST', 'PZ_INSPEC', 'PZ_SPECW']
+CCOLS = ['PZ_ZDIFF', 'PZ_INCONSIST']
 ZSPEC_NAMES = ('Z_SPEC', 'ZSPEC', 'SPEC_Z', 'SPECZ', 'Z_SPECTRO', 'REDSHIFT', 'Z')
 
 
@@ -179,6 +180,28 @@ def do_quality(cols, rows, a, W):
     pc = np.where(f == 0, ps.recalibrate_pit(pit[f == 1], pit), ps.recalibrate_pit(pit[f == 0], pit))
     from scipy import stats as sst
     rep['recalibration']['pit_crossfit_ks_p'] = float(sst.kstest(pc, 'uniform').pvalue)
+    # closure: K-fold PIT recalibration fed back into the predictive (p'(z) = p(z) g(F(z))), out-of-fold scores before / after; the map learnt on all objects can be saved
+    # (--recal-out) and applied to another catalogue of the same photo-z product (--recal-in)
+    try:
+        cf = pcl.crossfit(sub, zs[idx], k=5)
+        rep['closure'] = dict(before=cf['before'], after_oof=cf['after_oof'], note='out-of-fold: each fold recalibrated with a map learnt on the other folds')
+        if a.recal_out:
+            with open(a.recal_out, 'w') as fh:
+                json.dump(dict(map=cf['map'].to_dict(), n=int(len(idx)), pdf_kind=kind, source=os.path.basename(a.catalog)), fh)
+    except Exception as e:                                                 # a failing closure must not break the quality report
+        rep['closure'] = dict(error=str(e))
+    if a.recal_in and os.path.isfile(a.recal_in):
+        rcm = pcl.PITRecal.from_dict(json.load(open(a.recal_in))['map'])
+        rep['recal_applied'] = pcl.summary(pcl.recalibrated_predictive(sub, rcm), zs[idx])[0]
+        rows_q = []
+        okall = np.where(pok & np.isfinite(zp))[0] if hasattr(pok, '__len__') else np.arange(len(rows))
+        for s0 in range(0, len(okall), 4000):
+            ch = okall[s0:s0 + 4000]
+            pr = pcl.recalibrated_predictive(Predictive_subset(pred, ch), rcm)
+            q16, q50, q84 = pr.quantile(0.16), pr.quantile(0.5), pr.quantile(0.84)
+            rows_q += [dict(NUMBER=nums[j], PZ_P16_RC=q16[m], PZ_P50_RC=q50[m], PZ_P84_RC=q84[m]) for m, j in enumerate(ch)]
+        os.makedirs(a.work, exist_ok=True)
+        tsvio.write_table(os.path.join(a.work, 'pzq_recalibrated.tsv'), ['NUMBER', 'PZ_P16_RC', 'PZ_P50_RC', 'PZ_P84_RC'], rows_q)
     # binned
     zsi, zpi = zs[idx], zp[idx]
     zb = [float(v) for v in a.z_bins.split(',')] if a.z_bins else list(np.round(np.linspace(0, max(zsi.max(), 0.1) * 1.0001, 6), 3))
@@ -219,6 +242,35 @@ def do_quality(cols, rows, a, W):
     full['PZ_PIT'][idx] = pit; full['PZ_CRPS'][idx] = cr; full['PZ_ZSCORE'][idx] = zsc; full['PZ_DZ'][idx] = dz[idx]
     full['PZ_INCI68'][idx] = (np.abs(pit - 0.5) <= 0.34).astype(float)
     full['PZ_OUTLIER'][idx] = (np.abs(dz[idx]) > a.outlier).astype(float)
+    return rep, full
+
+
+def do_consistency(cols, rows, a, W):
+    """Two redshift estimates of the same objects (e.g. a template SED fit and the photo-z of this product): normalised difference, flags, accuracy of the agreeing set."""
+    for c in (a.zphot_col, a.zerr_col, a.zalt_col, a.zalt_err_col):
+        if c not in cols:
+            sys.exit('ERROR: column %s not in the catalogue' % c)
+    zA, sA, zB, sB = (colvals(rows, c) for c in (a.zphot_col, a.zerr_col, a.zalt_col, a.zalt_err_col))
+    ok = np.isfinite(zA) & np.isfinite(zB) & np.isfinite(sA) & np.isfinite(sB) & (sA > 0) & (sB > 0)
+    zs, zname = (find_zspec(cols, rows, a, W) if (a.zspec_col in cols or a.zspec_file) else (np.full(len(rows), np.nan), ''))
+    has_spec = np.isfinite(zs) & (zs > 0)
+    ref = ok & has_spec if (ok & has_spec).sum() >= 50 else ok
+    cal = pcl.calibrate(zA[ref], np.minimum(sA[ref], a.err_cap), zB[ref], np.minimum(sB[ref], a.err_cap))
+    sAc, sBc = np.minimum(sA, a.err_cap), np.minimum(sB, a.err_cap)
+    idx = np.where(ok)[0]
+    c = pcl.consistency(zA[idx], sAc[idx], zB[idx], sBc[idx], c=cal['c'], nsig=a.nsig, zspec=zs[idx] if has_spec[idx].all() else None)
+    rep = dict(n_catalog=len(rows), n_compared=int(ok.sum()), calibration=cal, calibrated_on='spec-z objects' if ref is not ok else 'all compared objects', nsig=a.nsig, err_cap=a.err_cap,
+               frac_flagged=c['frac_flagged'], A=a.zphot_col, B=a.zalt_col)
+    if has_spec.any():
+        hs = idx[has_spec[idx]]
+        cs = pcl.consistency(zA[hs], sAc[hs], zB[hs], sBc[hs], c=cal['c'], nsig=a.nsig, zspec=zs[hs])
+        rep['with_specz'] = {k: v for k, v in cs.items() if k not in ('flag', 'd')}
+    os.makedirs(a.work, exist_ok=True)
+    with open(os.path.join(a.work, 'pzq_consistency.json'), 'w') as fh:
+        json.dump(clean(rep), fh, indent=1)
+    full = {k: np.full(len(rows), np.nan) for k in CCOLS}
+    full['PZ_ZDIFF'][idx] = (c['d'] - cal['median']) / max(cal['c'], 1e-9); full['PZ_INCONSIST'][idx] = c['flag'].astype(float)
+    sys.stderr.write('photo-z consistency %s vs %s: %d compared, width c=%.2f, %.1f %% flagged (> %.1f sigma)\n' % (a.zphot_col, a.zalt_col, ok.sum(), cal['c'], 100 * c['frac_flagged'], a.nsig))
     return rep, full
 
 
@@ -362,7 +414,13 @@ def main(argv=None):
     ap.add_argument('--catalog', required=True)
     ap.add_argument('--work', required=True)
     ap.add_argument('--meta-out', default='')
-    ap.add_argument('--mode', choices=['quality', 'repr'], default='quality')
+    ap.add_argument('--mode', choices=['quality', 'repr', 'consistency'], default='quality')
+    ap.add_argument('--recal-out', default='', help='quality: save the PIT recalibration map learnt on the spec-z objects (JSON)')
+    ap.add_argument('--recal-in', default='', help='quality: apply a saved map; writes pzq_recalibrated.tsv (recalibrated 16/50/84 percentiles) and evaluates it')
+    ap.add_argument('--zalt-col', default='EZ_Z', help='consistency: second redshift estimate (e.g. SED-fit z)')
+    ap.add_argument('--zalt-err-col', default='EZ_ZERR')
+    ap.add_argument('--nsig', type=float, default=3.0)
+    ap.add_argument('--err-cap', type=float, default=0.3, help='consistency: cap on the quoted redshift errors (multimodal PDFs give huge widths)')
     ap.add_argument('--zspec-col', default='Z_SPEC')
     ap.add_argument('--zspec-file', default='')
     ap.add_argument('--zphot-col', default='PHOTO_Z')
@@ -389,8 +447,8 @@ def main(argv=None):
     cols, rows = tsvio.read_catalog(a.catalog)
     if not rows or 'NUMBER' not in cols:
         sys.exit('ERROR: catalog is empty or has no NUMBER column')
-    rep, full = (do_quality if a.mode == 'quality' else do_repr)(cols, rows, a, None)
-    out_cols = QCOLS if a.mode == 'quality' else RCOLS
+    rep, full = {'quality': do_quality, 'repr': do_repr, 'consistency': do_consistency}[a.mode](cols, rows, a, None)
+    out_cols = {'quality': QCOLS, 'repr': RCOLS, 'consistency': CCOLS}[a.mode]
     out = [(r['NUMBER'], {c: (float(full[c][i]) if np.isfinite(full[c][i]) else None) for c in out_cols}) for i, r in enumerate(rows)]
     tsvio.write_columns(out_cols, out)
     if a.meta_out:
@@ -398,6 +456,8 @@ def main(argv=None):
             p = rep['point']
             ometa.update(a.meta_out, 'photoz_quality', clean(dict(n_spec=rep['n_spec'], sigma_nmad=p['sigma_nmad'], bias=p['bias_mean'], outlier_frac=p['outlier_frac'],
                          pit_ks_p=rep['pit']['ks_p'], pit_cvm_p=rep['pit']['cvm_p'], pit_shape=rep['pit']['shape'], crps=rep['crps_mean'], pdf_kind=rep['pdf_kind'])), nrows=len(rows))
+        elif a.mode == 'consistency':
+            ometa.update(a.meta_out, 'photoz_consistency', clean(dict(n=rep['n_compared'], width=rep['calibration']['c'], frac_flagged=rep['frac_flagged'])), nrows=len(rows))
         else:
             ometa.update(a.meta_out, 'photoz_repr', clean(dict(n_spec=rep['n_spec'], n_target=rep['n_target'], knn_auc=rep['knn_test']['auc'], knn_p=rep['knn_test']['p'],
                          frac_outside=rep['coverage']['frac_outside'], ess_fraction=rep['weights']['ess_fraction'], verdict=rep['verdict'])), nrows=len(rows))

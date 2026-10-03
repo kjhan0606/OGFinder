@@ -130,3 +130,8 @@ New plugin (chip Lens, 7 CLI steps + results dialog, docs/lensmodel.md): SIE + s
 * Real SDSS Stripe 82 run 94 (camcols 3, 4; five exposures) vs IMCCE SkyBoT: precision (lower bound) 0.14 -> 0.59 / 0.19 -> 0.61 at recall 0.82 -> 0.82 / 0.97 -> 0.97 (ceiling 60 / 69 objects in >= 3 bands); level chosen on camcol 3, applied unchanged to camcol 4.
 * Not done: cross-night orbit-fit (IOD) linking; NEOs/comets/TNOs not in the prior.  Details in docs/moving_objects.md.
 
+### R20 (precision batch item 5) - photo-z closure (`ogfkit/pz_closure.py`; `photoz_quality.py --recal-out/--recal-in`, `--mode consistency`)
+* PIT recalibration map (global monotone G), 5-fold cross-fit report in `pzq_report.json`; two-estimate consistency flags (EAZY vs MDN).
+* SDSS 3000 held-out: PIT KS p 5e-4 -> 0.18 on an independent half (CRPS unchanged 0.0261: the MDN is nearly calibrated); injected x0.5 / x2 widths recovered (coverage 0.463 / 0.932 -> 0.677 / 0.680).
+* EAZY (eazy-py 0.8.7, no prior) vs MDN: 2.9 % flagged, 95 % of flagged are EAZY outliers; the merged estimate is not better than the MDN.  No GUI step; one survey.
+

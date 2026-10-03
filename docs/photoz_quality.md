@@ -61,6 +61,45 @@ The MDN branch of `ds9_photo_z.py` never worked (it passed an array to `extract_
   (NMAD 0.0133 -> 0.0136): the step says so (verdict NOT representative, `PZ_INSPEC = 0`) instead of fixing it.
 * GUI (M51 catalog, toy EAZY photo-z against a synthetic spec-z file): `verify_newplugins.tcl` section `photozq`, 24 checks, session replay identical.
 
+## Closure: recalibration and consistency of two estimates (precision batch item 5)
+
+`ogfkit/pz_closure.py`, CLI options of `photoz_quality.py` (no new GUI step; the plugin manifest is unchanged).
+
+* **PIT recalibration** (`quality` mode): a monotone map G learnt from the PIT values of the spec-z sample (`PITRecal`, 40 knots, slope floor 0.05) turns the predictive into
+  F'(z) = G(F(z)), p'(z) = p(z) G'(F(z)) (grid predictive).  `quality` now reports `closure` in `pzq_report.json`: a 5-fold **cross-fit** (map learnt on 4 folds, applied to the 5th), before /
+  out-of-fold-after PIT KS p, coverage, CRPS, log score.  `--recal-out map.json` saves the map learnt on all spec-z objects, `--recal-in map.json` applies it to a catalogue
+  (writes `pzq_recalibrated.tsv` with `PZ_P16_RC/PZ_P50_RC/PZ_P84_RC` and evaluates the recalibrated predictive on the spec-z subset).  The map is global (one function for all
+  objects), not per magnitude or redshift bin.
+* **Consistency of two estimates** (`--mode consistency --zalt-col EZ_Z --zalt-err-col EZ_ZERR [--nsig 3 --err-cap 0.3]`): d = (z_A - z_B)/sqrt(s_A^2 + s_B^2), the width c of d is
+  measured robustly (1.4826 MAD; on spec-z objects when >= 50 exist, else on all compared objects, so that real errors are not treated as scatter between *correct* estimates),
+  objects with |d - median| > nsig c are flagged (`PZ_INCONSIST`, `PZ_ZDIFF` columns, `pzq_consistency.json`); with spec-z the report gives outlier rates of the flagged / unflagged
+  sets, which estimate is closer, and the accuracy of the agreeing set.  Quoted errors are capped (default 0.3) because multimodal PDFs give huge widths.
+* Tests: `plugins/photoz_sed/tests/test_pz_closure.py` (5; injected wrong widths are uniformised, an already calibrated predictive is left alone, recalibrated predictive has CDF G(F) and unit area,
+  cross-fit improves out-of-fold, injected 5 % outliers are flagged, CLI round trip).
+
+**Numbers** (`plugins/photoz_sed/validation/closure_validate.py`, `closure_report.json`; real SDSS DR spec-z sample with the repo's MDN photo-z, ugriz, z <= 1, 3000 held-out objects):
+
+| test | before | after |
+|---|---|---|
+| MDN, map learnt on 1500, applied to an *independent* 1500: PIT KS p | 5.1e-4 | 0.18 |
+| 68 % coverage / CRPS / log score | 0.726 / 0.0261 / -1.865 | 0.691 / 0.0261 / -1.857 |
+| 5-fold cross-fit, all 3000: KS p / 68 % coverage / CRPS | 3.9e-7 / 0.720 / 0.0282 | 1.0 / 0.679 / 0.0283 |
+| injected widths x0.5 (out of fold): KS p / 68 % coverage / CRPS | 1e-47 / 0.463 / 0.0295 | 1.0 / 0.677 / 0.0285 |
+| injected widths x2 (out of fold): KS p / 68 % coverage / CRPS | 8e-81 / 0.932 / 0.0323 | 1.0 / 0.680 / 0.0290 |
+
+The MDN is already nearly calibrated, so on real data the gain is in PIT uniformity, **not in CRPS** (unchanged); the recalibration is mainly useful for
+catalogues with wrong or inherited errors, which the injected cases emulate (synthetic miscalibration of real predictions).
+
+Consistency with a real template code: eazy-py 0.8.7 (via `plugins/sedcodes`, native engine, z <= 1, **no magnitude prior**, ugriz only) vs the MDN on the 1500 test objects:
+EAZY sigma_NMAD 0.041, outliers (|dz|/(1+z) > 0.15) 7.7 %, bias -0.037; MDN sigma_NMAD 0.0235, outliers 1.3 %.  Width of the normalised difference c = 0.76 (the two estimates' errors are positively
+correlated, median d = -0.42).  44 objects (2.9 %) are flagged at 3 c: 95 % of them are EAZY outliers (5.1 % of the unflagged), 11 % are MDN outliers (1.0 % unflagged), EAZY is the closer one in only
+2 % of the flagged.  The inverse-variance mean of the agreeing objects (NMAD 0.0262) is *worse* than the MDN alone, because EAZY here is the weaker estimate - the flag identifies likely failures of
+either estimate, it does not make the mean better.
+
+**Limitations**: one survey (SDSS, z < 1, bright), one MDN; EAZY without prior (a prior would reduce its outliers); the independence of the two estimates is assumed through c (correlated errors
+shrink c, which makes the flag stricter, not looser); the map is global and learnt on spec-z objects that are not representative of the faint photometric sample (see the representativeness mode);
+no GUI step was added (CLI and plugin options only).
+
 ## Limitations
 * The PIT tests are insensitive to a few per cent of catastrophic outliers at a few hundred objects (use the outlier fraction, CRPS, `frac_extreme`); PIT uniformity is necessary, not sufficient (a PDF that ignores the data can be PIT-calibrated; use CRPS / log score to compare models).
 * The calibration is only as good as the spec-z sample: spec-z are biased to bright, low-z, emission-line / red-sequence objects, and a spec-z failure is an "outlier"; check the representativeness first.
