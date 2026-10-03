@@ -63,6 +63,22 @@
     "{max-stars}",
     "--saturation",
     "{saturation}",
+    "--rank",
+    "{rank}",
+    "--ext-size",
+    "{ext-size}",
+    {
+     "if": "wings",
+     "argv": [
+      "--wings"
+     ]
+    },
+    {
+     "if": "assess",
+     "argv": [
+      "--assess"
+     ]
+    },
     "--grid",
     "{grid}",
     "--mag-zeropoint",
@@ -204,6 +220,42 @@
    "min": 2,
    "max": 25,
    "expert": true
+  },
+  {
+   "name": "rank",
+   "label": "PCA rank of the variation",
+   "type": "int",
+   "default": 0,
+   "group": "Extensions",
+   "help": "0 = full polynomial coefficient images; N > 0 keeps the mean plus the N leading singular images of the position-dependent part (PSF = mean + sum a_j(x, y) E_j): fewer degrees of freedom, less noise with few stars.",
+   "min": 0,
+   "max": 6
+  },
+  {
+   "name": "wings",
+   "label": "Fit bright-star wings",
+   "type": "bool",
+   "default": false,
+   "group": "Extensions",
+   "help": "Measure the azimuthally averaged profile of the brightest isolated stars out to 40 px, fit a power-law wing and write psfex_wings.json and an extended PSF (psfex_extended.fits)."
+  },
+  {
+   "name": "ext-size",
+   "label": "Extended PSF size",
+   "type": "int",
+   "default": 121,
+   "group": "Extensions",
+   "help": "Stamp size (odd, pixels) of the extended PSF written with the wings.",
+   "min": 31,
+   "max": 401
+  },
+  {
+   "name": "assess",
+   "label": "Convolution error budget",
+   "type": "bool",
+   "default": false,
+   "group": "Extensions",
+   "help": "Write psfex_budget.json: the bias in magnitude / R_e / n of Sersic fits when the PSF of the field centre is used at the field corner (spatial variation ignored) and, with the wings, when the core stamp is used instead of the extended PSF."
   }
  ]
 }

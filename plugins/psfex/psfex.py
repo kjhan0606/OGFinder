@@ -24,7 +24,7 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, imageio, psfmodel as pm  # noqa: E402
+from ogfkit import tsvio, imageio, psfmodel as pm, psfext as px  # noqa: E402
 
 COLUMNS = ['PSFM_FWHM', 'PSFM_E', 'PSFM_PA', 'PSFM_NSTAR']
 
@@ -66,6 +66,10 @@ def main(argv=None):
     ap.add_argument('--star-list', default='', help='TSV with X_IMAGE Y_IMAGE (1-based) of the PSF stars; default: automatic selection')
     ap.add_argument('--neighbour-iter', type=int, default=0, help='iterations of neighbour subtraction (group fit of the other sources) before the model is rebuilt; 0 = mask neighbours')
     ap.add_argument('--grid', type=int, default=7)
+    ap.add_argument('--rank', type=int, default=0, help='keep the mean + this many singular images of the position-dependent part of the model (0 = full polynomial)')
+    ap.add_argument('--wings', action='store_true', help='fit a power-law wing to the brightest isolated stars (psfex_wings.json) and write the extended PSF (psfex_extended.fits)')
+    ap.add_argument('--ext-size', type=int, default=121)
+    ap.add_argument('--assess', action='store_true', help='write psfex_budget.json: photometric bias of using the central PSF at the field corner / the core stamp instead of the extended PSF')
     ap.add_argument('--mag-zeropoint', type=float, default=25.0)
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
@@ -78,6 +82,42 @@ def main(argv=None):
         xy = np.array([[tsvio.fnum(r['X_IMAGE']) - 1, tsvio.fnum(r['Y_IMAGE']) - 1] for r in rows])
     mdl, info, stars, grid = build(data, mask, a.kind, a.order, a.oversample if a.oversample == 'auto' else int(a.oversample), a.size, a.snr_min, a.max_stars,
                                    a.saturation if a.saturation > 0 else None, a.fwhm, xy, a.neighbour_iter)
+    if a.rank > 0:
+        mdl = px.reduce_rank(mdl, a.rank)
+    ext_lines = []
+    wing = None
+    ext = None
+    if a.wings:
+        bkg, _ = pm.background(data, mask)
+        st = sorted([r for r in stars if r.get('USED')], key=lambda r: -r['FLUX'])[:25]
+        xy_b = [(r['X_IMAGE'], r['Y_IMAGE']) for r in st]
+        rcore = max(3.0, 2.0 * mdl.fwhm_estimate())
+        r_, p_, ns_ = px.measure_wings(data, xy_b, bkg=bkg, rcore=rcore, rmax=40.0, mask=mask, saturation=a.saturation if a.saturation > 0 else None)
+        wing = px.fit_wings(r_, p_, rmin=0.25 * 40.0, rmax=40.0)
+        with open(W('wings.json'), 'w') as fh:
+            json.dump(pm._jsonable(dict(n_stars=ns_, rcore=rcore, fit=wing, profile=[[float(u), float(v)] for u, v in zip(r_, p_)])), fh)
+        if wing and wing['valid']:
+            ext, einfo = px.extended_psf(mdl, wing, size=a.ext_size | 1)
+            imageio.save_fits(W('extended.fits'), ext.astype(np.float32))
+            ext_lines.append('wings: %d stars, power-law index %.2f beyond %.0f px, tail beyond the %d px stamp %.2f %% of the flux' % (ns_, wing['gamma'], wing['r0'], a.ext_size | 1, 100 * einfo['tail_fraction']))
+        else:
+            ext_lines.append('wings: %d stars, no measurable power-law wing (index %s)' % (ns_, 'n/a' if not wing else '%.2f' % wing['gamma']))
+    if a.assess:
+        cx_, cy_ = 0.5 * sum(mdl.xr), 0.5 * sum(mdl.yr)
+        budget = dict(centre_psf_at_corner=px.error_budget(mdl.stamp(mdl.xr[1], mdl.yr[1], 0, 0), mdl.stamp(cx_, cy_, 0, 0), profiles=((1.0, 4.0), (4.0, 4.0))))
+        if ext is not None:
+            h_ = mdl.size // 2
+            c_ = a.ext_size // 2
+            core_ = mdl.stamp(cx_, cy_, 0, 0)
+            full_ = ext[c_ - 20:c_ + 21, c_ - 20:c_ + 21] if a.ext_size >= 41 else ext
+            full_ = full_ / full_.sum()
+            pad_ = np.zeros_like(full_)
+            o_ = (full_.shape[0] - core_.shape[0]) // 2
+            pad_[o_:o_ + core_.shape[0], o_:o_ + core_.shape[1]] = core_
+            budget['core_stamp_instead_of_extended'] = px.error_budget(full_, pad_ / pad_.sum(), profiles=((1.0, 8.0), (4.0, 8.0)))
+        with open(W('budget.json'), 'w') as fh:
+            json.dump(pm._jsonable(budget), fh)
+        ext_lines.append('error budget written: %s' % W('budget.json'))
     mdl.save(W('model.json'))
     mdl.save(W('model.fits'))
     imageio.save_fits(W('center.fits'), mdl.stamp(0.5 * sum(mdl.xr), 0.5 * sum(mdl.yr), 0, 0).astype(np.float32))
@@ -93,7 +133,9 @@ def main(argv=None):
     lines = ['PSF model: mode %s, %s stars (%d candidates, %d on the stellar locus), polynomial order %d, oversampling %d, stamp %d px' % (
         mdl.meta.get('mode'), info.get('n_used', info.get('n_stars')), info.get('n_candidates', 0), info.get('n_locus', info.get('n_stars', 0)), mdl.degree, mdl.oversample, mdl.size),
         'FWHM %.2f - %.2f px (field mean %.2f), ellipticity %.3f - %.3f' % (sm['fwhm_pix_min'], sm['fwhm_pix_max'], sm['constant_fwhm_pix'], sm['e_min'], sm['e_max']),
-        'files: %s, %s, %s' % (W('model.json'), W('center.fits'), W('stars.tsv'))]
+        'files: %s, %s, %s' % (W('model.json'), W('center.fits'), W('stars.tsv'))] + ext_lines
+    if a.rank > 0:
+        lines.insert(1, 'PCA rank %d (variation kept %.3f)' % (a.rank, mdl.meta.get('rank_variance_kept', 1.0)))
     if a.catalog:
         cols, rows = tsvio.read_catalog(a.catalog)
         x = np.array([tsvio.fnum(r.get('X_IMAGE')) - 1 for r in rows])

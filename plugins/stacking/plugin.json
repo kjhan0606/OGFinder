@@ -137,6 +137,12 @@
       "--save-cube"
      ]
     },
+    {
+     "if": "psf-stamp",
+     "argv": [
+      "--psf-stamp"
+     ]
+    },
     "--mag-zeropoint",
     "{extract:mag-zeropoint}",
     "--pixel-scale",
@@ -531,6 +537,14 @@
    "default": false,
    "group": "Output",
    "help": "Write stacking_cutouts.fits (N x S x S)."
+  },
+  {
+   "name": "psf-stamp",
+   "label": "Write the stack as a PSF stamp",
+   "type": "bool",
+   "default": false,
+   "group": "Output",
+   "help": "Treat the selected sources as stars: write stacking_psf.fits, the median stack of recentred stamps with azimuthally averaged wings and unit sum (a PSF image for multifit / PSF photometry)."
   },
   {
    "name": "show-stack",

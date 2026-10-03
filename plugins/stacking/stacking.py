@@ -180,6 +180,7 @@ def main(argv=None):
     ap.add_argument('--mag-zeropoint', type=float, default=float('nan'))
     ap.add_argument('--pixel-scale', type=float, default=float('nan'))
     ap.add_argument('--save-cube', action='store_true')
+    ap.add_argument('--psf-stamp', action='store_true', help='also write stacking_psf.fits: the selected sources treated as stars -> median stack of recentred stamps with azimuthally averaged wings (unit sum), usable as a PSF by multifit / psfex consumers')
     ap.add_argument('--meta-out')
     a = ap.parse_args(argv)
 
@@ -255,6 +256,14 @@ def main(argv=None):
         if not a.positions:
             kw['self_index'] = ids
     sx, sy = xs[keep], ys[keep]
+    if a.psf_stamp:
+        try:
+            from ogfkit import psfext as px
+            psf_, npsf = px.stack_star_psf(data, np.column_stack([sx, sy]), size=min(2 * a.half + 1, 61) | 1, bkg=bkg_map if bkg_map is not None else None)
+            imageio.save_fits(W('psf.fits'), psf_.astype(np.float32))
+            sys.stderr.write('stacking: PSF stamp from %d stars written to %s\n' % (npsf, W('psf.fits')))
+        except Exception as e:
+            sys.stderr.write('stacking: PSF stamp failed: %s\n' % e)
     for k in ('scales', 'angles', 'norm_values', 'weight_values'):
         if kw.get(k) is not None:
             kw[k] = np.asarray(kw[k])[keep]
