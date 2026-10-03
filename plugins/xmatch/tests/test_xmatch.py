@@ -215,28 +215,78 @@ def test_cli_tap_fake_server(tmp_path):
     assert os.path.exists(tmp_path / 'w' / 'xmatch_tap.csv')
 
 
+def test_cli_tap_falls_back_to_mirror_when_first_endpoint_is_dead(tmp_path):
+    """First TAP endpoint refuses connections (stands in for the hanging ESAC server) -> retried, then the --tap-fallback-url answers."""
+    ra1, dec1, ra2, dec2, n = field(n=60, n_ref_extra=10, seed=5)
+    cat = str(tmp_path / 'cat.tsv'); write_cat(cat, ra1, dec1)
+    TapHandler.table = 'source_id,ra,dec,phot_g_mean_mag\n' + ''.join('%d,%.8f,%.8f,%.2f\n' % (1000 + i, ra2[i], dec2[i], 16 + i * .01) for i in range(len(ra2)))
+    TapHandler.seen = []
+    srv = http.server.HTTPServer(('127.0.0.1', 0), TapHandler)
+    th = threading.Thread(target=srv.serve_forever, daemon=True); th.start()
+    try:
+        r = run(['--catalog', cat, '--work', str(tmp_path / 'w'), '--source', 'tap', '--allow-network', '--tap-url', 'http://127.0.0.1:9/tap',
+                 '--tap-fallback-url', 'http://127.0.0.1:%d/tap' % srv.server_address[1], '--tap-retries', '1', '--tap-timeout', '5',
+                 '--radius-arcsec', '1.0', '--ref-id-col', 'source_id'], timeout=90)
+        r2 = run(['--catalog', cat, '--work', str(tmp_path / 'w2'), '--source', 'tap', '--allow-network', '--tap-url', 'http://127.0.0.1:9/tap',
+                  '--tap-fallback-url', '', '--tap-retries', '0', '--tap-timeout', '5', '--radius-arcsec', '1.0'], timeout=90)
+    finally:
+        srv.shutdown()
+    assert r.returncode == 0, r.stderr
+    assert len(TapHandler.seen) == 1
+    _, rows = read_out(r.stdout)
+    assert sum(1 for i, rw in enumerate(rows) if rw['XM_ID'] == str(1000 + i)) >= 55
+    assert r2.returncode != 0 and 'every endpoint' in r2.stderr
+
+
+GAIA_ENDPOINTS = ['https://gea.esac.esa.int/tap-server/tap', 'https://gaia.ari.uni-heidelberg.de/tap']
+
+
+def _gaia_sync(query, timeout=30, tries=2):
+    """Cone query on the first Gaia TAP endpoint that answers.  Root cause of the earlier flakiness: the ESAC sync endpoint can
+    accept the connection (and answer /availability) yet not return a result for minutes under load -> read timeouts.  We retry
+    and fall back to the ARI Heidelberg mirror (same gaiadr3 schema); returns (csv text, endpoint) or (None, errors)."""
+    import urllib.request, urllib.parse
+    errors = []
+    body = urllib.parse.urlencode({'REQUEST': 'doQuery', 'LANG': 'ADQL', 'FORMAT': 'csv', 'QUERY': query}).encode()
+    for ep in GAIA_ENDPOINTS:
+        for k in range(tries):
+            try:
+                return urllib.request.urlopen(ep + '/sync', body, timeout=timeout).read().decode(), ep
+            except Exception as ex:            # timeouts, resets, HTTP 5xx
+                errors.append('%s try %d: %s' % (ep, k + 1, str(ex)[:80]))
+    return None, errors
+
+
 def _live_ok():
     try:
         import urllib.request
-        urllib.request.urlopen('https://gea.esac.esa.int/tap-server/tap/availability', timeout=10)
-        return True
+        for ep in GAIA_ENDPOINTS:
+            try:
+                urllib.request.urlopen(ep + '/availability', timeout=10)
+                return True
+            except Exception:
+                continue
+        return False
     except Exception:
         return False
 
 
 @pytest.mark.skipif(not os.environ.get('OGF_LIVE_TESTS') and not _live_ok(), reason='no network')
 def test_live_gaia_dr3_recovers_injected_offset(tmp_path):
-    """Real Gaia DR3 sources of a field (M51) -> perturbed copy (0.1" noise, +0.35"/-0.25" offset) as the 'catalog' -> match through the TAP path."""
-    import urllib.request, urllib.parse, io
-    q = ("SELECT TOP 600 source_id, ra, dec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 202.4696, 47.1952, 0.15)) AND phot_g_mean_mag < 20.5 ORDER BY phot_g_mean_mag")
-    data = urllib.request.urlopen('https://gea.esac.esa.int/tap-server/tap/sync', urllib.parse.urlencode({'REQUEST': 'doQuery', 'LANG': 'ADQL', 'FORMAT': 'csv', 'QUERY': q}).encode(), timeout=60).read().decode()
+    """Real Gaia DR3 sources of a field (M51) -> perturbed copy (0.1" noise, +0.35"/-0.25" offset) as the 'catalog' -> match through the TAP path.
+    Retries / falls back to a mirror on network trouble and SKIPS (not fails) when no Gaia endpoint answers."""
+    import io
+    q = ("SELECT TOP 600 source_id, ra, dec, phot_g_mean_mag FROM gaiadr3.gaia_source WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', 202.4696, 47.1952, 0.15)) AND phot_g_mean_mag < 20.5")
+    data, ep = _gaia_sync(q)
+    if data is None:
+        pytest.skip('no Gaia TAP endpoint answered: ' + '; '.join(ep))
     rows = list(csv.DictReader(io.StringIO(data)))
     assert len(rows) > 100, len(rows)
     rng = np.random.RandomState(4)
     ra = np.array([float(r['ra']) for r in rows]); dec = np.array([float(r['dec']) for r in rows])
     ra_c = ra - (0.35 + rng.randn(len(ra)) * 0.1) / 3600 / np.cos(np.radians(dec)); dec_c = dec - (-0.25 + rng.randn(len(ra)) * 0.1) / 3600
     cat = str(tmp_path / 'cat.tsv'); write_cat(cat, ra_c, dec_c)
-    r = run(['--catalog', cat, '--work', str(tmp_path / 'w'), '--source', 'tap', '--allow-network', '--radius-arcsec', '2.0', '--ref-id-col', 'source_id', '--copy-columns', 'phot_g_mean_mag'], timeout=180)
+    r = run(['--catalog', cat, '--work', str(tmp_path / 'w'), '--source', 'tap', '--allow-network', '--tap-url', ep, '--tap-timeout', '40', '--radius-arcsec', '2.0', '--ref-id-col', 'source_id', '--copy-columns', 'phot_g_mean_mag'], timeout=180)
     assert r.returncode == 0, r.stderr
     _, out = read_out(r.stdout)
     good = sum(1 for rw, rr in zip(out, rows) if rw['XM_ID'] == rr['source_id'])

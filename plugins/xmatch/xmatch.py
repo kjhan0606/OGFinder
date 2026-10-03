@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 import numpy as np
 
@@ -24,6 +25,7 @@ warnings.filterwarnings('ignore')
 from ogfkit import tsvio, xmatch as xm, meta as ometa  # noqa: E402
 
 COLUMNS = ['XM_SEP', 'XM_N', 'XM_FLAG', 'XM_DRA', 'XM_DDEC', 'XM_ID', 'XM_V1', 'XM_V2', 'XM_V3', 'XM_V4']
+GAIA_MIRROR = 'https://gaia.ari.uni-heidelberg.de/tap'
 DEFAULT_ADQL = ("SELECT TOP 50000 source_id, ra, dec, phot_g_mean_mag, parallax FROM gaiadr3.gaia_source "
                 "WHERE 1=CONTAINS(POINT('ICRS', ra, dec), CIRCLE('ICRS', {ra}, {dec}, {radius_deg}))")
 
@@ -33,13 +35,34 @@ def fetch_tap(a, ra, dec, radius_deg, work):
     if not a.allow_network:
         raise SystemExit('xmatch: TAP queries need the network: enable "Allow network access" (--allow-network)')
     from ai_bridge import adapters
-    prof = {'name': 'xmatch_tap', 'task': 'generic', 'transport': 'tap_query', 'base_url': a.tap_url, 'auth': {'scheme': 'none'},
-            'params': {'radius_arcsec': radius_deg * 3600.0}, 'request': {'adql': a.tap_adql or DEFAULT_ADQL, 'format': 'csv'}, 'response': {'fields': {}},
-            'timeout_s': a.tap_timeout}
-    ad = adapters.make_adapter(prof, {'params': dict(prof['params']), 'bands': []})
     rec = {'id': 'field', 'ra': ra, 'dec': dec, 'x': 0, 'y': 0, 'mags': {}, 'mag_errs': {}, 'catalog_row': {}}
-    prepared = ad.prepare([rec], None)
-    obj, meta = ad.send(prepared, a.tap_timeout)
+    urls = [a.tap_url]
+    fb = a.tap_fallback_url
+    if fb == 'auto':           # the ESAC Gaia TAP can hang for minutes under load; the ARI Heidelberg mirror serves the same gaiadr3 tables
+        fb = GAIA_MIRROR if 'gea.esac.esa.int' in a.tap_url else ''
+    if fb and fb != a.tap_url:
+        urls.append(fb)
+    errors = []
+    obj = meta = None
+    used = a.tap_url
+    for url in urls:
+        prof = {'name': 'xmatch_tap', 'task': 'generic', 'transport': 'tap_query', 'base_url': url, 'auth': {'scheme': 'none'},
+                'params': {'radius_arcsec': radius_deg * 3600.0}, 'request': {'adql': a.tap_adql or DEFAULT_ADQL, 'format': 'csv'}, 'response': {'fields': {}},
+                'timeout_s': a.tap_timeout}
+        ad = adapters.make_adapter(prof, {'params': dict(prof['params']), 'bands': []})
+        prepared = ad.prepare([rec], None)
+        for attempt in range(max(a.tap_retries, 0) + 1):
+            try:
+                obj, meta = ad.send(prepared, a.tap_timeout)
+                used = url
+                break
+            except Exception as ex:          # timeouts, connection resets, HTTP 5xx: try again, then the next mirror
+                errors.append('%s (try %d): %s' % (url, attempt + 1, str(ex)[:120]))
+                time.sleep(min(2.0 * (attempt + 1), 6.0))
+        if obj is not None:
+            break
+    if obj is None:
+        raise SystemExit('xmatch: TAP query failed on every endpoint: ' + ' | '.join(errors))
     rows = obj['rows']
     cols = obj['columns']
     raw = {}
@@ -55,7 +78,7 @@ def fetch_tap(a, ra, dec, radius_deg, work):
             data[c] = np.array([float(v) if v not in ('', None) else np.nan for v in vals])
         except ValueError:
             data[c] = np.array(vals, dtype=object)
-    return cols, data, raw, dict(n_rows=len(rows), http=meta.get('http_status'), url=a.tap_url, truncated=bool(a.tap_limit and len(rows) >= a.tap_limit))
+    return cols, data, raw, dict(n_rows=len(rows), http=meta.get('http_status'), url=used, fallback_used=(used != a.tap_url), attempts_failed=len(errors), truncated=bool(a.tap_limit and len(rows) >= a.tap_limit))
 
 
 def main(argv=None):
@@ -82,6 +105,8 @@ def main(argv=None):
     ap.add_argument('--tap-adql', default='')
     ap.add_argument('--tap-radius-arcmin', type=float, default=0.0)
     ap.add_argument('--tap-timeout', type=float, default=120.0)
+    ap.add_argument('--tap-retries', type=int, default=1, help='retries per endpoint after a timeout / connection error / 5xx')
+    ap.add_argument('--tap-fallback-url', default='auto', help="second TAP endpoint (same schema) tried when the first fails; 'auto' = ARI Heidelberg Gaia mirror for the ESAC URL, '' = none")
     ap.add_argument('--tap-limit', type=int, default=50000)
     a = ap.parse_args(argv)
     os.makedirs(a.work, exist_ok=True)
