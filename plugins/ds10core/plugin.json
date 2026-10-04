@@ -1,0 +1,520 @@
+{
+ "schema": 1,
+ "id": "ds10core",
+ "name": "ds10 shared core (regions, pixel table, calibration, forced photometry, scripts)",
+ "short": "ds10 core",
+ "tab": "Measure",
+ "order": 70,
+ "description": "Stand-alone shell of the compute core that the ds10-web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours) and a runner for ds10-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the ds10-web repository and is started as a separate process.",
+ "license": {
+  "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
+  "core": "ds10core (ds10-web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
+  "boundary": "separate process (python -m ds10core)",
+  "ds9_code_in_core": false,
+  "web": false
+ },
+ "web": false,
+ "requires": {
+  "python": [
+   "numpy",
+   "scipy"
+  ]
+ },
+ "primary": "calib",
+ "settings": "params",
+ "steps": [
+  {
+   "id": "info",
+   "label": "Image info, WCS, calibration",
+   "title": "ds10core: image info + AB zero point",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.info",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "info",
+    "{image}",
+    "--text"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Image info, WCS, calibration"
+  },
+  {
+   "id": "calib",
+   "label": "AB zero point (header calibration)",
+   "title": "ds10core: header-driven AB zero point",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.calib",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "calib",
+    "{image}",
+    "--text",
+    {
+     "if": "zp-override",
+     "argv": [
+      "--zp",
+      "{zp}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "AB zero point (header calibration)"
+  },
+  {
+   "id": "maps",
+   "label": "Weight / rms / exposure / mask maps (find + associate)",
+   "title": "ds10core: map association",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.maps",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "maps",
+    "{image}",
+    "auto",
+    "--dir",
+    "{map-dir}"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Weight / rms / exposure / mask maps (find + associate)"
+  },
+  {
+   "id": "regions-stats",
+   "label": "Region statistics (exact pixel membership)",
+   "title": "ds10core: region statistics",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.regions_stats",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "regions",
+    "stats",
+    "{regions-file}",
+    "--image",
+    "{image}",
+    "--text",
+    "--background",
+    "{bkg}",
+    "--bkg-stat",
+    "{bkg-stat}"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Region statistics (exact pixel membership)"
+  },
+  {
+   "id": "regions-mask",
+   "label": "Regions -> mask FITS",
+   "title": "ds10core: regions to mask",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.regions_mask",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "regions",
+    "mask",
+    "{regions-file}",
+    "--image",
+    "{image}",
+    "--mode",
+    "{mask-mode}",
+    "-o",
+    "{work}/ds10core/regions_mask.fits",
+    "--work",
+    "{work}/ds10core"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Regions -> mask FITS"
+  },
+  {
+   "id": "regions-convert",
+   "label": "Convert regions (DS9 / JSON / CSV)",
+   "title": "ds10core: convert regions",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.regions_convert",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "regions",
+    "convert",
+    "{regions-file}",
+    "--image",
+    "{image}",
+    "--to",
+    "{to-format}",
+    "--frame",
+    "{frame}"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Convert regions (DS9 / JSON / CSV)"
+  },
+  {
+   "id": "pixtab",
+   "label": "Pixel table at (X, Y)",
+   "title": "ds10core: pixel table",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.pixtab",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "pixtab",
+    "{image}",
+    "--xy",
+    "{px}",
+    "{py}",
+    "--size",
+    "{size}",
+    "--mode",
+    "{pix-mode}"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Pixel table at (X, Y)"
+  },
+  {
+   "id": "forced",
+   "label": "Forced photometry (bands -> colours)",
+   "title": "ds10core: multi-band forced photometry",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [],
+   "record": "ds10core.forced",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "forced",
+    "split:{band-images}",
+    "--thresh",
+    "{thresh}",
+    "--smooth-fwhm",
+    "{smooth-fwhm}",
+    "--minarea",
+    "{minarea}",
+    "--aperture-radii",
+    "{aperture-radii}",
+    "--cog-radius",
+    "{cog-radius}",
+    "--work",
+    "{work}/ds10core/forced",
+    "--out",
+    "{work}/ds10core/forced_out",
+    "--text"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "forced photometry done"
+  },
+  {
+   "id": "run-script",
+   "label": "Run ds10-script / replay.py / bundle",
+   "title": "ds10core: run a script",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [],
+   "record": "ds10core.run_script",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "run",
+    "{script}",
+    "--files",
+    "{files-dir}",
+    "--work",
+    "{work}/ds10core/run",
+    "--out",
+    "{work}/ds10core/run_out"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "script run done"
+  }
+ ],
+ "params": [
+  {
+   "name": "core-dir",
+   "label": "Core directory (contains ds10core/)",
+   "type": "string",
+   "default": "",
+   "group": "Core",
+   "help": "Directory that holds the ds10core package (the 'server' directory of ds10-web). Empty = environment DS10_CORE, ~/.ds9/ogf_params/ds10core.json, ../ds10-web/server, /workspace/ds10-web/server. The core runs as a separate process (docs/ds10core.md)."
+  },
+  {
+   "name": "zp-override",
+   "label": "Override the AB zero point",
+   "type": "bool",
+   "default": false,
+   "group": "Calibration",
+   "help": "Use the number below instead of the header value (shown as a manual override in the result)."
+  },
+  {
+   "name": "zp",
+   "label": "Manual AB zero point",
+   "type": "float",
+   "default": 25.0,
+   "group": "Calibration",
+   "help": "AB magnitude of one unit of the image's data values.",
+   "min": -10.0,
+   "max": 60.0,
+   "unit": "mag"
+  },
+  {
+   "name": "map-dir",
+   "label": "Directory with map files",
+   "type": "file",
+   "default": "",
+   "group": "Maps",
+   "help": "Where weight / rms / exposure / mask maps are looked for (empty = the image's directory)."
+  },
+  {
+   "name": "regions-file",
+   "label": "Region file (.reg / .json / .csv)",
+   "type": "file",
+   "default": "",
+   "group": "Regions",
+   "help": "DS9 region file, ds10 JSON or CSV. Shapes: circle, ellipse, box, annulus, polygon, point, line (include/exclude)."
+  },
+  {
+   "name": "bkg",
+   "label": "Background",
+   "type": "string",
+   "default": "auto",
+   "group": "Regions",
+   "help": "auto = the region marked background if any, none, a region id, or a number."
+  },
+  {
+   "name": "bkg-stat",
+   "label": "Background statistic",
+   "type": "choice",
+   "default": "median",
+   "group": "Regions",
+   "help": "Statistic of the background region.",
+   "choices": [
+    "median",
+    "mean"
+   ]
+  },
+  {
+   "name": "mask-mode",
+   "label": "Mask: pixels to use",
+   "type": "choice",
+   "default": "include",
+   "group": "Regions",
+   "help": "include = 1 inside the regions; exclude = 0 inside the regions.",
+   "choices": [
+    "include",
+    "exclude"
+   ]
+  },
+  {
+   "name": "to-format",
+   "label": "Convert to",
+   "type": "choice",
+   "default": "ds9",
+   "group": "Regions",
+   "help": "Output format of 'Convert regions' (printed).",
+   "choices": [
+    "ds9",
+    "json",
+    "csv"
+   ]
+  },
+  {
+   "name": "frame",
+   "label": "Coordinate frame of the output",
+   "type": "choice",
+   "default": "keep",
+   "group": "Regions",
+   "help": "keep = as stored; image or fk5 converts with the image WCS.",
+   "choices": [
+    "keep",
+    "image",
+    "fk5"
+   ]
+  },
+  {
+   "name": "px",
+   "label": "Pixel X (FITS, 1 = first)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Pixel table",
+   "help": "Centre of the pixel table.",
+   "min": 0.5
+  },
+  {
+   "name": "py",
+   "label": "Pixel Y (FITS, 1 = first)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Pixel table",
+   "help": "Centre of the pixel table.",
+   "min": 0.5
+  },
+  {
+   "name": "size",
+   "label": "Table size",
+   "type": "choice",
+   "default": "7",
+   "group": "Pixel table",
+   "help": "Odd number of pixels per side.",
+   "choices": [
+    "3",
+    "5",
+    "7",
+    "9",
+    "11",
+    "13",
+    "15"
+   ]
+  },
+  {
+   "name": "pix-mode",
+   "label": "Show",
+   "type": "choice",
+   "default": "value",
+   "group": "Pixel table",
+   "help": "Pixel values or the sky coordinates of the pixels.",
+   "choices": [
+    "value",
+    "ra",
+    "dec"
+   ]
+  },
+  {
+   "name": "band-images",
+   "label": "Band images (2 or more FITS files)",
+   "type": "string",
+   "default": "",
+   "group": "Forced photometry",
+   "help": "Space-free list is not possible in this dialog: give the files separated by a single space; every file name must differ. The detection image combines all bands (inverse variance); the catalogue is measured again in every band with the same apertures; colours need the header zero points (PHOTFLAM/PHOTPLAM/PHOTZPT)."
+  },
+  {
+   "name": "thresh",
+   "label": "Detection threshold",
+   "type": "float",
+   "default": 2.5,
+   "group": "Forced photometry",
+   "help": "Sigma above the background of the detection image.",
+   "min": 0.5,
+   "max": 30.0
+  },
+  {
+   "name": "smooth-fwhm",
+   "label": "Detection smoothing FWHM",
+   "type": "float",
+   "default": 3.0,
+   "group": "Forced photometry",
+   "help": "Gaussian filter before thresholding.",
+   "min": 0.0,
+   "max": 20.0,
+   "unit": "px"
+  },
+  {
+   "name": "minarea",
+   "label": "Minimum area",
+   "type": "int",
+   "default": 6,
+   "group": "Forced photometry",
+   "help": "Smallest connected region kept.",
+   "min": 1,
+   "max": 1000,
+   "unit": "px"
+  },
+  {
+   "name": "aperture-radii",
+   "label": "Aperture radii (arcsec)",
+   "type": "string",
+   "default": "0.18,0.3,0.48",
+   "group": "Forced photometry",
+   "help": "Circular apertures, comma separated."
+  },
+  {
+   "name": "cog-radius",
+   "label": "Curve-of-growth radius (arcsec)",
+   "type": "float",
+   "default": 0.72,
+   "group": "Forced photometry",
+   "help": "Radius for the point-source aperture correction.",
+   "min": 0.1,
+   "max": 10.0,
+   "unit": "arcsec"
+  },
+  {
+   "name": "script",
+   "label": "Script (.json / replay.py / bundle .zip)",
+   "type": "file",
+   "default": "",
+   "group": "Run script",
+   "help": "A ds10-script/1 step list, a replay script or a reproducibility bundle exported from the web app."
+  },
+  {
+   "name": "files-dir",
+   "label": "Folder with the images the script names",
+   "type": "file",
+   "default": "",
+   "group": "Run script",
+   "help": "Image files are found by name in this folder."
+  }
+ ]
+}
