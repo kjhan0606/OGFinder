@@ -38,6 +38,8 @@ A broken manifest is rejected with a message in Tools > Plugin log; other plugin
 | `description` | tooltip and "Pipeline overview" |
 | `example` / `enabled` | `"example": true` = disabled unless enabled explicitly; `"enabled": false` likewise |
 | `menu` | `"Workflow"` puts the plugin's entries into that main menu instead of a chip |
+| `license` | free-form licence tags of the plugin (documentation only; the loader ignores them). `plugins/ds10core` uses `{plugin, core, boundary, ds9_code_in_core, web}` to state that its compute core is a separate, non-GPL program started as a separate process |
+| `web` | `false` = a stand-alone-only shell: the ds10-web server skips this manifest (it is not a tool of the web app) |
 | `requires` | `{"binaries":[...], "python":[modules]}`; missing items disable the step with a message |
 | `network` | `1` when the plugin contacts a remote service (recorded; the exported script asks before running it) |
 | `primary` | step id run by the chip's ▶ button |
