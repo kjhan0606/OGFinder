@@ -18,3 +18,11 @@ SAOImageDS9 is fully funded by the Chandra X-ray Science Center (CXC) and is lic
 The catalog panel records the analysis steps of a GUI session. *Analysis > Save Session as Python Script...* writes a stand-alone script that re-runs the automatic steps on new FITS files (`--mode pipeline`, batch, `--jobs`, `--resume`) or replays the whole session on the original data (`--mode replay`). See [docs/session_python_script.md](docs/session_python_script.md).
 
 *Analysis > AI Services* provides connection points (not models) for external AI / astronomy services: JSON service profiles (`ai_services.example.json`, `~/.ds9/ai_services.json`), task contracts, cutout generation, response caching, provenance, and a CLI (`ds9_ai_bridge.py`); results are added as catalogue columns and recorded by the session recorder. Keys are read from environment variables only and payloads leave the machine - see [docs/ai_services.md](docs/ai_services.md). Built-in `mock` service for offline tests; the example profiles are templates with placeholder URLs.
+
+## License
+
+OGFinder (the SAOImageDS9 8.7 based stand-alone with the OGFinder plugins) is released under the **GNU General Public License, version 3** (tentative decision of the
+owner); the full text is in [LICENSE](LICENSE).  Bundled third-party components keep their own licences (Tcl/Tk BSD-style, zlib/libpng/libtiff/IJG, LGPL for AST, PAL, wcslib-derived
+code, libwcs and SEP, BSD for ERFA/MINPACK, ...); the list, the open items (e.g. the old OpenSSL) and the reasons are in [docs/licensing.md](docs/licensing.md) and
+[docs/license_audit.md](docs/license_audit.md).  The shared compute core **ds10core** is a separate package of the ds10-web repository with its own licence; the
+`ds10core` plugin runs it as a separate process and does not include or import it.
