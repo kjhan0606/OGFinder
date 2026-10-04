@@ -189,3 +189,69 @@ def test_run_validates_before_running_and_reports_bad_scripts(tmp_path):
     drop = tmp_path / "drop.json"
     drop.write_text(json.dumps({"schema": "ds10-script/1", "steps": [{"id": "s1", "ui": "delete_file"}]}))
     assert run("run", drop, "--work", tmp_path / "w3", check=False).returncode == 2
+
+
+# ------------------------------------------------------------------------------------------------ offline bundle of the web app (ds10 open) + paths with spaces
+BUNDLE = os.path.join(HERE, "data", "offline_bundle_small.zip")           # made by ds10-web tools/make_offline_fixture.py: one 96x96 image, one region, one detect job
+
+
+def test_split_words_separators_and_spaces_in_names():
+    assert launcher.split_words("a.fits b.fits c.fits") == ["a.fits", "b.fits", "c.fits"]
+    assert launcher.split_words("/my data/a.fits|/my data/b.fits") == ["/my data/a.fits", "/my data/b.fits"]
+    assert launcher.split_words("/my data/a.fits\n /my data/b.fits \n") == ["/my data/a.fits", "/my data/b.fits"]
+    assert launcher.split_words('"/my data/a.fits" /b.fits') == ["/my data/a.fits", "/b.fits"]
+    assert launcher.split_words("/o'brien/a.fits /b.fits") == ["/o'brien/a.fits", "/b.fits"]          # unbalanced quote: plain spaces
+
+
+def test_open_without_dest_goes_to_home_ds10_offline():
+    home = os.path.expanduser("~")
+    w = launcher.default_open_dest(["open", "/x/y/session one.zip", "--force", "--text"])
+    assert w[-2:] == ["--dest", os.path.join(home, "ds10-offline", "session one")]
+    assert launcher.default_open_dest(["open", "b.zip", "--dest", "", "--force"]) == ["open", "b.zip", "--force", "--dest", os.path.join(home, "ds10-offline", "b")]
+    assert launcher.default_open_dest(["open", "b.zip", "--dest", "--force"]) == ["open", "b.zip", "--force", "--dest", os.path.join(home, "ds10-offline", "b")]   # empty value dropped by the template
+    assert launcher.default_open_dest(["open", "b.zip", "--dest", "/w"]) == ["open", "b.zip", "--dest", "/w"]
+    assert launcher.default_open_dest(["info", "i.fits"]) == ["info", "i.fits"]
+
+
+def test_manifest_has_open_bundle_step_with_a_tcl_hook():
+    m = json.load(open(os.path.join(PLUGIN, "plugin.json")))
+    st = {s["id"]: s for s in m["steps"]}["open-bundle"]
+    assert st["after"] == "OGFDs10coreOpenAfter" and m["tcl"] == "ds10core.tcl" and "open" in st["cli"] and "--force" in st["cli"]
+    assert "proc OGFDs10coreOpenAfter" in open(os.path.join(PLUGIN, "ds10core.tcl")).read()
+    assert {p["name"] for p in m["params"]} >= {"bundle", "open-dest"}
+
+
+@needs_core
+def test_open_restores_the_web_session_and_continues(tmp_path):
+    ws = tmp_path / "my workspace"                                                      # a space in the folder name on purpose
+    r = run("open", BUNDLE, "--dest", ws, "--text")
+    assert "field96.fits" in r.stdout and "regions:" in r.stdout and "steps with stored results: s1" in r.stdout
+    assert (ws / "files" / "field96.fits").is_file() and (ws / "regions" / "regions.reg").is_file() and (ws / "session_script.json").is_file()
+    wsj = json.loads((ws / "workspace.json").read_text())
+    assert wsj["schema"] == "ds10-workspace/1" and wsj["files"][0]["kind"] == "original" and wsj["steps_with_results"] == ["s1"]
+    again = run("open", BUNDLE, "--dest", ws, check=False)
+    assert again.returncode != 0 and "--force" in again.stderr                          # never overwrites silently
+    run("open", BUNDLE, "--dest", ws, "--force", "--text")
+    # the stored result is used (status restored), nothing is recomputed
+    run("run", ws / "session_script.json", "--text")
+    rep = json.loads(next((ws / "runs").glob("r*/out/run_report.json")).read_text())
+    assert rep["ok"] and [s["status"] for s in rep["steps"]] == ["restored"]
+    st = run("status", ws, "--text")
+    assert "s1:restored" in st.stdout
+
+
+@needs_core
+def test_open_default_destination_under_home(tmp_path):
+    r = run("open", BUNDLE, "--text", env={"HOME": str(tmp_path)})
+    assert (tmp_path / "ds10-offline" / "offline_bundle_small" / "workspace.json").is_file() and str(tmp_path / "ds10-offline") in r.stdout
+
+
+@needs_core
+def test_forced_with_spaces_in_the_band_image_paths(bands, tmp_path):
+    import shutil
+    paths, _ = bands
+    d = tmp_path / "my band images"
+    d.mkdir()
+    new = [str(shutil.copy(p, d / os.path.basename(p))) for p in paths]
+    r = run("forced", "split:" + "|".join(new), "--work", tmp_path / "w", "--out", tmp_path / "o", "--thresh", 3.0, "--smooth-fwhm", 2.0, "--minarea", 4, "--text")
+    assert "forced photometry:" in r.stdout and (tmp_path / "o" / "forced_catalog.tsv").is_file()

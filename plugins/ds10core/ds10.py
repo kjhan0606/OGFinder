@@ -12,15 +12,21 @@ Where the core is looked for (first hit wins; the directory must contain ``ds10c
 
 The interpreter that runs the core: ``--python PATH``, else env ``DS10_PYTHON``, else the interpreter running this launcher (needs numpy and scipy).
 
-  ds10.py [--core-dir D] [--python P] [--where] COMMAND ARGS...      (COMMAND = info, calib, maps, regions, pixtab, bands, validate, run, forced, compare, export-script, list)
+  ds10.py [--core-dir D] [--python P] [--where] COMMAND ARGS...      (COMMAND = info, calib, maps, regions, pixtab, bands, validate, run, forced, compare, export-script, list, open, status)
 
-Words of the form ``split:A B C`` (used for the list of band images typed into a dialog) are expanded to the separate arguments A B C.
+Words of the form ``split:LIST`` (the list of band images typed into a dialog) are expanded to separate arguments.  LIST is separated by ``|`` or by new
+lines when it contains one of them (so file names may contain spaces: ``/my data/a.fits|/my data/b.fits``); otherwise by spaces, where a name with
+spaces can be quoted (``"/my data/a.fits" /b.fits``); an unbalanced quote falls back to plain spaces.
+
+``open BUNDLE --dest DIR`` restores an offline bundle of the web app into the folder DIR (see docs/offline_workflow.md); with an empty or missing ``--dest`` the
+folder is ``~/ds10-offline/<bundle file name without .zip>``.
 
 Flags of the core command line that the plugin manifest passes through unchanged (listed here so that tools/validate_manifests.py can check the manifest
-against this driver; the real definitions are the argparse options of ``ds10core/cli.py``):  --aperture-radii --background --bkg-stat --cog-radius --core-dir --dir --files --frame --image --minarea --mode --out --size --smooth-fwhm --text --thresh --to --work --xy --zp
+against this driver; the real definitions are the argparse options of ``ds10core/cli.py``):  --aperture-radii --background --bkg-stat --cog-radius --core-dir --dir --dest --files --force --frame --image --minarea --mode --out --size --smooth-fwhm --text --thresh --to --work --xy --zp
 """
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -56,6 +62,30 @@ def find_core(explicit=None):
     return None, "ds10core not found; looked in: " + "; ".join(tried)
 
 
+def split_words(v):
+    """The arguments of a ``split:`` word (see the module docstring)."""
+    if "|" in v or "\n" in v:
+        return [x.strip() for x in v.replace("\n", "|").split("|") if x.strip()]
+    try:
+        return shlex.split(v)
+    except ValueError:                                              # unbalanced quote (an apostrophe in a name): plain spaces
+        return v.split()
+
+
+def default_open_dest(words):
+    """``open BUNDLE [--dest D]``: D empty or missing -> ~/ds10-offline/<bundle name>."""
+    if not words or words[0] != "open" or len(words) < 2:
+        return words
+    w = list(words)
+    if "--dest" in w:
+        i = w.index("--dest")
+        if i + 1 < len(w) and w[i + 1].strip() and not w[i + 1].startswith("--"):
+            return w
+        del w[i:i + (2 if i + 1 < len(w) and not w[i + 1].strip() else 1)]
+    stem = os.path.splitext(os.path.basename(w[1]))[0] or "bundle"
+    return w + ["--dest", os.path.join(os.path.expanduser("~"), "ds10-offline", stem)]
+
+
 def main(argv):
     explicit = python = None
     where = False
@@ -86,7 +116,8 @@ def main(argv):
     env.setdefault("DS10_OGF_ROOT", ROOT)
     words = []
     for w in args:
-        words += w[6:].split() if w.startswith("split:") else [w]
+        words += split_words(w[6:]) if w.startswith("split:") else [w]
+    words = default_open_dest(words)
     return subprocess.call([py, "-m", "ds10core", *words], env=env)
 
 

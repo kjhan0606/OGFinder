@@ -289,6 +289,32 @@
     "mode": "text"
    },
    "done_status": "script run done"
+  },
+  {
+   "id": "open-bundle",
+   "label": "Open offline bundle (continue a web session here)",
+   "title": "ds10core: open an offline bundle",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [],
+   "record": "ds10core.open_bundle",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "open",
+    "{bundle}",
+    "--dest",
+    "{open-dest}",
+    "--force",
+    "--text"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "offline bundle restored",
+   "after": "OGFDs10coreOpenAfter"
   }
  ],
  "params": [
@@ -447,7 +473,7 @@
    "type": "string",
    "default": "",
    "group": "Forced photometry",
-   "help": "Space-free list is not possible in this dialog: give the files separated by a single space; every file name must differ. The detection image combines all bands (inverse variance); the catalogue is measured again in every band with the same apertures; colours need the header zero points (PHOTFLAM/PHOTPLAM/PHOTZPT)."
+   "help": "Files separated by '|' or by new lines (then names may contain spaces, e.g. /data/my images/a.fits|/data/my images/b.fits); without '|' and new lines, by spaces (quote a name with spaces: \"/my dir/a.fits\" /b.fits). Every file name must differ. The detection image combines all bands (inverse variance); the catalogue is measured again in every band with the same apertures; colours need the header zero points (PHOTFLAM/PHOTPLAM/PHOTZPT)."
   },
   {
    "name": "thresh",
@@ -515,6 +541,23 @@
    "default": "",
    "group": "Run script",
    "help": "Image files are found by name in this folder."
+  },
+  {
+   "name": "bundle",
+   "label": "Offline bundle (.zip from the web app)",
+   "type": "file",
+   "default": "",
+   "group": "Offline bundle",
+   "help": "The file 'Download offline bundle' made in the web app (Offline export button). Opening it restores the session in a folder: images (originals or float32 copies, depending on the plan), regions, maps, calibration and the stored results; the first image is shown in ds9."
+  },
+  {
+   "name": "open-dest",
+   "label": "Folder to restore into (empty = ~/ds10-offline/<bundle name>)",
+   "type": "file",
+   "default": "",
+   "group": "Offline bundle",
+   "help": "An existing, non-empty folder is replaced (the previous copy of this workspace is deleted), so give an empty or new folder."
   }
- ]
+ ],
+ "tcl": "ds10core.tcl"
 }

@@ -102,6 +102,31 @@ proc run {} {
     # ---- the session recorded the steps with their exact argument vectors
     set kinds [lmap r [::ogf::session::steps] {dict get $r step}]
     R session_records [expr {"ds10core.calib" in $kinds && "ds10core.forced" in $kinds && "ds10core.run_script" in $kinds}] $kinds
+    # ---- open an offline bundle of the web app: restore + show the first image and its regions in ds9
+    set bundle [file join [pwd] plugins ds10core tests data offline_bundle_small.zip]
+    ::ogf::params::put ds10core bundle $bundle
+    ::ogf::params::put ds10core open-dest [file join $::dir offline ws]
+    lassign [run_step ds10core open-bundle] ok recs
+    set txt [text_window]
+    set wsd [file join $::dir offline ws]
+    R open_bundle_step [expr {$ok && [string match "*opened offline bundle*" $txt] && [string match "*field96.fits*" $txt] && [string match "*steps with stored results: s1*" $txt]}] [string range $txt 0 200]
+    R open_bundle_workspace [expr {[file exists [file join $wsd workspace.json]] && [file exists [file join $wsd files field96.fits]] && [file exists [file join $wsd regions regions.reg]]}]
+    wait_idle 800
+    set shown [catch {$current(frame) get fits file name root base} fnm]
+    R open_bundle_image_in_ds9 [expr {$shown == 0 && [string match "*field96*" $fnm]}] "frame file: $fnm"
+    set nmark -1
+    catch {$current(frame) marker select all; set nmark [$current(frame) get marker select number]; $current(frame) marker unselect all}
+    R open_bundle_regions_in_ds9 [expr {$nmark == 1}] "markers=$nmark"
+    R open_bundle_workspace_recorded [expr {[::ogf::cat::get ds10core,workspace ?] eq $wsd}]
+    shot offline_open_bundle_ds9
+    # the restored script runs in the workspace and reuses the stored result
+    ::ogf::params::put ds10core script [file join $wsd session_script.json]
+    ::ogf::params::put ds10core files-dir [file join $wsd files]
+    lassign [run_step ds10core run-script] ok recs
+    set rr [file join [OGFSessWorkDir] ds10core run_out run_report.json]
+    set rep {}; if {[file exists $rr]} {set fd [open $rr r]; set rep [read $fd]; close $fd}
+    R open_bundle_script_restored [expr {$ok && [regexp {"status": "restored"} $rep]}] [string range $rep 0 200]
+    shot offline_open_bundle_script_run
     puts $::fh "SUMMARY failures=$::nf"; close $::fh
     exit
 }

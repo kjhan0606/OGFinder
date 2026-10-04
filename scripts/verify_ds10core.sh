@@ -1,7 +1,7 @@
 #!/bin/bash
 # Real-ds9 test of plugins/ds10core (stand-alone shell of the shared ds10 core): chip + menu entries, header calibration, region statistics / mask, pixel table,
 # multi-band forced photometry on synthetic bands, ds10-script run, session records; optional screenshots (docs/shots/standalone_*.png).
-#   scripts/verify_ds10core.sh [workdir]        env: DISPLAY_OVERRIDE=:77  OGF_SHOTS=docs/shots (screenshots on when set)
+#   scripts/verify_ds10core.sh [workdir]        env: DISPLAY_OVERRIDE=:77  OGF_SHOTS=docs/shots (screenshots on when set)  OGF_DS_GEOM=1300x950 (ds9 window)
 # SKIP (exit 77) when the ds10core package of ds10-web cannot be found.
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
 PY="${OGFINDER_PYTHON:-/workspace/ogf_venv/bin/python3}"; export OGFINDER_PYTHON="$PY"
@@ -29,6 +29,6 @@ open(f"{d}/r.reg", "w").write("# Region file format: DS9 version 4.1\nimage\ncir
 PYEOF
 rm -rf ~/ds9.auto ~/ds9.auto.dir
 HOME="$W/home" OGF_DS_OUT="$W/ds.txt" OGF_DS_DIR="$W/in" OGF_DS_SHOTS="${OGF_SHOTS:-}" OGF_DS_DISPLAY="${DISPLAY_OVERRIDE:-:77}" DISPLAY="${DISPLAY_OVERRIDE:-:77}" timeout -s KILL 600 \
-  bin/ds9 "$W/in/syn_f160w.fits" -geometry 1300x950 -source scripts/verify_ds10core.tcl > "$W/raw.txt" 2>&1
+  bin/ds9 "$W/in/syn_f160w.fits" -geometry "${OGF_DS_GEOM:-1300x950}" -source scripts/verify_ds10core.tcl > "$W/raw.txt" 2>&1
 grep -c '^PASS' "$W/ds.txt" | sed 's/^/PASS lines: /'; grep -E '^FAIL|^BGERROR' "$W/ds.txt" | head -8; grep '^SUMMARY' "$W/ds.txt"
 grep -q '^SUMMARY failures=0' "$W/ds.txt" && ! grep -q '^FAIL' "$W/ds.txt"
