@@ -905,3 +905,23 @@ If local mode is cut to wave 1 only (no M16, M17), the added cost is about 25-37
 10. Trial/free tier size and verification method; device limits for the local licence; offline grace.
 11. Whether usage analytics for local mode exist at all (default proposed: none, opt-in only).
 12. Whether tiles/viewing traffic is metered (proposed: fair-use allowance, not per request).
+
+
+---
+
+## Memo (ds10-web M12, 2026-10-04): the plan field that exists today, and what chapter 13 can build on
+
+Status: **implemented in the web repo as a plain account field, no billing logic.**  Tiers are *ordered*: 1 = free, 2 = pro, 3 = max, 4 = ultimate (higher = higher tier); they replace the earlier two-step
+free/paid idea.  Facts for the billing chapter (13.4-13.11):
+
+* **Where it lives.** `users.plan` (INTEGER 1..4, default 1) next to the hash-chained usage ledger; nothing in the ledger refers to it and the ledger still writes `pricing_version = "none"`, `tokens_micro = "0"`.
+  A future billing layer decides *which plan a payment buys* and calls the same administrator route (`PATCH /api/v1/admin/users/{id}` `{"plan": n}`); only administrators (or a billing service acting as one) may change it,
+  and every change is an audit-log entry `admin.user.plan` ("1 free -> 2 pro").
+* **Per-plan settings table = the `plans.yaml` of 13.8, as JSON/env today** (`server/ds10web/plans.py`, `DS10_PLANS_FILE`, `DS10_PLAN_<NAME>_<FIELD>`): storage capacity, concurrent jobs, queue length, finished-job
+  retention days, keep-original flag, original retention days, local-file-session auto-restore flag.  **No prices anywhere.**  All numbers are provisional placeholders (free = long-standing defaults 20 GiB / 3 / 20; pro
+  100 GiB / 4 / 50; max 500 GiB / 8 / 100; ultimate 2 TiB / 16 / 200; retention 30 / 90 / 180 / forever days; originals kept from pro up for 180 / 365 / forever days) and must be decided by the owner (open decision 10, 13.14).
+* **Behaviour already wired to it.** account limits are copied from the plan row when the plan is set; retention (job outputs and original uploads) follows the plan; originals are kept from pro up; sessions recorded on
+  files opened from the user's own computer restore automatically from a copy kept with the session on pro and up, a free account gets a notice ("유료 계정에서 원본 보관 시 자동 복원").
+* **Not done, deliberately:** windows/allowances per plan (13.6), holds and settlement, top-ups, taxes, invoices, trial logic, plan expiry or proration, a user-facing plan page (the account menu only shows the plan),
+  per-plan rate limits.  The first administrator's starting plan is an administrator setting (default free).
+* **Compatibility note for 13.9:** because plan and ledger are separate, changing a plan never rewrites ledger entries; a billing layer that wants plan history can read the audit log.
