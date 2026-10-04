@@ -12,14 +12,15 @@ Where the core is looked for (first hit wins; the directory must contain ``ds10c
 
 The interpreter that runs the core: ``--python PATH``, else env ``DS10_PYTHON``, else the interpreter running this launcher (needs numpy and scipy).
 
-  ds10.py [--core-dir D] [--python P] [--where] COMMAND ARGS...      (COMMAND = info, calib, maps, regions, pixtab, bands, validate, run, forced, compare, export-script, list, open, status)
+  ds10.py [--core-dir D] [--python P] [--where] COMMAND ARGS...      (COMMAND = info, calib, maps, regions, pixtab, bands, validate, run, forced, compare, export-script, list, open, status, pack)
 
 Words of the form ``split:LIST`` (the list of band images typed into a dialog) are expanded to separate arguments.  LIST is separated by ``|`` or by new
 lines when it contains one of them (so file names may contain spaces: ``/my data/a.fits|/my data/b.fits``); otherwise by spaces, where a name with
 spaces can be quoted (``"/my data/a.fits" /b.fits``); an unbalanced quote falls back to plain spaces.
 
 ``open BUNDLE --dest DIR`` restores an offline bundle of the web app into the folder DIR (see docs/offline_workflow.md); with an empty or missing ``--dest`` the
-folder is ``~/ds10-offline/<bundle file name without .zip>``.
+folder is ``~/ds10-offline/<bundle file name without .zip>``.  ``pack WORKSPACE [-o FILE]`` writes the return bundle (the script as it stands and the results of the steps that
+were run here) which the web app imports as a NEW, continued session.
 
 Flags of the core command line that the plugin manifest passes through unchanged (listed here so that tools/validate_manifests.py can check the manifest
 against this driver; the real definitions are the argparse options of ``ds10core/cli.py``):  --aperture-radii --background --bkg-stat --cog-radius --core-dir --dir --dest --files --force --frame --image --minarea --mode --out --size --smooth-fwhm --text --thresh --to --work --xy --zp
@@ -86,6 +87,20 @@ def default_open_dest(words):
     return w + ["--dest", os.path.join(os.path.expanduser("~"), "ds10-offline", stem)]
 
 
+def default_pack(words):
+    """``pack [WORKSPACE] [-o FILE]``: an empty ``-o`` value (dropped by the template) means the default file in the workspace folder."""
+    if not words or words[0] != "pack":
+        return words
+    w = list(words)
+    if "-o" in w:
+        i = w.index("-o")
+        if i + 1 >= len(w) or w[i + 1].startswith("--"):
+            del w[i]
+        elif not w[i + 1].strip():
+            del w[i:i + 2]
+    return w
+
+
 def main(argv):
     explicit = python = None
     where = False
@@ -117,7 +132,7 @@ def main(argv):
     words = []
     for w in args:
         words += split_words(w[6:]) if w.startswith("split:") else [w]
-    words = default_open_dest(words)
+    words = default_pack(default_open_dest(words))
     return subprocess.call([py, "-m", "ds10core", *words], env=env)
 
 

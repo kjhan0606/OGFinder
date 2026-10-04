@@ -127,6 +127,12 @@ proc run {} {
     set rep {}; if {[file exists $rr]} {set fd [open $rr r]; set rep [read $fd]; close $fd}
     R open_bundle_script_restored [expr {$ok && [regexp {"status": "restored"} $rep]}] [string range $rep 0 200]
     shot offline_open_bundle_script_run
+    # the way back: pack the workspace into a return bundle for the web import (nothing was run locally here, so only the web step is listed)
+    ::ogf::params::put ds10core pack-workspace $wsd
+    ::ogf::params::put ds10core pack-out [file join $::dir offline back.zip]
+    lassign [run_step ds10core pack-return] ok recs
+    set txt [text_window]
+    R pack_return_step [expr {$ok && [file exists [file join $::dir offline back.zip]] && [string match "*s1: web*" $txt]}] [string range $txt 0 200]
     puts $::fh "SUMMARY failures=$::nf"; close $::fh
     exit
 }

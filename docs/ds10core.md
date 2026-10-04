@@ -50,6 +50,12 @@ session on this computer; the full workflow, limits and the way back are in ds10
   `~/ds10-offline/<bundle name>`). After restoring, the first image of the session is loaded in ds9 with the regions of the session (`regions/regions.reg`), the
   summary opens in the text window and the status line names the workspace; then **Run ds10-script** with `<workspace>/session_script.json` and *Folder with the images* =
   `<workspace>/files` continues the work. Screenshots: `docs/shots/offline_open_bundle_ds9.png`, `offline_open_bundle_script_run.png` (1440x900).
+* The way back: **`ds10 pack field --text`** (GUI: Measure tab, chip **ds10 core** menu, **Pack results for the web server (return bundle)**, parameters *Workspace folder* and
+  *Return bundle file*) writes `<name>-return.zip` with the script as it stands and the results (`results/<step>/...`) of the steps that were run **here**, each with the
+  checksums of its inputs and outputs. Give that file to the web app (Offline export panel, *Import a return bundle...*): the server checks everything again and opens a
+  **new** session "... (continued locally)" in which those steps are marked *local*; the original session is never changed and the server does not recompute the steps.
+  A step without a result from this computer is reported and stays out. Images used by a step must be files of the web account (same content); files that exist only here
+  must be uploaded first. Details and limits: ds10-web `docs/offline_workflow.md`.
 * Paths with spaces: the *Band images* list of the forced-photometry dialog is split at `|` or new lines when the text contains one (names may then contain spaces), else at spaces;
   a name with spaces can be put in double quotes.
 * Limits: the bundle is a snapshot from the moment it was made; for multi-extension originals only the first image HDU is restored; bit-identical new results need the same

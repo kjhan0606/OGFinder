@@ -255,3 +255,34 @@ def test_forced_with_spaces_in_the_band_image_paths(bands, tmp_path):
     new = [str(shutil.copy(p, d / os.path.basename(p))) for p in paths]
     r = run("forced", "split:" + "|".join(new), "--work", tmp_path / "w", "--out", tmp_path / "o", "--thresh", 3.0, "--smooth-fwhm", 2.0, "--minarea", 4, "--text")
     assert "forced photometry:" in r.stdout and (tmp_path / "o" / "forced_catalog.tsv").is_file()
+
+
+def test_default_pack_drops_an_empty_output_name():
+    assert launcher.default_pack(["pack", "/w", "-o", "--text"]) == ["pack", "/w", "--text"]
+    assert launcher.default_pack(["pack", "/w", "-o", "", "--text"]) == ["pack", "/w", "--text"]
+    assert launcher.default_pack(["pack", "/w", "-o", "/x/r.zip", "--text"]) == ["pack", "/w", "-o", "/x/r.zip", "--text"]
+    assert launcher.default_pack(["info", "i.fits"]) == ["info", "i.fits"]
+
+
+def test_manifest_has_pack_return_step():
+    m = json.load(open(os.path.join(PLUGIN, "plugin.json")))
+    st = {s["id"]: s for s in m["steps"]}["pack-return"]
+    assert "pack" in st["cli"] and "{pack-workspace}" in st["cli"] and {p["name"] for p in m["params"]} >= {"pack-workspace", "pack-out"}
+
+
+@needs_core
+def test_pack_writes_the_return_bundle_of_the_workspace(tmp_path):
+    ws = tmp_path / "my workspace"
+    run("open", BUNDLE, "--dest", ws, "--text")
+    script = json.loads((ws / "session_script.json").read_text())
+    script["steps"].append(dict(script["steps"][0], id="s2", params=dict(script["steps"][0]["params"], **{"detect-thresh": 4.0})))
+    (ws / "session_script.json").write_text(json.dumps(script))
+    run("run", ws / "session_script.json", "--text")
+    out = tmp_path / "back" / "my return.zip"
+    r = run("pack", ws, "-o", out, "--text")
+    assert "s1: web" in r.stdout and "s2: local" in r.stdout and out.is_file()
+    import zipfile
+    names = zipfile.ZipFile(out).namelist()
+    assert "return.json" in names and "results/s2/catalog.tsv" in names and not any(n.startswith("results/s1/") for n in names)
+    d = json.loads(run("pack", ws).stdout)                                          # default name: in the workspace folder
+    assert d["path"].startswith(str(ws))

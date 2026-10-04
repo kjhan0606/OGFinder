@@ -315,6 +315,30 @@
    },
    "done_status": "offline bundle restored",
    "after": "OGFDs10coreOpenAfter"
+  },
+  {
+   "id": "pack-return",
+   "label": "Pack results for the web server (return bundle)",
+   "title": "ds10core: pack the return bundle",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [],
+   "record": "ds10core.pack_return",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/ds10.py",
+    "--core-dir",
+    "{core-dir}",
+    "pack",
+    "{pack-workspace}",
+    "-o",
+    "{pack-out}",
+    "--text"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "return bundle written"
   }
  ],
  "params": [
@@ -557,6 +581,22 @@
    "default": "",
    "group": "Offline bundle",
    "help": "An existing, non-empty folder is replaced (the previous copy of this workspace is deleted), so give an empty or new folder."
+  },
+  {
+   "name": "pack-workspace",
+   "label": "Workspace folder (the folder 'Open offline bundle' made)",
+   "type": "file",
+   "default": "",
+   "group": "Offline bundle",
+   "help": "The folder that holds workspace.json. The script session_script.json in it and the results of the steps you ran with 'Run ds10-script' are packed."
+  },
+  {
+   "name": "pack-out",
+   "label": "Return bundle file (empty = in the workspace folder)",
+   "type": "file",
+   "default": "",
+   "group": "Offline bundle",
+   "help": "Give this file to the web app: Offline export panel, 'Import a return bundle...'. The web server checks it and opens a NEW session that continues the original; nothing is overwritten."
   }
  ],
  "tcl": "ds10core.tcl"
