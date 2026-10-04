@@ -146,6 +146,13 @@ EXTRA="$EXTRA trails_tests"
 chk_trails_gui() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_trails.sh" "$OUT/trails_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA trails_gui"
+# stand-alone shell of the shared ds10 compute core (plugins/ds10core; the core itself lives in the ds10-web repository and runs as a separate process): SKIP when it is not found
+chk_ds10core_tests() { "$PY" plugins/ds10core/ds10.py --where >/dev/null 2>&1 || { echo "ds10core not found (DS10_CORE)"; return 77; }
+  "$PY" -m pytest -q plugins/ds10core/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA ds10core_tests"
+chk_ds10core_gui() { need_x || { echo "no X server"; return 77; }
+  DISPLAY_OVERRIDE=$DISP "$HERE/verify_ds10core.sh" "$OUT/ds10core_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
+EXTRA="$EXTRA ds10core_gui"
 # cross-night orbit-fit linking (moving/nightlink.py): synthetic injection + decoys, CLI mode, real MPC astrometry when the network is up (also part of moving_tests)
 chk_nightlink_tests() { "$PY" -m pytest -q moving/tests/test_nightlink.py 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA nightlink_tests"
