@@ -5,7 +5,7 @@
  "short": "Astrafex Core",
  "tab": "Measure",
  "order": 70,
- "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process.",
+ "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg).",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
   "core": "ds10core (Astrafex Web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
@@ -366,6 +366,69 @@
     "mode": "text"
    },
    "done_status": "return bundle written"
+  },
+  {
+   "id": "lsbg",
+   "label": "LSBG finder (shared core)",
+   "title": "Astrafex Core: LSBG finder (Tanoglidis-style cuts)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.lsbg",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_lsbg.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/lsbg_catalog.tsv",
+    "--segmap",
+    "{work}/lsbg_segmap.fits",
+    "--mask-out",
+    "{work}/lsbg_mask.fits",
+    "--summary",
+    "{work}/lsbg_summary.json",
+    "--detect-thresh",
+    "{lsbg-detect-thresh}",
+    "--detect-minarea",
+    "{lsbg-detect-minarea}",
+    "--smooth-fwhm",
+    "{lsbg-smooth-fwhm}",
+    "--mu-eff-min",
+    "{lsbg-mu-eff-min}",
+    "--mu-eff-max",
+    "{lsbg-mu-eff-max}",
+    "--r-eff-min",
+    "{lsbg-r-eff-min}",
+    "--r-eff-max",
+    "{lsbg-r-eff-max}",
+    "--ellipticity-max",
+    "{lsbg-ellipticity-max}",
+    "--mag-zeropoint",
+    "{lsbg-mag-zeropoint}",
+    {
+     "if_file": "{lsbg-r-image}",
+     "argv": [
+      "--r",
+      "{lsbg-r-image}"
+     ]
+    },
+    {
+     "if_file": "{lsbg-i-image}",
+     "argv": [
+      "--i",
+      "{lsbg-i-image}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "lsbg_catalog.tsv"
+   },
+   "done_status": "LSBG finder (shared core)"
   }
  ],
  "params": [
@@ -663,6 +726,83 @@
    "default": "",
    "group": "Offline bundle",
    "help": "Give this file to the web app: Offline export panel, 'Import a return bundle...'. The web server checks it and opens a NEW session that continues the original; nothing is overwritten."
+  },
+  {
+   "name": "lsbg-r-image",
+   "label": "LSBG r-band",
+   "type": "file",
+   "default": "",
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-i-image",
+   "label": "LSBG i-band",
+   "type": "file",
+   "default": "",
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-detect-thresh",
+   "label": "LSBG detect thresh",
+   "type": "float",
+   "default": 1.5,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-detect-minarea",
+   "label": "LSBG minarea",
+   "type": "int",
+   "default": 50,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-smooth-fwhm",
+   "label": "LSBG smooth FWHM",
+   "type": "float",
+   "default": 4.7,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-mu-eff-min",
+   "label": "LSBG \u03bc_eff min",
+   "type": "float",
+   "default": 24.2,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-mu-eff-max",
+   "label": "LSBG \u03bc_eff max",
+   "type": "float",
+   "default": 28.8,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-r-eff-min",
+   "label": "LSBG r_eff min",
+   "type": "float",
+   "default": 2.5,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-r-eff-max",
+   "label": "LSBG r_eff max",
+   "type": "float",
+   "default": 20.0,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-ellipticity-max",
+   "label": "LSBG ellipticity max",
+   "type": "float",
+   "default": 0.7,
+   "group": "LSBG"
+  },
+  {
+   "name": "lsbg-mag-zeropoint",
+   "label": "LSBG mag zeropoint",
+   "type": "string",
+   "default": "auto",
+   "group": "LSBG"
   }
  ],
  "tcl": "ds10core.tcl"
