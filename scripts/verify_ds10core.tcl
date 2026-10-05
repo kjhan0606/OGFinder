@@ -37,7 +37,7 @@ proc run {} {
     set vis [expr {[info exists ogfui(run,ds10core)] && [winfo ismapped $ogfui(run,ds10core)]}]
     set inmore [expr {[info exists ogfui(overflow,Measure)] && "ds10core" in $ogfui(overflow,Measure)}]
     R chip_reachable_in_measure_tab [expr {$vis || $inmore}] "visible=$vis in_more_menu=$inmore"
-    foreach lbl {"Forced photometry (bands -> colours)" "Region statistics (exact pixel membership)" "Pixel table at (X, Y)" "Run astrafex-script / replay.py / bundle"} {
+    foreach lbl {"Forced photometry (bands -> colours, optional PSF match)" "Region statistics (exact pixel membership)" "Pixel table at (X, Y)" "Run astrafex-script / replay.py / bundle"} {
 	R menu_has_[string map {{ } _ ( {} ) {} , {} / _ > _ - _} $lbl] [expr {[info exists ogfui(menu,ds10core)] && [$ogfui(menu,ds10core) index $lbl] ne "none"}]
     }
     R param_defaults [expr {[::ogf::params::get ds10core aperture-radii] eq "0.18,0.3,0.48" && [::ogf::params::get ds10core cog-radius] == 0.72}]
@@ -89,6 +89,21 @@ proc run {} {
     set fd [open [file join $wd forced_catalog.tsv] r]; set hdr [gets $fd]; set nrow 0; while {[gets $fd line] >= 0} {incr nrow}; close $fd
     R forced_catalog_columns [expr {[string match "*COLOR_F105W_F160W*" $hdr] && [string match "*MAG_AUTO_F125W*" $hdr] && $nrow >= 5}] "rows=$nrow"
     shot astrafex_05_forced_photometry_result
+    # ---- forced photometry again with PSF matching for colours
+    ::ogf::params::put ds10core psf-match 1
+    ::ogf::params::put ds10core psf-method fourier
+    ::ogf::params::put ds10core psf-target broadest
+    lassign [run_step ds10core forced] ok recs
+    set txt [text_window]
+    set wd2 [file join [OGFSessWorkDir] ds10core forced_out]
+    R forced_psf_ok [expr {$ok && [file exists [file join $wd2 forced_summary.json]]}] $recs
+    set summ {}
+    if {[file exists [file join $wd2 forced_summary.json]]} {
+	set fd [open [file join $wd2 forced_summary.json] r]; set summ [read $fd]; close $fd
+    }
+    R forced_psf_summary [expr {[regexp {"enabled": true} $summ] || [regexp {"enabled":true} $summ]}] [string range $summ 0 200]
+    shot psf_forced_match_result
+    ::ogf::params::put ds10core psf-match 0
     # ---- run the generated step list (web-compatible astrafex-script/1) as a script
     ::ogf::params::put ds10core script [file join $wd script.json]
     ::ogf::params::put ds10core files-dir $::dir
