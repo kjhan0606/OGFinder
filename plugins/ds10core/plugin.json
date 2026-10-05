@@ -5,7 +5,7 @@
  "short": "Astrafex Core",
  "tab": "Measure",
  "order": 70,
- "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process.",
+ "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process.",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
   "core": "ds10core (Astrafex Web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
@@ -229,8 +229,8 @@
   },
   {
    "id": "forced",
-   "label": "Forced photometry (bands -> colours)",
-   "title": "Astrafex Core: multi-band forced photometry",
+   "label": "Forced photometry (bands -> colours, optional PSF match)",
+   "title": "Astrafex Core: multi-band forced photometry (optional PSF matching)",
    "session": "AUTO",
    "stage": "measure",
    "needs": [],
@@ -256,6 +256,33 @@
     "{work}/ds10core/forced",
     "--out",
     "{work}/ds10core/forced_out",
+    {
+     "if": "psf-match",
+     "argv": [
+      "--psf-match"
+     ]
+    },
+    {
+     "if": "psf-match",
+     "argv": [
+      "--psf-target",
+      "{psf-target}"
+     ]
+    },
+    {
+     "if": "psf-match",
+     "argv": [
+      "--psf-method",
+      "{psf-method}"
+     ]
+    },
+    {
+     "if": "psf-match",
+     "argv": [
+      "--psf-size",
+      "{psf-size}"
+     ]
+    },
     "--text"
    ],
    "output": {
@@ -549,6 +576,45 @@
    "min": 0.1,
    "max": 10.0,
    "unit": "arcsec"
+  },
+  {
+   "name": "psf-match",
+   "label": "PSF matching for colours",
+   "type": "bool",
+   "default": false,
+   "group": "Forced photometry",
+   "help": "Homogenise bands to a common PSF before colours. COLOUR_* from matched images; MAG/FLUX totals from the originals. See Astrafex Web docs/psf_matching.md."
+  },
+  {
+   "name": "psf-target",
+   "label": "Target PSF band",
+   "type": "string",
+   "default": "broadest",
+   "group": "Forced photometry",
+   "help": "Band label to match to, or 'broadest'."
+  },
+  {
+   "name": "psf-method",
+   "label": "Matching kernel",
+   "type": "choice",
+   "choices": [
+    "fourier",
+    "gaussian",
+    "moffat"
+   ],
+   "default": "fourier",
+   "group": "Forced photometry",
+   "help": "fourier = Aniano Fourier-ratio; gaussian / moffat = analytic homogenisation."
+  },
+  {
+   "name": "psf-size",
+   "label": "Empirical PSF stamp (pixels)",
+   "type": "int",
+   "default": 25,
+   "group": "Forced photometry",
+   "min": 11,
+   "max": 101,
+   "help": "Odd stamp size for stacking isolated stars."
   },
   {
    "name": "script",

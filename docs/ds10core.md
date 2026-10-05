@@ -26,7 +26,7 @@ OGFinder is the second shell.
 | `astrafex maps IMAGE suggest\|auto\|associate\|show\|clear [--dir D --map F --kind K]` | weight / rms / exposure / mask map association (sidecar `IMAGE.ds10maps.json`) |
 | `astrafex regions convert\|stats\|mask REGFILE --image IMG [...]` | DS9 `.reg` / JSON / CSV, frames image/fk5, exact pixel membership statistics (background region, median/mean), mask FITS |
 | `astrafex pixtab IMAGE --xy X Y [--size N --mode value\|ra\|dec --csv F --json]` | pixel table (float32 data, WCS per cell) |
-| `astrafex forced IMG IMG [IMG...] --out DIR` | detection image -> detect -> forced photometry (aperture / Kron-like / isophotal, correlated-noise errors, upper limits, aperture corrections) -> colours; writes `forced_catalog.*`, `detect_*`, `detection*.fits`, `script.json` |
+| `astrafex forced IMG IMG [IMG...] --out DIR [--psf-match]` | detection image -> detect -> forced photometry (aperture / Kron-like / isophotal, correlated-noise errors, upper limits, aperture corrections) -> colours; optional `--psf-match` homogenises bands for colours (Aniano/Boucaud kernels; see Astrafex Web `docs/psf_matching.md`); writes `forced_catalog.*`, `detect_*`, `detection*.fits`, `script.json` |
 | `astrafex run SCRIPT [--files DIR\|FITS...]` | run a `astrafex-script/1` step list, a web-exported `replay.py` (`--inputs`), or a bundle `.zip` (replay local mode) |
 | `astrafex open BUNDLE [--dest DIR --force --text]`, `astrafex status [WORKSPACE]` | restore an **offline bundle** of the web app (Offline export button) into a workspace folder and show it; see below |
 | `astrafex validate SCRIPT`, `export-script SOURCE`, `compare A B`, `list` | validate against the manifests; replay/bundle -> step list; sha256 + tolerance comparison; plugins/steps |

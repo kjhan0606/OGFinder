@@ -327,3 +327,11 @@ def test_the_fixture_is_a_real_pre_rename_bundle_and_still_opens(tmp_path):
     assert (ws / "workspace.json").is_file()
     out = run("run", ws / "session_script.json", env={"HOME": str(tmp_path)})
     assert json.loads(out.stdout)["ok"]
+
+
+def test_manifest_exposes_psf_match_params():
+    m = json.load(open(os.path.join(PLUGIN, "plugin.json")))
+    names = {q["name"] for q in m["params"]}
+    assert {"psf-match", "psf-target", "psf-method", "psf-size"} <= names
+    forced = next(s for s in m["steps"] if s["id"] == "forced")
+    assert any(isinstance(x, dict) and x.get("if") == "psf-match" for x in forced["cli"])

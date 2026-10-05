@@ -23,7 +23,7 @@ folder is ``~/astrafex-offline/<bundle file name without .zip>``.  ``pack WORKSP
 were run here) which the web app imports as a NEW, continued session.
 
 Flags of the core command line that the plugin manifest passes through unchanged (listed here so that tools/validate_manifests.py can check the manifest
-against this driver; the real definitions are the argparse options of ``ds10core/cli.py``):  --aperture-radii --background --bkg-stat --cog-radius --core-dir --dir --dest --files --force --frame --image --minarea --mode --out --size --smooth-fwhm --text --thresh --to --work --xy --zp
+against this driver; the real definitions are the argparse options of ``ds10core/cli.py``):  --aperture-radii --background --bkg-stat --cog-radius --core-dir --dir --dest --files --force --frame --image --minarea --mode --out --size --smooth-fwhm --text --thresh --to --work --xy --zp --psf-match --psf-target --psf-method --psf-size
 """
 import json
 import os
