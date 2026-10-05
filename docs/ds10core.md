@@ -39,9 +39,9 @@ run script, **open offline bundle**. Results open in the text window; every run 
 **Not done:** no interactive region editing/drawing beyond ds9's own (regions are used from `.reg` files - ds9's own Region menu saves them), no table view of the forced
 catalogue inside the catalogue panel (the files are written and the path is shown), no band picking from the loaded frames, no mask hand-over to the shared
 mask manager, no GUI progress strip for long runs beyond the job runner's.
-GUI check: `scripts/verify_ds10core.sh` (real `bin/ds9`, 29 checks); screenshots `docs/shots/standalone_*.png`:
-`standalone_01_chip_menu_measure_tab`, `standalone_01b_plugin_menu`, `standalone_02_calibration_result`, `standalone_03_region_statistics`,
-`standalone_04_pixel_table`, `standalone_05_forced_photometry_result`.
+GUI check: `scripts/verify_ds10core.sh` (real `bin/ds9`, 29 checks); screenshots `docs/shots/astrafex_*.png`:
+`astrafex_01_chip_menu_measure_tab`, `astrafex_01b_plugin_menu`, `astrafex_02_calibration_result`, `astrafex_03_region_statistics`,
+`astrafex_04_pixel_table`, `astrafex_05_forced_photometry_result`.
 
 ## Continue a web session here (offline bundle)
 When the network to the Astrafex Web server drops, a bundle made with the web app's **Offline export** button (or kept up to date by its automatic refresh) restores the
@@ -54,7 +54,7 @@ session on this computer; the full workflow, limits and the way back are in Astr
 * GUI: Measure tab, chip **Astrafex Core** menu, **Open offline bundle (continue a web session here)**. Parameters *Offline bundle* and *Folder to restore into* (empty =
   `~/astrafex-offline/<bundle name>`). After restoring, the first image of the session is loaded in ds9 with the regions of the session (`regions/regions.reg`), the
   summary opens in the text window and the status line names the workspace; then **Run ds10-script** with `<workspace>/session_script.json` and *Folder with the images* =
-  `<workspace>/files` continues the work. Screenshots: `docs/shots/offline_open_bundle_ds9.png`, `offline_open_bundle_script_run.png` (1440x900).
+  `<workspace>/files` continues the work. Screenshots: `docs/shots/astrafex_offline_open_bundle_ds9.png`, `astrafex_offline_open_bundle_script_run.png` (1440x900).
 * The way back: **`astrafex pack field --text`** (GUI: Measure tab, chip **Astrafex Core** menu, **Pack results for the web server (return bundle)**, parameters *Workspace folder* and
   *Return bundle file*) writes `<name>-return.zip` with the script as it stands and the results (`results/<step>/...`) of the steps that were run **here**, each with the
   checksums of its inputs and outputs. Give that file to the web app (Offline export panel, *Import a return bundle...*): the server checks everything again and opens a

@@ -42,11 +42,11 @@ proc run {} {
     }
     R param_defaults [expr {[::ogf::params::get ds10core aperture-radii] eq "0.18,0.3,0.48" && [::ogf::params::get ds10core cog-radius] == 0.72}]
     R core_found [expr {![catch {exec $::env(OGFINDER_PYTHON) plugins/ds10core/ds10.py --where} where]}] $where
-    shot standalone_01_chip_menu_measure_tab
+    shot astrafex_01_chip_menu_measure_tab
     # the plugin's own menu (all steps) posted next to the panel
     set mm [expr {$inmore ? "$ogfui(more,Measure).m.p_ds10core" : $ogfui(menu,ds10core)}]
     catch {$mm post [expr {[winfo rootx .] + 760}] [expr {[winfo rooty .] + 120}]}
-    shot standalone_01b_plugin_menu
+    shot astrafex_01b_plugin_menu
     catch {$mm unpost}
     # ---- header calibration of the open image (primary action of the chip)
     lassign [run_step ds10core calib] ok recs
@@ -54,7 +54,7 @@ proc run {} {
     R calib_step_ok [expr {$ok}] $recs
     R calib_text [expr {[string match "*AB zero point: 25.9463*" $txt] && [string match "*F160W*" $txt] && [string match "*origin: header*" $txt]}] [string range $txt 0 200]
     R calib_recorded [expr {[lindex $recs 0 0] eq "ds10core.calib"}] $recs
-    shot standalone_02_calibration_result
+    shot astrafex_02_calibration_result
     # ---- maps (nothing to find next to the synthetic image: the step must run and say so)
     lassign [run_step ds10core maps] ok recs
     set txt [text_window]
@@ -64,7 +64,7 @@ proc run {} {
     lassign [run_step ds10core regions-stats] ok recs
     set txt [text_window]
     R regions_stats_text [expr {$ok && [string match "*circle*" $txt] && [string match "*box*" $txt] && [string match "*annulus*" $txt] && [string match "*n_pix*" $txt]}] [string range $txt 0 300]
-    shot standalone_03_region_statistics
+    shot astrafex_03_region_statistics
     lassign [run_step ds10core regions-mask] ok recs
     set mf [file join [OGFSessWorkDir] ds10core regions_mask.fits]
     R regions_mask_file [expr {$ok && [file exists $mf] && [file size $mf] > 1000}] $mf
@@ -75,7 +75,7 @@ proc run {} {
     lassign [run_step ds10core pixtab] ok recs
     set txt [text_window]
     R pixtab_text [expr {$ok && [llength [split [string trim $txt] "\n"]] >= 9}] [string range $txt 0 120]
-    shot standalone_04_pixel_table
+    shot astrafex_04_pixel_table
     # ---- forced photometry on the three synthetic bands
     ::ogf::params::put ds10core band-images "[file join $::dir syn_f105w.fits] [file join $::dir syn_f125w.fits] [file join $::dir syn_f160w.fits]"
     ::ogf::params::put ds10core thresh 3.0
@@ -88,7 +88,7 @@ proc run {} {
     R forced_text [expr {[string match "*forced photometry:*" $txt] && [string match "*F105W*" $txt] && [string match "*header*" $txt]}] [string range $txt 0 300]
     set fd [open [file join $wd forced_catalog.tsv] r]; set hdr [gets $fd]; set nrow 0; while {[gets $fd line] >= 0} {incr nrow}; close $fd
     R forced_catalog_columns [expr {[string match "*COLOR_F105W_F160W*" $hdr] && [string match "*MAG_AUTO_F125W*" $hdr] && $nrow >= 5}] "rows=$nrow"
-    shot standalone_05_forced_photometry_result
+    shot astrafex_05_forced_photometry_result
     # ---- run the generated step list (web-compatible astrafex-script/1) as a script
     ::ogf::params::put ds10core script [file join $wd script.json]
     ::ogf::params::put ds10core files-dir $::dir
@@ -118,7 +118,7 @@ proc run {} {
     catch {$current(frame) marker select all; set nmark [$current(frame) get marker select number]; $current(frame) marker unselect all}
     R open_bundle_regions_in_ds9 [expr {$nmark == 1}] "markers=$nmark"
     R open_bundle_workspace_recorded [expr {[::ogf::cat::get ds10core,workspace ?] eq $wsd}]
-    shot offline_open_bundle_ds9
+    shot astrafex_offline_open_bundle_ds9
     # the restored script runs in the workspace and reuses the stored result
     ::ogf::params::put ds10core script [file join $wsd session_script.json]
     ::ogf::params::put ds10core files-dir [file join $wsd files]
@@ -126,7 +126,7 @@ proc run {} {
     set rr [file join [OGFSessWorkDir] ds10core run_out run_report.json]
     set rep {}; if {[file exists $rr]} {set fd [open $rr r]; set rep [read $fd]; close $fd}
     R open_bundle_script_restored [expr {$ok && [regexp {"status": "restored"} $rep]}] [string range $rep 0 200]
-    shot offline_open_bundle_script_run
+    shot astrafex_offline_open_bundle_script_run
     # the way back: pack the workspace into a return bundle for the web import (nothing was run locally here, so only the web step is listed)
     ::ogf::params::put ds10core pack-workspace $wsd
     ::ogf::params::put ds10core pack-out [file join $::dir offline back.zip]

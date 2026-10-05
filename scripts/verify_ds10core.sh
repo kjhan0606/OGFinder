@@ -1,6 +1,6 @@
 #!/bin/bash
 # Real-ds9 test of plugins/ds10core (stand-alone shell of the shared Astrafex Core): chip + menu entries, header calibration, region statistics / mask, pixel table,
-# multi-band forced photometry on synthetic bands, astrafex-script run, session records; optional screenshots (docs/shots/standalone_*.png).
+# multi-band forced photometry on synthetic bands, astrafex-script run, session records; optional screenshots (docs/shots/astrafex_*.png).
 #   scripts/verify_ds10core.sh [workdir]        env: DISPLAY_OVERRIDE=:77  OGF_SHOTS=docs/shots (screenshots on when set)  OGF_DS_GEOM=1300x950 (ds9 window)
 # SKIP (exit 77) when the ds10core package of Astrafex Web cannot be found.
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
