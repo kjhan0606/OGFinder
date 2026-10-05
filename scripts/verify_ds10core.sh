@@ -1,8 +1,8 @@
 #!/bin/bash
-# Real-ds9 test of plugins/ds10core (stand-alone shell of the shared ds10 core): chip + menu entries, header calibration, region statistics / mask, pixel table,
-# multi-band forced photometry on synthetic bands, ds10-script run, session records; optional screenshots (docs/shots/standalone_*.png).
+# Real-ds9 test of plugins/ds10core (stand-alone shell of the shared Astrafex Core): chip + menu entries, header calibration, region statistics / mask, pixel table,
+# multi-band forced photometry on synthetic bands, astrafex-script run, session records; optional screenshots (docs/shots/standalone_*.png).
 #   scripts/verify_ds10core.sh [workdir]        env: DISPLAY_OVERRIDE=:77  OGF_SHOTS=docs/shots (screenshots on when set)  OGF_DS_GEOM=1300x950 (ds9 window)
-# SKIP (exit 77) when the ds10core package of ds10-web cannot be found.
+# SKIP (exit 77) when the ds10core package of Astrafex Web cannot be found.
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
 PY="${OGFINDER_PYTHON:-/workspace/ogf_venv/bin/python3}"; export OGFINDER_PYTHON="$PY"
 W="${1:-$(mktemp -d /tmp/ogf_ds10.XXXXXX)}"; rm -rf "$W"; mkdir -p "$W/home" "$W/in"

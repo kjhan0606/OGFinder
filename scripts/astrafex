@@ -1,0 +1,11 @@
+#!/bin/sh
+# astrafex - command line of Astrafex Core, the compute core shared by Astrafex Web and Astrafex Desktop (regions, pixel table, calibration, maps, forced photometry,
+# astrafex-script / replay runner, offline bundles).
+#   astrafex run script.json [--files DIR_OR_FITS ...]     astrafex open bundle.zip --dest DIR     astrafex pack WORKSPACE     astrafex --where
+# Runs plugins/ds10core/ds10.py with the OGFinder venv (numpy + scipy); the compute code lives in the Astrafex Web repository (package ds10core / astrafex_core, see
+# docs/ds10core.md).  `scripts/ds10` is the former name of this command and still works.
+here=$(cd "$(dirname "$0")/.." && pwd)
+py=${ASTRAFEX_PYTHON:-${DS10_PYTHON:-}}
+[ -z "$py" ] && [ -x /workspace/ogf_venv/bin/python3 ] && py=/workspace/ogf_venv/bin/python3
+[ -z "$py" ] && py=python3
+exec "$py" "$here/plugins/ds10core/ds10.py" "$@"

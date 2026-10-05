@@ -1,5 +1,7 @@
 # OGFinder license audit for commercialization
 
+> **Naming note (2026-10):** the product family is now called Astrafex ("ds10-web" = Astrafex Web, the stand-alone OGFinder = Astrafex Desktop, package `ds10core` = Astrafex Core). This document is kept as written at the time; see Astrafex Web `docs/naming.md`.
+
 **Status: engineering audit, NOT legal advice.** Prepared 2026-10-03 (Asia/Seoul) from the repository tree at `/workspace/OGFinder` (HEAD at start of audit: `dfd0593a5`; the tree had uncommitted edits by another worker, which were not touched), the Python environment `/workspace/ogf_venv` and a few public web pages. Nothing here is a legal opinion. Licence texts are interpreted by courts, not by this document; every "OK" below means "no blocker found by reading the files", not "cleared". **Have a qualified open-source/IP lawyer review before any commercial release.** Items marked **[UNVERIFIED]** were not confirmed from a primary source in this audit.
 
 Goal of the audit: commercialization of OGFinder (customized SAOImageDS9 8.7 + OGFinder plugins + `ogfkit` Python + C code + `ai_bridge`) as (A) a **stand-alone binary** and (B) a **web SaaS** ("ds10-web", custom, not JS9).

@@ -1,4 +1,4 @@
-# GUI test of plugins/ds10core (stand-alone shell of the shared ds10 core).  Run through scripts/verify_ds10core.sh.
+# GUI test of plugins/ds10core (stand-alone shell of the shared Astrafex Core).  Run through scripts/verify_ds10core.sh.
 global catpanel current ds9 ogfui
 set ::fh [open $::env(OGF_DS_OUT) w]; set ::nf 0
 set ::dir $::env(OGF_DS_DIR)
@@ -37,7 +37,7 @@ proc run {} {
     set vis [expr {[info exists ogfui(run,ds10core)] && [winfo ismapped $ogfui(run,ds10core)]}]
     set inmore [expr {[info exists ogfui(overflow,Measure)] && "ds10core" in $ogfui(overflow,Measure)}]
     R chip_reachable_in_measure_tab [expr {$vis || $inmore}] "visible=$vis in_more_menu=$inmore"
-    foreach lbl {"Forced photometry (bands -> colours)" "Region statistics (exact pixel membership)" "Pixel table at (X, Y)" "Run ds10-script / replay.py / bundle"} {
+    foreach lbl {"Forced photometry (bands -> colours)" "Region statistics (exact pixel membership)" "Pixel table at (X, Y)" "Run astrafex-script / replay.py / bundle"} {
 	R menu_has_[string map {{ } _ ( {} ) {} , {} / _ > _ - _} $lbl] [expr {[info exists ogfui(menu,ds10core)] && [$ogfui(menu,ds10core) index $lbl] ne "none"}]
     }
     R param_defaults [expr {[::ogf::params::get ds10core aperture-radii] eq "0.18,0.3,0.48" && [::ogf::params::get ds10core cog-radius] == 0.72}]
@@ -89,7 +89,7 @@ proc run {} {
     set fd [open [file join $wd forced_catalog.tsv] r]; set hdr [gets $fd]; set nrow 0; while {[gets $fd line] >= 0} {incr nrow}; close $fd
     R forced_catalog_columns [expr {[string match "*COLOR_F105W_F160W*" $hdr] && [string match "*MAG_AUTO_F125W*" $hdr] && $nrow >= 5}] "rows=$nrow"
     shot standalone_05_forced_photometry_result
-    # ---- run the generated step list (web-compatible ds10-script/1) as a script
+    # ---- run the generated step list (web-compatible astrafex-script/1) as a script
     ::ogf::params::put ds10core script [file join $wd script.json]
     ::ogf::params::put ds10core files-dir $::dir
     lassign [run_step ds10core run-script] ok recs

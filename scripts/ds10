@@ -1,9 +1,3 @@
 #!/bin/sh
-# ds10 - command line of the shared ds10 compute core (regions, pixel table, calibration, maps, forced photometry, ds10-script / replay runner).
-#   ds10 run script.json [--files DIR_OR_FITS ...]     ds10 regions stats r.reg --image f.fits --text     ds10 --where
-# Runs plugins/ds10core/ds10.py with the OGFinder venv (numpy + scipy); the compute code lives in ds10-web (see docs/ds10core.md).
-here=$(cd "$(dirname "$0")/.." && pwd)
-py=${DS10_PYTHON:-}
-[ -z "$py" ] && [ -x /workspace/ogf_venv/bin/python3 ] && py=/workspace/ogf_venv/bin/python3
-[ -z "$py" ] && py=python3
-exec "$py" "$here/plugins/ds10core/ds10.py" "$@"
+# ds10 - former name of `scripts/astrafex` (kept so that existing scripts and notes keep working); forwards all arguments.
+exec "$(cd "$(dirname "$0")" && pwd)/astrafex" "$@"

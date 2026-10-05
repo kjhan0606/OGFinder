@@ -1,5 +1,5 @@
-"""Stand-alone shell of the shared ds10 core: manifest/licence tags, launcher, and the command line against independent numpy references.
-The compute core (package ds10core of the ds10-web repository) is optional here: tests that need it are skipped when it cannot be found.
+"""Stand-alone shell of the shared Astrafex Core: manifest/licence tags, launcher, and the command line against independent numpy references.
+The compute core (package ds10core of the Astrafex Web repository) is optional here: tests that need it are skipped when it cannot be found.
 Nothing in this file imports ds10core: it is only ever run as a separate process, exactly like the plugin does."""
 import csv
 import hashlib
@@ -110,7 +110,7 @@ def test_regions_stats_mask_and_convert_against_numpy(img, tmp_path):
     ref = {"circle": (xs - 100) ** 2 + (ys - 80) ** 2 <= 10.3 ** 2, "box": (abs(xs - 200.3) <= 10) & (abs(ys - 120.2) <= 6),
            "annulus": ((xs - 100) ** 2 + (ys - 80) ** 2 > 15.3 ** 2) & ((xs - 100) ** 2 + (ys - 80) ** 2 <= 25.3 ** 2)}
     # (regions whose boundary passes exactly through pixel centres can flip a few pixels when an image-frame region is stored in sky coordinates:
-    #  docs/regions_and_pixel_table.md of ds10-web; the test therefore uses boundaries between pixel centres)
+    #  docs/regions_and_pixel_table.md of Astrafex Web; the test therefore uses boundaries between pixel centres)
     for row in st["stats"]:
         m = ref[row["shape"]]
         assert row["n_pix"] == int(m.sum()), (row["shape"], row["n_pix"], int(m.sum()))
@@ -172,7 +172,7 @@ def test_forced_chain_runs_and_script_run_reproduces_it_exactly(bands, tmp_path)
     assert summ["n_sources"] >= 5
     header = open(out / "forced_catalog.tsv").readline().rstrip("\n").split("\t")
     assert any(c.startswith("MAG_AUTO_F105W") for c in header) and any(c.startswith("COLOR_F105W_F160W") for c in header)
-    # the same step list run through `ds10 run` gives byte-identical catalogues
+    # the same step list run through `astrafex run` gives byte-identical catalogues
     run("run", out / "script.json", "--files", *paths, "--work", tmp_path / "w2", "--out", tmp_path / "out2")
     h = lambda q: hashlib.sha256(q.read_bytes()).hexdigest()
     assert h(tmp_path / "w1" / "steps" / "s3" / "work" / "catalog.tsv") == h(tmp_path / "w2" / "steps" / "s3" / "work" / "catalog.tsv")
@@ -183,16 +183,16 @@ def test_forced_chain_runs_and_script_run_reproduces_it_exactly(bands, tmp_path)
 @needs_core
 def test_run_validates_before_running_and_reports_bad_scripts(tmp_path):
     bad = tmp_path / "bad.json"
-    bad.write_text(json.dumps({"schema": "ds10-script/1", "steps": [{"id": "s1", "plugin": "nosuch", "step": "x"}]}))
+    bad.write_text(json.dumps({"schema": "astrafex-script/1", "steps": [{"id": "s1", "plugin": "nosuch", "step": "x"}]}))
     r = run("run", bad, "--work", tmp_path / "w", check=False)
     assert r.returncode == 2 and "not valid" in r.stderr
     drop = tmp_path / "drop.json"
-    drop.write_text(json.dumps({"schema": "ds10-script/1", "steps": [{"id": "s1", "ui": "delete_file"}]}))
+    drop.write_text(json.dumps({"schema": "astrafex-script/1", "steps": [{"id": "s1", "ui": "delete_file"}]}))
     assert run("run", drop, "--work", tmp_path / "w3", check=False).returncode == 2
 
 
-# ------------------------------------------------------------------------------------------------ offline bundle of the web app (ds10 open) + paths with spaces
-BUNDLE = os.path.join(HERE, "data", "offline_bundle_small.zip")           # made by ds10-web tools/make_offline_fixture.py: one 96x96 image, one region, one detect job
+# ------------------------------------------------------------------------------------------------ offline bundle of the web app (astrafex open) + paths with spaces
+BUNDLE = os.path.join(HERE, "data", "offline_bundle_small.zip")           # made by Astrafex Web tools/make_offline_fixture.py: one 96x96 image, one region, one detect job
 
 
 def test_split_words_separators_and_spaces_in_names():
@@ -203,12 +203,12 @@ def test_split_words_separators_and_spaces_in_names():
     assert launcher.split_words("/o'brien/a.fits /b.fits") == ["/o'brien/a.fits", "/b.fits"]          # unbalanced quote: plain spaces
 
 
-def test_open_without_dest_goes_to_home_ds10_offline():
+def test_open_without_dest_goes_to_home_astrafex_offline():
     home = os.path.expanduser("~")
     w = launcher.default_open_dest(["open", "/x/y/session one.zip", "--force", "--text"])
-    assert w[-2:] == ["--dest", os.path.join(home, "ds10-offline", "session one")]
-    assert launcher.default_open_dest(["open", "b.zip", "--dest", "", "--force"]) == ["open", "b.zip", "--force", "--dest", os.path.join(home, "ds10-offline", "b")]
-    assert launcher.default_open_dest(["open", "b.zip", "--dest", "--force"]) == ["open", "b.zip", "--force", "--dest", os.path.join(home, "ds10-offline", "b")]   # empty value dropped by the template
+    assert w[-2:] == ["--dest", os.path.join(home, "astrafex-offline", "session one")]
+    assert launcher.default_open_dest(["open", "b.zip", "--dest", "", "--force"]) == ["open", "b.zip", "--force", "--dest", os.path.join(home, "astrafex-offline", "b")]
+    assert launcher.default_open_dest(["open", "b.zip", "--dest", "--force"]) == ["open", "b.zip", "--force", "--dest", os.path.join(home, "astrafex-offline", "b")]   # empty value dropped by the template
     assert launcher.default_open_dest(["open", "b.zip", "--dest", "/w"]) == ["open", "b.zip", "--dest", "/w"]
     assert launcher.default_open_dest(["info", "i.fits"]) == ["info", "i.fits"]
 
@@ -228,7 +228,7 @@ def test_open_restores_the_web_session_and_continues(tmp_path):
     assert "field96.fits" in r.stdout and "regions:" in r.stdout and "steps with stored results: s1" in r.stdout
     assert (ws / "files" / "field96.fits").is_file() and (ws / "regions" / "regions.reg").is_file() and (ws / "session_script.json").is_file()
     wsj = json.loads((ws / "workspace.json").read_text())
-    assert wsj["schema"] == "ds10-workspace/1" and wsj["files"][0]["kind"] == "original" and wsj["steps_with_results"] == ["s1"]
+    assert wsj["schema"] == "astrafex-workspace/1" and wsj["files"][0]["kind"] == "original" and wsj["steps_with_results"] == ["s1"]
     again = run("open", BUNDLE, "--dest", ws, check=False)
     assert again.returncode != 0 and "--force" in again.stderr                          # never overwrites silently
     run("open", BUNDLE, "--dest", ws, "--force", "--text")
@@ -243,7 +243,7 @@ def test_open_restores_the_web_session_and_continues(tmp_path):
 @needs_core
 def test_open_default_destination_under_home(tmp_path):
     r = run("open", BUNDLE, "--text", env={"HOME": str(tmp_path)})
-    assert (tmp_path / "ds10-offline" / "offline_bundle_small" / "workspace.json").is_file() and str(tmp_path / "ds10-offline") in r.stdout
+    assert (tmp_path / "astrafex-offline" / "offline_bundle_small" / "workspace.json").is_file() and str(tmp_path / "astrafex-offline") in r.stdout
 
 
 @needs_core
@@ -286,3 +286,44 @@ def test_pack_writes_the_return_bundle_of_the_workspace(tmp_path):
     assert "return.json" in names and "results/s2/catalog.tsv" in names and not any(n.startswith("results/s1/") for n in names)
     d = json.loads(run("pack", ws).stdout)                                          # default name: in the workspace folder
     assert d["path"].startswith(str(ws))
+
+
+# ------------------------------------------------------------------------------------------------ Astrafex names + backward compatibility
+def test_user_visible_labels_say_astrafex_core_and_ids_are_kept():
+    m = json.load(open(os.path.join(PLUGIN, "plugin.json")))
+    assert m["short"] == "Astrafex Core" and m["name"].startswith("Astrafex Core")
+    assert m["id"] == "ds10core"                                                   # internal: parameter file, session records and the web manifests depend on it
+    for s in m["steps"]:
+        assert "ds10" not in s.get("label", "") + s.get("title", "") + s.get("done_status", ""), s["id"]
+        assert s["record"].startswith("ds10core.")
+
+
+def test_scripts_astrafex_and_the_former_ds10_name_both_work():
+    outs = []
+    for name in ("astrafex", "ds10"):
+        r = subprocess.run([os.path.join(ROOT, "scripts", name), "--where"], capture_output=True, text=True)
+        assert r.returncode in (0, 3), (name, r.stderr)
+        outs.append(r.stdout)
+    assert outs[0] == outs[1]
+
+
+@needs_core
+def test_astrafex_env_aliases_and_old_ones(tmp_path):
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("DS10_", "ASTRAFEX_"))}
+    for var in ("ASTRAFEX_CORE", "DS10_CORE"):
+        r = subprocess.run([sys.executable, os.path.join(PLUGIN, "ds10.py"), "--where"], capture_output=True, text=True, env=dict(env, **{var: CORE}))
+        d = json.loads(r.stdout)
+        assert d["core_dir"] == CORE and d["found_by"] in ("DS10_CORE", "ASTRAFEX_CORE")
+
+
+@needs_core
+def test_the_fixture_is_a_real_pre_rename_bundle_and_still_opens(tmp_path):
+    import zipfile
+    with zipfile.ZipFile(BUNDLE) as z:
+        assert json.loads(z.read("offline/offline.json"))["schema"] == "ds10-offline/1"
+        assert json.loads(z.read("offline/session_script.json"))["schema"] == "ds10-script/1"
+    ws = tmp_path / "w"
+    r = run("open", BUNDLE, "--dest", ws, "--text", env={"HOME": str(tmp_path)})
+    assert (ws / "workspace.json").is_file()
+    out = run("run", ws / "session_script.json", env={"HOME": str(tmp_path)})
+    assert json.loads(out.stdout)["ok"]

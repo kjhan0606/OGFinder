@@ -146,7 +146,7 @@ EXTRA="$EXTRA trails_tests"
 chk_trails_gui() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_trails.sh" "$OUT/trails_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA trails_gui"
-# stand-alone shell of the shared ds10 compute core (plugins/ds10core; the core itself lives in the ds10-web repository and runs as a separate process): SKIP when it is not found
+# stand-alone shell of the shared Astrafex Core (plugins/ds10core; the core itself lives in the Astrafex Web repository and runs as a separate process): SKIP when it is not found
 chk_ds10core_tests() { "$PY" plugins/ds10core/ds10.py --where >/dev/null 2>&1 || { echo "ds10core not found (DS10_CORE)"; return 77; }
   "$PY" -m pytest -q plugins/ds10core/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA ds10core_tests"

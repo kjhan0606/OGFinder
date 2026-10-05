@@ -22,16 +22,25 @@
 
 Data sets and AI services have their own terms (audit sections 3.8 and 5); they are not covered by this note.
 
+## Product name and attribution
+
+The product family is called **Astrafex**; the stand-alone program is called **Astrafex Desktop (based on the OGFinder tool set)**.  This is a product name only.  The
+licensed work stays "OGFinder" here: the copyright and licence notices of SAOImageDS9 (Smithsonian Astrophysical Observatory), AST, SEP, tcllib, ... and the GPL-3.0
+statement above name the works they apply to, are part of the source tree and of the GPL attribution/provenance, and are not edited by the rename.  The repository, the
+directory names, the plugin infrastructure and the code that is called OGFinder in comments keep that name.  Nothing in "Astrafex Desktop" implies endorsement by the
+SAOImageDS9 project; the ds9 name is used only to say what the program is derived from.  Trademark clearance for "Astrafex" (KR/EU) is pending; the rename is mechanical
+and reversible (Astrafex Web `docs/naming.md`).
+
 ## ds10core is a separate package, run as a separate process
 
 The shared compute core `ds10core` (regions, pixel table, calibration, map association, forced photometry, script runner, offline bundles) is **not part of this
-repository**.  It is the Python package `server/ds10core` of the separate ds10-web repository, which keeps its **own, still undecided licence** (it is not GPL and
+repository**.  It is the Python package `server/ds10core` of the separate Astrafex Web repository, which keeps its **own, still undecided licence** (it is not GPL and
 imports nothing from OGFinder or ds9).  OGFinder only ships the plugin `plugins/ds10core` (manifest, `ds10.py` launcher, a small Tcl hook): glue code under the
-same GPL-3 as the rest of OGFinder that starts `python -m ds10core ...` in a **separate process** with files and argument vectors as the only interface.
+same GPL-3 as the rest of OGFinder that starts `python -m astrafex_core ...` in a **separate process** with files and argument vectors as the only interface.
 Nothing of ds10core is imported, linked or copied into `bin/ds9`, and nothing of ds9, AST or SEP is imported by ds10core.  A user needs a checkout or install
-of ds10core next to OGFinder (`DS10_CORE`, see [ds10core.md](ds10core.md)); the plugin reports "not found" otherwise.
+of ds10core next to OGFinder (`ASTRAFEX_CORE` or `DS10_CORE`, see [ds10core.md](ds10core.md)); the plugin reports "not found" otherwise.
 
 ## If you convey a binary
 
 Give recipients the GPL-3 text, the complete corresponding source of `bin/ds9` (including the OGFinder changes and the build scripts) and the notices listed
-in audit section 2.5; do not add restrictions.  The ds10-web web application is a different product and different repository; it is not covered by this note.
+in audit section 2.5; do not add restrictions.  The Astrafex Web application is a different product and different repository; it is not covered by this note.

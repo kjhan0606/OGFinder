@@ -1,15 +1,15 @@
 {
  "schema": 1,
  "id": "ds10core",
- "name": "ds10 shared core (regions, pixel table, calibration, forced photometry, scripts)",
- "short": "ds10 core",
+ "name": "Astrafex Core (regions, pixel table, calibration, forced photometry, scripts)",
+ "short": "Astrafex Core",
  "tab": "Measure",
  "order": 70,
- "description": "Stand-alone shell of the compute core that the ds10-web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours) and a runner for ds10-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the ds10-web repository and is started as a separate process.",
+ "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process.",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
-  "core": "ds10core (ds10-web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
-  "boundary": "separate process (python -m ds10core)",
+  "core": "ds10core (Astrafex Web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
+  "boundary": "separate process (python -m astrafex_core)",
   "ds9_code_in_core": false,
   "web": false
  },
@@ -26,7 +26,7 @@
   {
    "id": "info",
    "label": "Image info, WCS, calibration",
-   "title": "ds10core: image info + AB zero point",
+   "title": "Astrafex Core: image info + AB zero point",
    "session": "NONE",
    "stage": "measure",
    "needs": [
@@ -50,7 +50,7 @@
   {
    "id": "calib",
    "label": "AB zero point (header calibration)",
-   "title": "ds10core: header-driven AB zero point",
+   "title": "Astrafex Core: header-driven AB zero point",
    "session": "AUTO",
    "stage": "measure",
    "needs": [
@@ -81,7 +81,7 @@
   {
    "id": "maps",
    "label": "Weight / rms / exposure / mask maps (find + associate)",
-   "title": "ds10core: map association",
+   "title": "Astrafex Core: map association",
    "session": "AUTO",
    "stage": "measure",
    "needs": [
@@ -107,7 +107,7 @@
   {
    "id": "regions-stats",
    "label": "Region statistics (exact pixel membership)",
-   "title": "ds10core: region statistics",
+   "title": "Astrafex Core: region statistics",
    "session": "AUTO",
    "stage": "measure",
    "needs": [
@@ -138,7 +138,7 @@
   {
    "id": "regions-mask",
    "label": "Regions -> mask FITS",
-   "title": "ds10core: regions to mask",
+   "title": "Astrafex Core: regions to mask",
    "session": "AUTO",
    "stage": "measure",
    "needs": [
@@ -170,7 +170,7 @@
   {
    "id": "regions-convert",
    "label": "Convert regions (DS9 / JSON / CSV)",
-   "title": "ds10core: convert regions",
+   "title": "Astrafex Core: convert regions",
    "session": "NONE",
    "stage": "measure",
    "needs": [
@@ -200,7 +200,7 @@
   {
    "id": "pixtab",
    "label": "Pixel table at (X, Y)",
-   "title": "ds10core: pixel table",
+   "title": "Astrafex Core: pixel table",
    "session": "NONE",
    "stage": "measure",
    "needs": [
@@ -230,7 +230,7 @@
   {
    "id": "forced",
    "label": "Forced photometry (bands -> colours)",
-   "title": "ds10core: multi-band forced photometry",
+   "title": "Astrafex Core: multi-band forced photometry",
    "session": "AUTO",
    "stage": "measure",
    "needs": [],
@@ -265,8 +265,8 @@
   },
   {
    "id": "run-script",
-   "label": "Run ds10-script / replay.py / bundle",
-   "title": "ds10core: run a script",
+   "label": "Run astrafex-script / replay.py / bundle",
+   "title": "Astrafex Core: run a script",
    "session": "AUTO",
    "stage": "measure",
    "needs": [],
@@ -293,7 +293,7 @@
   {
    "id": "open-bundle",
    "label": "Open offline bundle (continue a web session here)",
-   "title": "ds10core: open an offline bundle",
+   "title": "Astrafex Core: open an offline bundle",
    "session": "NONE",
    "stage": "measure",
    "needs": [],
@@ -319,7 +319,7 @@
   {
    "id": "pack-return",
    "label": "Pack results for the web server (return bundle)",
-   "title": "ds10core: pack the return bundle",
+   "title": "Astrafex Core: pack the return bundle",
    "session": "NONE",
    "stage": "measure",
    "needs": [],
@@ -348,7 +348,7 @@
    "type": "string",
    "default": "",
    "group": "Core",
-   "help": "Directory that holds the ds10core package (the 'server' directory of ds10-web). Empty = environment DS10_CORE, ~/.ds9/ogf_params/ds10core.json, ../ds10-web/server, /workspace/ds10-web/server. The core runs as a separate process (docs/ds10core.md)."
+   "help": "Directory that holds the ds10core package (the 'server' directory of Astrafex Web). Empty = environment DS10_CORE, ~/.ds9/ogf_params/ds10core.json, ../ds10-web/server, /workspace/ds10-web/server. The core runs as a separate process (docs/ds10core.md)."
   },
   {
    "name": "zp-override",
@@ -556,7 +556,7 @@
    "type": "file",
    "default": "",
    "group": "Run script",
-   "help": "A ds10-script/1 step list, a replay script or a reproducibility bundle exported from the web app."
+   "help": "An astrafex-script/1 step list, a replay script or a reproducibility bundle exported from the web app."
   },
   {
    "name": "files-dir",
@@ -576,7 +576,7 @@
   },
   {
    "name": "open-dest",
-   "label": "Folder to restore into (empty = ~/ds10-offline/<bundle name>)",
+   "label": "Folder to restore into (empty = ~/astrafex-offline/<bundle name>)",
    "type": "file",
    "default": "",
    "group": "Offline bundle",
@@ -588,7 +588,7 @@
    "type": "file",
    "default": "",
    "group": "Offline bundle",
-   "help": "The folder that holds workspace.json. The script session_script.json in it and the results of the steps you ran with 'Run ds10-script' are packed."
+   "help": "The folder that holds workspace.json. The script session_script.json in it and the results of the steps you ran with 'Run astrafex-script' are packed."
   },
   {
    "name": "pack-out",

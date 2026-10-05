@@ -1,5 +1,7 @@
 # Phase II - OGFinder on the web (design)
 
+> **Naming note (2026-10):** the product family is now called Astrafex ("ds10-web" = Astrafex Web, the stand-alone OGFinder = Astrafex Desktop, package `ds10core` = Astrafex Core). This document is kept as written at the time; see Astrafex Web `docs/naming.md`.
+
 Status: **design proposal, nothing of it is implemented.**  Revision 2 (2026-10-03): the UI decision is taken - **shared UI components plus
 user-selectable layout presets** (sections 6.1, 6.4-6.7, 9, 10).  The three mock-ups behind it are in `/workspace/webdesign/` (`README.md`,
 `proposal_A.html`, `proposal_B.html`, `proposal_C.html`, PNG screenshots); they are not part of this repository and use example data only.  Revision 4 (2026-10-03): the **default layout preset is Guided** (proposal C); Classic (A) and Workspace (B) are user-selectable alternatives (6.5, 6.6, 9, 10).  Revision 3 (2026-10-03): the product is **commercial** with a user-chosen compute mode (local flat subscription / server with tokens and limits, chapter 13), and every feature is developed for **both the stand-alone and the web version** (chapter 12).  Target repository: `github.com/kjhan0606/ds10-web` (new, to be created by

@@ -21,8 +21,8 @@ The catalog panel records the analysis steps of a GUI session. *Analysis > Save 
 
 ## License
 
-OGFinder (the SAOImageDS9 8.7 based stand-alone with the OGFinder plugins) is released under the **GNU General Public License, version 3** (tentative decision of the
+Astrafex Desktop (based on the OGFinder tool set: the SAOImageDS9 8.7 based stand-alone with the OGFinder plugins; the product is named "Astrafex", the licensed work and its notices keep the names OGFinder / SAOImageDS9) is released under the **GNU General Public License, version 3** (tentative decision of the
 owner); the full text is in [LICENSE](LICENSE).  Bundled third-party components keep their own licences (Tcl/Tk BSD-style, zlib/libpng/libtiff/IJG, LGPL for AST, PAL, wcslib-derived
 code, libwcs and SEP, BSD for ERFA/MINPACK, ...); the list, the open items (e.g. the old OpenSSL) and the reasons are in [docs/licensing.md](docs/licensing.md) and
-[docs/license_audit.md](docs/license_audit.md).  The shared compute core **ds10core** is a separate package of the ds10-web repository with its own licence; the
+[docs/license_audit.md](docs/license_audit.md).  The shared compute core **Astrafex Core** (Python package `ds10core`) is a separate package of the Astrafex Web repository with its own licence; the
 `ds10core` plugin runs it as a separate process and does not include or import it.
