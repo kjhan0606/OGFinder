@@ -11,8 +11,16 @@ H=${4:-/tmp/ogf_mov_home}
 OUT=$(mktemp -d /tmp/ogf_mov_replay.XXXXXX)
 [ -f "$S" ] || { echo "SKIP: no session script"; exit 77; }
 for f in $(echo "${FIELD#*:}" | tr ',' '\n' | sed 's/^[^=]*=//'); do [ -f "$f" ] || { echo "SKIP: missing $f"; exit 77; }; done
-rm -rf "$H"; mkdir -p "$H"
-env -i HOME="$H" PATH="$PATH" python3 "$S" --mode replay --allow-network --python "${OGFINDER_PYTHON:-python3}" \
+# Capture the real moving_cache before wiping HOME.  Replay uses an empty HOME so Gaia/SkyBoT/Horizons
+# answers must be seeded here; otherwise Align hangs on ESA TAP when the network is slow/down (the 1500s
+# timeout then kills the GUI-record check with "did not save a session script" under load, or the replay
+# alone hangs).  Not related to PSF-matching.
+SRC_CACHE="${OGF_MOVING_CACHE:-${REAL_HOME:-$HOME}/.ds9/moving_cache}"
+rm -rf "$H"; mkdir -p "$H/.ds9"
+if [ -d "$SRC_CACHE" ]; then cp -a "$SRC_CACHE" "$H/.ds9/moving_cache"; fi
+env -i HOME="$H" PATH="$PATH" OGFINDER_PYTHON="${OGFINDER_PYTHON:-}" \
+     OGF_MOVING_CACHE="$H/.ds9/moving_cache" \
+     python3 "$S" --mode replay --allow-network --python "${OGFINDER_PYTHON:-python3}" \
      --outdir "$OUT" --field "$FIELD" > "$OUT/run.log" 2>&1
 rc=$?
 echo "replay exit=$rc  $(grep -o 'steps ran=[0-9]* cached=[0-9]* skipped=[0-9]* failed=[0-9]*' "$OUT/run.log")  (log $OUT/run.log)"
