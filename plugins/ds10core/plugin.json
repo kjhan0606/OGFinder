@@ -446,6 +446,109 @@
     "catalog": "lsbg_catalog.tsv"
    },
    "done_status": "LSBG finder (shared core)"
+  },
+  {
+   "id": "psf-phot",
+   "label": "PSF photometry / CMD (shared core)",
+   "title": "Astrafex Core: crowded-field PSF photometry (ePSF, simultaneous fitting, two bands, frames, short exposures)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.psf_phot",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_psf_phot.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/psfphot_catalog.tsv",
+    "--summary",
+    "{work}/psfphot_summary.json",
+    "--psf-out",
+    "{work}/psfphot_epsf.fits",
+    "--mag-system",
+    "{psfphot-mag-system}",
+    "--mag-zeropoint",
+    "{psfphot-mag-zeropoint}",
+    "--saturate",
+    "{psfphot-saturate}",
+    "--saturate2",
+    "{psfphot-saturate2}",
+    "--saturate-short",
+    "{psfphot-saturate-short}",
+    "--saturate-short2",
+    "{psfphot-saturate-short}",
+    "--thresh",
+    "{psfphot-thresh}",
+    "--passes",
+    "{psfphot-passes}",
+    "--fwhm",
+    "{psfphot-fwhm}",
+    "--psf-order",
+    "{psfphot-psf-order}",
+    "--aperture-radius",
+    "{psfphot-aperture-radius}",
+    "--fit-radius",
+    "{psfphot-fit-radius}",
+    "--sky-in",
+    "{psfphot-sky-in}",
+    "--sky-out",
+    "{psfphot-sky-out}",
+    "--match-radius",
+    "{psfphot-match-radius}",
+    "--snr-min",
+    "{psfphot-snr-min}",
+    {
+     "if_file": "{psfphot-image2}",
+     "argv": [
+      "--image2",
+      "{psfphot-image2}"
+     ]
+    },
+    {
+     "if_file": "{psfphot-short}",
+     "argv": [
+      "--short",
+      "{psfphot-short}"
+     ]
+    },
+    {
+     "if_file": "{psfphot-short2}",
+     "argv": [
+      "--short2",
+      "{psfphot-short2}"
+     ]
+    },
+    {
+     "if": "psfphot-frames",
+     "argv": [
+      "--frames",
+      "{psfphot-frames}"
+     ]
+    },
+    {
+     "if": "psfphot-frames2",
+     "argv": [
+      "--frames2",
+      "{psfphot-frames2}"
+     ]
+    },
+    {
+     "if": "psfphot-crop",
+     "argv": [
+      "--crop",
+      "{psfphot-crop}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "psfphot_catalog.tsv"
+   },
+   "done_status": "PSF photometry (shared core)"
   }
  ],
  "params": [
@@ -844,6 +947,167 @@
    "default": 0.0,
    "group": "LSBG",
    "help": "0 = the model's validated operating point; higher = purer, lower = more complete."
+  },
+  {
+   "name": "psfphot-image2",
+   "label": "Band-2 image",
+   "type": "file",
+   "default": "",
+   "group": "PSF photometry",
+   "help": "Second band (colour = band 1 - band 2), e.g. the F814W drizzled stack"
+  },
+  {
+   "name": "psfphot-frames",
+   "label": "Band-1 single exposures",
+   "type": "string",
+   "default": "",
+   "group": "PSF photometry",
+   "help": "Comma-separated paths; measured with the deep star list and combined per star (cosmic-ray clipped)"
+  },
+  {
+   "name": "psfphot-frames2",
+   "label": "Band-2 single exposures",
+   "type": "string",
+   "default": "",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-short",
+   "label": "Band-1 short exposure",
+   "type": "file",
+   "default": "",
+   "group": "PSF photometry",
+   "help": "For stars saturated in the long exposures"
+  },
+  {
+   "name": "psfphot-short2",
+   "label": "Band-2 short exposure",
+   "type": "file",
+   "default": "",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-crop",
+   "label": "Crop x0:x1,y0:y1",
+   "type": "string",
+   "default": "",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-mag-system",
+   "label": "Magnitude system",
+   "type": "choice",
+   "choices": [
+    "vega",
+    "ab",
+    "st"
+   ],
+   "default": "vega",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-mag-zeropoint",
+   "label": "Zero point (band 1)",
+   "type": "string",
+   "default": "auto",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-saturate",
+   "label": "Saturation band 1",
+   "type": "string",
+   "default": "auto",
+   "group": "PSF photometry",
+   "help": "data units; auto = 0.75 x image max; 0 = none"
+  },
+  {
+   "name": "psfphot-saturate2",
+   "label": "Saturation band 2",
+   "type": "string",
+   "default": "auto",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-saturate-short",
+   "label": "Saturation short exposures",
+   "type": "string",
+   "default": "auto",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-thresh",
+   "label": "Detection threshold (sigma)",
+   "type": "float",
+   "default": 4.0,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-passes",
+   "label": "Find/fit passes",
+   "type": "int",
+   "default": 3,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-fwhm",
+   "label": "Starting FWHM (pix)",
+   "type": "float",
+   "default": 2.0,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-psf-order",
+   "label": "PSF variation order",
+   "type": "choice",
+   "choices": [
+    "0",
+    "1",
+    "2"
+   ],
+   "default": "1",
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-aperture-radius",
+   "label": "PSF normalisation radius (arcsec)",
+   "type": "float",
+   "default": 0.5,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-fit-radius",
+   "label": "Fit radius (pix)",
+   "type": "float",
+   "default": 3.0,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-sky-in",
+   "label": "Sky annulus inner (pix)",
+   "type": "float",
+   "default": 12.0,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-sky-out",
+   "label": "Sky annulus outer (pix)",
+   "type": "float",
+   "default": 20.0,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-match-radius",
+   "label": "Band match radius (pix)",
+   "type": "float",
+   "default": 1.0,
+   "group": "PSF photometry"
+  },
+  {
+   "name": "psfphot-snr-min",
+   "label": "Minimum S/N",
+   "type": "float",
+   "default": 3.0,
+   "group": "PSF photometry"
   }
  ],
  "tcl": "ds10core.tcl"

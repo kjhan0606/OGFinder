@@ -122,6 +122,18 @@ proc run {} {
     R lsbg_classify_dialog [expr {$dlg ne {} && [winfo exists $dlg]}] $dlg
     if {$dlg ne {}} {catch {foreach t [$dlg.body.nb tabs] {if {[$dlg.body.nb tab $t -text] eq {LSBG}} {$dlg.body.nb select $t}}}; catch {wm geometry $dlg 640x700+790+60}; wait_idle 800; shot lsbg_classify_desktop_params_1440x900; catch {destroy $dlg}}
     ::ogf::params::put ds10core lsbg-classify-keep-all 0
+    # ---- shared-core crowded-field PSF photometry on the synthetic field (Gaussian stars, FWHM ~4.2 px)
+    foreach {k v} {psfphot-fwhm 4.2 psfphot-saturate 0 psfphot-saturate2 0 psfphot-passes 2 psfphot-psf-order 0 psfphot-thresh 5} {::ogf::params::put ds10core $k $v}
+    lassign [run_step ds10core psf-phot] ok recs
+    set pcat [lindex [glob -nocomplain [file join [OGFSessWorkDir] psfphot_catalog.tsv] [file join [OGFSessWorkDir] ds10core psfphot_catalog.tsv] [file join [OGFSessWorkDir] ds10core * psfphot_catalog.tsv]] 0]
+    set phdr {}
+    if {$pcat ne {} && [file exists $pcat]} {set fd [open $pcat r]; set phdr [gets $fd]; close $fd}
+    R psf_phot_ok [expr {$ok && [string match "*MAG*MAGERR*CHI*SHARP*" $phdr]}] "$recs [string range $phdr 0 120]"
+    catch {destroy .ogftext}; wait_idle 1500
+    R psf_phot_table [expr {[::ogf::cat::nrows] > 0 && [lsearch [::ogf::cat::columns] SHARP] >= 0}] "rows=[::ogf::cat::nrows]"
+    shot psf_phot_desktop_1440x900
+    set dlg [OGFParamDialog ds10core -group {PSF photometry} -title {PSF photometry (shared core) - Settings}]
+    if {$dlg ne {}} {catch {foreach t [$dlg.body.nb tabs] {if {[$dlg.body.nb tab $t -text] eq {PSF photometry}} {$dlg.body.nb select $t}}}; catch {wm geometry $dlg 640x700+790+60}; wait_idle 800; shot psf_phot_desktop_params_1440x900; catch {destroy $dlg}}
     # ---- run the generated step list (web-compatible astrafex-script/1) as a script
     ::ogf::params::put ds10core script [file join $wd script.json]
     ::ogf::params::put ds10core files-dir $::dir

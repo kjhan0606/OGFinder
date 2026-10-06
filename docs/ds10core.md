@@ -35,7 +35,8 @@ OGFinder is the second shell.
 The plugin is a normal OGFinder plugin: manifest `plugins/ds10core/plugin.json`, tab **Measure**, chip "Astrafex Core" (it sits in the chip row's **More** menu
 because the Measure row is full), one menu entry per step, parameter dialog generated from the manifest (Settings...). Steps: image info, AB zero point
 (▶ of the chip), maps, region statistics, regions -> mask FITS, convert regions, pixel table at (X, Y), forced photometry (band list typed in the dialog),
-run script, **open offline bundle**. Results open in the text window; every run is recorded by the session recorder (`ds10core.*`) with its exact argument vector.
+run script, **open offline bundle**, LSBG finder, **PSF photometry / CMD** (`psf-phot`: `run_psf_phot.py` -> `python -m ds10core.tools.psf_phot`;
+second band, single exposures and short exposures are given in the Settings group *PSF photometry*; the catalogue fills the table). Results open in the text window; every run is recorded by the session recorder (`ds10core.*`) with its exact argument vector.
 **Not done:** no interactive region editing/drawing beyond ds9's own (regions are used from `.reg` files - ds9's own Region menu saves them), no table view of the forced
 catalogue inside the catalogue panel (the files are written and the path is shown), no band picking from the loaded frames, no mask hand-over to the shared
 mask manager, no GUI progress strip for long runs beyond the job runner's.
