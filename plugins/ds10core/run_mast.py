@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+"""Launch ``python -m ds10core.tools.mast`` with the shared core on PYTHONPATH (Desktop shell).
+
+Flags: --core-dir --target --ra --dec --image --radius --collection --instrument --filters --calib --type
+--proposal --max-rows --out --summary --obsid --kinds --mosaics --all-types --uris --products --rows --files
+--dest --max-total-mb
+"""
+from __future__ import annotations
+import os, subprocess, sys
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from ds10 import find_core, alias_env
+alias_env()
+args = sys.argv[1:]
+core_dir = None
+if len(args) >= 2 and args[0] == "--core-dir":
+    core_dir, args = args[1], args[2:]
+d, why = find_core(core_dir)
+if not d:
+    sys.stderr.write(why + "\n"); sys.exit(2)
+env = os.environ.copy()
+env["PYTHONPATH"] = d + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+py = env.get("DS10_PYTHON") or env.get("ASTRAFEX_PYTHON") or sys.executable
+sys.exit(subprocess.call([py, "-m", "ds10core.tools.mast", *args], env=env))

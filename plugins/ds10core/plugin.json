@@ -6,7 +6,7 @@
  "tab": "Measure",
  "order": 70,
  "dialog_tabs": 1,
- "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg).",
+ "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg); sky catalogue query / cross-match, MAST search and download, and user Python plugins.",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
   "core": "ds10core (Astrafex Web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
@@ -549,6 +549,241 @@
     "catalog": "psfphot_catalog.tsv"
    },
    "done_status": "PSF photometry (shared core)"
+  },
+  {
+   "id": "catalog-query",
+   "label": "Sky catalogue query",
+   "title": "Astrafex Core: query Gaia/SDSS/2MASS/DESI/LAMOST/Rubin",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.catalog_query",
+   "after": "OGFDs10coreCatalogAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_catalog.py",
+    "--core-dir",
+    "{core-dir}",
+    "query",
+    "--survey",
+    "{cat-survey}",
+    "--image",
+    "{image}",
+    "--out",
+    "{work}/catalog.tsv",
+    "--reg",
+    "{work}/markers.reg",
+    "--summary",
+    "{work}/summary.json",
+    "--max-rows",
+    "{cat-max-rows}",
+    "--pad-arcsec",
+    "{cat-pad-arcsec}",
+    "--epoch",
+    "{cat-epoch}",
+    {
+     "if": "cat-preset",
+     "argv": [
+      "--preset",
+      "{cat-preset}"
+     ]
+    },
+    {
+     "if": "cat-mag-limit",
+     "argv": [
+      "--mag-limit",
+      "{cat-mag-limit}"
+     ]
+    },
+    {
+     "if": "cat-no-cache",
+     "argv": [
+      "--no-cache"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "catalog.tsv"
+   }
+  },
+  {
+   "id": "catalog-xmatch",
+   "label": "Cross-match catalogue",
+   "title": "Astrafex Core: cross-match detection catalogue with a reference",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.catalog_xmatch",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_catalog.py",
+    "--core-dir",
+    "{core-dir}",
+    "xmatch",
+    "--catalog",
+    "{catalog}",
+    "--ref",
+    "{cat-refcat}",
+    "--radius",
+    "{cat-xmatch-radius}",
+    "--prefix",
+    "{cat-xmatch-prefix}",
+    "--column-style",
+    "fixed",
+    "--out",
+    "{work}/xmatch.tsv"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "CX_SEP",
+     "CX_N",
+     "CX_FLAG",
+     "CX_ID",
+     "CX_MAG",
+     "CX_V1",
+     "CX_V2",
+     "CX_V3"
+    ]
+   }
+  },
+  {
+   "id": "mast-search",
+   "label": "MAST search",
+   "title": "Astrafex Core: search MAST observations",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.mast_search",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_mast.py",
+    "--core-dir",
+    "{core-dir}",
+    "search",
+    "--image",
+    "{image}",
+    "--radius",
+    "{mast-radius}",
+    "--collection",
+    "{mast-collection}",
+    "--out",
+    "{work}/obs.tsv",
+    "--summary",
+    "{work}/summary.json",
+    {
+     "if": "mast-target",
+     "argv": [
+      "--target",
+      "{mast-target}"
+     ]
+    },
+    {
+     "if": "mast-instrument",
+     "argv": [
+      "--instrument",
+      "{mast-instrument}"
+     ]
+    },
+    {
+     "if": "mast-filters",
+     "argv": [
+      "--filters",
+      "{mast-filters}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "text",
+    "file": "obs.tsv"
+   }
+  },
+  {
+   "id": "mast-download",
+   "label": "MAST download",
+   "title": "Astrafex Core: download MAST products",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [],
+   "record": "ds10core.mast_download",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_mast.py",
+    "--core-dir",
+    "{core-dir}",
+    "download",
+    "--dest",
+    "{work}/mast_data",
+    "--summary",
+    "{work}/mast_download.json",
+    {
+     "if": "mast-uris",
+     "argv": [
+      "--uris",
+      "{mast-uris}"
+     ]
+    },
+    {
+     "if": "mast-obsid",
+     "argv": [
+      "--obsid",
+      "{mast-obsid}",
+      "--kinds",
+      "{mast-kinds}"
+     ]
+    },
+    {
+     "if": "mast-max-mb",
+     "argv": [
+      "--max-total-mb",
+      "{mast-max-mb}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "text",
+    "file": "mast_download.json"
+   }
+  },
+  {
+   "id": "user-plugin",
+   "label": "Run user plugin",
+   "title": "Astrafex Core: run an astrafex-user-plugin/1",
+   "session": "NONE",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.user_plugin",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_userplugin.py",
+    "--core-dir",
+    "{core-dir}",
+    "{user-plugin-dir}",
+    "--work",
+    "{work}",
+    "--catalog",
+    "{catalog}",
+    {
+     "if": "user-plugin-params",
+     "argv": [
+      "--params-json",
+      "{user-plugin-params}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "catalog.tsv"
+   }
   }
  ],
  "params": [
@@ -1108,6 +1343,166 @@
    "type": "float",
    "default": 3.0,
    "group": "PSF photometry"
+  },
+  {
+   "name": "cat-survey",
+   "label": "Survey",
+   "type": "choice",
+   "default": "gaia_dr3",
+   "group": "Catalogue",
+   "choices": [
+    "gaia_dr3",
+    "sdss_dr17",
+    "twomass",
+    "desi_dr1",
+    "lamost_dr11",
+    "rubin"
+   ]
+  },
+  {
+   "name": "cat-preset",
+   "label": "Preset",
+   "type": "string",
+   "default": "",
+   "group": "Catalogue"
+  },
+  {
+   "name": "cat-mag-limit",
+   "label": "Mag limit",
+   "type": "string",
+   "default": "",
+   "group": "Catalogue"
+  },
+  {
+   "name": "cat-max-rows",
+   "label": "Max rows",
+   "type": "int",
+   "default": 50000,
+   "group": "Catalogue"
+  },
+  {
+   "name": "cat-pad-arcsec",
+   "label": "Pad (arcsec)",
+   "type": "float",
+   "default": 5,
+   "group": "Catalogue"
+  },
+  {
+   "name": "cat-epoch",
+   "label": "Epoch",
+   "type": "choice",
+   "default": "auto",
+   "group": "Catalogue",
+   "choices": [
+    "auto",
+    "none"
+   ]
+  },
+  {
+   "name": "cat-no-cache",
+   "label": "Bypass cache",
+   "type": "bool",
+   "default": 0,
+   "group": "Catalogue"
+  },
+  {
+   "name": "cat-refcat",
+   "label": "Reference catalogue",
+   "type": "file",
+   "default": "",
+   "group": "Cross-match"
+  },
+  {
+   "name": "cat-xmatch-radius",
+   "label": "Match radius (arcsec)",
+   "type": "float",
+   "default": 1.0,
+   "group": "Cross-match"
+  },
+  {
+   "name": "cat-xmatch-prefix",
+   "label": "Prefix",
+   "type": "string",
+   "default": "CX",
+   "group": "Cross-match"
+  },
+  {
+   "name": "mast-target",
+   "label": "MAST target",
+   "type": "string",
+   "default": "",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-radius",
+   "label": "MAST radius (arcmin)",
+   "type": "float",
+   "default": 3.0,
+   "group": "MAST"
+  },
+  {
+   "name": "mast-collection",
+   "label": "Collections",
+   "type": "string",
+   "default": "HST",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-instrument",
+   "label": "Instruments",
+   "type": "string",
+   "default": "",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-filters",
+   "label": "Filters",
+   "type": "string",
+   "default": "",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-uris",
+   "label": "Download URIs",
+   "type": "string",
+   "default": "",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-obsid",
+   "label": "Download obsids",
+   "type": "string",
+   "default": "",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-kinds",
+   "label": "Product kinds",
+   "type": "string",
+   "default": "DRC",
+   "group": "MAST"
+  },
+  {
+   "name": "mast-max-mb",
+   "label": "Max total MB",
+   "type": "float",
+   "default": 2000,
+   "group": "MAST"
+  },
+  {
+   "name": "user-plugin-dir",
+   "label": "User plugin directory",
+   "type": "file",
+   "default": "",
+   "group": "User plugin",
+   "help": "Directory with plugin.json + plugin.py"
+  },
+  {
+   "name": "user-plugin-params",
+   "label": "Params JSON",
+   "type": "string",
+   "default": "{}",
+   "group": "User plugin"
   }
  ],
  "tcl": "ds10core.tcl"

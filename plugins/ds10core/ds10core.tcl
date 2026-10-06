@@ -31,3 +31,15 @@ proc OGFDs10coreOpenAfter {} {
     }
     ::ogf::status "Offline bundle restored to $ws[expr {$shown ne {} ? "; showing $shown" : {}}]. Run steps with the script \"$ws/session_script.json\" (Run astrafex-script)."
 }
+
+proc OGFDs10coreCatalogAfter {} {
+    global current
+    # the step writes markers.reg into the job work directory; the runner keeps the last work path in ::ogf::cat
+    set work [::ogf::params::get ds10core _last_work]
+    if {$work eq {}} {set work [file join $::env(HOME) .ds9 tmp]}
+    set reg [file join $work markers.reg]
+    if {[file exists $reg] && [info exists current(frame)]} {
+	catch {MarkerLoadFile $reg $current(frame) ds9 image fk5}
+	::ogf::status "Catalogue markers loaded from $reg"
+    }
+}
