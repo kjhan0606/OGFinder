@@ -36,13 +36,14 @@ The plugin is a normal OGFinder plugin: manifest `plugins/ds10core/plugin.json`,
 because the Measure row is full), one menu entry per step, parameter dialog generated from the manifest (Settings...). Steps: image info, AB zero point
 (▶ of the chip), maps, region statistics, regions -> mask FITS, convert regions, pixel table at (X, Y), forced photometry (band list typed in the dialog),
 run script, **open offline bundle**, LSBG finder, **PSF photometry / CMD** (`psf-phot`: `run_psf_phot.py` -> `python -m ds10core.tools.psf_phot`;
-second band, single exposures and short exposures are given in the Settings group *PSF photometry*; the catalogue fills the table). Results open in the text window; every run is recorded by the session recorder (`ds10core.*`) with its exact argument vector.
+second band, single exposures and short exposures are given in the Settings group *PSF photometry*; the catalogue fills the table), **Sky catalogue query** (`catalog-query`: Gaia DR3 / SDSS / 2MASS / DESI / LAMOST / Rubin around the open image; the catalogue fills the table and `markers.reg` is drawn on the frame), **Cross-match catalogue** (`CX_*` columns added to the table), **MAST search** / **MAST download**, **Run user plugin** (`astrafex-user-plugin/1`). Results open in the text window; every run is recorded by the session recorder (`ds10core.*`) with its exact argument vector.
 **Not done:** no interactive region editing/drawing beyond ds9's own (regions are used from `.reg` files - ds9's own Region menu saves them), no table view of the forced
 catalogue inside the catalogue panel (the files are written and the path is shown), no band picking from the loaded frames, no mask hand-over to the shared
 mask manager, no GUI progress strip for long runs beyond the job runner's.
-GUI check: `scripts/verify_ds10core.sh` (real `bin/ds9`, 29 checks); screenshots `docs/shots/astrafex_*.png`:
+GUI check: `scripts/verify_ds10core.sh` (real `bin/ds9`, 41 checks; the catalogue query runs against a local fake TAP service, `scripts/fake_sky_tap.py`,
+built on Astrafex Web's `server/tests/catmock.py`, so no network is needed); screenshots `docs/shots/astrafex_*.png`:
 `astrafex_01_chip_menu_measure_tab`, `astrafex_01b_plugin_menu`, `astrafex_02_calibration_result`, `astrafex_03_region_statistics`,
-`astrafex_04_pixel_table`, `astrafex_05_forced_photometry_result`.
+`astrafex_04_pixel_table`, `astrafex_05_forced_photometry_result`, and `sky_catalog_desktop_1440x900`, `sky_catalog_desktop_params_1440x900` (catalogue table + markers, Settings group *Catalogue*).
 
 ## Continue a web session here (offline bundle)
 When the network to the Astrafex Web server drops, a bundle made with the web app's **Offline export** button (or kept up to date by its automatic refresh) restores the
