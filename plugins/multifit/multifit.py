@@ -580,8 +580,18 @@ def main(argv=None):
     a.keep_stamps = a.montage > 0
     nw = a.n_workers if a.n_workers > 0 else min(8, os.cpu_count() or 1)
     if nw > 1 and len(idx) > 3:
-        with mp.get_context('fork').Pool(nw) as pool:
-            results = pool.map(fit_object, idx, chunksize=1)
+        # one BLAS thread per worker (inherited through fork): nw workers x a multi-threaded OpenBLAS oversubscribe the cores (2-3x slower)
+        try:
+            from threadpoolctl import threadpool_limits
+            blas1 = threadpool_limits(1)
+        except Exception:
+            blas1 = None
+        try:
+            with mp.get_context('fork').Pool(nw) as pool:
+                results = pool.map(fit_object, idx, chunksize=1)
+        finally:
+            if blas1 is not None:
+                blas1.restore_original_limits()
     else:
         results = [fit_object(i) for i in idx]
     by = {r['i']: r for r in results}
