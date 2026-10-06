@@ -116,7 +116,7 @@ def inject(n_per_class=10, seed=5, n_epoch=16, baseline=90.0):
             g = np.exp(-((xx[sl] - x) ** 2 + (yy[sl] - y) ** 2) / (2 * psf_sig ** 2))
             img[sl] += fl[i, e] * g / (2 * np.pi * psf_sig ** 2)
         diffs.append((59000.0 + tt[e], w, img, 25.0, 1.0))
-    cand = [tuple(float(v) for v in w.all_pix2world([x], [y], 0)) for x, y in pos]
+    cand = [tuple(float(v.item()) for v in w.all_pix2world([x], [y], 0)) for x, y in pos]
     cand = [(c[0][0] if hasattr(c[0], '__len__') else c[0], c[1][0] if hasattr(c[1], '__len__') else c[1]) for c in cand]
     lcs = lightcurve(cand, diffs, r_pix=r_ap)
     return truth, lcs, fl, frac, cand, tt
