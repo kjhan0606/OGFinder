@@ -18,7 +18,7 @@ def test_kepler_state_circular():
     pos, vel = OL._state(np.array([2.0]), np.array([0.0]), np.array([0.3]), np.array([1.0]), np.array([0.5]), np.array([2.0]))
     assert abs(np.linalg.norm(pos) - 2.0) < 1e-9
     assert abs(np.linalg.norm(vel) - math.sqrt(OL.GM_SUN / 2.0)) < 1e-9
-    assert abs(float(pos @ vel.T)) < 1e-9                                               # circular: r perpendicular to v
+    assert abs(float((pos @ vel.T).item())) < 1e-9                                               # circular: r perpendicular to v
 
 
 def test_population_at_opposition_is_retrograde_and_slow(elements):
