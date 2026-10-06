@@ -125,7 +125,9 @@ def plot_quality(path, rep, pit, zs, zp, pred_ok, stack, binned, label):
         cv = rep['pit']['coverage']
         lv = [c['level'] for c in cv]
         ax[0, 1].plot([0, 1], [0, 1], 'k--')
-        ax[0, 1].errorbar(lv, [c['observed'] for c in cv], yerr=[[c['observed'] - c['lo'] for c in cv], [c['hi'] - c['observed'] for c in cv]], fmt='o-')
+        # Wilson bounds can sit a rounding error inside the observed fraction (e.g. hi = 1 - 2e-16 for 1.0); matplotlib >= 3.11 rejects negative yerr
+        yerr = np.clip([[c['observed'] - c['lo'] for c in cv], [c['hi'] - c['observed'] for c in cv]], 0, None)
+        ax[0, 1].errorbar(lv, [c['observed'] for c in cv], yerr=yerr, fmt='o-')
         ax[0, 1].set_xlabel('nominal credible level'); ax[0, 1].set_ylabel('fraction of z_spec inside'); ax[0, 1].set_title('coverage')
         q = np.sort(pit)
         ax[1, 1].plot(np.linspace(0, 1, len(q)), q, 'C1'); ax[1, 1].plot([0, 1], [0, 1], 'k--')

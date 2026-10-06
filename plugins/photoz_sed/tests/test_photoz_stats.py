@@ -270,3 +270,20 @@ def test_real_mdn_on_heldout_sdss():
     assert pm['sigma_nmad'] < 0.03 and pm['outlier_frac'] < 0.03
     assert 0.62 < s['pit']['coverage'][1]['observed'] < 0.80 and s['crps_mean'] < 0.035
     assert ps.stacked_nz(pr, z[te], np.linspace(0, 1.6, 801), np.linspace(0, 1.6, 17))['ks_distance'] < 0.05
+
+
+def test_cli_quality_plot_full_coverage_small_sample(tmp_path):
+    # 20 spec-z all inside their (wide) PDFs: observed coverage 1.0 and a Wilson upper bound of 1 - 2e-16;
+    # the plot must still be written (matplotlib >= 3.11 rejects negative yerr)
+    rng = np.random.default_rng(5)
+    zt = 0.2 + 2 * rng.random(20)
+    zp = zt + 0.01 * rng.standard_normal(20)
+    rows = [(i + 1, 20.0 + i * 0.1, float(z), float(p), 0.5) for i, (z, p) in enumerate(zip(zt, zp))]
+    cat = tmp_path / 'c.tsv'
+    write_cat(cat, rows, ['NUMBER', 'MAG_AUTO', 'Z_SPEC', 'PHOTO_Z', 'PHOTO_Z_ERR'])
+    p = run_cli(['--catalog', str(cat), '--work', str(tmp_path / 'w'), '--mode', 'quality'])
+    assert p.returncode == 0, p.stderr
+    rep = json.load(open(tmp_path / 'w' / 'pzq_report.json'))
+    assert any(c['observed'] == 1.0 for c in rep['pit']['coverage'])
+    assert 'plot failed' not in p.stderr, p.stderr
+    assert (tmp_path / 'w' / 'pzq_plot.png').stat().st_size > 50
