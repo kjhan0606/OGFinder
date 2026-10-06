@@ -5,6 +5,7 @@
  "short": "Astrafex Core",
  "tab": "Measure",
  "order": 70,
+ "dialog_tabs": 1,
  "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg).",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
@@ -370,7 +371,7 @@
   {
    "id": "lsbg",
    "label": "LSBG finder (shared core)",
-   "title": "Astrafex Core: LSBG finder (Tanoglidis-style cuts)",
+   "title": "Astrafex Core: LSBG finder (Tanoglidis-style cuts, optional SVM classification)",
    "session": "AUTO",
    "stage": "measure",
    "needs": [
@@ -421,6 +422,22 @@
      "argv": [
       "--i",
       "{lsbg-i-image}"
+     ]
+    },
+    {
+     "if": "lsbg-classify",
+     "argv": [
+      "--classify",
+      "--classify-threshold",
+      "{lsbg-classify-threshold}"
+     ]
+    },
+    {
+     "if": "lsbg-classify-keep-all",
+     "argv": [
+      "--classify-keep-all",
+      "--classify-threshold",
+      "{lsbg-classify-threshold}"
      ]
     }
    ],
@@ -803,6 +820,30 @@
    "type": "string",
    "default": "auto",
    "group": "LSBG"
+  },
+  {
+   "name": "lsbg-classify",
+   "label": "LSBG classify (SVM)",
+   "type": "bool",
+   "default": false,
+   "group": "LSBG",
+   "help": "Purity stage after the cuts: RBF-kernel SVM of the shared core (model lsbg_classifier_v1, trained on DES DR2 candidates labelled by Tanoglidis et al. 2021). Keeps candidates with P_LSBG >= threshold; adds P_LSBG and LSBG_CLASS."
+  },
+  {
+   "name": "lsbg-classify-keep-all",
+   "label": "LSBG keep rejected",
+   "type": "bool",
+   "default": false,
+   "group": "LSBG",
+   "help": "Classify but keep every candidate (filter on LSBG_CLASS / P_LSBG in the catalogue panel)."
+  },
+  {
+   "name": "lsbg-classify-threshold",
+   "label": "LSBG P_LSBG threshold",
+   "type": "float",
+   "default": 0.0,
+   "group": "LSBG",
+   "help": "0 = the model's validated operating point; higher = purer, lower = more complete."
   }
  ],
  "tcl": "ds10core.tcl"

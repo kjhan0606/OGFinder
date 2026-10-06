@@ -104,6 +104,24 @@ proc run {} {
     R forced_psf_summary [expr {[regexp {"enabled": true} $summ] || [regexp {"enabled":true} $summ]}] [string range $summ 0 200]
     shot psf_forced_match_result
     ::ogf::params::put ds10core psf-match 0
+    # ---- shared-core LSBG finder with the SVM classification stage (keep-all: every candidate gets P_LSBG / LSBG_CLASS)
+    foreach {k v} {lsbg-mu-eff-min 10 lsbg-r-eff-min 0.05 lsbg-detect-minarea 10 lsbg-classify 0 lsbg-classify-keep-all 1 lsbg-classify-threshold 0} {::ogf::params::put ds10core $k $v}
+    lassign [run_step ds10core lsbg] ok recs
+    set lcat [lindex [glob -nocomplain [file join [OGFSessWorkDir] lsbg_catalog.tsv] [file join [OGFSessWorkDir] ds10core lsbg_catalog.tsv] [file join [OGFSessWorkDir] ds10core * lsbg_catalog.tsv]] 0]
+    set lsum [file join [file dirname $lcat] lsbg_summary.json]
+    set lhdr {}; set lsumtxt {}
+    if {$lcat ne {} && [file exists $lcat]} {set fd [open $lcat r]; set lhdr [gets $fd]; close $fd}
+    if {[file exists $lsum]} {set fd [open $lsum r]; set lsumtxt [read $fd]; close $fd}
+    R lsbg_classify_ok [expr {$ok && [string match "*P_LSBG*LSBG_CLASS*" $lhdr]}] "$recs [string range $lhdr end-60 end]"
+    R lsbg_classify_summary [expr {[string match "*\"classifier\"*" $lsumtxt] && [string match "*lsbg*" [lindex $recs 0 0]]}] [string range $lsumtxt 0 300]
+    catch {destroy .ogftext}; wait_idle 1500
+    R lsbg_classify_table [expr {[::ogf::cat::nrows] > 0 && [lsearch [::ogf::cat::columns] P_LSBG] >= 0}] "rows=[::ogf::cat::nrows]"
+    catch {[::ogf::cat::get tbl] xview moveto 1.0}; wait_idle 300
+    shot lsbg_classify_desktop_1440x900
+    set dlg [OGFParamDialog ds10core -group LSBG -title {LSBG finder (shared core) - Settings}]
+    R lsbg_classify_dialog [expr {$dlg ne {} && [winfo exists $dlg]}] $dlg
+    if {$dlg ne {}} {catch {foreach t [$dlg.body.nb tabs] {if {[$dlg.body.nb tab $t -text] eq {LSBG}} {$dlg.body.nb select $t}}}; catch {wm geometry $dlg 640x700+790+60}; wait_idle 800; shot lsbg_classify_desktop_params_1440x900; catch {destroy $dlg}}
+    ::ogf::params::put ds10core lsbg-classify-keep-all 0
     # ---- run the generated step list (web-compatible astrafex-script/1) as a script
     ::ogf::params::put ds10core script [file join $wd script.json]
     ::ogf::params::put ds10core files-dir $::dir
