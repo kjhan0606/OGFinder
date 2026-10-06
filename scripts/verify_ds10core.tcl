@@ -134,6 +134,23 @@ proc run {} {
     shot psf_phot_desktop_1440x900
     set dlg [OGFParamDialog ds10core -group {PSF photometry} -title {PSF photometry (shared core) - Settings}]
     if {$dlg ne {}} {catch {foreach t [$dlg.body.nb tabs] {if {[$dlg.body.nb tab $t -text] eq {PSF photometry}} {$dlg.body.nb select $t}}}; catch {wm geometry $dlg 640x700+790+60}; wait_idle 800; shot psf_phot_desktop_params_1440x900; catch {destroy $dlg}}
+    # ---- sky catalogue query (Gaia DR3 adapter answered by the local fake TAP service of verify_ds10core.sh): table + markers on the image
+    if {[info exists ::env(OGF_DS_SKY)] && $::env(OGF_DS_SKY) ne {}} {
+	foreach {k v} {cat-survey gaia_dr3 cat-no-cache 1 cat-pad-arcsec 0} {::ogf::params::put ds10core $k $v}
+	catch {$current(frame) marker delete all}
+	lassign [run_step ds10core catalog-query] ok recs
+	set reg [file join [OGFSessWorkDir] markers.reg]
+	R sky_catalog_ok [expr {$ok && [::ogf::cat::nrows] > 0 && [lsearch [::ogf::cat::columns] REF_ID] >= 0 && [lsearch [::ogf::cat::columns] REF_MAG] >= 0}] "$recs rows=[::ogf::cat::nrows]"
+	set nmark -1
+	catch {$current(frame) marker select all; set nmark [$current(frame) get marker select number]; $current(frame) marker unselect all}
+	R sky_catalog_markers [expr {[file exists $reg] && $nmark >= [::ogf::cat::nrows]}] "markers=$nmark rows=[::ogf::cat::nrows]"
+	R sky_catalog_recorded [expr {[lindex $recs 0 0] eq "ds10core.catalog_query"}] $recs
+	wait_idle 1500; catch {[::ogf::cat::get tbl] xview moveto 0.0}; wait_idle 300
+	shot sky_catalog_desktop_1440x900
+	set dlg [OGFParamDialog ds10core -group Catalogue -title {Sky catalogue query (shared core) - Settings}]
+	if {$dlg ne {}} {catch {foreach t [$dlg.body.nb tabs] {if {[$dlg.body.nb tab $t -text] eq {Catalogue}} {$dlg.body.nb select $t}}}; catch {wm geometry $dlg 640x700+790+60}; wait_idle 800; shot sky_catalog_desktop_params_1440x900; catch {destroy $dlg}}
+	catch {$current(frame) marker delete all}
+    }
     # ---- run the generated step list (web-compatible astrafex-script/1) as a script
     ::ogf::params::put ds10core script [file join $wd script.json]
     ::ogf::params::put ds10core files-dir $::dir

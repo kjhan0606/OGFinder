@@ -24,5 +24,6 @@ py = env.get("DS10_PYTHON") or env.get("ASTRAFEX_PYTHON") or sys.executable
 rc = subprocess.call([py, "-m", "ds10core.tools.catalog", *args], env=env, stdout=sys.stderr)
 out = args[args.index("--out") + 1] if "--out" in args[:-1] else (args[args.index("--xmatch-out") + 1] if "--xmatch-out" in args[:-1] else None)
 if rc == 0 and out and os.path.exists(out):
-    sys.stdout.write(open(out, encoding="utf-8").read())
+    # the catalogue table of the Desktop takes the first line as the header: drop the "# provenance" comment lines of the TSV
+    sys.stdout.write("".join(ln for ln in open(out, encoding="utf-8") if not ln.startswith("#")))
 sys.exit(rc)

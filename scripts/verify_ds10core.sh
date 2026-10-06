@@ -1,6 +1,7 @@
 #!/bin/bash
 # Real-ds9 test of plugins/ds10core (stand-alone shell of the shared Astrafex Core): chip + menu entries, header calibration, region statistics / mask, pixel table,
-# multi-band forced photometry on synthetic bands, LSBG finder with --classify-keep-all, astrafex-script run, session records; optional screenshots (docs/shots/astrafex_*.png).
+# multi-band forced photometry on synthetic bands, LSBG finder with --classify-keep-all, PSF photometry, sky catalogue query (local fake TAP), astrafex-script run,
+# session records; optional screenshots (docs/shots/astrafex_*.png).
 #   scripts/verify_ds10core.sh [workdir]        env: DISPLAY_OVERRIDE=:77  OGF_SHOTS=docs/shots (screenshots on when set)  OGF_DS_GEOM=1300x950 (ds9 window)
 # SKIP (exit 77) when the ds10core package of Astrafex Web cannot be found.
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(dirname "$HERE")"
@@ -28,7 +29,16 @@ for lab, (scale, flam, plam) in spec.items():
 open(f"{d}/r.reg", "w").write("# Region file format: DS9 version 4.1\nimage\ncircle(%g,%g,12.3)\nbox(200.3,200.2,40,24,0)\nannulus(%g,%g,20.3,32.3)\n" % (src[0][0], src[0][1], src[0][0], src[0][1]))
 PYEOF
 rm -rf ~/ds9.auto ~/ds9.auto.dir
-HOME="$W/home" OGF_DS_OUT="$W/ds.txt" OGF_DS_DIR="$W/in" OGF_DS_SHOTS="${OGF_SHOTS:-}" OGF_DS_DISPLAY="${DISPLAY_OVERRIDE:-:77}" DISPLAY="${DISPLAY_OVERRIDE:-:77}" timeout -s KILL 600 \
+# sky catalogue step against a local fake TAP service (catmock of the Astrafex Web checkout); skipped when that file is not there
+CORE="$("$PY" plugins/ds10core/ds10.py --where 2>/dev/null | "$PY" -c 'import json,sys; print(json.load(sys.stdin)["core_dir"])' 2>/dev/null)"
+SKY=""; FAKE_PID=""
+if [ -f "$CORE/tests/catmock.py" ]; then
+  "$PY" scripts/fake_sky_tap.py "$CORE" 53.1 -27.8 "$W/tap.port" > "$W/tap.log" 2>&1 & FAKE_PID=$!
+  trap '[ -n "$FAKE_PID" ] && kill "$FAKE_PID" 2>/dev/null' EXIT
+  for _ in $(seq 50); do [ -s "$W/tap.port" ] && break; sleep 0.1; done
+  if [ -s "$W/tap.port" ]; then SKY=1; export ASTRAFEX_CATALOG_ENDPOINTS="{\"*\": \"http://127.0.0.1:$(cat "$W/tap.port")/tap\"}" ASTRAFEX_CATALOG_CACHE="$W/catcache"; fi
+fi
+HOME="$W/home" OGF_DS_SKY="$SKY" OGF_DS_OUT="$W/ds.txt" OGF_DS_DIR="$W/in" OGF_DS_SHOTS="${OGF_SHOTS:-}" OGF_DS_DISPLAY="${DISPLAY_OVERRIDE:-:77}" DISPLAY="${DISPLAY_OVERRIDE:-:77}" timeout -s KILL 600 \
   bin/ds9 "$W/in/syn_f160w.fits" -geometry "${OGF_DS_GEOM:-1300x950}" -source scripts/verify_ds10core.tcl > "$W/raw.txt" 2>&1
 grep -c '^PASS' "$W/ds.txt" | sed 's/^/PASS lines: /'; grep -E '^FAIL|^BGERROR' "$W/ds.txt" | head -8; grep '^SUMMARY' "$W/ds.txt"
 grep -q '^SUMMARY failures=0' "$W/ds.txt" && ! grep -q '^FAIL' "$W/ds.txt"

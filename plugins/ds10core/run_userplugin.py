@@ -25,5 +25,6 @@ rc = subprocess.call([py, "-m", "ds10core.tools.userplugin", "run", *args], env=
 work = args[args.index("--work") + 1] if "--work" in args[:-1] else None
 cat = os.path.join(work, "catalog.tsv") if work else None
 if rc == 0 and cat and os.path.exists(cat):
-    sys.stdout.write(open(cat, encoding="utf-8").read())
+    # the catalogue table of the Desktop takes the first line as the header: drop the "# provenance" comment lines of the TSV
+    sys.stdout.write("".join(ln for ln in open(cat, encoding="utf-8") if not ln.startswith("#")))
 sys.exit(rc)
