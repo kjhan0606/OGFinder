@@ -50,6 +50,13 @@ def compute_jwst_zeropoint(header):
             print(f"  PHOTMJSR={photmjsr:.6f} MJy/sr per DN/s",
                   file=sys.stderr)
         return zp
+    elif 'PHOTFLAM' in header and 'PHOTPLAM' in header:
+        # HST drizzled images in e-/s (ACS drz headers have no PHOTFNU)
+        zp = (-2.5 * np.log10(float(header['PHOTFLAM'])) - 21.10
+              - 5.0 * np.log10(float(header['PHOTPLAM'])) + 18.692)
+        print(f"Auto ZP from PHOTFLAM/PHOTPLAM: ZP_AB={zp:.4f}",
+              file=sys.stderr)
+        return zp
     elif 'PHOTFNU' in header:
         # Fallback: PHOTFNU in Jy
         photfnu = float(header['PHOTFNU'])
@@ -658,7 +665,23 @@ def mode_color(args):
     print(f"Measuring {len(band_files)} bands: {list(band_files.keys())}",
           file=sys.stderr)
 
-    profiles = measure_multiband_icl_profiles(band_files, mask, cx, cy, config)
+    # Per-band zero points: with --mag-zeropoint auto each band's own header
+    # is used (filters differ by up to ~0.6 mag on HST); a number applies to all.
+    zeropoints = None
+    if str(args.mag_zeropoint).lower() == 'auto':
+        from astropy.io import fits as _fits
+        from icl.colors import header_ab_zeropoint
+        zeropoints = {}
+        for b, path in band_files.items():
+            with _fits.open(path) as hd:
+                h = hd[0].header if hd[0].data is not None else hd[1].header
+            zp_b = header_ab_zeropoint(h)
+            if zp_b is not None:
+                zeropoints[b] = zp_b
+                print(f"  {b}: ZP_AB={zp_b:.4f} (header)", file=sys.stderr)
+
+    profiles = measure_multiband_icl_profiles(band_files, mask, cx, cy, config,
+                                              zeropoints=zeropoints)
 
     # Output per-band profiles + colors
     band_names = sorted(band_files.keys())

@@ -314,3 +314,66 @@ def iterative_background_icl(data, mask, config):
 
     bgsub = data - background
     return background, current_mask, bgsub
+
+
+def constant_sky_apertures(data, mask, cx, cy, rmin_pix, n_apertures=30,
+                           radius=25, seed=0, max_tries=20000):
+    """Constant sky from random empty apertures far from the cluster centre.
+
+    Montes & Trujillo (2018, Sec. 2.1) measure the residual sky of the HFF
+    mosaics in ~30 apertures of r = 25 px placed > 350 kpc (single-BCG
+    clusters) from the BCG and away from any source or diffuse light, and
+    add/subtract that constant.  Apertures are accepted only if no pixel is
+    masked or NaN.
+
+    Parameters
+    ----------
+    data : 2D array
+    mask : 2D bool array (True = source)
+    cx, cy : float  -- centre (0-indexed)
+    rmin_pix : float -- minimum distance of an aperture centre from (cx, cy)
+    n_apertures, radius : aperture count and radius (px)
+
+    Returns
+    -------
+    sky : float
+        Median of the aperture means.
+    sky_err : float
+        Standard error of that median (1.253 sigma / sqrt(N)).
+    centres : (N, 2) array of (x, y) aperture centres.
+    means : (N,) array of aperture means.
+    """
+    ny, nx = data.shape
+    bad = ~np.isfinite(data)
+    if mask is not None:
+        bad = bad | np.asarray(mask, dtype=bool)
+    rng = np.random.default_rng(seed)
+    yy, xx = np.ogrid[-radius:radius + 1, -radius:radius + 1]
+    disk = (xx * xx + yy * yy) <= radius * radius
+    centres, means = [], []
+    tries = 0
+    while len(means) < n_apertures and tries < max_tries:
+        tries += 1
+        x = int(rng.integers(radius, nx - radius))
+        y = int(rng.integers(radius, ny - radius))
+        if np.hypot(x - cx, y - cy) < rmin_pix:
+            continue
+        sl = (slice(y - radius, y + radius + 1),
+              slice(x - radius, x + radius + 1))
+        if bad[sl][disk].any():
+            continue
+        # keep apertures from overlapping each other
+        if any(np.hypot(x - u, y - v) < 2 * radius for u, v in centres):
+            continue
+        centres.append((x, y))
+        means.append(float(np.mean(data[sl][disk])))
+    means = np.array(means)
+    if len(means) == 0:
+        raise RuntimeError("constant_sky_apertures: no empty aperture found "
+                           f"beyond r={rmin_pix:.0f} px")
+    sky = float(np.median(means))
+    sky_err = float(1.253 * np.std(means) / np.sqrt(len(means))) \
+        if len(means) > 1 else float('nan')
+    print(f"  sky from {len(means)} apertures (r={radius}px, R>{rmin_pix:.0f}px):"
+          f" {sky:.4g} +- {sky_err:.2g}", file=sys.stderr)
+    return sky, sky_err, np.array(centres), means

@@ -23,7 +23,7 @@ need_x() { if ! DISPLAY=$DISP xdpyinfo >/dev/null 2>&1; then
 gui() { rm -rf ~/ds9.auto ~/ds9.auto.dir; DISPLAY=$DISP timeout -s KILL "${T:-240}" "$@"; }
 
 # ---- checks: each defines  chk_NAME  (print details on stdout, return 0 pass / 1 fail / 77 skip) and is registered in ALL / LONG
-ALL="tools_syntax ai_bridge_tests moving_tests ai_gui agent_gui agent_real icl_export click_chooser click_xevent cat_api cat_behavior report_tests review_gui review_td geometry mouse"
+ALL="tools_syntax ai_bridge_tests moving_tests icl_tests ai_gui agent_gui agent_real icl_export click_chooser click_xevent cat_api cat_behavior report_tests review_gui review_td geometry mouse"
 LONG="session_replay link_bench moving_session"
 chk_tools_syntax() { local bad=0 f
   for f in tools/*.py scripts/*.py; do "$PY" -m py_compile "$f" 2>&1 || bad=1; done
@@ -38,6 +38,7 @@ chk_ai_bridge_tests() { local r
   else OGF_AI_OFFLINE=1 "$PY" -m pytest -q ai_bridge/tests 2>&1 | tail -3; r=${PIPESTATUS[0]}; echo "(live-agent tests skipped; OGF_LIVE=1 includes them)"; fi
   [ $r = 0 ]; }
 chk_moving_tests() { "$PY" -m pytest -q moving/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
+chk_icl_tests() { "$PY" -m pytest -q -p no:cacheprovider icl/tests 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 chk_ai_gui() { need_x || { echo "no X server"; return 77; }
   "$PY" scripts/verify_ai_gui.py --python "$PY" --display $DISP --workdir "$OUT/ai_gui_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 chk_agent_gui() { need_x || { echo "no X server"; return 77; }

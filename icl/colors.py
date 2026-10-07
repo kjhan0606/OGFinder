@@ -7,25 +7,57 @@ and computes color index profiles (e.g., B-V, g-r).
 import numpy as np
 
 
-def measure_multiband_icl_profiles(band_files, mask, cx, cy, config):
+def header_ab_zeropoint(header):
+    """AB zero point implied by a FITS header, or None.
+
+    Tries, in order: JWST ``PIXAR_SR`` (MJy/sr images), HST
+    ``PHOTFLAM``+``PHOTPLAM`` (e-/s images), ``PHOTFNU`` (Jy per unit),
+    then an explicit ``MAGZERO``/``ZP``/``ABZP`` keyword.
+    """
+    try:
+        if 'PIXAR_SR' in header:
+            return -6.10 - 2.5 * np.log10(float(header['PIXAR_SR']))
+        if 'PHOTFLAM' in header and 'PHOTPLAM' in header and \
+                float(header['PHOTFLAM']) > 0:
+            return (-2.5 * np.log10(float(header['PHOTFLAM'])) - 21.10
+                    - 5.0 * np.log10(float(header['PHOTPLAM'])) + 18.692)
+        if 'PHOTFNU' in header and float(header['PHOTFNU']) > 0:
+            return -2.5 * np.log10(float(header['PHOTFNU'])) + 8.90
+        for k in ('ABZP', 'MAGZERO', 'MAGZPT', 'ZP'):
+            if k in header:
+                return float(header[k])
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def measure_multiband_icl_profiles(band_files, mask, cx, cy, config,
+                                   zeropoints=None):
     """Measure ICL SB profiles in multiple bands.
 
     Parameters
     ----------
     band_files : dict
         {band_name: fits_path} mapping.
-    mask : 2D bool array
-        Source mask (shared across bands).
+    mask : 2D bool array or None
+        Source mask (shared across bands); True = masked.  Masked pixels
+        are excluded from every band's profile.
     cx, cy : float
         BCG center (0-indexed).
     config : ICLConfig
         Profile configuration.
+    zeropoints : dict, optional
+        {band_name: AB zero point}.  Bands not listed use
+        ``config.mag_zeropoint``.  Different filters have different zero
+        points (e.g. HST F606W 26.49 vs F814W 25.94), so a single value
+        biases the colours by the zero-point difference.
 
     Returns
     -------
     profiles : dict
         {band_name: profile_list} for each band.
     """
+    import copy
     from .profile import measure_sb_profile
     from astropy.io import fits
 
@@ -46,8 +78,21 @@ def measure_multiband_icl_profiles(band_files, mask, cx, cy, config):
             while data.ndim > 2:
                 data = data[0]
 
-        # Zero out masked regions (background already subtracted)
-        profiles[band_name] = measure_sb_profile(data, cx, cy, config)
+        # Exclude masked pixels (background already subtracted).  The
+        # profile code skips non-finite pixels, so masked -> NaN.
+        if mask is not None:
+            m = np.asarray(mask, dtype=bool)
+            if m.shape != data.shape:
+                raise ValueError(f"mask shape {m.shape} != image shape "
+                                 f"{data.shape} for band {band_name}")
+            data = data.copy()
+            data[m] = np.nan
+
+        cfg = config
+        if zeropoints and band_name in zeropoints:
+            cfg = copy.copy(config)
+            cfg.mag_zeropoint = float(zeropoints[band_name])
+        profiles[band_name] = measure_sb_profile(data, cx, cy, cfg)
 
     return profiles
 

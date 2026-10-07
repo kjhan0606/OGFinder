@@ -399,3 +399,83 @@ def _gaussian_fill(data, mask, max_passes=8):
             return
 
         sigma *= 2.0
+
+
+def _disk(r):
+    y, x = np.ogrid[-r:r + 1, -r:r + 1]
+    return (x * x + y * y) <= r * r
+
+
+def hot_cold_mask(data, cold_thresh=3.0, cold_minarea=200, hot_thresh=1.5,
+                  hot_minarea=5, unsharp_sigma=3.0, cold_dilate=11,
+                  hot_dilate=2, bkg_mesh=256, valid=None):
+    """Two-pass "hot + cold" source mask (Montes & Trujillo 2018, App. A2).
+
+    * cold: SEP detection on the image (bright, extended galaxies), the
+      segments dilated by ``cold_dilate`` pixels;
+    * hot: SEP detection on an unsharp-masked image (image minus a Gaussian
+      of ``unsharp_sigma`` px) that brings out small/faint sources sitting on
+      the ICL, dilated by ``hot_dilate`` pixels.
+
+    Thresholds are in units of the global background RMS.  NaN pixels
+    (and ``~valid``) are ignored by the detection.
+
+    Returns
+    -------
+    mask : 2D bool array
+        cold | hot dilated mask (True = masked).
+    seg_cold, seg_hot : 2D int arrays
+        SEP segmentation maps (0 = background).
+    obj_cold : structured array
+        SEP catalogue of the cold pass (x, y, flux, a, b, theta, npix ...).
+    """
+    try:
+        import sep
+    except ImportError:  # pragma: no cover
+        import sep_pjw as sep
+    from scipy.ndimage import gaussian_filter
+
+    img = np.array(data, dtype=np.float64)
+    bad = ~np.isfinite(img)
+    if valid is not None:
+        bad |= ~np.asarray(valid, dtype=bool)
+    img[bad] = 0.0
+    img = np.ascontiguousarray(img)
+    mbad = np.ascontiguousarray(bad.astype(np.uint8))
+
+    bkg = sep.Background(img, mask=mbad, bw=bkg_mesh, bh=bkg_mesh)
+    rms = float(bkg.globalrms)
+    sep.set_extract_pixstack(max(3_000_000, img.size // 4))
+    sep.set_sub_object_limit(4096)
+
+    # cold: no local background subtraction (the ICL is part of the signal)
+    obj_cold, seg_cold = sep.extract(img, cold_thresh * rms, mask=mbad,
+                                     minarea=cold_minarea,
+                                     segmentation_map=True,
+                                     deblend_cont=0.005)
+    # hot: unsharp-masked image
+    filled = img.copy()
+    if bad.any():
+        filled[bad] = 0.0
+    sm = gaussian_filter(filled, unsharp_sigma)
+    w = gaussian_filter((~bad).astype(np.float64), unsharp_sigma)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        sm = np.where(w > 0, sm / np.maximum(w, 1e-12), 0.0)
+    unsharp = np.ascontiguousarray(img - sm)
+    obj_hot, seg_hot = sep.extract(unsharp, hot_thresh * rms, mask=mbad,
+                                   minarea=hot_minarea,
+                                   segmentation_map=True)
+
+    mask = np.zeros(img.shape, dtype=bool)
+    if cold_dilate > 0:
+        mask |= binary_dilation(seg_cold > 0, structure=_disk(int(cold_dilate)))
+    else:
+        mask |= seg_cold > 0
+    if hot_dilate > 0:
+        mask |= binary_dilation(seg_hot > 0, structure=_disk(int(hot_dilate)))
+    else:
+        mask |= seg_hot > 0
+    print(f"  hot+cold mask: cold {len(obj_cold)} sources, hot {len(obj_hot)}"
+          f" sources, rms={rms:.3g}, masked {100 * mask.mean():.1f}%",
+          file=sys.stderr)
+    return mask, seg_cold.astype(np.int32), seg_hot.astype(np.int32), obj_cold
