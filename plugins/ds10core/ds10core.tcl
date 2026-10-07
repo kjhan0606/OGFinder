@@ -41,3 +41,60 @@ proc OGFDs10coreCatalogAfter {} {
 	::ogf::status "Catalogue markers loaded from $reg"
     }
 }
+
+# ---- star aperture photometry (steps aper-phot / aper-series)
+# before: the regions on the image (the stars you clicked: point or circle regions) -> {work}/aper_picks.reg, in image coordinates
+proc OGFDs10coreAperBefore {} {
+    global current
+    set f [file join [OGFSessWorkDir] aper_picks.reg]
+    set txt {}
+    if {[info exists current(frame)] && $current(frame) ne {}} {catch {set txt [$current(frame) marker list ds9 image fk5 degrees 0]}}
+    file mkdir [file dirname $f]
+    set fd [open $f w]; puts -nonewline $fd $txt; close $fd
+    set n [regexp -all -line {^\s*(point|circle)\(} $txt]
+    if {[::ogf::params::get ds10core aper-stars] eq "regions"} {
+	::ogf::status [expr {$n ? "Aperture photometry: $n picked star(s)" : "Aperture photometry: no stars picked (click on stars first); detecting stars instead"}]
+    }
+}
+
+# after: apertures and sky annuli replace the picks on the image; the light curve (time series) is shown in its own window
+proc OGFDs10coreAperAfter {} {
+    global current
+    set wd [OGFSessWorkDir]
+    set reg [file join $wd aper_apertures.reg]
+    if {[file exists $reg] && [info exists current(frame)]} {
+	catch {$current(frame) marker delete all}
+	catch {MarkerLoadFile $reg $current(frame) ds9 image fk5}
+    }
+    set sj [file join $wd aperphot_summary.json]
+    set png [file join $wd aperseries_lightcurve.png]
+    set series [expr {[file exists $png] && [file mtime $png] >= [clock seconds] - 600}]
+    if {$series} {set sj [file join $wd aperseries_summary.json]}
+    set msg "Aperture photometry done"
+    if {[file exists $sj]} {
+	set fd [open $sj r]; set s [read $fd]; close $fd
+	set n ?; set fw ?; set zp ?
+	regexp {"n_stars":\s*([0-9]+)} $s -> n
+	regexp {"fwhm_px":\s*([0-9.]+)} $s -> fw
+	regexp {"zeropoint":\s*\{[^\}]*"zp":\s*([-0-9.]+)} $s -> zp
+	set msg "Aperture photometry: $n stars, FWHM [format %.2f $fw] px, ZP [format %.3f $zp]; table = catalogue, apertures/annuli on the image ($reg)"
+    }
+    ::ogf::status $msg
+    if {$series} {OGFDs10coreAperLightCurve $png}
+}
+
+proc OGFDs10coreAperLightCurve {png} {
+    set w .ogfaperlc
+    catch {destroy $w}
+    toplevel $w
+    wm title $w "Astrafex Core: light curve"
+    catch {wm geometry $w +[expr {[winfo rootx .] + [winfo width .] / 2}]+[expr {[winfo rooty .] + 260}]}
+    if {[catch {image create photo ogfaperlcimg -file $png} err]} {
+	label $w.l -text "light curve: $png ($err)"
+    } else {
+	label $w.l -image ogfaperlcimg
+    }
+    pack $w.l -fill both -expand 1
+    button $w.b -text Close -command [list destroy $w]
+    pack $w.b -side bottom
+}

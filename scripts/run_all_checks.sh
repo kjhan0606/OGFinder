@@ -154,6 +154,10 @@ EXTRA="$EXTRA ds10core_tests"
 chk_ds10core_gui() { need_x || { echo "no X server"; return 77; }
   DISPLAY_OVERRIDE=$DISP "$HERE/verify_ds10core.sh" "$OUT/ds10core_work" 2>&1 | tail -6; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA ds10core_gui"
+# star aperture photometry steps of the shared core (picked stars with real X clicks, table, aperture/annulus overlay, light curve): verify_aper_phot.sh
+chk_aperphot_gui() { need_x || { echo "no X server"; return 77; }
+  DISPLAY_OVERRIDE=$DISP "$HERE/verify_aper_phot.sh" "$OUT/aperphot_work" 2>&1 | tail -6; local r=${PIPESTATUS[0]}; [ $r = 77 ] && return 77; [ $r = 0 ]; }
+EXTRA="$EXTRA aperphot_gui"
 # cross-night orbit-fit linking (moving/nightlink.py): synthetic injection + decoys, CLI mode, real MPC astrometry when the network is up (also part of moving_tests)
 chk_nightlink_tests() { "$PY" -m pytest -q moving/tests/test_nightlink.py 2>&1 | tail -3; [ ${PIPESTATUS[0]} = 0 ]; }
 EXTRA="$EXTRA nightlink_tests"

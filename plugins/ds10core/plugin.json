@@ -6,7 +6,7 @@
  "tab": "Measure",
  "order": 70,
  "dialog_tabs": 1,
- "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg); sky catalogue query / cross-match, MAST search and download, and user Python plugins.",
+ "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg); sky catalogue query / cross-match, MAST search and download, and user Python plugins; star aperture photometry with clicked stars and light curves (ds10core.tools.aper_phot).",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
   "core": "ds10core (Astrafex Web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
@@ -784,6 +784,187 @@
     "mode": "set",
     "catalog": "catalog.tsv"
    }
+  },
+  {
+   "id": "aper-phot",
+   "label": "Aperture photometry (click stars)",
+   "title": "Astrafex Core: star aperture photometry (picked stars, catalogue or detection; CoG aperture correction, zero point)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.aper_phot",
+   "before": "OGFDs10coreAperBefore",
+   "after": "OGFDs10coreAperAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_aper_phot.py",
+    "--core-dir",
+    "{core-dir}",
+    "--stars",
+    "{aper-stars}",
+    "--picks",
+    "{work}/aper_picks.reg",
+    "{image}",
+    "--out",
+    "{work}/aperphot_catalog.tsv",
+    "--summary",
+    "{work}/aperphot_summary.json",
+    "--regions",
+    "{work}/aper_apertures.reg",
+    "--cog-out",
+    "{work}/aperphot_cog.tsv",
+    "--find-thresh",
+    "{aper-find-thresh}",
+    "--centroid",
+    "{aper-centroid}",
+    "--recenter-max",
+    "{aper-recenter-max}",
+    "--radii",
+    "{aper-radii}",
+    "--unit",
+    "{aper-unit}",
+    "--fwhm",
+    "{aper-fwhm}",
+    "--sky-in",
+    "{aper-sky-in}",
+    "--sky-out",
+    "{aper-sky-out}",
+    "--sky-method",
+    "{aper-sky-method}",
+    "--gain",
+    "{aper-gain}",
+    "--saturate",
+    "{aper-saturate}",
+    "--apcor",
+    "{aper-apcor}",
+    "--zeropoint",
+    "{aper-zeropoint}",
+    {
+     "if": "aper-ref-mag",
+     "argv": [
+      "--ref-mag",
+      "{aper-ref-mag}"
+     ]
+    },
+    {
+     "if_file": "{catalog}",
+     "argv": [
+      "--catalog",
+      "{catalog}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "aperphot_catalog.tsv"
+   },
+   "done_status": "Aperture photometry (shared core)"
+  },
+  {
+   "id": "aper-series",
+   "label": "Aperture photometry light curve (frames)",
+   "title": "Astrafex Core: time-series differential aperture photometry (target / comparison / check stars, AAVSO export)",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.aper_series",
+   "before": "OGFDs10coreAperBefore",
+   "after": "OGFDs10coreAperAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_aper_phot.py",
+    "--core-dir",
+    "{core-dir}",
+    "--stars",
+    "{aper-stars}",
+    "--picks",
+    "{work}/aper_picks.reg",
+    "{image}",
+    "--out",
+    "{work}/aperseries_catalog.tsv",
+    "--summary",
+    "{work}/aperseries_summary.json",
+    "--regions",
+    "{work}/aper_apertures.reg",
+    "--cog-out",
+    "{work}/aperseries_cog.tsv",
+    "--find-thresh",
+    "{aper-find-thresh}",
+    "--centroid",
+    "{aper-centroid}",
+    "--recenter-max",
+    "{aper-recenter-max}",
+    "--radii",
+    "{aper-radii}",
+    "--unit",
+    "{aper-unit}",
+    "--fwhm",
+    "{aper-fwhm}",
+    "--sky-in",
+    "{aper-sky-in}",
+    "--sky-out",
+    "{aper-sky-out}",
+    "--sky-method",
+    "{aper-sky-method}",
+    "--gain",
+    "{aper-gain}",
+    "--saturate",
+    "{aper-saturate}",
+    "--apcor",
+    "{aper-apcor}",
+    "--zeropoint",
+    "{aper-zeropoint}",
+    {
+     "if": "aper-ref-mag",
+     "argv": [
+      "--ref-mag",
+      "{aper-ref-mag}"
+     ]
+    },
+    {
+     "if_file": "{catalog}",
+     "argv": [
+      "--catalog",
+      "{catalog}"
+     ]
+    },
+    "--frames",
+    "{aper-frames}",
+    "--series-out",
+    "{work}/aperseries_series.tsv",
+    "--lc-out",
+    "{work}/aperseries_lightcurve.tsv",
+    "--aavso-out",
+    "{work}/aperseries_aavso.txt",
+    "--lc-png",
+    "{work}/aperseries_lightcurve.png",
+    "--target",
+    "{aper-target}",
+    "--comps",
+    "{aper-comps}",
+    {
+     "if": "aper-check",
+     "argv": [
+      "--check",
+      "{aper-check}"
+     ]
+    },
+    "--track",
+    "{aper-track}",
+    "--starid",
+    "{aper-starid}",
+    "--obscode",
+    "{aper-obscode}"
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "aperseries_catalog.tsv"
+   },
+   "done_status": "Aperture photometry light curve (shared core)"
   }
  ],
  "params": [
@@ -1119,14 +1300,14 @@
   },
   {
    "name": "lsbg-mu-eff-min",
-   "label": "LSBG \u03bc_eff min",
+   "label": "LSBG μ_eff min",
    "type": "float",
    "default": 24.2,
    "group": "LSBG"
   },
   {
    "name": "lsbg-mu-eff-max",
-   "label": "LSBG \u03bc_eff max",
+   "label": "LSBG μ_eff max",
    "type": "float",
    "default": 28.8,
    "group": "LSBG"
@@ -1503,6 +1684,205 @@
    "type": "string",
    "default": "{}",
    "group": "User plugin"
+  },
+  {
+   "name": "aper-stars",
+   "label": "Stars",
+   "type": "choice",
+   "choices": [
+    "regions",
+    "catalog",
+    "detect"
+   ],
+   "default": "regions",
+   "group": "Aperture photometry",
+   "help": "regions = the point / circle regions you clicked on the image (ds9 Region menu); catalog = the catalogue table (X_IMAGE/Y_IMAGE or RA/Dec, e.g. a Gaia query); detect = find stars automatically"
+  },
+  {
+   "name": "aper-radii",
+   "label": "Aperture radii",
+   "type": "string",
+   "default": "1,1.5,2,3",
+   "group": "Aperture photometry",
+   "help": "Comma-separated, in the unit below"
+  },
+  {
+   "name": "aper-unit",
+   "label": "Radius unit",
+   "type": "choice",
+   "choices": [
+    "fwhm",
+    "px",
+    "arcsec"
+   ],
+   "default": "fwhm",
+   "group": "Aperture photometry",
+   "help": "Also the unit of the sky annulus; fwhm = multiples of the measured FWHM"
+  },
+  {
+   "name": "aper-fwhm",
+   "label": "FWHM (px or auto)",
+   "type": "string",
+   "default": "auto",
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-sky-in",
+   "label": "Sky annulus inner",
+   "type": "float",
+   "default": 4.0,
+   "min": 0.5,
+   "max": 500,
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-sky-out",
+   "label": "Sky annulus outer",
+   "type": "float",
+   "default": 6.0,
+   "min": 1,
+   "max": 1000,
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-sky-method",
+   "label": "Sky estimator",
+   "type": "choice",
+   "choices": [
+    "median",
+    "mode",
+    "mean"
+   ],
+   "default": "median",
+   "group": "Aperture photometry",
+   "help": "Sigma-clipped; mode = 3 median - 2 mean"
+  },
+  {
+   "name": "aper-centroid",
+   "label": "Centroid",
+   "type": "choice",
+   "choices": [
+    "com",
+    "gauss",
+    "none"
+   ],
+   "default": "com",
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-recenter-max",
+   "label": "Max. recentring shift (px)",
+   "type": "float",
+   "default": 3.0,
+   "min": 0,
+   "max": 50,
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-find-thresh",
+   "label": "Detection threshold (sigma)",
+   "type": "float",
+   "default": 8.0,
+   "min": 3,
+   "max": 100,
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-gain",
+   "label": "Gain e-/ADU (0 = header)",
+   "type": "float",
+   "default": 0,
+   "min": 0,
+   "max": 1000,
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-saturate",
+   "label": "Saturation (auto / level / 0)",
+   "type": "string",
+   "default": "auto",
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-apcor",
+   "label": "Aperture correction",
+   "type": "choice",
+   "choices": [
+    "cog",
+    "infinity",
+    "none"
+   ],
+   "default": "cog",
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-zeropoint",
+   "label": "Zero point (auto / value / fit)",
+   "type": "string",
+   "default": "auto",
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-ref-mag",
+   "label": "Reference magnitude column (fit)",
+   "type": "string",
+   "default": "",
+   "group": "Aperture photometry"
+  },
+  {
+   "name": "aper-frames",
+   "label": "Frames (time series)",
+   "type": "string",
+   "default": "",
+   "group": "Light curve",
+   "help": "Comma-separated paths of the other images; the open image is frame 1"
+  },
+  {
+   "name": "aper-target",
+   "label": "Target star #",
+   "type": "string",
+   "default": "1",
+   "group": "Light curve"
+  },
+  {
+   "name": "aper-comps",
+   "label": "Comparison stars #",
+   "type": "string",
+   "default": "2,3",
+   "group": "Light curve"
+  },
+  {
+   "name": "aper-check",
+   "label": "Check star #",
+   "type": "string",
+   "default": "",
+   "group": "Light curve"
+  },
+  {
+   "name": "aper-track",
+   "label": "Tracking",
+   "type": "choice",
+   "choices": [
+    "wcs",
+    "offset",
+    "none"
+   ],
+   "default": "wcs",
+   "group": "Light curve"
+  },
+  {
+   "name": "aper-starid",
+   "label": "AAVSO star name",
+   "type": "string",
+   "default": "TARGET",
+   "group": "Light curve"
+  },
+  {
+   "name": "aper-obscode",
+   "label": "AAVSO observer code",
+   "type": "string",
+   "default": "XXXX",
+   "group": "Light curve"
   }
  ],
  "tcl": "ds10core.tcl"
