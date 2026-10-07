@@ -174,7 +174,7 @@ Each reported segment was straightened and measured with `sdss_ridge.py` (defini
 | r | 165 | 1c | 133.8 | 335 | static 1 | 1.12 | 5 | 0.50 | 215.7 | 84 | spike |
 | r | 165 | 1c | 134.3 | 342 | static 4 | 1.38 | 6 | 0.65 | 252.1 | 32 | spike |
 
-**16 spike, 5 star, 8 no streak.  No detection was confirmed as a satellite trail.**  There is still no satellite-trail truth table for these frames.
+**16 spike, 5 star, 8 no streak.  No detection was confirmed as a satellite trail.**  There is still no satellite-trail truth table for these SDSS frames.  A separate ACS/WFC sample, with coordinates, is in the section below.
 
 * **spike** (16): a compact source on or just off the segment and a narrow residual at a 45/135 deg spike angle, or the same residual static in another band.  The two r 145 segments are one star (cores 0.30 arcsec apart).  Five field-165 segments (g 44.5, i 134.3, i 134.8, r 133.8, r 134.3) are one star (cores within 6 arcsec) and are static in at least one other band.  Several are called one-band by the SNR ≥ 6 rule while the cutout is still a star at a spike angle (r 139, g 151, i 160, r 164): the other-band collapsed SNR is 2-5.
 * **i field 158, straight, θ 44.4** is the faintest coherent ridge: 0.87 σ_pix, FWHM 6 px, 70 % of 20 px bins above 0.5 σ, and the wing-sigma cutout shows a faint narrow band through a star.  Other-band collapsed SNR is u 0.5, g 1.7, r 2.5, z 5.0, so the static cut does not fire.  The spike rule also kept it: the brightest pixel on the ±3 px strip is 3.9× the fitted amplitude and 672 px off the segment, and the ridge does not fall off by the rule's factor.  The angle is 0.6 deg from 45.  It is counted as a spike, not as a satellite trail.
@@ -192,3 +192,85 @@ Each reported segment was straightened and measured with `sdss_ridge.py` (defini
 ### effect of the spike-rule change (fac_fall 300 -> 30, ratio 3.0 -> 2.5) on the HUDF injection tests (same seeds, `--exp fp,detect`; the tables above in this file for the detection rate are the pre-change ones)
 HUDF detection rate, all widths (found/40): peak 4 sigma 35 -> 32, 2 sigma 26 -> 22, 1 sigma 6 -> 6, 0.7 sigma 2 -> 1.  False trails in the 88 trail-free images: 0 before and after (best-z statistics unchanged).
 Accuracy over the 104 matched detections of that run: dtheta median 0.007 deg (68 % half-range 0.21), drho RMS 0.88 px, FWHM ratio median 1.01 (the earlier 126-detection sample also contained the galaxy-crossing set, so counts are not comparable).  `--spike-fac 300` restores the old rule (ratio 2.5 instead of 3.0 remains).
+
+### ACS/WFC satellite-trail truth sample (2026-10-08)
+
+Image membership comes from Kruk et al. 2023, Nature Astronomy 7, 262 (DOI 10.1038/s41550-023-01903-3), Zenodo record 7474191 version 0.1, file `HST_observations_satellite_trail_classifications.csv` (md5 `654acbe818da5f9f0af02f3fb510118b`).  The file has 114607 HST images.  3072 rows have `flag` = `satellite`, and the sum of `no_sats` on those rows is 3228.  Instruments: ACS/WFC 76056, WFC3/UVIS 38551.  The table is image-level.  It has no trail endpoints.  RA/Dec is the pointing.  The column names are `flag` and `no_sats`.  `image_url` points at a classification preview JPEG, which was not used as a geometry label.  The science frames are the MAST `flc` products (`mast:HST/product/{id}_flc.fits`).  They are CTE-corrected and are not distortion-corrected, so a trail that is straight on the sky can bow by several pixels in detector pixels.  Labels and the detector both use detector pixels.
+
+The cut is `sat_truth_selection.json`.  Keep ACS/WFC rows with `APERTURE=WFC`, `DETECTOR=WFC`, `flag=satellite`, `no_sats=1`, `target_moving` false, intent science, exposure 300–1200 s, and one of F814W, F606W, F850LP, F435W, F475W, F775W, F555W, F625W in the filter string.  That pool is 865 rows and 328 distinct (band, proposal) pairs.  From it: one exposure per band, distinct proposals, pairwise separation at least 8 deg, exposure time nearest 600 s.  `jc8m32j5q` is outside this cut.  Eight exposures were labelled.  The alternates in the JSON were not downloaded.  Kruk `no_sats=1` is an image flag, so two visible streaks on one image were both recorded.
+
+| id | band | filter | exptime [s] | proposal | date | target |
+|---|---|---|---|---|---|---|
+| j6m610mvq | F814W | CLEAR1L;F814W | 600 | 9427 | 2002-09-03 | NGC5557 |
+| j8zq09yyq | F606W | F606W;CLEAR2L | 527 | 10129 | 2005-04-22 | NGC1399-S |
+| j9fo50uiq | F850LP | F850LP;CLEAR2L | 357 | 10476 | 2006-01-15 | ANY |
+| j8vp07s8q | F435W | CLEAR1L;F435W | 550 | 10006 | 2004-10-02 | M31-BH2 |
+| j9cr06j2q | F475W | F475W;CLEAR2L | 406 | 10550 | 2006-04-14 | UGC-11651 |
+| j91103cjq | F775W | F775W;CLEAR2L | 600 | 10334 | 2005-03-28 | SDSSJ0813+3508 |
+| j9bm09dbq | F555W | F555W;CLEAR2L | 300 | 10524 | 2006-03-20 | ANY |
+| jcvn03jeq | F625W | F625W;CLEAR2L | 578 | 14172 | 2015-12-22 | IC-348-POS3B |
+
+Geometry was marked by eye on stretched chips before `detect_trails`.  `sat_truth_labels.json` sha256 `d56e06e2b94d3b20fcc69279fb64f5362825045be2a2971cbd0e569045d1f2c7`, written 2026-10-08 08:15:32 KST.  `sat_truth_detections.json` was written 2026-10-08 08:25:39 KST and stores the same sha256.  Chip 2 is FITS extension 1 (CCDCHIP 2).  Chip 1 is extension 4 (CCDCHIP 1).  DQ is the SCI extension plus 2.  A pixel is valid when `(DQ & 0x3FF) == 0`.  Coordinates are 1-based FITS pixels.  The overview used for the eye mark was a block-mean asinh stretch and a 15 px median high-pass block-maximum, both with invalid pixels filled by the sky.  Endpoints were then measured on the sky-subtracted chip: every 8 px along the eye window, the cross-track peak of a 48 px along-track median, peaks above 1 sigma kept, then a sigma-clipped straight line.  An endpoint was extended to the chip border only where the ridge stayed bright to the last measured bin.  `ridge_mad_px` is the MAD of those peaks about the line.  It is not the uncertainty of the fitted line.  The label is the straight fit, because the detector fits a straight segment.  On j6m610mvq chip 1 the ridge bows by about ±8 px (MAD 6.3 px), which is the ACS distortion left in the flc.
+
+| id | chip | x1 | y1 | x2 | y2 | θ [deg] | length [px] | excess [σ] | ridge MAD [px] | σ [e-] |
+|---|---|---|---|---|---|---|---|---|---|---|
+| j6m610mvq | chip1 | 61.4 | 1 | 3587.7 | 2048 | 30.14 | 4077.3 | 34 | 6.3 | 40.5 |
+| j8zq09yyq | chip2 | 1 | 384.5 | 993.2 | 1 | 158.87 | 1063.7 | 8.3 | 0.64 | 11.7 |
+| j9fo50uiq | chip1 | 1200 | 1027.0 | 3062.6 | 1 | 151.15 | 2126.5 | 5.7 | 6.9 | 7.5 |
+| j9fo50uiq | chip2 | 3177.6 | 2048 | 3991.7 | 1610.4 | 151.74 | 924.3 | 2.8 | 1.7 | 6.9 |
+| j8vp07s8q | chip1 | 3715.6 | 2048 | 4096 | 836.5 | 107.43 | 1269.8 | 10 | 1.3 | 35.6 |
+| j91103cjq | chip1 | 1126.2 | 2048 | 2758.8 | 1 | 128.57 | 2618.3 | 15.6 | 0.48 | 9.5 |
+| j91103cjq | chip2 | 2797.4 | 2048 | 4096 | 406.3 | 128.34 | 2093.2 | 16.6 | 0.23 | 9.1 |
+| j9bm09dbq | chip1 | 288.6 | 1 | 2372.5 | 2048 | 44.49 | 2921.1 | 2.0 | 3.0 | 9.3 |
+| jcvn03jeq | chip2 | 1 | 665.7 | 4096 | 544.4 | 178.3 | 4096.8 | 22 | 2.5 | 11.7 |
+
+Chips labelled none: j6m610mvq chip2, j8zq09yyq chip1, j8vp07s8q chip2 (a star spike), j9cr06j2q chip1 (galaxy light), j9cr06j2q chip2, j9bm09dbq chip2, jcvn03jeq chip1 (short corner marks only).  j9cr06j2q is in the Kruk satellite list, and neither chip has a continuous narrow streak on this stretch.  On j91103cjq chip1 a vertical smudge near x=3670 has a high-pass median excess of −0.31 sigma and is not a label.  On j9bm09dbq chip1 the column x=202 (0-based index 201), FITS rows 904–1656, is one bright column: 45.6 % of that column has DQ bits set, and the sky-subtracted median of columns x=199..205 on that row range is 0.5, −1.0, −0.7, +124.3, −0.1, −0.8, −0.5 electrons.  It is not a label.  The detector rejected a candidate at θ 89.8, length 764, z 83 on that chip with reason `bleed`.
+
+The match rule is `sat_truth_score.py`.  dθ ≤ 3 deg, dρ ≤ 8 px, and the projected overlap is at least `max(100 px, 0.30 * min(length_label, length_detection))`.  One detection takes at most one label.  Recall uses every label.  Precision uses every accepted detection.  A chip with no label and no detection is a true-negative chip.  Rejected candidates are neither true positives nor false positives.
+
+The detector call was `detect_trails(im, valid=valid)` with no extra arguments (`ogfkit/trails.py`), thread caps 2, one chip at a time.  Sixteen chips, summed chip time 572.6 s, wall 575.83 s, exit 0.  `--curved` was not run.  A numpy All-NaN slice warning was printed during j9fo50uiq chip2.  That chip still returned detections.  Accepted rows store endpoints, θ, length, z, FWHM and amplitude.  Rejected rows store θ, length, z and the reason.  `trails.py` also computes a FWHM before it rejects (lines 489–493, `shape` when FWHM > 40 or length < 12 × FWHM, else `bleed`).  The driver did not write that FWHM, so rejected FWHMs are not reported.
+
+`python3 sat_truth_score.py sat_truth_labels.json sat_truth_detections.json` prints:
+
+```
+labels 9  detections 12
+TP labels 6  FN 3  TP detections 6  FP 6  true-negative chips 6
+recall 0.667 (6/9)
+precision 0.500 (6/12)
+on labelled chips: detections 11  precision 0.545 (6/11)
+false detections on chips with no label: 1
+```
+
+| label | dθ [deg] | dρ [px] | overlap [px] | detection θ, length, z, FWHM |
+|---|---|---|---|---|
+| j6m610mvq chip1 | 0.17 | 2.47 | 3329 | 30.30, 3329, 117.2, 8.6 |
+| j8zq09yyq chip2 | 0.56 | 4.13 | 1059 | 159.43, 1060, 68.9, 34.6 |
+| j91103cjq chip1 | 0.00 | 0.18 | 2610 | 128.57, 2610, 106.5, 2.6 |
+| j91103cjq chip2 | 0.01 | 0.20 | 2082 | 128.35, 2082, 133.3, 2.5 |
+| j9bm09dbq chip1 | 0.21 | 1.37 | 1447 | 44.27, 1447, 102.2, 3.3 |
+| jcvn03jeq chip2 | 0.05 | 2.33 | 4093 | 178.35, 4093, 214.4, 13.2 |
+
+The j6m detection covers 3329/4077 of the label.  The j9bm detection covers 1447/2921 of the label and still matches, because the overlap cut is 30 % of the shorter segment.  True-negative chips: j6m610mvq chip2, j8zq09yyq chip1, j8vp07s8q chip2, j9cr06j2q chip1, j9bm09dbq chip2, jcvn03jeq chip1.
+
+Three labels have no accepted match.  Each has a rejected candidate at nearly the same angle.  Those candidates stay false negatives.  They are not reclassified.
+
+| label | rejected candidate | reason |
+|---|---|---|
+| j9fo50uiq chip1, θ 151.15, length 2126.5 | θ 149.8, length 1734, z 45.2 | shape |
+| j9fo50uiq chip2, θ 151.74, length 924.3 | θ 152.15, length 992, z 33.7 | bleed |
+| j8vp07s8q chip1, θ 107.43, length 1269.8 | θ 107.3, length 1264, z 66.6; θ 107.3, length 1253, z 55.7; θ 102.8, length 548, z 30.5 | shape |
+
+The six false detections, and a sky excess measured after the score.  This excess is not part of the match rule and does not change the counts.  Sky is the median of valid pixels.  Sigma is 1.4826 × MAD.  The profile is the along-track median of 80 samples, cross-track −40 to +40 px.  Excess is the peak of that profile minus the median of the outer 8 samples on each wing, divided by sigma.
+
+| detection | θ | length | z | FWHM | excess [σ] | peak offset [px] |
+|---|---|---|---|---|---|---|
+| j9fo50uiq chip1 | 119.92 | 1114 | 76.2 | 15.8 | 2.00 | 0 |
+| j9fo50uiq chip1 | 92.80 | 548 | 32.6 | 5.7 | 1.86 | +1 |
+| j9fo50uiq chip2 | 92.00 | 558 | 35.6 | 5.1 | 2.20 | 0 |
+| j9fo50uiq chip2 | 89.22 | 548 | 12.9 | 29.6 | 0.73 | −2 |
+| j8vp07s8q chip1 | 76.42 | 559 | 13.2 | 10.6 | 0.51 | −29 |
+| j9cr06j2q chip2 | 171.93 | 2468 | 41.9 | 3.6 | 0.66 | 0 |
+
+The same measurement on the j9fo50uiq chip1 label gives 4.00 sigma (sigma 7.53 e-).  The θ 119.9 detection sits on a faint streak that was visible on the high-pass grid and was not entered as a label, because the ridge fit did not lock onto it.  It stays a false positive.  The j9cr06j2q chip2 detection has 0.66 sigma of sky excess (sigma 7.98 e-, amplitude 36 e-).  The frozen `none` label stands, and the detection stays a false positive.  It is the one false detection on a chip with no label.
+
+The three detector outputs previously quoted for ACS `jc8m32j5q` (`real_acs.py`) are that run's own segments, compared with acstools MRT masks on the `findsat_mrt` example.  They are not an independent coordinate catalogue, and they are not labels in this sample.

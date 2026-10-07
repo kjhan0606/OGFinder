@@ -81,7 +81,8 @@ Amplitude = peak per pixel in units of the pixel sigma measured by the pipeline;
 * **Real trails: HST ACS/WFC exposure `jc8m32j5q_flc.fits`** (MACS J0717, F606W, 1207 s; the acstools `findsat_mrt` example; `real_acs.py`, DQ flags masked): chip 1: a narrow bright trail (FWHM 2.6 px, peak 332 e-, 2014 px, z 94) and a wide faint one
   (FWHM 21 px, peak 8.5 e- = 0.54 pixel sigma, 3468 px, z 18); chip 2: the continuation of the narrow trail (FWHM 2.5, 2603 px, z 96).  Three near-vertical candidates (z 10-21) are the bleed/diffraction spikes of saturated stars and were rejected (before the bleed/spike rules they were reported as trails).
   Against acstools 3.8.2 MRT masks (chip 1): our masks lie 98 % (narrow) / 100 % (wide) inside the MRT masks, IoU 0.48 / 0.78 (MRT masks are about twice as wide); residual excess in the 4 px just outside our mask: +0.002 / -0.03 of the trail peak (0.04 pixel sigma for the narrow trail).
-  There is no labelled truth for this exposure, so no recall/precision number.
+  These three segments are this detector's own output on an exposure already known to contain satellite trails (the acstools `findsat_mrt` example), set next to the acstools MRT masks.  This exposure has no independent coordinate catalogue.  `jc8m32j5q` is not part of the labelled sample below.
+* **Labelled real trails (2026-10-08)**: eight ACS/WFC `flc` exposures drawn from Kruk et al. 2023 (image-level satellite flag; endpoints marked by eye before `detect_trails`).  Nine trail segments on 16 chips.  Default straight finder, DQ mask, no extra arguments: **recall 6/9, precision 6/12**.  Three labelled trails were rejected by the shape or bleed cut and stay false negatives.  Coordinates, the frozen match rule and the per-chip table are in `plugins/trails/validation/trails_validation.md`.
 
 ### Extensions and held-out checks (rev 24bd44d51; tables in `trails_validation.md`, per-detection list `heldout_sdss_prefix.md`)
 * **Curved arcs** (SYNTHETIC arcs, w = 6 px, injected into 700x700 HUDF windows, 8 per cell, coverage = fraction of the visible trail pixels inside the mask): straight trails (curvature 0): median coverage 0.99-1.00.  Curvature 4 deg/100 px (heading change ~28 deg over 700 px):
@@ -107,10 +108,9 @@ Amplitude = peak per pixel in units of the pixel sigma measured by the pipeline;
 * **Cost of the spike-rule change**: HUDF injection recall 35/40 -> 32/40 at 4 sigma and 26/40 -> 22/40 at 2 sigma; false trails stay 0/88.
 
 ## Limitations
-
-## Limitations
 * Curved trails are only handled as piecewise-linear chains (`--curved`, opt-in): recall 44-89 % at 3 sigma for 4-8 deg/100 px, none at 1.5 sigma, with occasional spurious segments; low-duty (<= 0.3) flickering trails are mostly missed; trails wider than ~40 px FWHM or shorter than 12 x their width are rejected on purpose.
 * On real wide-field frames with saturated stars (SDSS) the false-detection rate was 23 % of frames (before the spike rule change) and 7 % after.  The 2026-10-08 inspection of the 29 that remain classified 16 as diffraction spikes, 5 as a star on the segment with no narrow ray, and 8 as having no continuous streak (table in `plugins/trails/validation/trails_validation.md`).  Trails crossing a bright star core may be read as spikes (lower recall).
+* On the eight labelled ACS/WFC exposures (9 segments, labels drawn before the detector ran) the default straight finder has recall 6/9 and precision 6/12.  The three misses were rejected by the shape or bleed cut and are counted as false negatives.  One accepted detection on a chip with no labelled streak has 0.66 sigma of sky excess along the segment and is counted as a false positive.
 * Sensitivity is set by the correlated noise and the galaxies: about 1-2 pixel-sigma peak amplitude (HUDF F160W: ~28 mag/arcsec^2) for 50 %; faint partial trails inside a galaxy disc (M51) are often missed.
 * The 32 px background mesh subtracts part of very wide faint trails (> ~30 px) before detection; the mask width then comes from the fitted profile, not the full trail.
 * Bleed/spike rejection is a heuristic; a genuine trail running along a column or through a saturated star core with falling brightness would be rejected (`--keep-bleeds`).  Spikes that stay below 30 x the run amplitude (`--spike-fac`) are reported as trails.
