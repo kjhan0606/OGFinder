@@ -17,9 +17,25 @@ cd "$ROOT" || exit 2
 DS9=bin/ds9
 FITS="${OGF_TEST_FITS:-/workspace/fits}"
 declare -a NAMES KINDS RES SECS NOTE
+# The Xvfb we start is ours: it is killed on every exit (normal end, error, INT/TERM/HUP).  It is started with every fd above 2
+# closed, so it never holds an inherited lock fd (e.g. of `flock /tmp/astrafex_heavy.lock scripts/run_all_checks.sh`).
+# A running check is a background job + `wait`, so a signal is handled at once; its process tree is killed by PID.
+XVFB_PID=""; CHK_PID=""
+kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
+stop_xvfb() { if [ -n "$CHK_PID" ]; then kill_tree "$CHK_PID"; CHK_PID=""; fi
+  if [ -n "$XVFB_PID" ]; then kill "$XVFB_PID" 2>/dev/null; wait "$XVFB_PID" 2>/dev/null; XVFB_PID=""; fi; }
+trap 'stop_xvfb' EXIT
+trap 'stop_xvfb; trap - EXIT; exit 130' INT
+trap 'stop_xvfb; trap - EXIT; exit 143' TERM
+trap 'stop_xvfb; trap - EXIT; exit 129' HUP
+start_xvfb_nofd() {   # $1 display, rest Xvfb args; sets XVFB_PID
+  local d=$1; shift
+  ( for f in /proc/$BASHPID/fd/*; do f=${f##*/}; [ "$f" -gt 2 ] 2>/dev/null && eval "exec $f>&-"; done
+    exec Xvfb "$d" "$@" </dev/null >/dev/null 2>&1 ) &
+  XVFB_PID=$!; }
 need_x() { if ! DISPLAY=$DISP xdpyinfo >/dev/null 2>&1; then
     command -v Xvfb >/dev/null || return 1
-    (setsid Xvfb $DISP -screen 0 1400x1000x24 >/dev/null 2>&1 &); sleep 2; DISPLAY=$DISP xdpyinfo >/dev/null 2>&1 || return 1; fi; return 0; }
+    start_xvfb_nofd $DISP -screen 0 1400x1000x24; sleep 2; DISPLAY=$DISP xdpyinfo >/dev/null 2>&1 || return 1; fi; return 0; }
 gui() { rm -rf ~/ds9.auto ~/ds9.auto.dir; DISPLAY=$DISP timeout -s KILL "${T:-240}" "$@"; }
 
 # ---- checks: each defines  chk_NAME  (print details on stdout, return 0 pass / 1 fail / 77 skip) and is registered in ALL / LONG
@@ -171,7 +187,9 @@ LONG="$LONG regression_data"
 #@EXTRA-CHECKS
 
 run_one() { local n=$1 t0 t1 rc
-  t0=$(date +%s); "chk_$n" > "$OUT/$n.log" 2>&1; rc=$?; t1=$(date +%s)
+  # a GUI check's Xvfb is started here, in the main shell (not in the background job), so the traps above own and kill it
+  declare -f "chk_$n" | grep -q need_x && need_x
+  t0=$(date +%s); "chk_$n" > "$OUT/$n.log" 2>&1 & CHK_PID=$!; wait $CHK_PID; rc=$?; CHK_PID=""; t1=$(date +%s)
   NAMES+=("$n"); SECS+=($((t1-t0)))
   case $rc in 0) RES+=(PASS);; 77) RES+=(SKIP);; *) RES+=(FAIL);; esac
   NOTE+=("$(tail -1 "$OUT/$n.log" | cut -c1-70)"); }

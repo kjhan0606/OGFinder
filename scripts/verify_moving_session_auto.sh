@@ -12,7 +12,11 @@ DISP="${DISPLAY_OVERRIDE:-:77}"; REALHOME="${REAL_HOME:-$HOME}"
 CACHE="$REALHOME/.ds9/mast_cache"; EPH="$REALHOME/.ds9/ephem"
 FILES=""; for b in j8pu38c7q j8pu38caq j8pu38ceq j8pu38ciq; do f="$CACHE/${b}_flc.fits"; [ -f "$f" ] || { echo "SKIP: $f not cached (BB89 exposures, HST program 13758? see docs/moving_objects.md)"; exit 77; }; FILES="$FILES $f"; done
 DISPLAY=$DISP xdpyinfo >/dev/null 2>&1 || { command -v Xvfb >/dev/null || { echo "SKIP: no X server"; exit 77; }
-  (setsid Xvfb $DISP -screen 0 1400x1000x24 >/dev/null 2>&1 &); sleep 2; DISPLAY=$DISP xdpyinfo >/dev/null 2>&1 || { echo "SKIP: no X server"; exit 77; }; }
+  # our Xvfb: started with fds >2 closed (no inherited lock fd) and killed on every exit (trap)
+  ( for f in /proc/$BASHPID/fd/*; do f=${f##*/}; [ "$f" -gt 2 ] 2>/dev/null && eval "exec $f>&-"; done
+    exec Xvfb $DISP -screen 0 1400x1000x24 </dev/null >/dev/null 2>&1 ) & XVFB_PID=$!
+  trap 'kill $XVFB_PID 2>/dev/null; wait $XVFB_PID 2>/dev/null' EXIT; trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP
+  sleep 2; DISPLAY=$DISP xdpyinfo >/dev/null 2>&1 || { echo "SKIP: no X server"; exit 77; }; }
 NET=1; curl -s -m 15 -o /dev/null https://ssp.imcce.fr/ || NET=0   # SkyBoT/Horizons answers are cached in ~/.ds9/moving_cache (linked below)
 [ $NET = 0 ] && [ ! -d "$REALHOME/.ds9/moving_cache" ] && { echo "SKIP: network unreachable and no moving_cache"; exit 77; }
 PYBIN="${OGFINDER_PYTHON:-/workspace/ogf_venv/bin/python3}"; export OGFINDER_PYTHON="$PYBIN"
