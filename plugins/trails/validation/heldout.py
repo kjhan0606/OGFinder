@@ -203,7 +203,8 @@ def main():
             cl.setdefault(d['class'].split(' (')[0], []).append(d)
         for k, v in cl.items():
             md.append('* %s: %d' % (k, len(v)))
-        md.append('\n| band | field | id | theta | length | FWHM | amp [sigma_pix] | z | duty | other bands present / covered (snr) | class |')
+        # profile SNR is fitted amplitude / median(1.2533*sigma_pix/sqrt(n_along)), not amp/sigma_pix. It grows with sqrt(length).
+        md.append('\n| band | field | id | theta | length | FWHM | profile SNR | z | duty | other bands present / covered (snr) | class |')
         md.append('|---|---|---|---|---|---|---|---|---|---|---|')
         for d in sorted(dets, key=lambda d: (d['field'], d['band'])):
             md.append('| %s | %d | %d%s | %.1f | %.0f | %.1f | %.1f | %.1f | %.2f | %d/%d (%s) | %s |' % (d['band'], d['field'], d['id'], 'c' if d['curved'] else '', d['theta'], d['length'], d['fwhm'], d['amp_snr'], d['z'], d['duty'],

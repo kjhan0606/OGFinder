@@ -132,7 +132,54 @@ frames with >= 1 detection: 41; detections: 78 (straight 56, curved-chain segmen
 
 Pre-fix result analysed after the fact: 53 of the 56 straight detections lie within 3 deg of 45/135 deg (the diffraction-spike directions of SDSS saturated stars).  The spike rule was then changed (fac_fall 300 -> 30, ratio 3.0 -> 2.5);
 re-running the 41 frames that had any detection (this is **not blind**): 11 straight detections in 11 of the 160 frames remain (9 within 3 deg of 45/135, one at 90 deg, one at 159 deg) and 18 curved-chain segments in 8 frames
-(chains of aligned stars, spike remnants).  No detection was confirmed as a satellite trail; whether a genuine faint trail is among the remaining ~29 was not established (the one-band candidates were looked at through an image-description tool, not by a human).
+(chains of aligned stars, spike remnants).  No detection was confirmed as a satellite trail; whether a genuine faint trail is among the remaining ~29 was not established (the one-band candidates were looked at through an image-description tool, not by a human).  The section below is that inspection.
+
+The column headed `amp [sigma_pix]` in `heldout_sdss_prefix.md` and in heldout.py output from before 2026-10-08 is `profile_snr`: the fitted cross-track amplitude divided by `1.2533 * sigma_pix / sqrt(n_along)`.  It grows with the square root of the length.  It is not the per-pixel surface brightness.  heldout.py now labels the column `profile SNR`.
+
+### visual inspection of the 29 post-rule detections (2026-10-08)
+
+Full rerun of all 160 frames (32 fields x ugriz, fields 136-167, SDSS DR17, `DATE-OBS` 1998-09-19) with the detector on master `8984e74` (`ogfkit/trails.py` identical to `ad876106`), `heldout.py --exp sdss --curved --workers 6`: **4593 s**.  Frames with a detection: 17.  Detections: **29** (straight 11, curved-chain segments 18).  Automated class: static 15, transient-candidate 14.  Best z of the detection-free frames: median 4.4, 95 % 29.4, max 55.5.  Of the 11 straight detections, 9 are within 3 deg of 45/135 (all nine are within 1.2 deg); the other two are g field 141 at 90.0 deg and i field 165 at 159.2 deg.  That is the same count and the same angle split as the non-blind 41-frame rerun above.  The per-object list of that rerun was not saved, so object-by-object identity was not checked.
+
+Each reported segment was straightened and measured with `sdss_ridge.py` (definition in the script).  `ridge` is the cross-track peak, in units of the local wing sigma, after the brightest 3 % of along-track columns are removed, so a star on the line does not set it.  `bins>0.5σ` is the fraction of 20 px bins whose centre excess exceeds half a pixel sigma.  `core/amp` is the brightest pixel on the ±3 px strip, searched 1.5 lengths past each end, divided by the stored profile amplitude; `sep` is how far that pixel lies from the segment.  Cutouts of the straightened segment (stretch set by the wing sigma, no line drawn on the pixels) were examined for every detection.  Image-description captions were not used as measurements.
+
+| band | field | id | theta | length | auto | ridge [σ_pix] | FWHM [px] | bins>0.5σ | core/amp | sep [px] | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| g | 137 | 1 | 45.0 | 302 | static 2 | 1.99 | 4 | 0.80 | 248.7 | 35 | spike |
+| r | 137 | 1 | 43.8 | 315 | static 3 | 2.99 | 6 | 0.93 | 51.9 | 0 | spike |
+| u | 138 | 1c | 0.1 | 732 | one-band | 0.34 | 5 | 0.14 | 12782.9 | 27 | no streak |
+| u | 138 | 1c | 179.2 | 403 | one-band | 0.19 | 78 | 0.05 | 3.2 | 522 | no streak |
+| u | 138 | 1c | 179.5 | 333 | static 1 | 0.40 | 7 | 0.06 | 8325.8 | 464 | no streak |
+| r | 139 | 1 | 135.7 | 302 | one-band | 0.96 | 4 | 0.53 | 175.0 | 0 | spike |
+| g | 141 | 1 | 90.0 | 931 | static 1 | 0.21 | 17 | 0.07 | 3.0 | 248 | no streak |
+| r | 145 | 1c | 44.2 | 333 | static 3 | 1.31 | 4 | 0.56 | 266.7 | 14 | spike |
+| r | 145 | 1c | 44.9 | 333 | static 1 | 0.53 | 2 | 0.31 | 6677.7 | 105 | spike |
+| u | 147 | 1c | 88.9 | 440 | static 1 | 0.30 | 15 | 0.00 | 22.4 | 316 | no streak |
+| u | 147 | 1c | 102.2 | 337 | one-band | 0.19 | 58 | 0.00 | 141.7 | 0 | star |
+| g | 151 | 1 | 45.1 | 302 | one-band | 0.99 | 5 | 0.53 | 223.1 | 0 | spike |
+| r | 155 | 1 | 44.3 | 302 | static 2 | 1.52 | 6 | 0.80 | 139.4 | 139 | spike |
+| i | 158 | 1c | 41.4 | 350 | static 3 | 0.46 | 23 | 0.24 | 433.2 | 0 | star |
+| i | 158 | 1 | 44.4 | 556 | one-band | 0.87 | 6 | 0.70 | 3.9 | 672 | spike |
+| i | 158 | 2c | 45.1 | 779 | one-band | 0.54 | 24 | 0.38 | 367.1 | 950 | no streak |
+| i | 159 | 1 | 44.7 | 338 | static 1 | 1.32 | 5 | 1.00 | 0.4 | 0 | spike |
+| i | 160 | 1 | 134.6 | 1204 | one-band | 0.43 | 6 | 0.38 | 59.9 | 0 | spike |
+| i | 164 | 1c | 54.3 | 348 | one-band | 0.19 | 73 | 0.06 | 144.5 | 0 | star |
+| i | 164 | 1c | 73.9 | 333 | one-band | 0.55 | 1 | 0.25 | 14.3 | 0 | star |
+| r | 164 | 1 | 136.2 | 401 | one-band | 0.81 | 25 | 0.55 | 201.7 | 0 | spike |
+| g | 165 | 1c | 44.5 | 333 | static 2 | 0.93 | 5 | 0.50 | 581.6 | 92 | spike |
+| g | 165 | 1c | 69.8 | 622 | one-band | 0.24 | 51 | 0.06 | 51762.7 | 0 | star |
+| g | 165 | 1c | 70.2 | 333 | one-band | 0.13 | 82 | 0.00 | 11378.3 | 228 | no streak |
+| i | 165 | 1c | 134.3 | 373 | static 1 | 0.72 | 5 | 0.50 | 249.2 | 98 | spike |
+| i | 165 | 1c | 134.8 | 333 | static 2 | 1.16 | 5 | 0.62 | 242.9 | 40 | spike |
+| i | 165 | 1 | 159.2 | 2155 | one-band | 0.19 | 13 | 0.10 | 125.1 | 0 | no streak |
+| r | 165 | 1c | 133.8 | 335 | static 1 | 1.12 | 5 | 0.50 | 215.7 | 84 | spike |
+| r | 165 | 1c | 134.3 | 342 | static 4 | 1.38 | 6 | 0.65 | 252.1 | 32 | spike |
+
+**16 spike, 5 star, 8 no streak.  No detection was confirmed as a satellite trail.**  There is still no satellite-trail truth table for these frames.
+
+* **spike** (16): a compact source on or just off the segment and a narrow residual at a 45/135 deg spike angle, or the same residual static in another band.  The two r 145 segments are one star (cores 0.30 arcsec apart).  Five field-165 segments (g 44.5, i 134.3, i 134.8, r 133.8, r 134.3) are one star (cores within 6 arcsec) and are static in at least one other band.  Several are called one-band by the SNR ≥ 6 rule while the cutout is still a star at a spike angle (r 139, g 151, i 160, r 164): the other-band collapsed SNR is 2-5.
+* **i field 158, straight, θ 44.4** is the faintest coherent ridge: 0.87 σ_pix, FWHM 6 px, 70 % of 20 px bins above 0.5 σ, and the wing-sigma cutout shows a faint narrow band through a star.  Other-band collapsed SNR is u 0.5, g 1.7, r 2.5, z 5.0, so the static cut does not fire.  The spike rule also kept it: the brightest pixel on the ±3 px strip is 3.9× the fitted amplitude and 672 px off the segment, and the ridge does not fall off by the rule's factor.  The angle is 0.6 deg from 45.  It is counted as a spike, not as a satellite trail.
+* **star** (5): the segment contains a compact source and the residual after removing the brightest columns is wide or below 0.5 σ (u 147 at 102 deg, i 158 at 41.4, both i 164 segments, g 165 at 69.8).  g 165 at 69.8 and g 165 at 70.2 share a core (0.18 arcsec); the second segment does not pass through it and has no ridge.
+* **no streak** (8): ridge ≤ 0.54 σ_pix, or a wide cross-track profile with a small fraction of bins above 0.5 σ.  This includes the two straight detections that are not at a spike angle.  g field 141 is exactly 90 deg and static in u (collapsed SNR 8) but the ridge is 0.21 σ, so it is not a bleed column.  i field 165 at 159.2 deg is the long one (2155 px, profile SNR 10.6): the ridge is 0.19 σ and 10 % of bins exceed 0.5 σ, and the wing-sigma cutout shows stars and noise, not a continuous band.  i field 158 segment 2c is at a spike angle but is 24 px wide at 0.54 σ, with the bright pixel 950 px off the segment.
 
 ### held-out check 2: HUDF F105W and F125W (REAL, never used for tuning; same sky as the F160W tuning windows, independent pixels/noise; frozen detector + curved finder)
 ## HUDF held-out windows (non-overlapping 700x700 windows of the F105W / F125W frames, never used for tuning; candidate positions {'f105w': 182, 'f125w': 182}), 92 s
