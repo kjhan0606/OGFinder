@@ -74,5 +74,29 @@ HUDF F105W/F125W/F160W web-versus-stand-alone batch (script exported from a web 
 catalogues, detection images, segmentation, zero points, region statistics/masks and pixel tables have the **same sha256**; run-time fields (`seconds`) are
 the only differences (identical Python/numpy/scipy versions).
 
+### Star aperture photometry (steps `aper-phot`, `aper-series`)
+Menu entries **Aperture photometry (click stars)** and **Aperture photometry light curve (frames)**: `run_aper_phot.py` ->
+`python -m ds10core.tools.aper_phot` (the same tool as the web panel *Photometry*; research notes, feature list and specification in the Astrafex Web
+repository, `docs/aperture_photometry.md`).
+1. Click on the stars in ds9 (Region edit mode, circle or point regions; the click need not hit the centre: the centroid finds the star).
+   The `before` hook (`OGFDs10coreAperBefore`) saves the frame's regions in image coordinates to `~/.ds9/aper_picks.reg`.
+   *Stars* = `regions` (default) uses them, `catalog` uses the catalogue table (X_IMAGE/Y_IMAGE or RA/Dec, e.g. a Gaia query), `detect` finds stars.
+2. Settings group *Aperture photometry*: radii (default 1,1.5,2,3) and unit (fwhm / px / arcsec; also the unit of the sky annulus, default 4-6),
+   FWHM (auto), sky estimator (median / mode / mean, sigma-clipped, neighbours masked), centroid (com / gauss / none) and recentring limit,
+   gain (0 = header), saturation, aperture correction (cog / infinity / none), zero point (auto = header, a number, or `fit` with a reference column).
+3. Result: the catalogue table (`NUMBER NAME X_IMAGE Y_IMAGE ... FLUX_APER_k MAG_APER_k ... FLUX FLUXERR MAG MAGERR SNR APCOR FLAGS`), the picks
+   replaced by the apertures (green) and sky annuli (red) (`after` hook `OGFDs10coreAperAfter`, `~/.ds9/aper_apertures.reg`), a status line with
+   the number of stars, FWHM and zero point. Files: `~/.ds9/aperphot_{catalog,summary,cog}.*`.
+4. Light curve: Settings group *Light curve*: frames (comma-separated paths; the open image is frame 1), target / comparison / check star numbers
+   (order of the picks), tracking (wcs refined by the bright-star shift / offset / none), AAVSO star name and observer code. The light curve
+   (target - ensemble, check star) opens in its own window; `~/.ds9/aperseries_{lightcurve,series}.tsv` and `aperseries_aavso.txt` (AAVSO Extended).
+
+GUI check: `scripts/verify_aper_phot.sh` (real `bin/ds9`; six stars picked with **real X clicks** through xdotool when available, otherwise point
+regions loaded into the frame; flux within 3 % of the injected value, centroids < 0.2 px, table, 6 annuli + 24 apertures on the frame, a
+6-frame light curve with an 8 % variable recovered to 0.2 %, a flat check star, AAVSO file, light-curve window); `run_all_checks.sh` check
+`aperphot_gui`; driver tests `plugins/ds10core/tests/test_aper_phot_driver.py` (in `ds10core_tests`). Screenshots
+`docs/shots/aper_desktop_table_1440x900.png`, `docs/shots/aper_desktop_lightcurve_1440x900.png` (all four, including the parameter tab and the
+overlay zoom, are in the Astrafex Web user guide, `docs/user_guide/figures/aper_desktop_*`).
+
 ## Checks
-`scripts/run_all_checks.sh --only ds10core_tests,ds10core_gui`; `tools/validate_manifests.py` (0 problems).
+`scripts/run_all_checks.sh --only ds10core_tests,ds10core_gui,aperphot_gui`; `tools/validate_manifests.py` (0 problems).
