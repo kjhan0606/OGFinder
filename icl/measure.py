@@ -215,7 +215,8 @@ def pixel_sb_map(image, zeropoint, pixel_scale, mu_offset=0.0):
 
 def icl_fraction_pixels(image, valid, zeropoint, pixel_scale, mu_bright,
                         mu_faint=None, mu_offset=0.0, smooth_sigma=0.0,
-                        n_bootstrap=200, block=64, seed=42):
+                        n_bootstrap=200, block=64, seed=42,
+                        include_nonpositive=False):
     """ICL fraction from a per-pixel surface-brightness threshold.
 
     The isophotal definition used by Rudick et al. (2011), Burke et al.
@@ -227,10 +228,15 @@ def icl_fraction_pixels(image, valid, zeropoint, pixel_scale, mu_bright,
     The pixel SB is classified on an optionally Gaussian-smoothed copy of
     the image (``smooth_sigma`` px, NaN-aware) to reduce noise scatter
     across the threshold; the summed fluxes are always the unsmoothed ones.
-    Pixels with negative flux in the classification image are fainter
-    than any threshold: they are counted as ICL when ``mu_faint`` is None,
-    and excluded from the slice otherwise.  The denominator is the total
-    flux of all valid pixels.
+    Pixels with flux <= 0 in the classification image have no defined
+    surface brightness.  By default they are not ICL pixels in either mode
+    ("all the pixels fainter than the threshold" = pixels with a defined
+    mu > mu_bright), so the open-ended set always contains the slice and
+    f(mu > mu_bright) >= f(mu_bright < mu <= mu_faint).  Counting them
+    (``include_nonpositive=True``, open-ended mode only) adds the negative
+    sky-noise tail of the whole faint area, which can make the open-ended
+    fraction smaller than the slice.  The denominator is the total flux of
+    all valid pixels (positive and negative, so that sky noise cancels).
 
     Uncertainty: block bootstrap over ``block`` x ``block`` px tiles.
 
@@ -248,11 +254,12 @@ def icl_fraction_pixels(image, valid, zeropoint, pixel_scale, mu_bright,
         with np.errstate(invalid='ignore', divide='ignore'):
             cls = gaussian_filter(z, smooth_sigma) / w
     mu = pixel_sb_map(cls, zeropoint, pixel_scale, mu_offset)
-    faint = ~(mu <= mu_bright)                 # includes NaN (flux <= 0)
     if mu_faint is not None:
         sel = (mu > mu_bright) & (mu <= mu_faint)
+    elif include_nonpositive:
+        sel = ~(mu <= mu_bright)               # includes NaN (flux <= 0)
     else:
-        sel = faint
+        sel = mu > mu_bright                   # defined (positive-flux) pixels only
     sel &= ok
 
     f_all = np.where(ok, img, 0.0)

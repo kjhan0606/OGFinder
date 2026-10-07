@@ -1132,7 +1132,9 @@ OGFinder/icl/
 Additional functions (2026-10): \texttt{masking.hot\_cold\_mask} (two-pass ``hot+cold'' SEP masking of
 \textcite{montes2018}, App.~A2), \texttt{background.constant\_sky\_apertures} (constant residual sky from empty
 apertures far from the BCG), \texttt{measure.icl\_fraction\_pixels} (pixel-based $f_\mathrm{ICL}$ in a
-surface-brightness slice, with an optional dimming offset and block-bootstrap errors). Unit tests:
+surface-brightness slice, with an optional dimming offset and block-bootstrap errors; in the open-ended mode only
+pixels with a defined surface brightness, i.e.\ flux $>0$, are counted unless \texttt{include\_nonpositive=True}).
+Unit tests:
 \texttt{icl/tests/test\_icl.py} (\texttt{scripts/run\_all\_checks.sh --only icl\_tests}).
 \texttt{measure\_multiband\_icl\_profiles} now honours its mask (it was ignored before) and takes per-band zero
 points; \texttt{--mode color --mag-zeropoint auto} reads each band's header.
@@ -1142,13 +1144,14 @@ points; \texttt{--mode color --mag-zeropoint auto} reads each band's header.
 A re-runnable reproduction of the rest-frame $V$ ICL fractions of Abell S1063 in \textcite{montes2018} (Table~2) is
 shipped with Astrafex Web as \texttt{ds10-web/examples/icl\_as1063/} (scripts \texttt{01\_download.py} \ldots\
 \texttt{06\_compare.py}; user guide section ``Intracluster light (Abell S1063)''). It downloads the public HFF
-v1.0 mosaics and the ASTRODEEP redshift catalogue, builds hot+cold and cluster-membership masks, subtracts a
-constant sky, and measures $f_\mathrm{ICL}$ with \texttt{icl\_fraction\_pixels}. Published: $2.89\pm0.04\,\%$
-($26<\mu_V<27$) and $3.24\pm0.06\,\%$ ($\mu_V>26$). Measured: $1.97\pm0.22$ and $1.11\pm0.20\,\%$ with a
-$10\log(1+z)$ dimming correction, $3.60\pm0.40$ and $3.06\pm0.39\,\%$ with $7.5\log(1+z)$ (dimming plus the
-$f_\nu$ bandwidth term). The paper does not state which convention it used. The low $\mu_V>26$ value of the
-first convention comes from the residual sky, which sets the summed flux of the pixels fainter than
-$\mu_V=27$ (details in the example README).
+v1.0 mosaics (ACS epoch~1, 72\,ks WFC3 epoch~2) and the ASTRODEEP redshift catalogue, builds hot+cold and
+cluster-membership masks on F160W, subtracts a constant sky, PSF-matches the ACS bands to F160W, and measures
+$f_\mathrm{ICL}$ pixel by pixel with \texttt{icl\_fraction\_pixels}. Published: $2.89\pm0.04\,\%$ ($26<\mu_V<27$)
+and $3.24\pm0.06\,\%$ ($\mu_V>26$). Measured: $3.95\pm0.44\pm0.80$ and $4.68\pm0.52\pm0.98\,\%$ (bootstrap, sky
+systematic), i.e.\ $1.2\sigma$ and $1.3\sigma$ above. The rest-frame conversion is $7.5\log(1+z)$: the paper's
+Fig.~1 SED of the cluster sits $1.00\pm0.02$\,mag above our observed surface brightness at $R\le54$\,kpc in four
+bands. At 115\,kpc our profile is 0.3--0.7\,mag fainter than the paper's. A background shift that removes this
+difference gives 2.62 and 2.84\,\%, so the remaining gap is the sky level (details in the example README).
 
 
 %======================================================

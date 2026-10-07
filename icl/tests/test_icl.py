@@ -121,6 +121,24 @@ def test_icl_fraction_pixels_analytic():
     assert 0 < r3["F_ICL"] < 1 and r3["F_ICL_ERR"] >= 0
 
 
+def test_icl_fraction_open_ended_contains_slice_with_noise():
+    # bright core + faint plateau + pure-noise outskirts (half the pixels negative)
+    rng = np.random.default_rng(3)
+    img = rng.normal(0.0, 0.02, (60, 60))
+    img[:10] += 1.0                                   # mu ~ 25
+    img[10:25] += 10 ** (-0.4 * 1.5)                  # mu ~ 26.5
+    valid = np.ones_like(img, bool)
+    sl = measure.icl_fraction_pixels(img, valid, 25.0, 1.0, 26.0, 27.0, n_bootstrap=0)
+    op = measure.icl_fraction_pixels(img, valid, 25.0, 1.0, 26.0, None, n_bootstrap=0)
+    assert op["F_ICL"] >= sl["F_ICL"] and op["N_PIX_ICL"] >= sl["N_PIX_ICL"]
+    # mu > 26 with zp 25 and 1"/px  <=>  0 < flux < 10**-0.4
+    assert op["N_PIX_ICL"] == int(((img > 0) & (img < 10 ** -0.4)).sum())
+    # legacy behaviour: flux <= 0 pixels counted as ICL -> the negative tail pulls the sum down
+    neg = measure.icl_fraction_pixels(img, valid, 25.0, 1.0, 26.0, None, n_bootstrap=0, include_nonpositive=True)
+    assert neg["N_PIX_ICL"] == op["N_PIX_ICL"] + int((img <= 0).sum())
+    assert neg["L_ICL"] == pytest.approx(op["L_ICL"] + img[img <= 0].sum())
+
+
 def test_pixel_sb_map_nan_for_nonpositive():
     mu = measure.pixel_sb_map(np.array([[1.0, 0.0, -1.0]]), 25.0, 0.06)
     assert mu[0, 0] == pytest.approx(25.0 + 2.5 * np.log10(0.06 ** 2))
