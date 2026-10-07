@@ -222,9 +222,11 @@ def trail_flux(cat, trails, k=2.5):
 
 
 # ------------------------------------------------------------------ WCS registration of dithered frames
-def wcs_resample(data, wcs_in, wcs_out, shape_out, order=1, cval=np.nan):
+def wcs_resample(data, wcs_in, wcs_out, shape_out, order=1, cval=np.nan, min_weight=0.5):
     """resample `data` (on wcs_in) to the pixel grid of wcs_out with scipy.ndimage.map_coordinates (order 1 = bilinear; masks: use order 1 on a float mask and
-    threshold).  Output pixels outside the input footprint get `cval`."""
+    threshold).  Output pixels outside the input footprint get `cval`.  NaN input pixels (bad / masked) are excluded by normalised interpolation:
+    out = I(data * valid) / I(valid), so a good pixel next to a bad one keeps its value (before, the bad pixel entered the bilinear sum as 0 and pulled
+    its neighbours down); output pixels whose valid interpolation weight is < min_weight are `cval`."""
     from scipy.ndimage import map_coordinates
     ny, nx = shape_out
     Y, X = np.mgrid[0:ny, 0:nx]
@@ -232,11 +234,18 @@ def wcs_resample(data, wcs_in, wcs_out, shape_out, order=1, cval=np.nan):
     xi, yi = wcs_in.celestial.all_world2pix(ra, dec, 0)
     coords = np.vstack([yi, xi])
     d = np.asarray(data, np.float64)
-    out = map_coordinates(np.nan_to_num(d, nan=0.0), coords, order=order, mode='constant', cval=0.0)
+    good = np.isfinite(d)
     inside = (xi >= -0.5) & (xi <= d.shape[1] - 0.5) & (yi >= -0.5) & (yi <= d.shape[0] - 0.5)
-    if np.isnan(d).any():
-        bad = map_coordinates(np.isnan(d).astype(float), coords, order=0, mode='constant', cval=1.0) > 0.5
-        inside &= ~bad
+    if good.all():
+        out = map_coordinates(d, coords, order=order, mode='nearest')
+    else:
+        num = map_coordinates(np.where(good, d, 0.0), coords, order=order, mode='nearest')
+        wt = map_coordinates(good.astype(np.float64), coords, order=order, mode='nearest')
+        if order > 1:                                   # spline weights can overshoot: fall back to the nearest-pixel validity
+            wt = np.clip(wt, 0.0, 1.0)
+        with np.errstate(all='ignore'):
+            out = num / wt
+        inside &= wt >= min_weight
     out = np.where(inside, out, cval)
     return out.reshape(ny, nx)
 

@@ -639,8 +639,25 @@ def flag_catalog(cat, trails, touch_k=2.5):
 
 
 # ------------------------------------------------------------------ multi-frame stacking with trail exclusion
-def stack_frames(frames, masks=None, method='sigclip', nsig=3.0, iters=5):
-    """combine registered frames with per-frame boolean masks (True = exclude): 'median', 'mean' or 'sigclip' (iterative sigma-clipped mean).
+def _neighbour_diff(R):
+    """largest absolute difference of each pixel of R to its 4 neighbours (NaN treated as 0)"""
+    Rf = np.nan_to_num(R)
+    D = np.zeros_like(Rf)
+    for ax in (0, 1):
+        for sh in (1, -1):
+            D = np.maximum(D, np.abs(Rf - np.roll(Rf, sh, axis=ax)))
+    return D
+
+
+def stack_frames(frames, masks=None, method='sigclip', nsig=3.0, iters=5, variances=None, weights=None, snr=(3.5, 3.0), scale=(1.2, 0.7), minmed_nsig=4.0):
+    """combine registered frames with per-frame boolean masks (True = exclude): 'median', 'mean', 'sigclip' (iterative sigma-clipped mean, the
+    scatter from the frames themselves: MAD) or 'crrej' (cosmic-ray rejection against a noise model, the AstroDrizzle driz_cr criterion:
+    |F_i - R| > snr * sigma_i + scale * D, D = largest absolute difference of R to its 4 neighbours (so registration / interpolation differences
+    in star cores are not rejected), then the 8 neighbours of rejected pixels with the second (snr, scale) pair; R = median of the valid frames,
+    or the minimum where the median is > minmed_nsig sigma above it ('minmed') or only 2 are valid (a 2-frame median is the mean and follows the cosmic ray); repeated (up to 3 times) with R from the
+    survivors so pixels hit in two of four frames are caught).  'crrej' needs `variances` (per-frame variance maps, same units as the frames).
+    The MAD of 3-4 values is a poor scatter estimate: 'sigclip' rejects ~20 %% of good pixels of 4 noise frames and cannot reject a pixel hit in 2
+    of 4 frames, so use 'crrej' for few dithered exposures.  weights: per-frame scalar weights of the final mean (e.g. exposure times).
     -> combined image (NaN where no valid input), number of frames used per pixel"""
     F = np.array([np.asarray(f, np.float64) for f in frames])
     M = np.zeros(F.shape, bool) if masks is None else np.array([np.zeros(F.shape[1:], bool) if m is None else m for m in masks])
@@ -650,6 +667,35 @@ def stack_frames(frames, masks=None, method='sigclip', nsig=3.0, iters=5):
             out = np.nanmedian(F, axis=0)
         elif method == 'mean':
             out = np.nanmean(F, axis=0)
+        elif method == 'crrej':
+            if variances is None:
+                raise ValueError("method 'crrej' needs per-frame variance maps")
+            sig = np.sqrt(np.maximum(np.array([np.asarray(v, np.float64) for v in variances]), 0.0))
+            from scipy.ndimage import binary_dilation
+            for _ in range(3):
+                valid = np.isfinite(F)
+                nv = valid.sum(0)
+                med, mn = np.nanmedian(F, axis=0), np.nanmin(F, axis=0)
+                sv = np.where(np.isfinite(F), sig, np.nan)
+                smed = np.nanmedian(sv, axis=0)
+                # 'minmed' (cf. AstroDrizzle combine_type): the minimum where the median is far above it - 2 of 4 exposures hit by cosmic
+                # rays raise the median, whose spike then inflates D so that no exposure is rejected.  The tolerance includes scale * D of
+                # the minimum image, so star cores (sharp in every exposure, also in the minimum) keep the median; always the minimum for 2.
+                Dmin = _neighbour_diff(mn)
+                R = np.where((nv == 2) | (med - mn > minmed_nsig * np.sqrt(2.0) * smed + scale[0] * Dmin), mn, med)
+                D = _neighbour_diff(R)
+                dev = np.abs(F - R)
+                rej = valid & (nv >= 2) & (dev > snr[0] * sig + scale[0] * D)
+                if not rej.any():
+                    break
+                near = np.array([binary_dilation(r, structure=np.ones((3, 3), bool)) for r in rej])
+                rej |= valid & (nv >= 2) & near & (dev > snr[1] * sig + scale[1] * D)
+                F = np.where(rej, np.nan, F)
+            if weights is not None:
+                w = np.asarray(weights, np.float64)[:, None, None] * np.isfinite(F)
+                out = np.nansum(F * w, axis=0) / np.where(w.sum(0) > 0, w.sum(0), np.nan)
+            else:
+                out = np.nanmean(F, axis=0)
         else:
             for _ in range(iters):
                 mu = np.nanmedian(F, axis=0)

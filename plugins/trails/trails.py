@@ -4,7 +4,8 @@
     trails.py IMAGE --work DIR [--mask MASKFILE] [--catalog TSV] [--threshold 8 --min-length 0 --max-trails 8 --smooth 1]
               [--margin 2 --edge-sigma 2 --end-extend 3] [--fill mask|interpolate|stack] [--fill-noise] [--touch-k 2.5]
               [--catalog-check] [--no-flag-catalog] [--pixel-scale S --mag-zeropoint Z] [--meta-out FILE]
-    trails.py IMAGE --task stack --frames F1 F2 ... --work DIR [--stack-method sigclip|median|mean] [--frame-masks M1 M2 ...]
+    trails.py IMAGE --task stack --frames F1 F2 ... --work DIR [--stack-method sigclip|median|mean|crrej] [--frame-masks M1 M2 ...]
+              [--all-chips] [--dq-bits N] [--scale exptime] [--sky median] [--clip-sigma 3]
 
 What it writes into DIR (prefix trails_): trails.json (all trails: pixel end points, angle, length, width, amplitude, scores), mask.fits (0/1
 uint8, 1 = trail), flags.tsv (NUMBER TRAIL_FLAG TRAIL_ID TRAIL_DIST, with --catalog), <base>_trailfree.fits (--fill interpolate),
@@ -171,13 +172,19 @@ def run_detect(a):
     return 0
 
 
-def _wcs(hdr):
-    try:
-        from astropy.wcs import WCS
-        w = WCS(hdr).celestial
-        return w if w.has_celestial else None
-    except Exception:
-        return None
+def _wcs(hdr, fobj=None):
+    """celestial WCS of a header; `fobj` (the open HDUList) is needed for HST lookup-table distortions (D2IMARR / WCSDVARR of flc/flt files): without
+    it astropy raises, and before this was handled the stack silently fell back to 'no registration' for every HST exposure"""
+    from astropy.wcs import WCS
+    for kw in (dict(fobj=fobj), {}):
+        if kw.get('fobj', 1) is None:
+            continue
+        try:
+            w = WCS(hdr, **kw).celestial if kw else WCS(hdr).celestial
+            return w if w.has_celestial else None
+        except Exception:
+            continue
+    return None
 
 
 def _differs(w0, w1, shape):
@@ -189,38 +196,149 @@ def _differs(w0, w1, shape):
     return float(np.max(np.hypot(x - pts[:, 0], y - pts[:, 1]))) > 0.05
 
 
+def load_frame(path, all_chips=False, dq_bits=None, want_err=False):
+    """-> dict(chips=[(data float32, header, wcs or None, bad-pixel mask from DQ or None)], exptime, errs=[ERR extension of each chip or None]).  MEF files with SCI extensions (HST flc/flt/drc):
+    the first SCI (or all with all_chips), the DQ extension of the same EXTVER (pixels with any of dq_bits set are bad; dq_bits=None ignores DQ);
+    otherwise the first 2-D HDU.  EXPTIME from the chip header, else the primary header."""
+    from astropy.io import fits
+    out, errs = [], []
+    with fits.open(path, memmap=False) as hl:
+        sci = [h for h in hl if h.name == 'SCI' and h.data is not None and h.data.ndim == 2]
+        if not sci:
+            sci = [next(h for h in hl if h.data is not None and h.data.ndim == 2)]
+        if not all_chips:
+            sci = sci[:1]
+        exptime = None
+        for k, h in enumerate(sci):
+            dq = None
+            if dq_bits is not None and h.name == 'SCI':
+                try:
+                    d = hl['DQ', h.ver].data
+                    dq = (np.asarray(d).astype(np.int64) & int(dq_bits)) != 0
+                except KeyError:
+                    pass
+            out.append((np.array(h.data, np.float32), h.header.copy(), _wcs(h.header, hl), dq))
+            e = None
+            if want_err and h.name == 'SCI':
+                try:
+                    e = np.array(hl['ERR', h.ver].data, np.float32)
+                except KeyError:
+                    pass
+            errs.append(e)
+            if exptime is None:
+                exptime = h.header.get('EXPTIME', hl[0].header.get('EXPTIME'))
+    return dict(chips=out, exptime=float(exptime) if exptime else None, errs=errs)
+
+
+def _sky_level(img, bad):
+    v = img[~bad & np.isfinite(img)]
+    if v.size < 100:
+        return 0.0
+    v = v[:: max(1, v.size // 2000000)]
+    med, sd = np.median(v), 1.4826 * np.median(np.abs(v - np.median(v)))
+    for _ in range(5):
+        v = v[np.abs(v - med) < 3 * max(sd, 1e-30)]
+        med, sd = np.median(v), 1.4826 * np.median(np.abs(v - np.median(v)))
+    return float(med)
+
+
+def _copy_lookup_distortion(src, dst):
+    """append the D2IMARR / WCSDVARR lookup-table extensions of `src` (HST flc/flt) to `dst`, whose header carries the reference chip's WCS keywords
+    (D2IMEXT, CPDIS*, DP*): without them the stack's WCS could not be read (astropy needs the tables) and stripping them would lose the
+    detector-distortion correction.  -> number of extensions copied"""
+    from astropy.io import fits
+    with fits.open(src, memmap=False) as hl:
+        ext = [h.copy() for h in hl[1:] if h.name in ('D2IMARR', 'WCSDVARR')]
+    if ext:
+        with fits.open(dst, mode='append') as out:
+            for h in ext:
+                out.append(fits.ImageHDU(h.data, h.header))
+    return len(ext)
+
+
 def run_stack(a):
-    """combine frames excluding each frame's trails; with --register (default auto) frames with a different WCS are resampled (bilinear) onto the first
-    frame's grid together with their trail masks (detection runs on the native frame, before the resampling)"""
+    """combine frames excluding each frame's trails; with --register (default auto) frames with a different WCS are resampled (bilinear, normalised so
+    masked pixels do not leak) onto the first frame's grid together with their trail masks (detection runs on the native chip, before the resampling).
+    --all-chips: every SCI extension of every frame is resampled onto the reference grid (first chip of the first frame), so dithers across a chip
+    gap fill it.  --dq-bits: HST DQ flags excluded.  --scale exptime: frames divided by EXPTIME (units per second, needed when exposure times
+    differ).  --sky median: a sigma-clipped median sky subtracted per chip (needed when the sky level differs between exposures; otherwise the
+    clipping and the per-pixel number of frames turn sky differences into artefacts)."""
     os.makedirs(a.work, exist_ok=True)
-    frames, masks, ntr = [], [], []
-    hdr0, w0, shape0, nreg = None, None, None, 0
+    frames, masks, ntr, info, varis, wts = [], [], [], [], [], []
+    crrej = a.stack_method == 'crrej'
+    hdr0, w0, shape0, nreg, nowcs = None, None, None, 0, 0
     for i, f in enumerate(a.frames):
-        img, hdr = imageio.load_image(f)
-        if hdr0 is None:
-            hdr0, shape0 = hdr, img.shape
-            w0 = _wcs(hdr) if a.register != 'none' else None
-        if a.frame_masks and i < len(a.frame_masks) and a.frame_masks[i] != '-':
-            m = imageio.load_mask(a.frame_masks[i], img.shape)
-        else:
-            r = detect(a, img, hdr, None)
-            m = T.trail_mask(img.shape, r['trails'], end_extend=a.end_extend) if r['trails'] else np.zeros(img.shape, bool)
-            ntr.append(len(r['trails']))
-        bad = m | (img == 0)
-        wi = _wcs(hdr) if (w0 is not None and i > 0) else None
-        if wi is not None and (a.register == 'wcs' or img.shape != shape0 or _differs(w0, wi, img.shape)):
-            im2 = TX.wcs_resample(np.where(bad & (img == 0), np.nan, img), wi, w0, shape0, order=1, cval=np.nan)
-            mk, nodata = TX.register_masks(m, wi, w0, shape0, grow=1)
-            img, bad = im2, mk | nodata | ~np.isfinite(im2)
-            nreg += 1
-        elif a.register == 'wcs' and i > 0 and wi is None:
-            sys.stderr.write('frame %s has no usable WCS: not resampled\n' % f)
-        frames.append(img); masks.append(bad)
-    out, n = T.stack_frames(frames, masks, method=a.stack_method)
+        fr = load_frame(f, all_chips=a.all_chips, dq_bits=a.dq_bits, want_err=crrej)
+        acc = accm = accv = None
+        for c, (img, hdr, wc, dq) in enumerate(fr['chips']):
+            if hdr0 is None:
+                hdr0, shape0 = hdr, img.shape
+                w0 = wc if a.register != 'none' else None
+                if a.register != 'none' and w0 is None:
+                    sys.stderr.write('reference frame %s has no usable WCS: frames are NOT registered\n' % f)
+            if c == 0 and a.frame_masks and i < len(a.frame_masks) and a.frame_masks[i] != '-':
+                m = imageio.load_mask(a.frame_masks[i], img.shape)
+            else:
+                r = detect(a, img, hdr, None)
+                m = T.trail_mask(img.shape, r['trails'], end_extend=a.end_extend) if r['trails'] else np.zeros(img.shape, bool)
+                ntr.append(len(r['trails']))
+            bad = m | (img == 0) | ~np.isfinite(img)
+            if dq is not None:
+                bad |= dq
+            var = None
+            if crrej:                                     # variance: the ERR extension (HST), else sky noise + Poisson scaled to the sky level
+                err = fr['errs'][c]
+                if err is not None and err.shape == img.shape:
+                    var = err.astype(np.float64) ** 2
+                else:
+                    s0 = _sky_level(img, bad)
+                    v = img[~bad][::max(1, img.size // 1000000)]
+                    sd2 = (1.4826 * np.median(np.abs(v - np.median(v)))) ** 2
+                    var = sd2 + np.maximum(img - s0, 0.0) * (sd2 / s0 if s0 > sd2 else 0.0)
+            ts = 1.0
+            if a.scale == 'exptime':
+                if not fr['exptime']:
+                    raise SystemExit('frame %s has no EXPTIME (--scale exptime)' % f)
+                ts = fr['exptime']
+                img = img / ts
+                if var is not None:
+                    var = var / ts ** 2
+            sky = _sky_level(img, bad) if a.sky == 'median' else 0.0
+            img = img - sky
+            info.append(dict(frame=os.path.basename(f), chip=c, exptime=fr['exptime'], sky=sky, trails=ntr[-1] if ntr else 0, dq_masked=float(dq.mean()) if dq is not None else 0.0))
+            wi = wc if w0 is not None else None
+            if wi is not None and (a.register == 'wcs' or img.shape != shape0 or (i, c) != (0, 0) and _differs(w0, wi, img.shape)):
+                im2 = TX.wcs_resample(np.where(bad, np.nan, img), wi, w0, shape0, order=1, cval=np.nan)
+                mk, nodata = TX.register_masks(m, wi, w0, shape0, grow=1)
+                if var is not None:
+                    var = TX.wcs_resample(np.where(bad, np.nan, var), wi, w0, shape0, order=1, cval=np.nan)
+                img, bad = im2, mk | nodata | ~np.isfinite(im2)
+                if c == 0:
+                    nreg += 1
+            elif w0 is not None and wi is None and (i, c) != (0, 0):
+                nowcs += 1
+                sys.stderr.write('frame %s chip %d has no usable WCS: not resampled\n' % (f, c))
+                if img.shape != shape0:
+                    continue
+            elif img.shape != shape0:
+                continue
+            if acc is None:
+                acc, accm = np.where(bad, np.nan, img), bad.copy()
+                accv = var
+            else:                                         # chips of one frame do not overlap: fill the pixels this chip covers
+                take = accm & ~bad
+                acc[take] = img[take]; accm &= bad
+                if var is not None:
+                    accv[take] = var[take]
+        frames.append(acc); masks.append(accm); varis.append(accv); wts.append(fr['exptime'] if a.scale == 'exptime' and fr['exptime'] else 1.0)
+    out, n = T.stack_frames(frames, masks, method=a.stack_method, nsig=a.clip_sigma, variances=varis if crrej else None, weights=wts if crrej else None)
     p = os.path.join(a.work, 'trails_stack.fits')
     write_fits(p, np.nan_to_num(out).astype(np.float32), hdr0)
+    ndist = _copy_lookup_distortion(a.frames[0], p)
     write_fits(os.path.join(a.work, 'trails_stack_n.fits'), n.astype(np.int16), sky_header(hdr0))
-    print('#TRAILS_STACK frames=%d method=%s trails_per_frame=%s registered=%d out=%s' % (len(frames), a.stack_method, ','.join(map(str, ntr)), nreg, p))
+    with open(os.path.join(a.work, 'trails_stack.json'), 'w') as fh:
+        json.dump(dict(frames=info, registered=nreg, distortion_tables=ndist, no_wcs=nowcs, method=a.stack_method, scale=a.scale, sky=a.sky, all_chips=a.all_chips), fh, indent=1)
+    print('#TRAILS_STACK frames=%d method=%s trails_per_frame=%s registered=%d no_wcs=%d out=%s' % (len(frames), a.stack_method, ','.join(map(str, ntr)), nreg, nowcs, p))
     return 0
 
 
@@ -255,7 +373,12 @@ def main(argv=None):
     ap.add_argument('--frames', nargs='*')
     ap.add_argument('--frame-masks', nargs='*')
     ap.add_argument('--register', choices=['none', 'wcs', 'auto'], default='auto', help='stack: resample frames and their trail masks onto the first frame through the WCS (auto = when the WCS differ)')
-    ap.add_argument('--stack-method', default='sigclip', choices=['sigclip', 'median', 'mean'])
+    ap.add_argument('--stack-method', default='sigclip', choices=['sigclip', 'median', 'mean', 'crrej'], help='stack: crrej = cosmic-ray rejection against the noise model (ERR extension or sky+Poisson), recommended for few dithered exposures')
+    ap.add_argument('--clip-sigma', type=float, default=3.0, help='stack: sigclip threshold')
+    ap.add_argument('--all-chips', action='store_true', help='stack: use every SCI extension of each frame (HST ACS/WFC, WFC3/UVIS: dithers across the chip gap)')
+    ap.add_argument('--dq-bits', type=int, default=None, help='stack: exclude pixels with these HST DQ bits set (e.g. 4095 hides the static/bad pixel flags; 0/None ignores DQ)')
+    ap.add_argument('--scale', choices=['none', 'exptime'], default='none', help='stack: divide frames by EXPTIME (different exposure times)')
+    ap.add_argument('--sky', choices=['none', 'median'], default='none', help='stack: subtract a clipped median sky per chip (different sky levels)')
     a = ap.parse_args(argv)
     return run_stack(a) if a.task == 'stack' else run_detect(a)
 
