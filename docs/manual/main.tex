@@ -1125,9 +1125,30 @@ OGFinder/icl/
 |-- profile.py        # SB profile measurement (circular/elliptical/sector)
 |-- measure.py        # ICL fraction + isophotal radii + multi-threshold
 |-- decompose.py      # Double Sersic BCG+ICL decomposition
-+-- colors.py         # Multi-band profiles + color indices
++-- colors.py         # Multi-band profiles + color indices (shared mask, per-band ZP)
 \end{lstlisting}
 \end{codebox}
+
+Additional functions (2026-10): \texttt{masking.hot\_cold\_mask} (two-pass ``hot+cold'' SEP masking of
+\textcite{montes2018}, App.~A2), \texttt{background.constant\_sky\_apertures} (constant residual sky from empty
+apertures far from the BCG), \texttt{measure.icl\_fraction\_pixels} (pixel-based $f_\mathrm{ICL}$ in a
+surface-brightness slice, with an optional dimming offset and block-bootstrap errors). Unit tests:
+\texttt{icl/tests/test\_icl.py} (\texttt{scripts/run\_all\_checks.sh --only icl\_tests}).
+\texttt{measure\_multiband\_icl\_profiles} now honours its mask (it was ignored before) and takes per-band zero
+points; \texttt{--mode color --mag-zeropoint auto} reads each band's header.
+
+\section{Validation: HFF Abell S1063 vs Montes \& Trujillo (2018)}
+\label{sec:icl_as1063}
+A re-runnable reproduction of the rest-frame $V$ ICL fractions of Abell S1063 in \textcite{montes2018} (Table~2) is
+shipped with Astrafex Web as \texttt{ds10-web/examples/icl\_as1063/} (scripts \texttt{01\_download.py} \ldots\
+\texttt{06\_compare.py}; user guide section ``Intracluster light (Abell S1063)''). It downloads the public HFF
+v1.0 mosaics and the ASTRODEEP redshift catalogue, builds hot+cold and cluster-membership masks, subtracts a
+constant sky, and measures $f_\mathrm{ICL}$ with \texttt{icl\_fraction\_pixels}. Published: $2.89\pm0.04\,\%$
+($26<\mu_V<27$) and $3.24\pm0.06\,\%$ ($\mu_V>26$). Measured: $1.97\pm0.22$ and $1.11\pm0.20\,\%$ with a
+$10\log(1+z)$ dimming correction, $3.60\pm0.40$ and $3.06\pm0.39\,\%$ with $7.5\log(1+z)$ (dimming plus the
+$f_\nu$ bandwidth term). The paper does not state which convention it used. The low $\mu_V>26$ value of the
+first convention comes from the residual sky, which sets the summed flux of the pixels fainter than
+$\mu_V=27$ (details in the example README).
 
 
 %======================================================
