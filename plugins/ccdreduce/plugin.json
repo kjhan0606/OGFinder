@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "id": "ccdreduce",
+  "name": "CCD reduction",
+  "short": "CCD reduction",
+  "tab": "Measure",
+  "order": 16,
+  "web": false,
+  "description": "Preprocess bias, dark, flat and snapshot FITS. The AI button classifies each frame by type, exposure and file size and flat-fields the snapshot. Manual assigns each type and can average, add, subtract or divide.",
+  "requires": { "python": ["numpy"] },
+  "primary": "open",
+  "settings": "params",
+  "tcl": "ccdreduce.tcl",
+  "params": [
+    { "name": "core-dir", "label": "Core directory", "type": "string", "default": "", "help": "Directory that contains ds10core. Empty uses the copy next to OGFinder." },
+    { "name": "frames", "label": "Frames", "type": "string", "default": "", "help": "FITS paths joined by |." },
+    { "name": "assignment", "label": "Assignment", "type": "string", "default": "auto", "help": "auto, or path:class items separated by |." },
+    { "name": "combine", "label": "Combine", "type": "choice", "choices": ["median", "mean"], "default": "median", "help": "Master statistic for bias, dark and flat." }
+  ],
+  "steps": [
+    {
+      "id": "open",
+      "label": "CCD reduction…",
+      "title": "Bias, dark, flat and snapshot",
+      "session": "MANUAL",
+      "stage": "measure",
+      "needs": [],
+      "proc": "OGFCcdOpen"
+    },
+    {
+      "id": "reduce",
+      "label": "Flat-field the snapshot",
+      "title": "Flat-field the snapshot",
+      "session": "MANUAL",
+      "stage": "measure",
+      "needs": [],
+      "after": "OGFCcdAfter",
+      "output": { "mode": "text" },
+      "cli": [
+        "{python}",
+        "{plugin_dir}/run_ccd.py",
+        "--core-dir",
+        "{core-dir}",
+        "reduce",
+        "--frames",
+        "{frames}",
+        "--assignment",
+        "{assignment}",
+        "--combine",
+        "{combine}",
+        "--out",
+        "{work}/ccdreduce/snapshot_flat.fits",
+        "--summary",
+        "{work}/ccdreduce/summary.json"
+      ]
+    }
+  ]
+}

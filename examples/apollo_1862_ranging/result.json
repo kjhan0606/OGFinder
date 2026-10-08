@@ -1,0 +1,348 @@
+{
+  "designation": "1862",
+  "fullname_short": "1862 Apollo",
+  "observations_file": "observations.obs80",
+  "mpc_get_obs": "https://data.minorplanetcenter.net/api/get-obs",
+  "selection": "Public MPC OBS80 for designation 1862, station 703, MJD 59250 to 59260, note2 not S or s. Twelve lines. The rest of the archive is not in this directory.",
+  "station": {
+    "code": "703",
+    "lon_deg": 249.26736,
+    "rho_cos": 0.845311,
+    "rho_sin": 0.533211,
+    "name": "University of Arizona Catalina Sky Survey",
+    "sigma_arcsec": 0.5,
+    "sigma_source": "moving/obs.py DEFAULT_SIGMA['703']"
+  },
+  "n_obs": 12,
+  "mjd_first": 59250.364046,
+  "mjd_last": 59256.414017,
+  "span_days": 6.049971000000369,
+  "first_utc": "2021-02-05T08:44:13.574",
+  "last_utc": "2021-02-11T09:56:11.069",
+  "observations": [
+    {
+      "mjd_utc": 59250.364046,
+      "ra_deg": 178.58516666666668,
+      "dec_deg": 10.262694444444444,
+      "mag": 19.72,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59250.369777,
+      "ra_deg": 178.58420833333332,
+      "dec_deg": 10.263388888888889,
+      "mag": 19.48,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59250.375506,
+      "ra_deg": 178.58304166666667,
+      "dec_deg": 10.264027777777779,
+      "mag": 19.58,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59250.381242,
+      "ra_deg": 178.581875,
+      "dec_deg": 10.265,
+      "mag": 18.86,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59251.390703,
+      "ra_deg": 178.37908333333334,
+      "dec_deg": 10.400027777777778,
+      "mag": 19.51,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59251.396011,
+      "ra_deg": 178.37829166666666,
+      "dec_deg": 10.40088888888889,
+      "mag": 19.61,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59251.401319,
+      "ra_deg": 178.37687499999998,
+      "dec_deg": 10.401666666666667,
+      "mag": 18.85,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59251.406632,
+      "ra_deg": 178.37591666666665,
+      "dec_deg": 10.40225,
+      "mag": 19.11,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59256.398264,
+      "ra_deg": 177.20804166666667,
+      "dec_deg": 11.125583333333333,
+      "mag": 19.12,
+      "band": "G",
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59256.403517,
+      "ra_deg": 177.20662500000003,
+      "dec_deg": 11.12638888888889,
+      "mag": null,
+      "band": null,
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59256.408768,
+      "ra_deg": 177.20516666666668,
+      "dec_deg": 11.12725,
+      "mag": null,
+      "band": null,
+      "stn": "703"
+    },
+    {
+      "mjd_utc": 59256.414017,
+      "ra_deg": 177.203875,
+      "dec_deg": 11.128166666666667,
+      "mag": 19.5,
+      "band": "G",
+      "stn": "703"
+    }
+  ],
+  "tracklets": [
+    {
+      "id": 0,
+      "night": 59250,
+      "code": "703",
+      "sigma_arcsec": 0.5,
+      "year_for_sigma": 2021,
+      "n_obs": 4,
+      "mjd_first": 59250.364046,
+      "mjd_last": 59250.381242,
+      "arc_hours": 0.4127040000166744,
+      "t0": 59250.37264275
+    },
+    {
+      "id": 1,
+      "night": 59251,
+      "code": "703",
+      "sigma_arcsec": 0.5,
+      "year_for_sigma": 2021,
+      "n_obs": 4,
+      "mjd_first": 59251.390703,
+      "mjd_last": 59251.406632,
+      "arc_hours": 0.3822960000252351,
+      "t0": 59251.398666249996
+    },
+    {
+      "id": 2,
+      "night": 59256,
+      "code": "703",
+      "sigma_arcsec": 0.5,
+      "year_for_sigma": 2021,
+      "n_obs": 4,
+      "mjd_first": 59256.398264,
+      "mjd_last": 59256.414017,
+      "arc_hours": 0.37807199999224395,
+      "t0": 59256.4061415
+    }
+  ],
+  "link": {
+    "max_gap_days": 12,
+    "min_tracklets": 3,
+    "n_groups": 1,
+    "n_pairs": 0,
+    "unlinked": [],
+    "seconds": 0.5344990845769644,
+    "point_fit": {
+      "ids": [
+        0,
+        2,
+        1
+      ],
+      "nights": [
+        59250,
+        59256,
+        59251
+      ],
+      "n_obs": 12,
+      "chi2_red": 0.3872388781008613,
+      "rms_arcsec": 0.32014951430599714,
+      "max_resid": 1.0738722188042837,
+      "elements": {
+        "a": 1.4841685796050736,
+        "e": 0.5848968799472973,
+        "inc_deg": 6.508779916895711,
+        "q": 0.6160830080782541,
+        "r_au": 2.202220947601317
+      },
+      "mjd_epoch": 59250.37264275,
+      "epoch_utc": "2021-02-05T08:56:36.334"
+    },
+    "note": "Two-body Sun-only fit from moving.nightlink. The elements are osculating at mjd_epoch, which is the epoch of that fit, not the mean observation time and not the JPL epoch."
+  },
+  "ranging": {
+    "status": "ok",
+    "sampler": "laplace",
+    "note": "local Laplace sample of the 6-parameter fit to the same observations. A uniform draw over the whole admissible region does not land in this valley once the arc determines the range. Not OpenOrb",
+    "n_obs": 12,
+    "n_samples": 200,
+    "neff": 200.0,
+    "mjd_epoch": 59252.72581683333,
+    "chi2_min": 9.83979849005679,
+    "best_rms_arcsec": 0.320152939478253,
+    "best": {
+      "a": 1.4844168789925463,
+      "e": 0.5852866936008061,
+      "inc_deg": 6.51124980506188,
+      "q": 0.6156074319617709
+    },
+    "quantiles_16_50_84": {
+      "a": [
+        1.4720800076067935,
+        1.4845500113392824,
+        1.499726603666589
+      ],
+      "e": [
+        0.5632030819755095,
+        0.5849533176834787,
+        0.6071809188597236
+      ],
+      "inc_deg": [
+        6.371381607034824,
+        6.5102591470477735,
+        6.661213563286808
+      ],
+      "q": [
+        0.587518103075221,
+        0.6155950520937771,
+        0.6425951100327487
+      ]
+    },
+    "class_probs": {
+      "NEO": 1.0000000000000007
+    },
+    "codes": {
+      "n_accepted": 108,
+      "n_requested": 8,
+      "like_min": 0.001,
+      "status": "ok",
+      "backend": "codes",
+      "force_model": "CODES Fortran real33 + DE440s + SB441-N16 + full 1PN + J2/J4/J6",
+      "n_propagated": 8,
+      "n_failed": 0,
+      "mjd_epoch": 59256.414017,
+      "quantiles_16_50_84": {
+        "a": [
+          1.4738861381002373,
+          1.4832640542733813,
+          1.4938492013019524
+        ],
+        "e": [
+          0.565129451335684,
+          0.5842833494135818,
+          0.5988875625671967
+        ],
+        "inc_deg": [
+          6.375194448971848,
+          6.511215006494213,
+          6.597399021939018
+        ],
+        "q": [
+          0.5939445415839726,
+          0.6107034662959174,
+          0.6302701602904061
+        ]
+      }
+    }
+  },
+  "ranging_run": {
+    "n_samples": 200,
+    "seed": 1862,
+    "distribution_seed": 1862,
+    "propagation_seed": 1879,
+    "n_propagate": 8,
+    "seconds": 29.88927672803402,
+    "threads": 2
+  },
+  "jpl_sbdb": {
+    "url": "https://ssd-api.jpl.nasa.gov/sbdb.api?sstr=1862&full-prec=true",
+    "fullname": "1862 Apollo (1932 HA)",
+    "orbit_class": "Apollo",
+    "neo": true,
+    "pha": true,
+    "epoch_jd_tdb": "2461200.5",
+    "epoch_utc": "2026-06-08T23:58:50.815",
+    "cov_epoch_jd_tdb": "2458331.5",
+    "cov_epoch_utc": "2018-07-31T23:58:50.817",
+    "equinox": "J2000",
+    "first_obs": "1930-12-13",
+    "last_obs": "2026-04-15",
+    "soln_date": "2026-08-31 06:24:24",
+    "n_obs_used": 3701,
+    "rms": ".458",
+    "condition_code": "0",
+    "comment": "Nongravitational accels. using nonstandard g(r) = (1 au/ r)^2",
+    "elements": [
+      {
+        "name": "e",
+        "value": ".5601800481295997",
+        "sigma": "1.5934E-9",
+        "units": null,
+        "title": "eccentricity"
+      },
+      {
+        "name": "a",
+        "value": "1.470715141636512",
+        "sigma": "1.975E-10",
+        "units": "au",
+        "title": "semi-major axis"
+      },
+      {
+        "name": "q",
+        "value": ".6468498628096396",
+        "sigma": "2.365E-9",
+        "units": "au",
+        "title": "perihelion distance"
+      },
+      {
+        "name": "i",
+        "value": "6.352178986018433",
+        "sigma": "7.4617E-8",
+        "units": "deg",
+        "title": "inclination; angle with respect to x-y ecliptic plane"
+      },
+      {
+        "name": "om",
+        "value": "35.50294307615321",
+        "sigma": "8.2735E-7",
+        "units": "deg",
+        "title": "longitude of the ascending node"
+      },
+      {
+        "name": "w",
+        "value": "286.0977380402823",
+        "sigma": "6.8361E-7",
+        "units": "deg",
+        "title": "argument of perihelion"
+      },
+      {
+        "name": "ma",
+        "value": "224.3616015046227",
+        "sigma": "5.9438E-7",
+        "units": "deg",
+        "title": "mean anomaly"
+      }
+    ],
+    "note": "JPL SBDB solution at its own epoch. It is not the epoch of these twelve observations, and it uses a different observation set and force model. The elements are not subtracted from the two-body fit or from the Laplace sample."
+  },
+  "jpl_sbdb_error": null
+}

@@ -19,7 +19,9 @@ floor sigma_eff^2 = sigma^2 + floor0^2 + (floor_rate * |t - t_ref|)^2 (arcsec, d
 Limits: the search itself is pure 2-body Sun-only dynamics (arcs of up to a few weeks are fine for main-belt objects with a
 floor of ~1 arcsec; NEO close approaches and arcs of months need an N-body propagator).  Optional refinement of an
 already linked group is ``moving.nbody_refine`` (a separate process: ASSIST differential correction when that
-ephemeris is installed, otherwise the external CODES integrator).  Observer = geocentre (+ station offset from the
+ephemeris is installed, otherwise the external CODES integrator).  An optional distribution of elements for a
+group the linker already kept is ``moving.arc_ranging`` (simplified statistical ranging; the point fit stays).
+Observer = geocentre (+ station offset from the
 MPC parallax constants when `code` is given); no covariance-based Mahalanobis test of the final fit (chi2/dof and
 max residual only); greedy (not globally optimal) chain assignment.
 """

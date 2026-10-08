@@ -1,0 +1,104 @@
+{
+  "observations_file": "observations.obs80",
+  "result_file": "result.json",
+  "figure": "likelihood_contours.png",
+  "n_samples": 200,
+  "seed": 1862,
+  "sampler": "laplace",
+  "sample_mjd_utc": 59252.72581683333,
+  "sample_utc": "2021-02-07T17:25:10.574",
+  "horizons": {
+    "command": "1862;",
+    "center": "500@10",
+    "jd_tdb": 2459253.226617585,
+    "tdb": "2021-02-07T17:26:19.759",
+    "frame": "Horizons VECTORS, heliocentric ICRF equatorial. Elements from moving.kepler.state_to_elements, which rotates equatorial vectors onto the ecliptic with the IAU 1976 obliquity.",
+    "elements": {
+      "a": 1.4703440094232518,
+      "e": 0.5599699814941951,
+      "inc_deg": 6.354900800842496,
+      "q": 0.646995501676413,
+      "om_deg": 35.614864736398374,
+      "w_deg": 285.99619706672485,
+      "ma_deg": 228.23024588298847
+    }
+  },
+  "laplace_mode": {
+    "a": 1.4844168789925463,
+    "e": 0.5852866936008061,
+    "inc_deg": 6.51124980506188,
+    "q": 0.6156074319617709
+  },
+  "offset_horizons_minus_mode": {
+    "a": -0.014072869569294433,
+    "e": -0.025316712106611017,
+    "inc_deg": -0.15634900421938358,
+    "q": 0.03138806971464203
+  },
+  "planes": {
+    "a_e": {
+      "n": 200,
+      "kde_covariance": [
+        [
+          3.576054870071877e-05,
+          5.6464196197061574e-05
+        ],
+        [
+          5.6464196197061574e-05,
+          9.111500533192107e-05
+        ]
+      ],
+      "peak_density": 5068.169477284608,
+      "level_68": 2309.0088040572946,
+      "level_95": 359.69532931329826,
+      "level_68_over_peak": 0.4555902904206749,
+      "level_95_over_peak": 0.07097144855266631,
+      "density_at_horizons": 2186.178046360015,
+      "horizons_inside_68": false,
+      "horizons_inside_95": true
+    },
+    "a_inc_deg": {
+      "n": 200,
+      "kde_covariance": [
+        [
+          3.576054870071877e-05,
+          0.0003638218525573333
+        ],
+        [
+          0.0003638218525573333,
+          0.003779394703047271
+        ]
+      ],
+      "peak_density": 595.8753606768563,
+      "level_68": 233.28976237243444,
+      "level_95": 36.62331455070146,
+      "level_68_over_peak": 0.39150765037077556,
+      "level_95_over_peak": 0.061461367540186496,
+      "density_at_horizons": 332.29057527227565,
+      "horizons_inside_68": true,
+      "horizons_inside_95": true
+    },
+    "q_e": {
+      "n": 200,
+      "kde_covariance": [
+        [
+          0.00013754982049934503,
+          -0.00011193206440269753
+        ],
+        [
+          -0.00011193206440269753,
+          9.111500533192107e-05
+        ]
+      ],
+      "peak_density": 16985.08683162402,
+      "level_68": 6911.321565064155,
+      "level_95": 1378.974660833267,
+      "level_68_over_peak": 0.40690528306256135,
+      "level_95_over_peak": 0.08118737775692708,
+      "density_at_horizons": 7338.721586210947,
+      "horizons_inside_68": true,
+      "horizons_inside_95": true
+    }
+  },
+  "note": "Contours are a Gaussian KDE of the Laplace draws in that plane. The 68% line is the density of the draw at which 68% of the draws, counted from the densest, are inside. Same rule for 95%. The Horizons elements are osculating at the sample UTC instant, expressed as a TDB Julian date for the vector request. They are not the SBDB elements at JD 2461200.5."
+}

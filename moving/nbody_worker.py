@@ -7,6 +7,8 @@ installed.  Otherwise the worker uses the external CODES integrator
 (``neo_orbit_calculator`` under ``OGF_CODES_ROOT`` or ``~/BACKUP/3.5ST``):
 Fortran Dormand-Prince, JPL DE440s, SB441-N16, full 1PN and J2/J4/J6.
 That tree is not shipped with OGFinder and is never imported into the web process.
+``propagate_many`` moves a list of heliocentric states to one later epoch for
+the ranging distribution; it does not replace the differential correction.
 """
 import json
 import os
@@ -169,6 +171,35 @@ class CodesEngine:
             xx = S[:, :3] + S[:, 3:] * (tau - tau_i)[:, None]
             ra[i], dec[i] = _radec(xx - obs_pos)
         return ra, dec, tau
+
+
+def _propagate_many(engine, req):
+    states = np.atleast_2d(np.asarray(req["states_helio"], float))
+    if states.ndim != 2 or states.shape[1] != 6 or len(states) == 0:
+        return {"status": "error", "message": "states_helio must be (n, 6) with n > 0"}
+    mjd_ref = float(req["mjd_ref"])
+    mjd_out = float(req["mjd_out"])
+    if mjd_out + 1e-6 < mjd_ref:
+        return {"status": "error", "message": "propagate_many steps forward of the sample epoch"}
+    rows = []
+    n_failed = 0
+    for state in states:
+        try:
+            bary, et = engine.bary_at(state, mjd_ref, mjd_out)
+            rows.append(_elements(engine.helio_of(bary, et)))
+        except Exception:
+            n_failed += 1
+    if not rows:
+        return {"status": "error", "message": "every sample failed to propagate", "n_failed": int(n_failed)}
+    return {
+        "status": "ok",
+        "backend": "codes",
+        "force_model": engine.force_model,
+        "mjd_epoch": mjd_out,
+        "n": int(len(rows)),
+        "n_failed": int(n_failed),
+        "elements": rows,
+    }
 
 
 def _elements(helio):
@@ -348,6 +379,14 @@ def dispatch(req):
         bary, et = engine.bary_at(np.asarray(req["state_helio"], float), float(req["mjd_ref"]), float(req["mjd_out"]))
         helio = engine.helio_of(bary, et)
         return {"status": "ok", "mjd_epoch": float(req["mjd_out"]), "state_helio": helio.tolist(), "elements": _elements(helio)}
+    if cmd == "propagate_many":
+        if engine is None:
+            return {"status": "error", "message": "propagate_many uses the CODES backend"}
+        out = _propagate_many(engine, req)
+        if out.get("status") == "ok":
+            out["backend"] = "codes"
+            out["force_model"] = engine.force_model
+        return out
     if cmd != "fit":
         return {"status": "error", "message": "unknown cmd %s" % cmd}
     floor = float(req.get("floor_arcsec", 0.05))

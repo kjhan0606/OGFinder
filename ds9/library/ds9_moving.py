@@ -13,6 +13,7 @@ recorder as one argv and replayed:
   --mode link         link detections into tracklets -> tracklets.json, movers.tsv, movers.reg
   --mode nightlink    link tracklets of SEVERAL nights/visits (--tracklet-files a/tracklets.json b/tracklets.json ...) by 2-body orbit fits -> nightlinks.json, nightlinks.tsv
                         --nl-nbody   re-fit each linked group in a separate process (ASSIST, else CODES)
+                        --nl-ranging sample the orbital-element distribution of each linked group and pair (simplified statistical ranging)
   --mode identify     known-object identification (SkyBoT + Horizons) -> identified.tsv
   --mode orbit        orbit determination for one tracklet (--tracklet N) or a known object (--designation D with MPC obs)
   --mode transients   static transient candidates + host association (--catalog TSV) -> transients.tsv, transients.reg
@@ -375,6 +376,9 @@ def m_nightlink(a):
     if a.nl_nbody:
         from moving import nbody_refine as NR
         res = NR.refine_result(trks, res, chi2_max=a.nl_chi2)
+    if a.nl_ranging:
+        from moving import arc_ranging as AR
+        res = AR.attach(trks, res, n_samples=a.nl_ranging_samples, n_propagate=a.nl_ranging_propagate)
     rows = []
     for gi, g in enumerate(res["groups"] + res["pairs"]):
         row = dict(group=gi, kind="linked" if gi < len(res["groups"]) else "pair", n_tracklets=len(g["ids"]), n_obs=g["n_obs"], nights=",".join(str(x) for x in g["nights"]),
@@ -385,6 +389,8 @@ def m_nightlink(a):
             row["nbody_status"] = g["nbody"].get("status")
             row["nbody_accepted"] = bool(g["nbody"].get("accepted"))
             row["two_body_raw_rms_arcsec"] = g.get("two_body_raw_rms_arcsec")
+        if g.get("ranging"):
+            row["ranging"] = g["ranging"]
         rows.append(row)
     rejected_rows = []
     for g in res.get("nbody_rejected", []):
@@ -392,7 +398,8 @@ def m_nightlink(a):
                                   two_body_elements=g.get("two_body_elements"), two_body_raw_rms_arcsec=g.get("two_body_raw_rms_arcsec")))
     util.write_json(os.path.join(wd, "nightlinks.json"), dict(groups=rows, unlinked=[src[i] for i in res["unlinked"]], stats=res["stats"],
                                                                nbody=res.get("nbody"), nbody_rejected=rejected_rows,
-                                                               params=dict(obs_code=a.obs_code, min_tracklets=a.nl_min, chi2_max=a.nl_chi2, floor_arcsec=a.nl_floor, max_gap_days=a.nl_max_gap, nbody=bool(a.nl_nbody))))
+                                                               ranging=res.get("ranging"),
+                                                               params=dict(obs_code=a.obs_code, min_tracklets=a.nl_min, chi2_max=a.nl_chi2, floor_arcsec=a.nl_floor, max_gap_days=a.nl_max_gap, nbody=bool(a.nl_nbody), ranging=bool(a.nl_ranging))))
     with open(os.path.join(wd, "nightlinks.tsv"), "w") as f:
         cols = ["group", "kind", "n_tracklets", "n_obs", "nights", "members", "a_au", "e", "inc_deg", "chi2_red", "rms_arcsec"]
         f.write("\t".join(cols) + "\n")
@@ -535,6 +542,9 @@ def main(argv=None):
     ap.add_argument("--obs-code", default="500", help="nightlink: MPC observatory code of the tracklets (500 geocentre, 250 HST, ...)")
     ap.add_argument("--nl-chi2", type=float, default=4.0); ap.add_argument("--nl-floor", type=float, default=0.3, help="nightlink model-error floor [arcsec]")
     ap.add_argument("--nl-nbody", action="store_true", help="nightlink: re-fit each linked group in a separate process (ASSIST differential correction, else the CODES integrator)")
+    ap.add_argument("--nl-ranging", action="store_true", help="nightlink: sample the orbital-element distribution of each linked group and pair")
+    ap.add_argument("--nl-ranging-samples", type=int, default=400, help="nightlink --nl-ranging: admissible-region samples per group")
+    ap.add_argument("--nl-ranging-propagate", type=int, default=32, help="nightlink --nl-ranging: accepted samples to propagate with CODES (0 skips)")
     ap.add_argument("--nl-max-gap", type=float, default=30.0); ap.add_argument("--nl-min", type=int, default=3, help="nightlink: tracklets needed for a confirmed group (2-tracklet links are reported as pairs)"); ap.add_argument("--nl-sigma", type=float, default=0.3)
     ap.add_argument("--designation"); ap.add_argument("--mjd-min", type=float); ap.add_argument("--mjd-max", type=float)
     ap.add_argument("--no-debias", action="store_true"); ap.add_argument("--samples", type=int, default=400)
