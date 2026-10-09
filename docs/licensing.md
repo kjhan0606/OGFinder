@@ -14,13 +14,29 @@
 | zlib, libpng, libtiff, IJG libjpeg, SQLite (public domain), libtommath | permissive (zlib / PNG / BSD-like / IJG acknowledgement) | (audit 3.2) |
 | awthemes (zlib-style), ttkthemes (mixed Tcl-style / GPL-2+ / GPL-3; GPL-3 is the one licence for all) | permissive / GPL-3 | (audit 3.2) |
 | AST (LGPL-3.0+), PAL (LGPL-3.0+), wcslib-derived files and libwcs (LGPL-2+), ERFA/SOFA (BSD-3 + SOFA acknowledgement), cminpack/MINPACK (BSD-style with acknowledgement) | LGPL / BSD | linked into `bin/ds9`; source is shipped with the GPL-3 source (audit 2.3, 3.3) |
-| Funtools (GPL-2+; `COPYING` says LGPL-2.1), XPA (MIT `LICENSE` / GPL-2+ `copyright`), tkhtml1 (LGPL-2+), tkmpeg and tkagif (GPL-2 / 2+) | GPL-2+/LGPL/MIT mix; all combinable under GPL-3 through the "or later" wording | the inconsistencies in the vendored licence files are listed in audit section 1 item 8 |
-| SEP C library (`sep_src/`, LGPL-3.0+) used by `ds9_sextract` | LGPL-3.0+ | ship `sep_src` and `build_sextract.sh` (audit 3.3) |
+| Funtools | `funtools/copyright` is GPL-2 or later (SAO, 1999-2007). `funtools/COPYING` is the LGPL-2.1 text. Both files stay. | see the notice section below |
+| XPA | `xpa/LICENSE` is the MIT text (Smithsonian, 2014-2016). `xpa/copyright` is GPL-2 or later (1999-2013). Both files stay. | see the notice section below |
+| tkhtml1 | `tkhtml1/COPYRIGHT` is the GNU Library General Public License, version 2 or later (D. Richard Hipp). `tkhtml1/LICENSE` is the GPL version 2 text. Both files stay. | help browser |
+| tkmpeg and tkagif | GPL-2 / GPL-2 or later | combined in this GPL-3 build |
+| SEP C library (`sep_src/`) | LGPL-3.0+ | sources stay in the tree. `build_sextract.sh` does not link them. The product extractor is `ogfmeas/sextract.py` |
+| fitsy Rice / HCOMPRESS / PLIO | NASA CFITSIO permissive notice | `fitsy/NOTICE`. CFITSIO itself is not bundled |
+| funtools `util/zlib-1.2.3` | zlib licence (Jean-loup Gailly and Mark Adler) | zlib 1.2.3, as shipped inside funtools. This note does not upgrade it |
+| TinyCC `compilers/tcc-0.9.25-win32-bin.zip` | TinyCC is LGPL. The zip listing has no licence file (audit, unverified) | the Windows package rule does not unpack the zip |
 | Python packages of the analysis tools (numpy, scipy, astropy, matplotlib, ...) | BSD / MIT / PSF / Apache-2.0 | installed in the user's environment, not part of this repository |
-| `rebound`, `assist` (GPL-3.0+), `sep` Python wheel (LGPL-3.0+), PyMuPDF (AGPL-3.0 or commercial) | copyleft Python packages | imported by the `moving` tools or installed in the development venv; PyMuPDF is not imported by any OGFinder code (audit 1 item 6) |
-| OpenSSL 1.0.2u (static in `bin/ds9`) | OpenSSL/SSLeay licence (advertising clause) | **open item**: end-of-life and GPL-incompatible without an exception; replace by OpenSSL 3.x or the system TLS library before a binary release (audit 1 item 5) |
+| `rebound`, `assist` (GPL-3.0+), Python `sep` (LGPL-3.0+), PyMuPDF (AGPL-3.0 or commercial) | copyleft Python packages | rebound and assist run only in the explicit `propagate_assist` child. Python sep is used only when `OGF_USE_SEP=1`. PyMuPDF is not imported |
+| OpenSSL | Apache-2.0 for OpenSSL 3, which the build links from the system | the vendored `openssl/` tree is 1.0.2u and is not configured or linked. See below |
 
 Data sets and AI services have their own terms (audit sections 3.8 and 5); they are not covered by this note.
+
+## Notices for the 2026-10-09 build change
+
+This section is an engineering record, not a conclusion that a lawyer has cleared the combination.
+
+The product build stages the system OpenSSL 3 (`scripts/stage_openssl3.sh`) and links `libssl` and `libcrypto` from that stage (`$(prefix)/sys-openssl/lib`). `make` does not run the OpenSSL 1.0.2u configure in `openssl/`. TclTLS 1.6.7 is compiled against the OpenSSL 1.1/3 BIO and DH calls. A checkout still contains the `openssl/` 1.0.2u sources; they are not a build input.
+
+`build_sextract.sh` exits without compiling `sep_src` or writing `bin/ds9_sextract`. Source extraction for the product is `python ogfmeas/sextract.py`. The LGPL sources remain in `sep_src/` and `ds9/library/ds9_sextract.c`.
+
+`funtools/copyright` grants GPL version 2 or any later version. `funtools/COPYING` is the LGPL-2.1 document. `xpa/LICENSE` is the MIT grant dated 2014-2016, and `xpa/copyright` is the GPL-2-or-later grant dated 1999-2013. `tkhtml1/COPYRIGHT` names the Library General Public License version 2 or later, and `tkhtml1/LICENSE` is the GPL version 2 document. None of those files was rewritten. `funtools/util/zlib-1.2.3` remains zlib 1.2.3 under the zlib licence. `compilers/tcc-0.9.25-win32-bin.zip` stays in the source tree and is not unpacked into the Windows application. The Rice, HCOMPRESS and PLIO decompressors carry the NASA CFITSIO notice in `fitsy/NOTICE`.
 
 ## Product name and attribution
 

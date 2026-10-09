@@ -3,8 +3,8 @@
 ``link_nights`` stays a Sun-only two-body fit so this module's import does not
 load rebound, assist, or spiceypy.  ``refine_result`` sends the linked groups
 to ``python -m moving.nbody_worker``.  The worker calls
-``moving.orbit.differential_correction`` when ASSIST and the DE440 kernels are
-installed, and otherwise the external CODES integrator (see the worker module).
+``moving.orbit.differential_correction`` on the in-tree solar-system model,
+and otherwise the external CODES integrator (see the worker module).
 Groups the N-body fit rejects leave ``groups`` and are listed in
 ``nbody_rejected``.  A missing backend leaves the two-body result unchanged.
 """
@@ -62,13 +62,20 @@ def probe(codes_root=None, allow_assist=True, use_default=True):
     return call_worker(req, codes_root=codes_root, timeout=120)
 
 
-def observe(state_helio, mjd_ref, mjd, code="500", codes_root=None, timeout=180):
-    """Apparent geocentric RA/Dec (deg) of a heliocentric equatorial state, from the CODES worker."""
+def observe(state_helio, mjd_ref, mjd, code="500", codes_root=None, timeout=180,
+            allow_assist=True, use_default=True):
+    """Apparent RA/Dec (deg) of a heliocentric equatorial state (AU, AU/day).
+
+    Light-time corrected, geocentre or an MPC station.  The default backend is
+    ogfmeas.  ``allow_assist=False`` selects CODES when a tree with de440s.bsp
+    is present.
+    """
     mjd = np.asarray(mjd, float)
     codes = [code] * len(mjd) if isinstance(code, str) or code is None else list(code)
     req = {
         "cmd": "observe",
-        "allow_assist": False,
+        "allow_assist": bool(allow_assist),
+        "use_default": bool(use_default),
         "state_helio": np.asarray(state_helio, float).tolist(),
         "mjd_ref": float(mjd_ref),
         "mjd": mjd.tolist(),
@@ -82,10 +89,13 @@ def observe(state_helio, mjd_ref, mjd, code="500", codes_root=None, timeout=180)
     return np.asarray(out["ra"], float), np.asarray(out["dec"], float), out
 
 
-def propagate_helio(state_helio, mjd_ref, mjd_out, codes_root=None, timeout=180):
+def propagate_helio(state_helio, mjd_ref, mjd_out, codes_root=None, timeout=180,
+                    allow_assist=True, use_default=True):
+    """Heliocentric state at ``mjd_out``.  The default backend is ogfmeas."""
     req = {
         "cmd": "propagate_helio",
-        "allow_assist": False,
+        "allow_assist": bool(allow_assist),
+        "use_default": bool(use_default),
         "state_helio": np.asarray(state_helio, float).tolist(),
         "mjd_ref": float(mjd_ref),
         "mjd_out": float(mjd_out),

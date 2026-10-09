@@ -2,13 +2,15 @@
 
 The parent linker (``moving.nightlink``) does not import this module.  Run it as
 ``python -m moving.nbody_worker`` with one JSON object on stdin and one JSON
-object on stdout.  rebound and assist are imported only when they are already
-installed.  Otherwise the worker uses the external CODES integrator
-(``neo_orbit_calculator`` under ``OGF_CODES_ROOT`` or ``~/BACKUP/3.5ST``):
-Fortran Dormand-Prince, JPL DE440s, SB441-N16, full 1PN and J2/J4/J6.
-That tree is not shipped with OGFinder and is never imported into the web process.
-``propagate_many`` moves a list of heliocentric states to one later epoch for
-the ranging distribution; it does not replace the differential correction.
+object on stdout.  The default backend is the in-tree solar-system integrator
+in ``moving.orbit`` (no rebound or assist).  ``observe``, ``propagate_helio``,
+and ``propagate_many`` use that integrator.  ``allow_assist`` false selects the
+external CODES integrator when ``neo_orbit_calculator`` under ``OGF_CODES_ROOT``
+or ``~/BACKUP/3.5ST`` has ``de440s.bsp``: Fortran Dormand-Prince, JPL DE440s,
+SB441-N16, full 1PN and J2/J4/J6.  That tree is not shipped with OGFinder and
+is never imported into the web process.
+``propagate_many`` moves a list of heliocentric states to one epoch for the
+ranging distribution; it does not replace the differential correction.
 """
 import json
 import os
@@ -75,6 +77,8 @@ def _sky(ra_obs, dec_obs, ra_mod, dec_mod):
 
 
 class CodesEngine:
+    backend = "codes"
+
     def __init__(self, root):
         self.env, self.integ, self.model, self.rhs_factory, self.AU, self.C, self.DAY = _codes(root)
         self.force_model = (
@@ -173,13 +177,79 @@ class CodesEngine:
         return ra, dec, tau
 
 
+class OgfmeasEngine:
+    """In-tree states in AU and AU/day.  Times are UTC MJD at the boundary and JD TDB inside."""
+
+    backend = "ogfmeas"
+
+    def __init__(self):
+        from moving import orbit as orbit_mod
+        from moving.util import C_AUD
+        self.prop = orbit_mod.Propagator()
+        self.force_model = self.prop.force_model
+        self.C = C_AUD
+
+    def bary_at(self, state_helio, mjd_from, mjd_to):
+        from moving.util import utc_mjd_to_tdb_jd
+        jd_from = float(utc_mjd_to_tdb_jd([mjd_from])[0])
+        jd_to = float(utc_mjd_to_tdb_jd([mjd_to])[0])
+        sun0 = self.prop.sun(jd_from)
+        bary = np.empty(6)
+        bary[:3] = np.asarray(state_helio[:3], float) + sun0[:3]
+        bary[3:] = np.asarray(state_helio[3:], float) + sun0[3:]
+        if abs(jd_to - jd_from) > 1e-12:
+            bary = self.prop.propagate(bary[None, :], jd_from, np.array([jd_to]))[0, 0]
+        return bary, jd_to
+
+    def helio_of(self, bary, jd):
+        sun = self.prop.sun(float(jd))
+        h = np.empty(6)
+        h[:3] = np.asarray(bary[:3], float) - sun[:3]
+        h[3:] = np.asarray(bary[3:], float) - sun[3:]
+        return h
+
+    def observers(self, mjd, codes):
+        from moving.obs import geocentric_gcrs_km
+        from moving.util import AU_KM, utc_mjd_to_tdb_jd
+        mjd = np.asarray(mjd, float)
+        jd = utc_mjd_to_tdb_jd(mjd)
+        pos = np.zeros((len(mjd), 3))
+        for i, t in enumerate(jd):
+            pos[i] = self.prop.body("earth", float(t))[:3]
+        for code in set(codes):
+            if code in (None, "", "500"):
+                continue
+            idx = [i for i, c in enumerate(codes) if c == code]
+            pos[idx] += geocentric_gcrs_km(code, mjd[idx]) / AU_KM
+        return jd, pos
+
+    def predict(self, states, jd0, jds, obs_pos, tau_days=None):
+        """states (n, 6) barycentric at jd0.  Returns ra, dec in degrees and light time in days."""
+        states = np.atleast_2d(np.asarray(states, float))
+        jds = np.asarray(jds, float)
+        obs_pos = np.asarray(obs_pos, float)
+        tau = np.full(len(jds), 0.005) if tau_days is None else np.asarray(tau_days, float).copy()
+        for _ in range(2):
+            emitted = self.prop.propagate(states[:1], jd0, jds - tau)[0]
+            tau = np.linalg.norm(emitted[:, :3] - obs_pos, axis=1) / self.C
+        te = jds - tau
+        ra = np.zeros((len(states), len(jds)))
+        dec = np.zeros_like(ra)
+        for i, state in enumerate(states):
+            emitted = self.prop.propagate(state[None, :], jd0, te)[0]
+            tau_i = np.linalg.norm(emitted[:, :3] - obs_pos, axis=1) / self.C
+            xx = emitted[:, :3] + emitted[:, 3:] * (tau - tau_i)[:, None]
+            ra[i], dec[i] = _radec(xx - obs_pos)
+        return ra, dec, tau
+
+
 def _propagate_many(engine, req):
     states = np.atleast_2d(np.asarray(req["states_helio"], float))
     if states.ndim != 2 or states.shape[1] != 6 or len(states) == 0:
         return {"status": "error", "message": "states_helio must be (n, 6) with n > 0"}
     mjd_ref = float(req["mjd_ref"])
     mjd_out = float(req["mjd_out"])
-    if mjd_out + 1e-6 < mjd_ref:
+    if engine.backend == "codes" and mjd_out + 1e-6 < mjd_ref:
         return {"status": "error", "message": "propagate_many steps forward of the sample epoch"}
     rows = []
     n_failed = 0
@@ -193,7 +263,7 @@ def _propagate_many(engine, req):
         return {"status": "error", "message": "every sample failed to propagate", "n_failed": int(n_failed)}
     return {
         "status": "ok",
-        "backend": "codes",
+        "backend": engine.backend,
         "force_model": engine.force_model,
         "mjd_epoch": mjd_out,
         "n": int(len(rows)),
@@ -345,13 +415,23 @@ def _observe(engine, req):
     codes = list(req.get("code") or ["500"] * len(mjd))
     if len(codes) == 1 and len(mjd) > 1:
         codes = codes * len(mjd)
-    # Epoch sits before every emission time.  The Fortran propagator does not step backward.
-    mjd_epoch = float(np.min(mjd) - 0.1)
-    bary, et0 = engine.bary_at(np.asarray(req["state_helio"], float), float(req["mjd_ref"]), mjd_epoch)
-    ets, obs_pos = engine.observers(mjd, codes)
-    ra, dec, _ = engine.predict(bary[None, :], et0, ets, obs_pos)
-    return {"status": "ok", "ra": ra[0].tolist(), "dec": dec[0].tolist(), "mjd_epoch": mjd_epoch,
-            "state_helio": engine.helio_of(bary, et0).tolist()}
+    # The Fortran propagator does not step backward, so that epoch sits before every emission time.
+    if engine.backend == "codes":
+        mjd_epoch = float(np.min(mjd) - 0.1)
+    else:
+        mjd_epoch = float(req["mjd_ref"])
+    bary, t0 = engine.bary_at(np.asarray(req["state_helio"], float), float(req["mjd_ref"]), mjd_epoch)
+    times, obs_pos = engine.observers(mjd, codes)
+    ra, dec, _tau = engine.predict(bary[None, :], t0, times, obs_pos)
+    return {
+        "status": "ok",
+        "backend": engine.backend,
+        "force_model": engine.force_model,
+        "ra": ra[0].tolist(),
+        "dec": dec[0].tolist(),
+        "mjd_epoch": mjd_epoch,
+        "state_helio": engine.helio_of(bary, t0).tolist(),
+    }
 
 
 def dispatch(req):
@@ -361,32 +441,31 @@ def dispatch(req):
     use_assist = allow_assist and assist_ready()
     if cmd == "probe":
         if use_assist:
-            return {"status": "ok", "backend": "assist", "force_model": "ASSIST(DE440+16 asteroids+GR+J2/J3/J4)"}
+            from moving import orbit as O
+            return {"status": "ok", "backend": "ogfmeas", "force_model": O.Propagator().force_model}
         if root and os.path.isfile(os.path.join(root, "neo_orbit_calculator", "kernels", "de440s.bsp")):
             engine = CodesEngine(root)
             return {"status": "ok", "backend": "codes", "force_model": engine.force_model, "codes_root": root}
-        return {"status": "unavailable", "reason": "neither ASSIST+DE440 nor a CODES tree with de440s.bsp is available"}
+        return {"status": "unavailable", "reason": "neither the in-tree integrator nor a CODES tree with de440s.bsp is available"}
     if not use_assist and not (root and os.path.isfile(os.path.join(root, "neo_orbit_calculator", "kernels", "de440s.bsp"))):
-        return {"status": "unavailable", "reason": "neither ASSIST+DE440 nor a CODES tree with de440s.bsp is available"}
-    engine = None if use_assist else CodesEngine(root)
+        return {"status": "unavailable", "reason": "neither the in-tree integrator nor a CODES tree with de440s.bsp is available"}
+    engine = OgfmeasEngine() if use_assist else CodesEngine(root)
     if cmd == "observe":
-        if engine is None:
-            return {"status": "error", "message": "observe is implemented for the CODES backend only"}
         return _observe(engine, req)
     if cmd == "propagate_helio":
-        if engine is None:
-            return {"status": "error", "message": "propagate_helio is implemented for the CODES backend only"}
-        bary, et = engine.bary_at(np.asarray(req["state_helio"], float), float(req["mjd_ref"]), float(req["mjd_out"]))
-        helio = engine.helio_of(bary, et)
-        return {"status": "ok", "mjd_epoch": float(req["mjd_out"]), "state_helio": helio.tolist(), "elements": _elements(helio)}
+        bary, epoch = engine.bary_at(
+            np.asarray(req["state_helio"], float), float(req["mjd_ref"]), float(req["mjd_out"]))
+        helio = engine.helio_of(bary, epoch)
+        return {
+            "status": "ok",
+            "backend": engine.backend,
+            "force_model": engine.force_model,
+            "mjd_epoch": float(req["mjd_out"]),
+            "state_helio": helio.tolist(),
+            "elements": _elements(helio),
+        }
     if cmd == "propagate_many":
-        if engine is None:
-            return {"status": "error", "message": "propagate_many uses the CODES backend"}
-        out = _propagate_many(engine, req)
-        if out.get("status") == "ok":
-            out["backend"] = "codes"
-            out["force_model"] = engine.force_model
-        return out
+        return _propagate_many(engine, req)
     if cmd != "fit":
         return {"status": "error", "message": "unknown cmd %s" % cmd}
     floor = float(req.get("floor_arcsec", 0.05))
@@ -400,10 +479,15 @@ def dispatch(req):
                 rows.append(_fit_codes(engine, group, floor, max_iter))
         except Exception as exc:
             rows.append({"id": group.get("id"), "status": "error", "message": "%s: %s" % (type(exc).__name__, exc)})
+    if use_assist:
+        from moving import orbit as orbit_mod
+        force_model = orbit_mod.Propagator().force_model
+    else:
+        force_model = engine.force_model
     return {
         "status": "ok",
-        "backend": "assist" if use_assist else "codes",
-        "force_model": "ASSIST(DE440+16 asteroids+GR+J2/J3/J4)" if use_assist else engine.force_model,
+        "backend": "ogfmeas" if use_assist else "codes",
+        "force_model": force_model,
         "codes_root": None if use_assist else root,
         "groups": rows,
     }

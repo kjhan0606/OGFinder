@@ -98,8 +98,10 @@ Tcl_Obj* Tls_NewX509Obj(Tcl_Interp *interp, X509 *cert)
     char notAfter[BUFSIZ];
 #ifndef NO_SSL_SHA
     int shai;
-    char sha_hash[SHA_DIGEST_LENGTH*2];
+    char sha_hash[SHA_DIGEST_LENGTH*2 + 1];
     const char *shachars="0123456789ABCDEF";
+    unsigned char sha1_digest[SHA_DIGEST_LENGTH];
+    unsigned int sha1_len = 0;
 #endif
 
     if ((bio = BIO_new(BIO_s_mem())) == NULL) {
@@ -135,10 +137,14 @@ Tcl_Obj* Tls_NewX509Obj(Tcl_Interp *interp, X509 *cert)
     strcpy( notAfter, ASN1_UTCTIME_tostr( X509_get_notAfter(cert) ));
 
 #ifndef NO_SSL_SHA
-    for (shai=0;shai<SHA_DIGEST_LENGTH;shai++)
-    {
-        sha_hash[shai * 2]=shachars[(cert->sha1_hash[shai] & 0xF0) >> 4];
-        sha_hash[shai * 2 + 1]=shachars[(cert->sha1_hash[shai] & 0x0F)];
+    sha_hash[0] = '\0';
+    if (X509_digest(cert, EVP_sha1(), sha1_digest, &sha1_len) == 1
+	    && sha1_len == SHA_DIGEST_LENGTH) {
+	for (shai = 0; shai < SHA_DIGEST_LENGTH; shai++) {
+	    sha_hash[shai * 2] = shachars[(sha1_digest[shai] & 0xF0) >> 4];
+	    sha_hash[shai * 2 + 1] = shachars[(sha1_digest[shai] & 0x0F)];
+	}
+	sha_hash[SHA_DIGEST_LENGTH * 2] = '\0';
     }
     Tcl_ListObjAppendElement( interp, certPtr,
 	    Tcl_NewStringObj( "sha1_hash", -1) );

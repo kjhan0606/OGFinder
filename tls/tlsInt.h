@@ -62,6 +62,18 @@
 #define NO_TLS1_2
 #endif
 
+/* OpenSSL 1.1 removed SSLv2. This system's OpenSSL 3 also omits SSLv3. */
+#if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
+#ifndef NO_SSL2
+#define NO_SSL2
+#endif
+#endif
+#if defined(OPENSSL_NO_SSL3_METHOD) || defined(OPENSSL_NO_SSL3)
+#ifndef NO_SSL3
+#define NO_SSL3
+#endif
+#endif
+
 #ifdef TCL_STORAGE_CLASS
 # undef TCL_STORAGE_CLASS
 #endif

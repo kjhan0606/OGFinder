@@ -17,7 +17,7 @@ from ogfkit import repro  # noqa: E402
 
 CLI = os.path.join(PLUG, 'repro.py')
 BATCH = os.path.join(ROOT, 'plugins', 'batch', 'batch.py')
-need = pytest.mark.skipif(not os.path.exists(os.path.join(ROOT, 'bin', 'ds9_sextract')), reason='bin/ds9_sextract not built')
+need = pytest.mark.skipif(not os.path.exists(os.path.join(ROOT, 'ogfmeas', 'sextract.py')), reason='ogfmeas/sextract.py missing')
 
 
 def sh(cmd):
@@ -58,7 +58,7 @@ def test_bundle_contents(batch_run):
     print('bundle: %d files, %d bytes; git %s dirty=%s; %d key packages %s; %d locked packages; inputs %d (sha256 %s...)' % (
         len(names), os.path.getsize(z), m['tool'].get('head', '')[:9], m['tool'].get('dirty'), len(m['packages']), sorted(m['packages']), m['n_packages_locked'], len(m['inputs']), m['inputs'][0]['sha256'][:12]))
     assert m['schema'] == 1 and m['kind'] == 'batch' and len(m['inputs']) == 3 and len(m['outputs']) == 3
-    assert 'numpy' in m['packages'] and m['binaries']['ds9_sextract']['sha256']
+    assert 'numpy' in m['packages'] and m['binaries']['ogfmeas_sextract']['sha256']
     assert m['inputs'][0]['sha256'] == repro.sha256_file(m['inputs'][0]['path'])
     lock = zipfile.ZipFile(z).read('requirements.lock').decode()
     assert 'numpy==' in lock and len(lock.splitlines()) == m['n_packages_locked']

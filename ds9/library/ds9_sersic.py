@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Sérsic profile fitting for each source."""
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import os
 import argparse
@@ -107,10 +120,10 @@ def process_file(fitsfile, catalog_file=None, max_sources=200,
                   mag_zeropoint=25.0, n_workers=0):
     """Process a single FITS file and return TSV string."""
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
         try:
-            import sep_pjw as sep
+            sep = _import_ogfmeas()
         except ImportError:
             print("ERROR: sep is required", file=sys.stderr)
             return ""

@@ -1,18 +1,36 @@
 #!/usr/bin/env python3
-"""Real-galaxy cross-check of multifit against GALFIT (same data, PSF, sigma, mask, start values, constraints).
+"""Real-galaxy cross-check of the in-tree single-Sérsic fit and multifit.
 
-    python galfit_real_compare.py prep  WORK [--n 30] [--hudf-dir /workspace/fits] [--m51 FILE]   # catalog, stacked PSF per band, cutouts, mask, sigma, start feedmes
-    python galfit_real_compare.py run   WORK [--workers 8] [--galfit BIN] [--ld DIR]              # GALFIT and multifit on every cutout
-    python galfit_real_compare.py report WORK OUT.json                                             # statistics (parameters, chi2 with a neutral arbiter, failures)
+    python galfit_real_compare.py prep  WORK [--n 30] [--hudf-dir /workspace/fits] [--m51 FILE]
+    python galfit_real_compare.py run   WORK [--workers 8]
+    python galfit_real_compare.py report WORK OUT.json
+
+``sersic`` cutouts are fitted with ogfmeas.sersic (one ellipse, optional PSF).
+When ``--galfit`` or ``GALFIT_BIN`` names the user-installed binary, that
+program is also run and the row is labeled ``galfit``. A missing binary does
+not write a ``galfit`` result. ``devexp`` is fitted only by that binary.
+Chi-squared uses the binary's renderer when the binary is present, and the
+in-tree renderer otherwise.
 
 Data: HUDF F105W / F125W / F160W mosaics (same pixel grid, 0.06"/px; AB zero point from PHOTFLAM / PHOTPLAM) and the M51 image (zero point 25, arbitrary units).
 Objects are chosen on F160W (extended: half-light radius > 4 px, 19.5 < mag < 23.5) and fitted in every band at the same position.
-Every cutout: background-subtracted with sep (64 px mesh), constant sigma = local sep rms of the cutout (identical for both programs), PSF = median stack of isolated stars of that band
-(sub-pixel recentred), mask = other detected objects (segmentation map dilated by 2 px; the target's own segment is kept), start values from the sep moments.
-Models: `sersic` (free n) on every cutout; `devexp` (de Vaucouleurs + exponential disc with tied centre) on the same cutouts.  Both programs fit the same feedme, and each result is
-re-rendered with GALFIT (P=1) and its chi2 evaluated in numpy with the same sigma and mask (neutral arbiter).  There is no truth on real galaxies: only the agreement of the two programs
-and the chi2 reached can be assessed (not which one is closer to the physical parameters).
+Every cutout: background-subtracted (64 px mesh), constant sigma = local rms of the cutout, PSF = median stack of isolated stars of that band
+(sub-pixel recentred), mask = other detected objects (segmentation map dilated by 2 px; the target's own segment is kept), start values from the detection moments.
+Models prepared: `sersic` (free n) on every cutout; `devexp` (de Vaucouleurs + exponential disc with tied centre) on the same cutouts.
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse
 import json
 import math
@@ -53,7 +71,7 @@ def load(path):
 
 
 def detect(d):
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(np.nan_to_num(d))
     bk = sep.Background(d, bw=64, bh=64)
     ds = d - bk.back()
@@ -64,7 +82,7 @@ def detect(d):
 
 
 def stack_psf(ds, rms, o, fr, size=31, nmax=40, snr_min=40):
-    import sep
+    sep = _import_ogfmeas()
     from scipy.ndimage import shift as ndshift
     ny, nx = ds.shape
     flux = o['flux']
@@ -257,25 +275,75 @@ def prep(a):
     print('prepared', len(mf), 'fits in', len(set((m['band'], m['k']) for m in mf)), 'cutouts')
 
 
+def _galfit_bin(a):
+    """Path of the user-installed GALFIT binary, or '' when it is absent."""
+    path = str(getattr(a, 'galfit', '') or '').strip()
+    if not path:
+        return ''
+    if os.path.isfile(path) and os.access(path, os.X_OK):
+        return path
+    return shutil.which(path) or ''
+
+
 def render_chi2(a, md, feed_txt, tag, sigma):
+    """Chi-squared of a result feedme.
+
+    The user-installed binary renders the model when it is present. Otherwise
+    the in-tree renderer is used. A feedme that cannot be read returns None.
+    """
+    if _galfit_bin(a):
+        return _galfit_render_chi2(a, md, feed_txt, tag, sigma)
+    try:
+        cfg = GI.parse_feedme(feed_txt, strict=False, base_dir=md)
+    except Exception:
+        return None
+    return _in_tree_chi2(md, cfg, sigma)
+
+
+def _galfit_render_chi2(a, md, feed_txt, tag, sigma):
     ed = os.path.join(md, 'e_' + tag)
     os.makedirs(ed, exist_ok=True)
-    for f in ('psf.fits', 'data.fits', 'mask.fits'):
-        shutil.copy(os.path.join(md, f), ed)
+    for name in ('psf.fits', 'data.fits', 'mask.fits'):
+        shutil.copy(os.path.join(md, name), ed)
     txt = feed_txt
-    for key, val in (('A', 'data.fits'), ('B', 'out.fits'), ('C', 'none'), ('D', 'psf.fits'), ('F', 'none'), ('G', 'none'), ('P', '1')):
+    for key, val in (('A', 'data.fits'), ('B', 'out.fits'), ('C', 'none'),
+                     ('D', 'psf.fits'), ('F', 'none'), ('G', 'none'), ('P', '1')):
         txt = re.sub(r'(?m)^%s\).*$' % key, '%s) %s' % (key, val), txt)
     open(os.path.join(ed, 'e.feedme'), 'w').write(txt)
-    GC.run_galfit(a.galfit, a.ld, 'e.feedme', ed, timeout=120)
-    o = os.path.join(ed, 'out.fits')
-    if not os.path.exists(o):
+    GC.run_galfit(_galfit_bin(a), getattr(a, 'ld', '') or '', 'e.feedme', ed, timeout=120)
+    out = os.path.join(ed, 'out.fits')
+    if not os.path.exists(out):
         return None
     data = fits.getdata(os.path.join(ed, 'data.fits')).astype(float)
-    mod = fits.getdata(o)
-    mod = mod[0] if mod.ndim == 3 else mod
+    mod = fits.getdata(out)
+    mod = mod[0] if getattr(mod, 'ndim', 0) == 3 else mod
     bad = fits.getdata(os.path.join(ed, 'mask.fits')) > 0
-    r = ((data - mod.astype(float)) / sigma)[~bad]
-    return float(np.sum(r ** 2)), int((~bad).sum())
+    resid = ((data - mod.astype(float)) / sigma)[~bad]
+    return float(np.sum(resid ** 2)), int((~bad).sum())
+
+
+def _in_tree_chi2(md, cfg, sigma):
+    from ogfkit import multifit as MF
+    data = fits.getdata(os.path.join(md, 'data.fits')).astype(float)
+    if data.ndim == 3:
+        data = data[0]
+    mask_path = os.path.join(md, 'mask.fits')
+    bad = fits.getdata(mask_path) > 0 if os.path.isfile(mask_path) else ~np.isfinite(data)
+    psf = None
+    psf_path = os.path.join(md, 'psf.fits')
+    if os.path.isfile(psf_path):
+        psf = np.clip(fits.getdata(psf_path).astype(float), 0, None)
+        total = float(psf.sum())
+        psf = psf / total if total > 0 else None
+    cn = [MF._normalise(dict(c), cfg.get('zp', 25.0)) for c in cfg['components']]
+    for c in cn:
+        c['x'] -= 1.0
+        c['y'] -= 1.0
+    sky = cfg.get('sky_value_galfit')
+    mod = MF.render_model(cn, data.shape, psf=psf, sky=0.0 if sky is None else sky)
+    resid = (data - mod) / np.asarray(sigma, dtype=float)
+    use = (~bad) & np.isfinite(resid)
+    return float(np.sum(resid[use] ** 2)), int(np.count_nonzero(use))
 
 
 def comps_of(cfg):
@@ -288,31 +356,65 @@ def comps_of(cfg):
     return out
 
 
+def run_galfit_optional(a, md, timeout):
+    """Run the user-installed GALFIT binary on ``start.feedme``.
+
+    The binary is not bundled. A missing path raises FileNotFoundError before
+    an output directory is created.
+    """
+    binary = _galfit_bin(a)
+    if not binary:
+        raise FileNotFoundError('external binary not found')
+    gwd = os.path.join(md, 'g')
+    shutil.rmtree(gwd, ignore_errors=True)
+    shutil.copytree(md, gwd, ignore=shutil.ignore_patterns('g', 'm', 'e_*'))
+    t, proc = GC.run_galfit(binary, getattr(a, 'ld', '') or '', 'start.feedme', gwd, timeout=timeout)
+    out = {'galfit_time': t}
+    gr = GC.galfit_result(gwd)
+    if gr is None:
+        out['galfit'] = None
+        out['galfit_err'] = (proc.stdout or '')[-160:]
+        return out
+    cfg, chi, _ = gr
+    fs = sorted(f for f in os.listdir(gwd) if re.match(r'galfit\.\d+$', f))
+    txt = open(os.path.join(gwd, fs[-1]), encoding='utf-8').read()
+    out['galfit'] = dict(
+        comps=comps_of(cfg), chi2nu=chi,
+        flagged=len(re.findall(r'\*[^*\n]+\*', txt)),
+        sky=cfg.get('sky_value_galfit'), feed=txt,
+    )
+    return out
+
+
 def run_one(task):
     m, a = task
     md = os.path.join(a.work, m['dir'])
     res = dict(m)
-    # GALFIT
-    gwd = os.path.join(md, 'g')
-    shutil.rmtree(gwd, ignore_errors=True)
-    shutil.copytree(md, gwd, ignore=shutil.ignore_patterns('g', 'm', 'e_*'))
     try:
-        t, r = GC.run_galfit(a.galfit, a.ld, 'start.feedme', gwd, timeout=a.timeout)
-        res['galfit_time'] = t
-        gr = GC.galfit_result(gwd)
-        if gr is None:
-            res['galfit'] = None
-            res['galfit_err'] = (r.stdout or '')[-160:]
-        else:
-            cfg, chi, _ = gr
-            fs = sorted(f for f in os.listdir(gwd) if re.match(r'galfit\.\d+$', f))
-            txt = open(os.path.join(gwd, fs[-1])).read()
-            res['galfit'] = dict(comps=comps_of(cfg), chi2nu=chi, flagged=len(re.findall(r'\*[^*\n]+\*', txt.split('# Chi')[0] if False else txt)), sky=cfg.get('sky_value_galfit'))
-            res['galfit']['feed'] = txt
+        res.update(run_galfit_optional(a, md, a.timeout))
+    except FileNotFoundError:
+        res['galfit'] = None
+        res['galfit_time'] = None
+        res['galfit_err'] = 'external binary not found'
     except subprocess.TimeoutExpired:
         res['galfit'] = None
         res['galfit_err'] = 'timeout'
         res['galfit_time'] = a.timeout
+    if m.get('model', 'sersic') == 'sersic':
+        t = time.time()
+        try:
+            import pysersic_map as PM
+            fit = PM.fit_directory(md, sigma=m.get('sigma'))
+            fit['chi2'] = PM.pixel_chi2(md, fit, sigma=m.get('sigma'))
+            res['ogfmeas'] = fit
+        except Exception as e:
+            res['ogfmeas'] = None
+            res['ogfmeas_err'] = str(e)[:200]
+        res['ogfmeas_time'] = time.time() - t
+    else:
+        res['ogfmeas'] = None
+        res['ogfmeas_err'] = 'single elliptical Sersic only'
+        res['ogfmeas_time'] = None
     # multifit
     mwd = os.path.join(md, 'm')
     shutil.rmtree(mwd, ignore_errors=True)
@@ -330,7 +432,7 @@ def run_one(task):
         mm = re.search(r'chi2/dof = ([0-9.]+)', r.stdout)
         res['multifit'] = dict(comps=comps_of(cfg), chi2nu=float(mm.group(1)) if mm else None, sky=cfg.get('sky_value_galfit'), feed=open(ex).read())
     try:
-        if res.get('galfit'):
+        if res.get('galfit') and res['galfit'].get('feed'):
             res['galfit']['chi2'] = render_chi2(a, md, res['galfit']['feed'], 'g', m['sigma'])
         if res.get('multifit'):
             res['multifit']['chi2'] = render_chi2(a, md, res['multifit']['feed'], 'm', m['sigma'])
@@ -391,8 +493,16 @@ def report(a):
     for model in ('sersic', 'devexp'):
         rs = [r for r in res if r['model'] == model]
         both = [r for r in rs if r.get('galfit') and r.get('multifit')]
+        gt = [r['galfit_time'] for r in rs if r.get('galfit_time') is not None]
+        mt = [r['multifit_time'] for r in rs if r.get('multifit_time') is not None]
         s = dict(n=len(rs), galfit_failed=sum(1 for r in rs if not r.get('galfit')), multifit_failed=sum(1 for r in rs if not r.get('multifit')), both=len(both),
-                 galfit_flagged_params=sum(1 for r in both if r['galfit'].get('flagged')), galfit_time_median=float(np.median([r['galfit_time'] for r in rs])), multifit_time_median=float(np.median([r['multifit_time'] for r in rs])))
+                 galfit_flagged_params=sum(1 for r in both if r['galfit'].get('flagged')), galfit_time_median=(float(np.median(gt)) if gt else None),
+                 multifit_time_median=(float(np.median(mt)) if mt else None))
+        og = [r for r in rs if r.get('ogfmeas')]
+        if og:
+            ot = [r['ogfmeas_time'] for r in og if r.get('ogfmeas_time') is not None]
+            s['ogfmeas_fitted'] = len(og)
+            s['ogfmeas_time_median'] = float(np.median(ot)) if ot else None
         s['galfit_failures'] = [dict(band=r['band'], k=r['k'], err=r.get('galfit_err')) for r in rs if not r.get('galfit')][:10]
         s['multifit_failures'] = [dict(band=r['band'], k=r['k'], err=(r.get('multifit_err') or '')[-120:]) for r in rs if not r.get('multifit')][:10]
         acc = {}

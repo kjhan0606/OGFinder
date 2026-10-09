@@ -5,10 +5,11 @@ from .base import SPSBackend, SEDResult
 
 
 class ProspectorBackend(SPSBackend):
-    """SED fitting using Prospector (prospect).
+    """SED fitting using the user-installed prospect package.
 
-    Requires: pip install prospect dynesty
-    Features native fitting via dynesty nested sampling.
+    The import runs only when this backend is requested. ``auto`` does not
+    select it. sedpy is imported only on this path. A missing package raises
+    before any chi-squared fallback.
     """
 
     @classmethod
@@ -16,7 +17,7 @@ class ProspectorBackend(SPSBackend):
         try:
             import prospect
             return True
-        except ImportError:
+        except Exception:
             return False
 
     @classmethod
@@ -41,8 +42,16 @@ class ProspectorBackend(SPSBackend):
         from prospect.sources import CSPSpecBasis
         return CSPSpecBasis(zcontinuous=1)
 
+    def _missing(self):
+        raise RuntimeError(
+            "Backend 'prospector' was not found. "
+            "The in-tree SED model is analytic."
+        )
+
     def generate_sed(self, z, log_mass, log_age, log_Z, Av, log_tau,
                      bands) -> np.ndarray:
+        if not type(self).is_available():
+            self._missing()
         from .filters import map_filters
         from .params import canonical_to_prospector
         from sedpy.observate import load_filters
@@ -70,6 +79,8 @@ class ProspectorBackend(SPSBackend):
 
     def fit_sed(self, mags, mag_errs, photo_z, bands, **kw) -> SEDResult:
         """Native fitting using dynesty nested sampling."""
+        if not type(self).is_available():
+            self._missing()
         import sys
 
         try:

@@ -27,7 +27,7 @@
 # zlib 1.2.8
 # xpa 2.1.20
 # libxslt 1.1.29
-# openssl 1.0.2u
+# OpenSSL 3 from the system. The vendored openssl/ tree is 1.0.2u and is not built.
 
 DS9_VERSION	= 8.7
 XPA_VERSION	= 2.1.20
@@ -132,17 +132,12 @@ ds9/$(OS)/Makefile :
 	$(CACHE)
 
 #--------------------------openssl
+# Stage system OpenSSL 3. Do not configure or compile openssl/ (1.0.2u).
 
-openssl	: openssl/Makefile
+openssl	:
 	@echo ""
-	@echo "*** $@ ***"
-	$(MAKE) -C openssl -j $(JOBS)
-
-openssl/Makefile:
-	@echo ""
-	@echo "*** $@ ***"
-	cd openssl; \
-	$(SSLCONFIG) --prefix=$(prefix)
+	@echo "*** system OpenSSL 3 (vendored 1.0.2u is not built) ***"
+	$(SHELL) ./scripts/stage_openssl3.sh $(prefix)/sys-openssl
 
 #-------------------------- tclfitsy
 
@@ -211,7 +206,7 @@ tls/Makefile :
 	@echo "*** $@ ***"
 	cd tls; \
 	./configure \
- 	--with-ssl-dir=$(prefix)/openssl \
+ 	--with-ssl-dir=$(prefix)/sys-openssl \
 	 $(TLSFLAGS) \
 	$(WITHTCL) \
 	$(PREFIX) \
@@ -598,7 +593,7 @@ localclean :
 opensslclean:
 	@echo ""
 	@echo "*** $@ ***"
-	$(MAKE) -C openssl clean
+	$(RM) -rf $(prefix)/sys-openssl
 
 tclfitsyclean :
 	@echo ""
@@ -735,15 +730,7 @@ localdistclean :
 openssldistclean :
 	@echo ""
 	@echo "*** $@ ***"
-	$(MAKE) -C openssl clean
-	$(RM) -f openssl/Makefile
-	$(RM) -fr openssl/include
-	$(RM) -f openssl/crypto/opensslconf.h
-	$(RM) -f openssl/apps/CA.pl
-	$(RM) -f openssl/tools/c_rehash
-	find openssl/test -type l -exec rm {} \;
-	find openssl/apps -type l -exec rm {} \;
-	find openssl/certs/demo -type l -exec rm {} \;
+	$(RM) -rf $(prefix)/sys-openssl
 
 tclfitsydistclean :
 	@echo ""

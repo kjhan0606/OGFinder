@@ -1,6 +1,6 @@
 """plugins/report/report.py on real data (m51, HUDF F160W crop): contents of the generated HTML are checked from the Python side.
 
-The catalogs come from the real extractor bin/ds9_sextract (skipped when the binary or the test images are absent); the review
+The catalogs come from ogfmeas/sextract.py (skipped when the script or the test images are absent); the review
 columns are written the way the GUI writes them (REVIEW / REVIEW_NOTE / REVIEW_TIME).
 """
 import base64
@@ -19,17 +19,17 @@ import report as R
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 FITS = os.environ.get('OGF_TEST_FITS', '/workspace/fits')
-SEX = os.path.join(ROOT, 'bin', 'ds9_sextract')
+SEX = os.path.join(ROOT, 'ogfmeas', 'sextract.py')
 M51 = os.path.join(FITS, 'm51.fits')
 HUDF = os.path.join(FITS, 'hudf_f160w.fits')
 SCRIPT = os.path.join(ROOT, 'plugins', 'report', 'report.py')
 
-needs_m51 = pytest.mark.skipif(not (os.path.exists(SEX) and os.path.exists(M51)), reason='bin/ds9_sextract or m51.fits missing')
-needs_hudf = pytest.mark.skipif(not (os.path.exists(SEX) and os.path.exists(HUDF)), reason='bin/ds9_sextract or hudf_f160w.fits missing')
+needs_m51 = pytest.mark.skipif(not (os.path.exists(SEX) and os.path.exists(M51)), reason='ogfmeas/sextract.py or m51.fits missing')
+needs_hudf = pytest.mark.skipif(not (os.path.exists(SEX) and os.path.exists(HUDF)), reason='ogfmeas/sextract.py or hudf_f160w.fits missing')
 
 
 def extract(image, tmp, *args):
-    out = subprocess.run([SEX, image, *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=300).stdout.decode()
+    out = subprocess.run([sys.executable, SEX, image, *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=300).stdout.decode()
     p = os.path.join(str(tmp), os.path.basename(image) + '.tsv')
     with open(p, 'w') as f:
         f.write(out)

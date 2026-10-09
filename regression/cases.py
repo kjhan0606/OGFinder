@@ -37,10 +37,10 @@ def _run(args, **kw):
 
 
 def _catalog(img, work, thresh='3'):
-    sex = os.path.join(ROOT, 'bin', 'ds9_sextract')
+    sex = os.path.join(ROOT, 'ogfmeas', 'sextract.py')
     if not os.path.exists(sex):
-        raise D.Unavailable('bin/ds9_sextract missing')
-    out = subprocess.run([sex, img, '--detect-thresh', thresh], capture_output=True, text=True, timeout=600, check=True).stdout
+        raise D.Unavailable('ogfmeas/sextract.py missing')
+    out = subprocess.run([PY, sex, img, '--detect-thresh', thresh], capture_output=True, text=True, timeout=600, check=True).stdout
     path = os.path.join(work, 'cat.tsv')
     open(path, 'w').write(out)
     return path

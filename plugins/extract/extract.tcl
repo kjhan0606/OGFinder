@@ -7,17 +7,9 @@ proc CatalogPanelExtract {} {
     global current
     global loadParam
 
-    # Find the ds9_sextract binary (platform-aware)
-    set bindir [file dirname [info nameofexecutable]]
-    set os $::tcl_platform(os)
-
-    if {$os eq "Windows NT"} {
-	set sextract [file join $bindir ds9_sextract.exe]
-    } else {
-	set sextract [file join $bindir ds9_sextract]
-    }
-    if {![file executable $sextract]} {
-	::ogf::cat::set status "ERROR: ds9_sextract not found in $bindir"
+    set sextract [file join [OGFSessRoot] ogfmeas sextract.py]
+    if {![file exists $sextract]} {
+	::ogf::cat::set status "ERROR: ogfmeas/sextract.py not found"
 	return
     }
 
@@ -67,46 +59,10 @@ proc CatalogPanelExtract {} {
 	}
     }
 
-    # Platform-specific library path setup and execution
-    if {$os eq "Darwin"} {
-	# macOS: set DYLD_LIBRARY_PATH
-	set libpaths {}
-	if {[info exists ::env(CONDA_PREFIX)]} {
-	    lappend libpaths "$::env(CONDA_PREFIX)/lib"
-	}
-	set home_conda [file join [file normalize ~] miniconda3/lib]
-	if {[file isdirectory $home_conda]} {
-	    lappend libpaths $home_conda
-	}
-	if {[info exists ::env(DYLD_LIBRARY_PATH)]} {
-	    lappend libpaths $::env(DYLD_LIBRARY_PATH)
-	}
-	if {[llength $libpaths] > 0} {
-	    set ::env(DYLD_LIBRARY_PATH) [join $libpaths :]
-	}
-    } elseif {$os ne "Windows NT"} {
-	# Linux/Unix: set LD_LIBRARY_PATH
-	set libpaths {}
-	if {[info exists ::env(CONDA_PREFIX)]} {
-	    lappend libpaths "$::env(CONDA_PREFIX)/lib"
-	}
-	set home_conda [file join [file normalize ~] miniconda3/lib]
-	if {[file isdirectory $home_conda]} {
-	    lappend libpaths $home_conda
-	}
-	if {[info exists ::env(LD_LIBRARY_PATH)]} {
-	    lappend libpaths $::env(LD_LIBRARY_PATH)
-	}
-	if {[llength $libpaths] > 0} {
-	    set ::env(LD_LIBRARY_PATH) [join $libpaths :]
-	}
-    }
-    # Windows: DLLs found via PATH automatically
-
-    OGFSessLog extract auto [list $sextract $fn {*}$paramargs] -title "Extract sources (ds9_sextract)" \
+    set py [OGFPython]
+    OGFSessLog extract auto [list $py $sextract $fn {*}$paramargs] -title "Extract sources" \
 	-tool sextract -post [dict create kind set]
-    # Run extraction (cross-platform exec)
-    if {[catch {set data [exec $sextract $fn {*}$paramargs 2>@stderr]} err]} {
+    if {[catch {set data [exec $py $sextract $fn {*}$paramargs 2>@stderr]} err]} {
 	::ogf::cat::set status "Extraction error: $err"
 	return
     }
@@ -312,8 +268,8 @@ proc CatalogPanelAutoExtract {} {
 
 # before-hook of the headless "extract" step (::ogf::step::run extract extract headless): what CatalogPanelExtract does around the exec
 proc OGFHeadlessExtractBefore {} {
-    if {![file executable [file join [file dirname [info nameofexecutable]] [expr {$::tcl_platform(os) eq "Windows NT" ? "ds9_sextract.exe" : "ds9_sextract"}]]]} {
-	error "ds9_sextract not found"
+    if {![file exists [file join [OGFSessRoot] ogfmeas sextract.py]]} {
+	error "ogfmeas/sextract.py not found"
     }
     catch {CatalogPanelSetLogScale}
     foreach pname {detect-thresh detect-minarea deblend-nthresh deblend-mincont mag-zeropoint back-size back-filtersize} {

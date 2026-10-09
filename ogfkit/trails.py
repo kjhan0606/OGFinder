@@ -14,6 +14,19 @@ Detection (detect_trails):
 Coordinates: arrays are [row=y, col=x] 0-based internally; the public trail dicts use 1-based FITS pixel coordinates (x1, y1, x2, y2).
 Angle theta: direction of the line from +x towards +y, in [0, 180) degrees.
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import math
 import numpy as np
 
@@ -35,7 +48,7 @@ def background(img, valid, mesh=64):
     from scipy.ndimage import zoom
     ny, nx = img.shape
     try:
-        import sep
+        sep = _import_ogfmeas()
         d = np.ascontiguousarray(np.where(valid, img, 0.0), dtype=np.float32)
         bw = max(16, min(mesh, nx // 3, ny // 3))
         b = sep.Background(d, mask=~valid, bw=bw, bh=bw, fw=3, fh=3)

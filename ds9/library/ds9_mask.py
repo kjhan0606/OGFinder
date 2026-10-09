@@ -33,6 +33,19 @@ Usage:
     ds9_mask.py IMAGE --mode masked --mask MASK --masked-output out.fits [--interp-method linear]
 Every mode ends with one line:  #MASK_STATS key=value ...
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import os
 import re
@@ -323,7 +336,7 @@ def parse_tsv_catalog(path):
 
 
 def mode_auto(a):
-    import sep
+    sep = _import_ogfmeas()
     from icl.masking import create_source_mask, mask_bright_stars
     data, header = load_image(a.image)
     ny, nx = data.shape

@@ -6,8 +6,10 @@ Uses Inverse MLP+MDN to estimate galaxy physical properties from
 multi-band photometry + photo-z. Falls back to empirical color-mass
 relation if no checkpoint available.
 
-Supports multiple SPS backends (FSPS, Bagpipes, Prospector, CIGALE,
-Dense Basis) for direct SED fitting when --backend is specified.
+``--backend auto`` uses the in-tree analytic SED model. An explicit
+fsps, bagpipes, or prospector name imports that user-installed package.
+``cigale`` runs the user-installed ``pcigale`` program when that name is
+requested and the program is on PATH. ``dense_basis`` is not called.
 
 Usage:
     ds9_sed_fit.py FITSFILE --catalog catalog.tsv
@@ -176,10 +178,19 @@ def mode_list_backends():
 
     all_backends = list_all()
     avail = list_available()
+    not_called = {"dense_basis"}
+    optional = {"fsps", "bagpipes", "prospector", "cigale"}
 
     print("#BACKENDS")
     for name in all_backends:
-        status = "available" if name in avail else "not_installed"
+        if name in avail:
+            status = "available"
+        elif name in optional:
+            status = "not_found"
+        elif name in not_called:
+            status = "not_called"
+        else:
+            status = "not_installed"
         print(f"{name}\t{status}")
 
 

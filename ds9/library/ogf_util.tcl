@@ -13,8 +13,7 @@ proc OGFPython {} {
 }
 
 proc OGFSextractBin {} {
-    set bindir [file dirname [info nameofexecutable]]
-    return [file join $bindir ds9_sextract]
+    return [file join [OGFSessRoot] ogfmeas sextract.py]
 }
 
 # Extend LD_LIBRARY_PATH the same way CatalogPanelExtract does (conda libs)

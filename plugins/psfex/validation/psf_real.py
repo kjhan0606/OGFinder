@@ -1,4 +1,17 @@
 """Real-data part of psf_validate.py: held-out star residuals of the PSF models and fitted wings on HUDF F160W (crop) and M51."""
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import json
 import os
 import sys
@@ -13,7 +26,7 @@ from ogfkit import psfmodel as PM, psfext as PX  # noqa: E402
 
 def heldout_residual(mdl, sub, test_xy, r=8.0):
     """For each held-out star: centroid (windowed), linear flux fit, sum |data - flux * model| inside r px / flux.  -> array"""
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(sub.astype(np.float64))
     out = []
     ny, nx = d.shape

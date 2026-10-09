@@ -1,5 +1,6 @@
-"""Prospector adapter (SED fitting at the record's redshift; python-fsps + sedpy + dynesty/emcee in the interpreter `python`, SPS_HOME must point to the FSPS data).
-See script_adapter.py: the shipped native/prospector_fit.py runs a parametric (delay-tau) model with dynesty; `command` replaces it."""
+"""SED-fit adapter. ``command`` runs a caller-supplied program with the JSON protocol in script_adapter.py.
+
+The shipped script calls the user-installed package only when that import works. A missing package exits without a prospector-labeled fit. The in-tree SED model is analytic."""
 import sys
 
 from . import common, script_adapter

@@ -1,4 +1,8 @@
-"""Orbit determination against JPL (needs the ASSIST ephemeris files, and Horizons for the truth state)."""
+"""Orbit determination with the in-tree solar-system integrator.
+
+The Horizons position gate stays 5e-6 AU after 100 days. That check uses the
+built-in planet ephemeris, not a DE440 kernel and not the 16 asteroids.
+"""
 import numpy as np
 from conftest import needs_ephem, needs_net
 
@@ -16,7 +20,6 @@ def test_propagator_matches_horizons():
     jd1 = jd0 + 100.0
     S = p.propagate(st[None, :], jd0, [jd1])[0, 0]
     hz = H.vectors("433;", [jd1], center="500@0")[0]
-    # SBDB elements are osculating at jd0 from a full N-body fit: positions agree to a few 1e-7 AU after 100 d
     assert np.linalg.norm(S[:3] - hz[:3]) < 5e-6
 
 

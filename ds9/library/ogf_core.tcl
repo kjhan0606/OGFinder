@@ -930,9 +930,9 @@ proc ::ogf::step::context {id {catname {}}} {
     set m [::ogf::reg::get $id]
     set ctx [dict create python [OGFPython] plugin_dir [::ogf::step::plugin_dir $id] work [OGFSessWorkDir] root [OGFSessRoot]]
     dict set ctx image [CatalogPanelGetFITS]
-    # {sextract}: the ds9_sextract binary next to bin/ds9; {image_tail}: file name of the image; {base}: image name without .gz/.fits;
+    # {sextract}: in-tree ogfmeas/sextract.py; {image_tail}: file name of the image; {base}: image name without .gz/.fits;
     # {psf}: PSF file of the PSF builder / loader ("" when none)
-    dict set ctx sextract [file join [file dirname [info nameofexecutable]] [expr {$::tcl_platform(os) eq "Windows NT" ? "ds9_sextract.exe" : "ds9_sextract"}]]
+    dict set ctx sextract [file join [OGFSessRoot] ogfmeas sextract.py]
     dict set ctx image_tail [file tail [dict get $ctx image]]
     dict set ctx base [CatalogPanelFitsBaseName [dict get $ctx image]]
     dict set ctx psf [::ogf::cat::get psf,file {}]

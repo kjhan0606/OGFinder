@@ -829,7 +829,7 @@ proc CatalogPanelSimPSFWebbPSF {} {
     if {[::ogf::cat::get psf,sim_webbpsf_ok] == 1} {
 	set statxt "WebbPSF: Available"
     } else {
-	set statxt "WebbPSF: Not found (pip install webbpsf)"
+	set statxt "WebbPSF: Not found"
     }
     ttk::label $f.status -text $statxt -foreground \
 	[expr {[::ogf::cat::get psf,sim_webbpsf_ok] == 1 ? "green" : "red"}]

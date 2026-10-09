@@ -98,5 +98,38 @@ regions loaded into the frame; flux within 3 % of the injected value, centroids 
 `docs/shots/aper_desktop_table_1440x900.png`, `docs/shots/aper_desktop_lightcurve_1440x900.png` (all four, including the parameter tab and the
 overlay zoom, are in the Astrafex Web user guide, `docs/user_guide/figures/aper_desktop_*`).
 
+### Saturation mask, varying PSF, photometric solution, star-galaxy
+
+Four more menu entries on the same chip. Each driver locates the core and starts it as a separate process. Settings groups use the same names.
+
+| Menu | Driver | Core module | What the step writes |
+|---|---|---|---|
+| Saturation mask | `run_pixmask.py` | `ds10core.tools.pixmask` | `{work}/pixmask.fits` (uint8: saturation 1, bleed 2, persistence 4, DQ 8) and `{work}/pixmask_summary.json`. The status line opens in the text window. |
+| Varying PSF | `run_psfvar.py` | `ds10core.tools.psfvar` | `{work}/psf_model.json`, `{work}/psf_center.fits`, `{work}/psfvar_summary.json`. An open catalogue supplies the stars. With no catalogue, or an empty catalogue file, the core uses compact detections. |
+| Photometric solution | `run_photcal.py` | `ds10core.tools.photcal` | Fits `m_std = m_inst + zp + k X + c C` on the open catalogue and replaces the table. Files: `{work}/photcal.tsv`, `{work}/photcal_summary.json`. |
+| Star-galaxy | `run_stargal.py` | `ds10core.tools.stargal` | Half-light radius and concentration against the PSF. Adds `CLASS_SG`, `STELLARITY`, `R50`, `R80`, `CONCENTRATION` and leaves the existing `CLASS` column as it is. Files: `{work}/stargal.tsv`, `{work}/stargal_summary.json`. |
+
+Bleed and persistence are on unless the Settings booleans are cleared. An empty Saturation value uses the `SATURATE` card, then `SATLEVEL`. An empty PSF FWHM estimates the PSF from the bright round sources and needs at least eight of them.
+
+### Original-code tools on the same menu
+
+Ten more menu entries. Each driver locates the core and starts it as a separate process. CCD reduction is already the `ccdreduce` plugin and is not repeated here. Plugins that still need a licence review stay out of this menu.
+
+| Menu | Driver | Core module | What the step writes |
+|---|---|---|---|
+| Solve WCS | `run_wcs.py` | `ds10core.tools.wcs_solve` | `{work}/wcs_solved.fits`, `{work}/wcs_summary.json`. The status line opens in the text window. |
+| Dither stack | `run_dither.py` | `ds10core.tools.dither_stack` | `{work}/dither_stack.fits`, `{work}/dither_summary.json`. Frame paths are joined by a vertical bar. |
+| Resample | `run_regrid.py` | `ds10core.tools.regrid` | `{work}/resampled.fits`, `{work}/regrid_summary.json`. Bilinear sampling onto the reference shape and WCS. |
+| Cosmic-ray mask | `run_crmask.py` | `ds10core.tools.cr_mask` | `{work}/crmask.fits`, `{work}/crmask_summary.json`. The step id is `crmask`. |
+| Detect sources | `run_detect.py` | `ds10core.tools.detect` | Replaces the table with `{work}/detect_catalog.tsv`. Also `{work}/detect_segmap.fits` and `{work}/detect_summary.json`. |
+| Galactic extinction | `run_extinct.py` | `ds10core.tools.galactic_ext` | Replaces the table. Files: `{work}/extinct.tsv`, `{work}/extinct_summary.json`. |
+| Periodogram | `run_period.py` | `ds10core.tools.periodogram` | Replaces the table with `{work}/periodogram.tsv`. Summary: `{work}/period_summary.json`. |
+| Lyman-break | `run_dropout.py` | `ds10core.tools.dropout` | Replaces the table with `{work}/dropout.tsv`. Summary: `{work}/dropout_summary.json`. |
+| Completeness and counts | `run_counts.py` | `ds10core.tools.counts` | Replaces the table with `{work}/counts.tsv`. The step id is `counts`. Summary: `{work}/counts_summary.json`. |
+| Luminosity function | `run_lf.py` | `ds10core.tools.lumfunc` | Replaces the table with `{work}/lf.tsv`. Summary: `{work}/lf_summary.json`. |
+
+The WCS catalogue file is a reference list of ra and dec. The default survey is `none`, which does not query the network. Choosing `gaia_dr3` does. Deblend stays off unless that Settings boolean is turned on. Completeness keeps the short defaults of 4 magnitude bins and 6 objects per bin. An empty catalogue file on that step is ignored. The luminosity function skips the Schechter fit below 30 galaxies. No dust map is read.
+
 ## Checks
 `scripts/run_all_checks.sh --only ds10core_tests,ds10core_gui,aperphot_gui`; `tools/validate_manifests.py` (0 problems).
+Driver tests: `plugins/ds10core/tests/test_image_tools_driver.py`, `plugins/ds10core/tests/test_core_tools_driver.py`.

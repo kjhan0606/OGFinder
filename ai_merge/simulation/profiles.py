@@ -1,18 +1,17 @@
-"""Sersic galaxy profile generation with GalSim backend and numpy fallback."""
+"""Sersic galaxy stamps.
+
+The default stamp is the in-tree numpy profile. GalSim runs only when
+``backend='galsim'`` and the user-installed package imports.
+"""
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.special import gammaincinv, gamma
 
-try:
-    import galsim
-    HAS_GALSIM = True
-except ImportError:
-    HAS_GALSIM = False
-
 
 def make_galaxy_stamp(stamp_size, flux, re, sersic_n, ellip, theta_rad,
-                      psf_fwhm, x_offset=0.0, y_offset=0.0):
+                      psf_fwhm, x_offset=0.0, y_offset=0.0, *,
+                      backend="numpy"):
     """
     Generate a single Sersic galaxy stamp.
 
@@ -39,18 +38,27 @@ def make_galaxy_stamp(stamp_size, flux, re, sersic_n, ellip, theta_rad,
     -------
     image : np.ndarray
         2D stamp image (float64).
+    backend : {'numpy', 'galsim'}
+        ``numpy`` is the default. ``galsim`` uses the installed package.
     """
-    if HAS_GALSIM:
+    if backend == "galsim":
         return _make_galsim(stamp_size, flux, re, sersic_n, ellip,
                             theta_rad, psf_fwhm, x_offset, y_offset)
-    else:
-        return _make_numpy(stamp_size, flux, re, sersic_n, ellip,
-                           theta_rad, psf_fwhm, x_offset, y_offset)
+    if backend != "numpy":
+        raise ValueError("backend must be 'numpy' or 'galsim'")
+    return _make_numpy(stamp_size, flux, re, sersic_n, ellip,
+                       theta_rad, psf_fwhm, x_offset, y_offset)
 
 
 def _make_galsim(stamp_size, flux, re, sersic_n, ellip, theta_rad,
                  psf_fwhm, x_offset, y_offset):
-    """GalSim backend."""
+    """GalSim backend. Called only for an explicit backend='galsim'."""
+    try:
+        import galsim
+    except Exception as exc:
+        raise RuntimeError(
+            "galsim was not found. The in-tree stamp is numpy."
+        ) from exc
     # Clamp sersic_n to GalSim's valid range
     n = max(0.3, min(sersic_n, 6.2))
     re_safe = max(0.5, re)

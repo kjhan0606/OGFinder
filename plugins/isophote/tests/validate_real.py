@@ -4,6 +4,19 @@ For each of the brightest extended sources of the crop (SEP detection) the isoph
   * total flux inside the last isophote vs SEP elliptical-aperture flux of the same ellipse (same centre, SMA, eps, PA of that isophote)
   * eps / PA at the half-light radius vs the second-moment ellipse of SEP (A_IMAGE, B_IMAGE, THETA_IMAGE)
 usage: validate_real.py [--n 6]"""
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse, os, sys, math
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -12,7 +25,7 @@ import isophote as I
 from ogfkit import imageio
 
 ap = argparse.ArgumentParser(); ap.add_argument('--n', type=int, default=6); a = ap.parse_args()
-import sep
+sep = _import_ogfmeas()
 FITS = os.environ.get('OGF_TEST_FITS', '/workspace/fits')
 data, hdr = imageio.load_image(FITS + '/hudf_f160w.fits')
 x0, y0, W = 1500, 1500, 1000

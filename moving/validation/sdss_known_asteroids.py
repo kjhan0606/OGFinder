@@ -12,6 +12,19 @@ mover has up to 5 detections.  Steps (everything cached under $OGF_DATA_CACHE or
 Precision is a LOWER bound: a tracklet that is not a known object may be an unknown real asteroid (fainter than the catalogue completeness).
 Usage: sdss_known_asteroids.py OUT.json [--camcol 3] [--fraction 0.99]
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse, glob, json, os, pickle, subprocess, sys, time
 import numpy as np
 
@@ -41,7 +54,7 @@ def download(camcol, fields=range(136, 168)):
 
 
 def detect(path):
-    import sep
+    sep = _import_ogfmeas()
     from astropy.io import fits
     from astropy.wcs import WCS
     import warnings

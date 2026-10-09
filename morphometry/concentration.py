@@ -1,5 +1,18 @@
 """Concentration index: C = 5 * log10(r80 / r20)."""
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import numpy as np
 
 
@@ -19,10 +32,10 @@ def measure_concentration(data, x, y, a, b, theta, rmax=50.0):
     C : float, concentration index
     """
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
         try:
-            import sep_pjw as sep
+            sep = _import_ogfmeas()
         except ImportError:
             return np.nan
 

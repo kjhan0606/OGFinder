@@ -23,4 +23,4 @@ def _eph():
         return False
 
 
-needs_ephem = pytest.mark.skipif(not _eph(), reason="ASSIST + DE440/sb441 ephemeris files missing (ds9_moving.py --mode setup)")
+needs_ephem = pytest.mark.skipif(not _eph(), reason="in-tree solar-system integrator unavailable")

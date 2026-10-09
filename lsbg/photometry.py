@@ -4,12 +4,25 @@ Measures Kron flux, fixed aperture fluxes, and curve-of-growth
 half-light radii for LSBG surface brightness estimation.
 """
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import numpy as np
 try:
-    import sep
+    sep = _import_ogfmeas()
 except ImportError:
-    import sep_pjw as sep
+    sep = _import_ogfmeas()
 
 
 def curve_of_growth(data, x, y, max_radius=100, n_steps=20):

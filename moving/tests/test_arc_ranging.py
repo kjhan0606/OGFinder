@@ -1,9 +1,10 @@
 """Element distribution for observations the night linker can already keep.
 
 The short arc uses simplified statistical ranging.  The three-night arc uses
-the local Laplace sample.  CODES propagation runs only when that integrator
-is on disk.  Importing this module must not load rebound, assist, spiceypy,
-or neo_orbit_calculator.
+the local Laplace sample.  Accepted samples propagate with ogfmeas unless a
+test passes ``allow_assist=False``.  That CODES path runs only when the
+integrator is on disk.  Importing this module must not load rebound, assist,
+spiceypy, or neo_orbit_calculator.
 """
 import os
 import subprocess
@@ -137,12 +138,34 @@ def test_missing_backend_keeps_the_distribution():
     trks = _long_tracklets()
     res = N.link_nights(trks, max_gap_days=30)
     before = res["groups"][0]["elements"]["a"]
-    out = AR.attach(trks, res, n_samples=40, seed=3, n_propagate=4, codes_root="", use_default=False, timeout=60)
+    out = AR.attach(trks, res, n_samples=40, seed=3, n_propagate=4, codes_root="", use_default=False,
+                    timeout=60, allow_assist=False)
     g = out["groups"][0]
     assert g["elements"]["a"] == before
     assert g["ranging"]["status"] == "ok"
     assert g["ranging"]["codes"]["status"] == "unavailable"
     assert g["ranging"]["quantiles_16_50_84"]["a"][0] < g["ranging"]["quantiles_16_50_84"]["a"][2]
+
+
+def test_ogfmeas_propagates_accepted_samples():
+    from moving import arc_ranging as AR
+    from moving import nightlink as N
+    trks = _long_tracklets()
+    res = N.link_nights(trks, max_gap_days=30)
+    before = res["groups"][0]["elements"]["a"]
+    out = AR.attach(trks, res, n_samples=40, seed=3, n_propagate=4, timeout=180)
+    g = out["groups"][0]
+    slot = g["ranging"]["codes"]
+    print("RANGING_MEASURE ogfmeas status=%s backend=%s n=%s force=%s"
+          % (slot.get("status"), slot.get("backend"), slot.get("n_propagated"), slot.get("force_model")))
+    assert g["elements"]["a"] == before
+    assert slot["status"] == "ok"
+    assert slot["backend"] == "ogfmeas"
+    assert slot["force_model"] == (
+        "ogfmeas(builtin planets and Moon, solar Schwarzschild, Sun J2, Earth J2/J3/J4)")
+    assert slot["n_propagated"] == 4
+    assert slot["n_failed"] == 0
+    assert slot["quantiles_16_50_84"]["a"][1] > 0
 
 
 def _codes_ready():
@@ -158,7 +181,7 @@ def test_codes_propagates_accepted_samples():
     from moving import nightlink as N
     trks = _long_tracklets()
     res = N.link_nights(trks, max_gap_days=30)
-    out = AR.attach(trks, res, n_samples=40, seed=3, n_propagate=6, timeout=180)
+    out = AR.attach(trks, res, n_samples=40, seed=3, n_propagate=6, timeout=180, allow_assist=False)
     g = out["groups"][0]
     codes = g["ranging"]["codes"]
     print("RANGING_MEASURE codes status=%s backend=%s n=%s epoch=%s a=%s"

@@ -1,10 +1,10 @@
 """Orbit propagation and batch least-squares differential correction.
 
-Force model (default): ASSIST (Holman et al. 2023) with JPL DE440 planets, the 16 massive
-asteroids of sb441-n16, relativistic (GR) corrections, Earth J2/J3/J4 and the Sun J2
-(ASSIST defaults).  Fallback if ASSIST or the ephemeris files are missing: REBOUND with
-Newtonian point masses of Sun+planets taken from astropy's builtin ephemeris (reduced force
-model; flagged in the result as 'force_model').
+Force model: the in-tree test-particle integrator (ogfmeas.ssbody). Planet and
+Moon positions come from astropy's built-in ephemeris. Forces are Newtonian
+point masses, the solar Schwarzschild term, solar J2, and Earth J2/J3/J4.
+The 16 massive asteroids and a DE440 kernel are not used. The result records
+the model name in ``force_model``.
 
 Observation model: barycentric ICRF positions; light-time iteration (first-order Taylor
 correction per perturbed particle); astrometric (catalog-reduced) directions, so NO stellar
@@ -12,6 +12,8 @@ aberration correction is applied (it is already absorbed by the star-catalog red
 gravitational light deflection is neglected (<~ 10 mas for elongations > 90 deg).
 """
 import os
+import pathlib
+import sys
 import numpy as np
 from .util import EPHEM_DIR, C_AUD, ARCSEC, log, utc_mjd_to_tdb_jd
 from . import kepler as K
@@ -19,44 +21,48 @@ from . import obs as OBS
 
 PLANETS_FILE = "linux_p1550p2650.440"
 ASTEROID_FILE = "sb441-n16.bsp"
-_EPH = {"obj": None, "tried": False}
+
+
+def _ssbody():
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas.ssbody as ssbody
+    return ssbody
 
 
 def ephem_paths():
     return (os.path.join(EPHEM_DIR, PLANETS_FILE), os.path.join(EPHEM_DIR, ASTEROID_FILE))
 
 
-def get_ephem():
-    if _EPH["obj"] is not None:
-        return _EPH["obj"]
-    import assist
-    p, a = ephem_paths()
-    _EPH["obj"] = assist.Ephem(p, a)
-    return _EPH["obj"]
-
-
 def assist_available():
+    """True when the in-tree solar-system integrator can be constructed.
+
+    The name is kept for the desktop setup report. This does not import
+    rebound or assist, and it does not require an ephemeris kernel.
+    """
     try:
-        import assist, rebound  # noqa
-        p, a = ephem_paths()
-        return os.path.exists(p) and os.path.exists(a)
+        _ssbody()
+        return True
     except Exception:
         return False
 
 
 class Propagator:
-    """Integrate test particles in the ASSIST force model.  Times are JD TDB."""
+    """Integrate test particles. Times are JD TDB."""
     def __init__(self, ephem=None):
-        self.force_model = "ASSIST(DE440+16 asteroids+GR+J2/J3/J4)" if assist_available() else "UNAVAILABLE"
         if not assist_available():
-            raise RuntimeError("ASSIST or ephemeris files missing (run ds9_moving.py --mode setup)")
-        self.ep = ephem or get_ephem()
-        self.jd_ref = self.ep.jd_ref
+            self.force_model = "UNAVAILABLE"
+            raise RuntimeError("in-tree solar-system integrator is unavailable")
+        self._planets = ephem or _ssbody().BuiltinEphemeris()
+        self.force_model = _ssbody().FORCE_MODEL
 
     def body(self, name, jd):
-        """Barycentric position/velocity of a planetary body (ASSIST ephemeris) at JD TDB."""
-        p = self.ep.get_particle(name, jd - self.jd_ref)
-        return np.array([p.x, p.y, p.z, p.vx, p.vy, p.vz])
+        """Barycentric position and velocity of a planet or the Moon at JD TDB."""
+        return self._planets.state(name, jd)
 
     def sun(self, jd):
         return self.body("sun", jd)
@@ -64,35 +70,51 @@ class Propagator:
     def propagate(self, states, jd0, jds):
         """states: (n,6) barycentric at jd0; jds: (m,) target times (any order).
         Returns (n, m, 6) states."""
-        import rebound, assist
-        states = np.atleast_2d(np.asarray(states, float))
-        jds = np.asarray(jds, float)
-        order = np.argsort(jds)
-        out = np.zeros((len(states), len(jds), 6))
-        fw = [k for k in order if jds[k] >= jd0]
-        bw = [k for k in order[::-1] if jds[k] < jd0]
-        # one fresh simulation per direction: re-using a simulation after the forward sweep and resetting its state by hand
-        # corrupts ASSIST's internal bookkeeping (verified: wrong light-time-corrected positions for epochs on both sides of jd0)
-        for seq in (fw, bw):
-            if not seq:
-                continue
-            sim = rebound.Simulation()
-            sim.t = jd0 - self.jd_ref
-            for s_ in states:
-                sim.add(x=s_[0], y=s_[1], z=s_[2], vx=s_[3], vy=s_[4], vz=s_[5])
-            ex = assist.Extras(sim, self.ep)
-            for k in seq:
-                ex.integrate_or_interpolate(jds[k] - self.jd_ref)
-                for i in range(len(states)):
-                    p = sim.particles[i]
-                    out[i, k] = (p.x, p.y, p.z, p.vx, p.vy, p.vz)
-            del ex, sim
-        return out
+        return self._planets.propagate(states, jd0, jds)
 
 
 def propagate_one(prop, state, jd0, jds):
     """Simple helper: states at each jd (one particle) using a fresh simulation per sweep."""
     return prop.propagate(np.array([state]), jd0, jds)[0]
+
+
+def propagate_assist(states, jd0, jds):
+    """Integrate with the user-installed rebound and assist packages.
+
+    Those packages run in a child process, and only when this function is
+    called. A missing package or a missing kernel file raises RuntimeError
+    and does not return in-tree states. Propagator stays on ogfmeas.ssbody.
+    """
+    import json
+    import subprocess
+    root = str(pathlib.Path(__file__).resolve().parents[1])
+    payload = json.dumps({
+        "states": np.atleast_2d(np.asarray(states, float)).tolist(),
+        "jd0": float(jd0),
+        "jds": np.asarray(jds, float).tolist(),
+    })
+    env = dict(os.environ)
+    env.setdefault("OMP_NUM_THREADS", "2")
+    env.setdefault("OPENBLAS_NUM_THREADS", "2")
+    env.setdefault("MKL_NUM_THREADS", "2")
+    env.setdefault("NUMEXPR_NUM_THREADS", "2")
+    proc = subprocess.run(
+        [sys.executable, "-m", "moving.assist_worker"],
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=root,
+        env=env,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        if proc.returncode == 2:
+            raise RuntimeError(
+                "assist was not found. The in-tree orbit model is ogfmeas. "
+                + detail)
+        raise RuntimeError("assist worker failed: " + detail)
+    out = json.loads(proc.stdout)
+    return np.asarray(out["states"], float), out["force_model"]
 
 
 # ------------------------------------------------------------------ observations container

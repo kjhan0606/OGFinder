@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Measure non-parametric morphology (C, A, Gini, M20, Petrosian) for sources."""
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import os
 import argparse
@@ -67,10 +80,10 @@ def process_file(fitsfile, catalog_file=None, min_npix=100, n_workers=0,
     Either catalog_file or _sources must be provided.
     """
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
         try:
-            import sep_pjw as sep
+            sep = _import_ogfmeas()
         except ImportError:
             print("ERROR: sep is required", file=sys.stderr)
             return ""

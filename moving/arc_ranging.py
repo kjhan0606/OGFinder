@@ -11,10 +11,12 @@ determines the orbit, the reported cloud is the local Laplace sample of that
 fit.  A uniform draw over the whole admissible region misses that valley.
 
 The two-body point fit stored on the group is left as it is.  A subset of
-the accepted samples can be propagated with the existing CODES child process
-(``python -m moving.nbody_worker``, command ``propagate_many``).  A missing
-backend leaves the two-body distribution in place.  This module does not
-import rebound, assist, spiceypy, or neo_orbit_calculator.
+the accepted samples can be propagated by the child process
+(``python -m moving.nbody_worker``, command ``propagate_many``).  The default
+integrator is the in-tree model.  ``allow_assist=False`` keeps the external
+CODES path when that tree is present.  A missing backend leaves the two-body
+distribution in place.  This module does not import rebound, assist,
+spiceypy, or neo_orbit_calculator.
 """
 import numpy as np
 from scipy.optimize import least_squares
@@ -305,7 +307,8 @@ def draw_states(pack, n, seed, like_min=LIKE_MIN):
     return np.asarray(pack["state"], float)[pick], keep
 
 
-def propagate_accepted(pack, n_propagate, seed, codes_root=None, use_default=True, timeout=300, like_min=LIKE_MIN):
+def propagate_accepted(pack, n_propagate, seed, codes_root=None, use_default=True, timeout=300,
+                       like_min=LIKE_MIN, allow_assist=True):
     """Propagate a weighted subset of accepted samples to the last observation time."""
     from . import nbody_refine as NR
 
@@ -315,7 +318,7 @@ def propagate_accepted(pack, n_propagate, seed, codes_root=None, use_default=Tru
         mjd_out = float(pack["jd_ref"]) + 1.0
     req = {
         "cmd": "propagate_many",
-        "allow_assist": False,
+        "allow_assist": bool(allow_assist),
         "use_default": bool(use_default),
         "states_helio": states.tolist(),
         "mjd_ref": float(pack["jd_ref"]),
@@ -330,7 +333,7 @@ def propagate_accepted(pack, n_propagate, seed, codes_root=None, use_default=Tru
         return base
     rows = out.get("elements") or []
     if not rows:
-        base.update(status="error", message="CODES returned no elements")
+        base.update(status="error", message="the integrator returned no elements")
         return base
     ones = np.ones(len(rows))
     base.update(
@@ -350,7 +353,8 @@ def propagate_accepted(pack, n_propagate, seed, codes_root=None, use_default=Tru
     return base
 
 
-def attach(trks, result, n_samples=400, seed=1, n_propagate=32, codes_root=None, use_default=True, timeout=None):
+def attach(trks, result, n_samples=400, seed=1, n_propagate=32, codes_root=None, use_default=True,
+           timeout=None, allow_assist=True):
     """Add a ``ranging`` summary to each linked group and each pair.  Point-fit fields stay unchanged."""
     by_id = {t.id: t for t in trks}
     n_ok = 0
@@ -372,7 +376,7 @@ def attach(trks, result, n_samples=400, seed=1, n_propagate=32, codes_root=None,
             if int(n_propagate) > 0:
                 summary["codes"] = propagate_accepted(
                     pack, n_propagate, int(seed) + 17 + gi, codes_root=codes_root,
-                    use_default=use_default, timeout=timeout)
+                    use_default=use_default, timeout=timeout, allow_assist=allow_assist)
             else:
                 summary["codes"] = {"status": "skipped", "n_accepted": 0, "n_propagated": 0}
             g["ranging"] = summary

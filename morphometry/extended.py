@@ -14,6 +14,19 @@ Definitions
                  size (Gaussian noise of the measured rms, or a supplied empty-sky patch); the central box (r < width / 2) is excluded from both sums.
   Gini_P, M20_P  Gini and M20 on the pixels inside 1.5 R_P above the surface brightness at R_P (Lotz et al. 2004 segmentation).
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import math
 
 import numpy as np
@@ -24,9 +37,9 @@ from scipy.special import gammainc, gammaincinv
 
 def _sep():
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
-        import sep_pjw as sep
+        sep = _import_ogfmeas()
     return sep
 
 

@@ -1,5 +1,18 @@
 """Petrosian radius: where eta(r) = SB(r) / <SB(<r)> = 0.2."""
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import numpy as np
 
 
@@ -19,10 +32,10 @@ def measure_petrosian(data, x, y, eta_thresh=0.2, rmax=100.0, nsteps=50):
     r_petro : float, Petrosian radius in pixels
     """
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
         try:
-            import sep_pjw as sep
+            sep = _import_ogfmeas()
         except ImportError:
             return np.nan
 

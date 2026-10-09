@@ -5,6 +5,19 @@ by galaxy/star light during background modeling and SB profile
 measurement.
 """
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import numpy as np
 from collections import defaultdict
@@ -430,9 +443,9 @@ def hot_cold_mask(data, cold_thresh=3.0, cold_minarea=200, hot_thresh=1.5,
         SEP catalogue of the cold pass (x, y, flux, a, b, theta, npix ...).
     """
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:  # pragma: no cover
-        import sep_pjw as sep
+        sep = _import_ogfmeas()
     from scipy.ndimage import gaussian_filter
 
     img = np.array(data, dtype=np.float64)

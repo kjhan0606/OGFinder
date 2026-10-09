@@ -12,6 +12,19 @@ Modes:
     ds9_icl.py FITS --mode color --mask mask.fits --center 500,400 --bands F606W:f606w.fits,...
 """
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import os
 import argparse
@@ -184,9 +197,9 @@ def parse_catalog_tsv(path):
 def mode_mask(args):
     """Create source mask and interpolated image."""
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
-        import sep_pjw as sep
+        sep = _import_ogfmeas()
 
     data, header = load_fits_data(args.fits)
     ny, nx = data.shape

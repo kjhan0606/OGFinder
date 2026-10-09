@@ -1,10 +1,13 @@
-"""EAZY adapter (photo-z).  engine=native: eazy-py (`pip install eazy`, templates/filters from the eazy-photoz repository) in the interpreter `python`;
-engine=external: the classic EAZY file interface - writes catalog / zphot.param / zphot.translate, runs `command <param file>`, parses `<MAIN_OUTPUT_FILE>.zout`.
+"""Photo-z adapter.
+
+engine=native calls ogfmeas.photoz.template_chi2 when ``params['templates']`` is a list of numeric ``[rest_wavelength, rest_flux]`` pairs. Band photometry is then sampled at registry pivot wavelengths (a coarse point sample, not a filter integral). Template-file paths are not read, and the external photo-z package is not called. Without numeric templates the native engine stops.
+engine=external: the classic file interface - writes catalog / zphot.param / zphot.translate, runs `command <param file>`, parses `<MAIN_OUTPUT_FILE>.zout`.
+engine=package runs the user-installed eazy-py package in a separate interpreter, only when that name is requested. A missing package is an error and is not labeled as eazy.
 
 Entry points: `process(records, params, task)` (pure, JSON in/out), `run(records, params, context)` (ai_bridge python_callable), `python -m sed_adapters.eazy_adapter`
 (ai_bridge local_command, JSON on stdin/stdout).
 
-params (all optional): engine, python, command (argv list), eazy_data (dir with filters/ templates/, default $EAZYCODE), filters_res, filters_info, templates_file,
+params (all optional): engine, python, command (argv list), templates (numeric [rest_wavelength, rest_flux] pairs; native engine only), eazy_data (external engine; dir with filters/ templates/, default $EAZYCODE), filters_res, filters_info, templates_file,
 z_min z_max z_step, min_mag_err, default_mag_err, point_estimate (peak|ml), workdir, timeout, prior (bool), n_min_colors.
 """
 import json
@@ -113,18 +116,20 @@ def process(records, params=None, task='photoz'):
     if task != 'photoz':
         raise ValueError('eazy adapter supports task photoz only')
     if not records:
-        return [], MODEL % 'no records'
+        label = MODEL % 'no records' if params.get('engine', 'native') == 'external' else 'ogfmeas.photoz'
+        return [], label
     bands, F, E, warns = collect(records, params)
     nmin = params.get('n_min_colors', 3)
     engine = params.get('engine', 'native')
-    root, fres, info, tpl = default_paths(params)
+    _root, fres, info, tpl = default_paths(params)
     results = [None] * len(records)
     good = [i for i in range(len(records)) if int(np.sum(F[i] > -90)) >= nmin]
     for i in range(len(records)):
         if i not in good:
             results[i] = {'id': records[i]['id'], 'error': 'fewer than %d usable bands' % nmin}
     if not good:
-        return results, MODEL % 'unused'
+        label = MODEL % 'unused' if engine == 'external' else 'ogfmeas.photoz'
+        return results, label
     sub = [records[i] for i in good]
     wd = params.get('workdir') or tempfile.mkdtemp(prefix='eazy_')
     os.makedirs(wd, exist_ok=True)
@@ -153,32 +158,58 @@ def process(records, params=None, task='photoz'):
         for i in good:
             d = zo.get(str(records[i]['id']))
             results[i] = ({'id': records[i]['id'], **from_zout(d, params.get('point_estimate', 'peak'))} if d else {'id': records[i]['id'], 'error': 'no row in .zout'})
-    else:
+    elif engine == 'package':
         py = params.get('python') or sys.executable
         req = dict(wd=wd, bands=bands, flux=F[good].tolist(), err=E[good].tolist(), ids=[str(records[i]['id']) for i in good],
-                   eazy_data=root, filters_res=fres, templates_file=tpl, z_min=params.get('z_min', 0.01), z_max=params.get('z_max', 6.0), z_step=params.get('z_step', 0.01),
-                   prior=bool(params.get('prior')), temp_err_file=params.get('temp_err_file', ''), n_min_colors=nmin)
-        rc, so, se = common.run_command([py, os.path.join(HERE, 'native', 'eazy_native.py')], cwd=wd, stdin_text=json.dumps(req), timeout=timeout)
+                   filters_res=fres, templates_file=tpl, eazy_data=_root or None,
+                   z_min=params.get('z_min', 0.01), z_max=params.get('z_max', 6.0), z_step=params.get('z_step', 0.01),
+                   prior=bool(params.get('prior')))
+        rc, so, se = common.run_command([py, os.path.join(HERE, 'native', 'eazy_package.py')], cwd=wd, stdin_text=json.dumps(common.clean(req)), timeout=timeout)
         if rc != 0:
-            raise RuntimeError('eazy-py helper failed (rc=%d): %s' % (rc, (se or so)[-600:]))
+            raise RuntimeError('eazy package helper failed (rc=%d): %s' % (rc, (se or so)[-600:]))
         out = json.loads(so[so.index('{'):])
-        ver = 'eazy-py %s' % out.get('version')
+        ver = out.get('version') or 'eazy'
         for i, row in zip(good, out['rows']):
             results[i] = ({'id': records[i]['id'], **common.photoz_row(row['z'], row['p16'], row['p50'], row['p84'], row['chi2'], row['sigma'])} if row.get('z') is not None
                           else {'id': records[i]['id'], 'error': row.get('error', 'fit failed')})
+    elif engine == 'native':
+        py = params.get('python') or sys.executable
+        req = dict(wd=wd, bands=bands, flux=F[good].tolist(), err=E[good].tolist(), ids=[str(records[i]['id']) for i in good],
+                   z_min=params.get('z_min', 0.01), z_max=params.get('z_max', 6.0), z_step=params.get('z_step', 0.01))
+        if params.get('templates') is not None:
+            req['templates'] = params['templates']
+        if params.get('wavelength') is not None:
+            req['wavelength'] = params['wavelength']
+        if params.get('redshifts') is not None:
+            req['redshifts'] = params['redshifts']
+        rc, so, se = common.run_command([py, os.path.join(HERE, 'native', 'eazy_native.py')], cwd=wd, stdin_text=json.dumps(common.clean(req)), timeout=timeout)
+        if rc != 0:
+            raise RuntimeError('photo-z helper failed (rc=%d): %s' % (rc, (se or so)[-600:]))
+        out = json.loads(so[so.index('{'):])
+        ver = out.get('version') or 'ogfmeas.photoz'
+        for i, row in zip(good, out['rows']):
+            results[i] = ({'id': records[i]['id'], **common.photoz_row(row['z'], row['p16'], row['p50'], row['p84'], row['chi2'], row['sigma'])} if row.get('z') is not None
+                          else {'id': records[i]['id'], 'error': row.get('error', 'fit failed')})
+    else:
+        raise ValueError('unknown eazy engine %r' % engine)
     for r, w in zip(results, warns):
         if w and 'error' not in r:
             r['warning'] = '; '.join(w[:3])
-    return results, MODEL % ver
+    if engine == 'external':
+        model = MODEL % ver
+    elif engine == 'package':
+        model = 'eazy (%s)' % ver
+    else:
+        model = 'ogfmeas.photoz' if ver == 'ogfmeas.photoz' else ver
+    return results, model
 
 
 def check(params=None):
-    """Availability report (never raises)."""
+    """Availability report (never raises). The native engine does not call an external package."""
     params = params or {}
-    root, fres, info, tpl = default_paths(params)
-    py = params.get('python') or sys.executable
-    rc, so, se = common.run_command([py, '-c', 'import eazy;print(eazy.__version__)'], timeout=60)
-    return dict(code=CODE, engine_native=(rc == 0), version=so.strip().split('\n')[-1] if rc == 0 else None, filters_res=os.path.isfile(fres), templates=os.path.isfile(tpl))
+    _root, fres, _info, tpl = default_paths(params)
+    return dict(code=CODE, engine_native=False, version='ogfmeas.photoz', filters_res=os.path.isfile(fres), templates=os.path.isfile(tpl),
+                detail='the external package is not called; numeric rest-frame templates are fit by ogfmeas.photoz')
 
 
 def run(records, params, context=None):

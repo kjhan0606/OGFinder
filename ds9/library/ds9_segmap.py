@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """Generate a segmentation map from a FITS image using SEP."""
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import os
 import argparse
@@ -18,10 +31,10 @@ def main():
     args = parser.parse_args()
 
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
         try:
-            import sep_pjw as sep
+            sep = _import_ogfmeas()
         except ImportError:
             print("ERROR: sep is required", file=sys.stderr)
             sys.exit(1)

@@ -17,6 +17,13 @@ def wquant(x, w, q):
 
 
 def main():
+    try:
+        import prospect  # noqa: F401
+    except Exception:
+        sys.stderr.write(
+            "prospect was not found. the external package is not called; "
+            "the in-tree SED model is analytic.\n")
+        return 2
     req = json.load(sys.stdin)
     P = req.get('params') or {}
     os.chdir(req.get('wd') or '.')
@@ -86,4 +93,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main() or 0)

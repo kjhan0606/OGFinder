@@ -12,7 +12,7 @@ Detection callback API (any detection step can be tested this way)::
     detect(image: float32 2-D ndarray, mask: bool ndarray | None) -> dict-of-arrays | list-of-dicts
         required keys x, y (0-based pixel centres); optional mag (calibrated), a, b.   Must be picklable for n_workers > 1.
 
-Built in: sextract_detector (the application's own ds9_sextract binary = "the existing extraction"), sep_detector, and "module:function"
+Built in: sextract_detector (ogfmeas.sextract, the in-tree extraction), sep_detector, and "module:function"
 (a factory called with the keyword options of the CLI; see load_detector).
 
 CLI:  completeness.py IMAGE [--detector sextract|sep|pkg.mod:fn] [--kind star|galaxy] [--mag-min 22 --mag-max 29 --n-bins 14 --per-bin 60]
@@ -20,14 +20,25 @@ CLI:  completeness.py IMAGE [--detector sextract|sep|pkg.mod:fn] [--kind star|ga
         [--mask MASK] [--crop-size N] [--plot-out F] [--json-out F] [--curve-out F] [--meta-out catalog_meta.json] [--n-workers N] [--seed 1] [detector options]
         With --catalog the TSV `NUMBER COMPL_FRAC COMPL_LIM50 COMPL_LIM90` is printed (completeness at each object's MAG_AUTO).
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse
 import importlib
 import json
 import math
 import os
-import subprocess
 import sys
-import tempfile
 
 import numpy as np
 
@@ -60,37 +71,27 @@ def _norm(det):
 
 
 class SextractDetector:
-    """Runs bin/ds9_sextract on the (temporary) image and parses X_IMAGE / Y_IMAGE / MAG_AUTO / A_IMAGE / B_IMAGE."""
+    """In-tree detection. Returns 0-based x, y and MAG_AUTO, A_IMAGE, B_IMAGE."""
 
     def __init__(self, zp=25.0, thresh=1.5, minarea=5, binary=None, extra=()):
         self.zp, self.thresh, self.minarea, self.extra = zp, thresh, minarea, list(extra)
-        self.binary = binary or os.path.join(_root, 'bin', 'ds9_sextract')
+        self.binary = binary
 
     def __call__(self, img, mask=None):
-        with tempfile.TemporaryDirectory(prefix='ogf_cmp_') as td:
-            fn = os.path.join(td, 'im.fits')
-            a = np.asarray(img, dtype=np.float32)
-            if mask is not None:
-                a = a.copy()
-                a[mask] = np.nan
-            imageio.save_fits(fn, a)
-            p = subprocess.run([self.binary, fn, '--detect-thresh', str(self.thresh), '--detect-minarea', str(self.minarea),
-                                '--mag-zeropoint', str(self.zp)] + self.extra, capture_output=True, text=True)
-            if p.returncode != 0:
-                raise RuntimeError('ds9_sextract failed: ' + p.stderr[-200:])
-        lines = [l for l in p.stdout.split('\n') if l.strip() and not l.startswith('#')]
-        if len(lines) < 2:
+        from ogfmeas.sextract import detect_sources
+        a = np.asarray(img, dtype=np.float64)
+        bad = None if mask is None else np.asarray(mask, dtype=bool)
+        finite = np.isfinite(a)
+        if not finite.all():
+            a = np.where(finite, a, 0.0)
+            bad = ~finite if bad is None else (bad | ~finite)
+        rows = detect_sources(a, thresh=self.thresh, minarea=self.minarea, zp=self.zp, mask=bad)
+        if len(rows["x"]) == 0:
             return dict(x=[], y=[], mag=[], a=[], b=[])
-        cols = lines[0].split('\t')
-        ix = {c: cols.index(c) for c in ('X_IMAGE', 'Y_IMAGE', 'MAG_AUTO', 'A_IMAGE', 'B_IMAGE')}
-        rows = [l.split('\t') for l in lines[1:]]
-        out = {}
-        for key, c in (('x', 'X_IMAGE'), ('y', 'Y_IMAGE'), ('mag', 'MAG_AUTO'), ('a', 'A_IMAGE'), ('b', 'B_IMAGE')):
-            out[key] = np.array([tsvio.fnum(r[ix[c]]) for r in rows])
-        out['x'] -= 1.0
-        out['y'] -= 1.0                      # to 0-based
-        out['mag'] = np.where(out['mag'] > 90, np.nan, out['mag'])
-        return out
+        mag = np.asarray(rows["mag_auto"], dtype=float)
+        return dict(x=np.asarray(rows["x"], dtype=float), y=np.asarray(rows["y"], dtype=float),
+                    mag=np.where(mag > 90, np.nan, mag), a=np.asarray(rows["a"], dtype=float),
+                    b=np.asarray(rows["b"], dtype=float))
 
 
 class SepDetector:
@@ -102,7 +103,7 @@ class SepDetector:
         self.local_rms = local_rms          # threshold relative to the local rms map instead of the global rms (varying depth)
 
     def __call__(self, img, mask=None):
-        import sep
+        sep = _import_ogfmeas()
         a = np.ascontiguousarray(img, dtype=np.float32)
         m = None if mask is None else np.ascontiguousarray(mask.astype(np.uint8))
         bad = ~np.isfinite(a)

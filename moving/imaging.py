@@ -4,6 +4,19 @@ A `Chip` is one science array with its WCS (including distortion), error and bad
 units of electrons/s (HST) or the native unit (others) and corrected for the geometric pixel-area
 variation (so that the surface brightness is constant across the detector).
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import os, json
 import numpy as np
 from astropy.io import fits
@@ -186,7 +199,7 @@ def align_sidecar(path, align_dir):
 
 def background(img, mask=None, box=256):
     """Robust mesh background and rms using sep."""
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(img.astype(np.float32))
     m = None if mask is None else np.ascontiguousarray(mask)
     bkg = sep.Background(d, mask=m, bw=box, bh=box, fw=3, fh=3)
@@ -275,7 +288,7 @@ def collect_star_cutouts(chips, size=25, nmax=200, snr_min=10.0, confirm=True):
         sub = (c.data - bkg).astype(np.float32)
         ny, nx = c.shape
         # all significant sources (for crowding test)
-        import sep
+        sep = _import_ogfmeas()
         o = sep.extract(np.ascontiguousarray(sub), 4.0, err=np.ascontiguousarray(rms), mask=np.ascontiguousarray(c.bad), minarea=4)
         tree = cKDTree(np.c_[o["x"], o["y"]]) if len(o) else None
         for x0, y0 in zip(st["x"], st["y"]):

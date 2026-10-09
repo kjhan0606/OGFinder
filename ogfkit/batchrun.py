@@ -1,7 +1,7 @@
 """Batch runner: a recipe of plugin steps over many fields, with parallel workers, resume, per-field logs and a summary.
 
 Recipe (JSON):
-  {"detect": {"args": ["--detect-thresh", "1.5"]}            # optional: bin/ds9_sextract <image> + args -> catalog   (or)
+  {"detect": {"args": ["--detect-thresh", "1.5"]}            # optional: ogfmeas/sextract.py <image> + args -> catalog   (or)
    "catalog": "/data/{name}.tsv",                            # optional: catalog file per field ({name} = field name)
    "steps": [{"plugin": "cluster", "step": "members", "params": {"dens-sigma": 150}}, ...]}
 Fields file: one field per line, "NAME path/to/image.fits" (extra tokens ignored; '#' comments).
@@ -191,7 +191,7 @@ class Field:
 
     def _key_and_argv(self, s, chain, cols, rows, cat_path):
         if s['kind'] == 'detect':
-            argv = [os.path.join(self.root, 'bin', 'ds9_sextract'), self.image] + [str(a) for a in self.recipe['detect'].get('args', [])]
+            argv = [self.python, os.path.join(self.root, 'ogfmeas', 'sextract.py'), self.image] + [str(a) for a in self.recipe['detect'].get('args', [])]
             return hashlib.sha256((chain + json.dumps(argv)).encode()).hexdigest(), argv
         if s['kind'] == 'catalog':
             p = self.recipe['catalog'].replace('{name}', self.name)

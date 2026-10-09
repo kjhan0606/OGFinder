@@ -87,7 +87,7 @@ def build_argv(manifests, pid, sid, ctx, overrides=None):
     ctx.setdefault('plugin_dir', m['_dir'])
     ctx.setdefault('mask', '')
     ctx.setdefault('psf', '')
-    ctx.setdefault('sextract', os.path.join(ctx['root'], 'bin', 'ds9_sextract'))
+    ctx.setdefault('sextract', os.path.join(ctx['root'], 'ogfmeas', 'sextract.py'))
     ctx.setdefault('image_tail', os.path.basename(ctx.get('image', '') or ''))
     ctx.setdefault('base', re.sub(r'\.(fits|fit|fts)$', '', re.sub(r'\.gz$', '', ctx['image_tail'])))
     argv = []

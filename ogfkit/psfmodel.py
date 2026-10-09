@@ -11,6 +11,19 @@ separable cubic-convolution interpolation of the fine grid; every stamp is renor
 Fallbacks (few stars): >= 60 stars -> degree 2, >= 20 -> degree 1, >= 4 -> constant, 1-3 -> Moffat fit to those stars,
 0 -> Gaussian of the prior FWHM; model.meta['mode'] says which one was used.
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import json
 import math
 import warnings
@@ -348,7 +361,7 @@ def diagnostics(model, grid=5, shape=None):
 # ------------------------------------------------------------------------------------------------------------ star handling
 def background(data, mask=None, bw=64):
     """(bkg, rms) maps from sep.Background (mask: True = bad)."""
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(np.nan_to_num(data, nan=0.0).astype(np.float32))
     bad = ~np.isfinite(data)
     if mask is not None:
@@ -360,7 +373,7 @@ def background(data, mask=None, bw=64):
 
 def find_stars(data, bkg, rms, thresh=5.0, minarea=5, mask=None):
     """Candidate point sources: dict of arrays x, y (0-based), peak, snr, flux, fr50 (half-light radius), a, b, flag."""
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray((np.nan_to_num(data, nan=0.0) - bkg).astype(np.float32))
     bad = ~np.isfinite(data)
     if mask is not None:

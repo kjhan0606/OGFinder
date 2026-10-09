@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Fits each object with Bagpipes (https://github.com/ACCarnall/bagpipes; Nautilus/MultiNest sampler) at a FIXED redshift (the record's) and prints the SED-fit
+"""Fits each object with Bagpipes (https://github.com/ACCarnall/bagpipes) at a FIXED redshift and prints the SED-fit
 columns as JSON.  stdin: {"ids", "z", "bands", "flux" (uJy), "err" (uJy), "filter_files" {band: path}, "params"}.
-Model: delayed-exponential SFH + Calzetti dust + nebular emission, priors from params (defaults below).  Posterior summaries: median, half of the 16-84 interval."""
+The sampler is nautilus. MultiNest is not called. Model: delayed-exponential SFH + Calzetti dust + nebular emission, priors from params (defaults below).  Posterior summaries: median, half of the 16-84 interval."""
 import json
 import os
 import sys
@@ -9,10 +9,27 @@ import tempfile
 
 import numpy as np
 
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+from sed_fit.backends.bagpipes_backend import nautilus_sampler
+
 
 def main():
+    try:
+        import bagpipes  # noqa: F401
+    except Exception:
+        sys.stderr.write(
+            "bagpipes was not found. the external package is not called; "
+            "the in-tree SED model is analytic.\n")
+        return 2
     req = json.load(sys.stdin)
     P = req.get('params') or {}
+    try:
+        sampler = nautilus_sampler(P.get('sampler'))
+    except RuntimeError as exc:
+        sys.stderr.write(str(exc) + "\n")
+        return 2
     os.chdir(req.get('wd') or tempfile.mkdtemp(prefix='bagpipes_'))
     os.environ.setdefault('MPLBACKEND', 'Agg')
     import bagpipes as pipes
@@ -43,7 +60,7 @@ def main():
         import hashlib
         run = str(P.get('run', 'adapter')) + '_' + hashlib.sha1(json.dumps([photo.tolist(), z, sorted(inst)]).encode()).hexdigest()[:10]
         fit = pipes.fit(gal, inst, run=run)
-        fit.fit(verbose=False, n_live=int(P.get('n_live', 500)))
+        fit.fit(verbose=False, n_live=int(P.get('n_live', 500)), sampler=sampler)
         s = fit.posterior.samples
         def q(name):
             a = np.asarray(s[name], float)
@@ -71,4 +88,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main() or 0)

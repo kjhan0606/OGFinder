@@ -1,159 +1,110 @@
-"""CIGALE (pcigale) backend."""
+"""External CIGALE program.
+
+``pcigale run`` is a separate program. It is used only when ``pcigale`` is
+already on PATH. The pcigale package is not imported. ``generate_sed`` does
+not call it. ``get_backend('auto')`` stays on the in-tree analytic model.
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
 
 import numpy as np
-from .base import SPSBackend, SEDResult
+
+from .base import SEDResult, SPSBackend
 
 
 class CIGALEBackend(SPSBackend):
-    """SED fitting using CIGALE (Code Investigating GALaxy Emission).
-
-    Requires: pip install pcigale
-    Uses subprocess for fitting (pcigale run), direct API for SED generation.
-    """
-
     @classmethod
     def is_available(cls) -> bool:
-        try:
-            import pcigale
-            return True
-        except ImportError:
-            return False
+        return shutil.which("pcigale") is not None
 
     @classmethod
     def name(cls) -> str:
         return "cigale"
 
-    def generate_sed(self, z, log_mass, log_age, log_Z, Av, log_tau,
-                     bands) -> np.ndarray:
-        from .filters import map_filters
-        from .params import canonical_to_cigale
+    def generate_sed(self, z, log_mass, log_age, log_Z, Av, log_tau, bands):
+        del z, log_mass, log_age, log_Z, Av, log_tau, bands
+        raise RuntimeError(
+            "Backend 'cigale' does not call the pcigale package in-process. "
+            "The in-tree SED model is analytic."
+        )
 
-        params = canonical_to_cigale(z, log_mass, log_age, log_Z,
-                                      Av, log_tau)
-        cig_filters = map_filters(bands, 'cigale')
+    def fit_sed(self, mags, mag_errs, photo_z, bands, **kw):
+        del kw
+        if not self.is_available():
+            raise RuntimeError(
+                "the external program 'pcigale' was not found on PATH. "
+                "A CIGALE fit is not produced here. "
+                "The in-tree SED model is analytic."
+            )
+        return self._fit_subprocess(mags, mag_errs, photo_z, bands)
 
-        from pcigale.sed_modules import get_module
-
-        # Build SED through module pipeline
-        sfh = get_module('sfhdelayed')
-        sfh_params = {
-            'age_main': params['sfhdelayed']['age_main'],
-            'tau_main': params['sfhdelayed']['tau_main'],
-            'age_burst': 20.0,
-            'tau_burst': 50.0,
-            'f_burst': 0.0,
-            'sfr_A': 1.0,
-            'normalise': True,
-        }
-        sfh.process(sfh_params)
-        sed = sfh.sed
-
-        ssp = get_module('bc03')
-        ssp_params = {
-            'imf': params['bc03']['imf'],
-            'metallicity': params['bc03']['metallicity'],
-            'separation_age': 10,
-        }
-        ssp.process(ssp_params, sed)
-
-        dust = get_module('dustatt_calzleit')
-        dust_params = {
-            'Av_BC': params['dustatt_calzleit']['Av'],
-            'Av_ISM': params['dustatt_calzleit']['Av'] * 0.3,
-            'slope_BC': 0.0,
-            'slope_ISM': 0.0,
-        }
-        dust.process(dust_params, sed)
-
-        redshift = get_module('redshifting')
-        redshift.process({'redshift': z}, sed)
-
-        # Compute photometry
-        mags_out = np.zeros(len(bands), dtype=np.float32)
-        for j, filt_name in enumerate(cig_filters):
-            try:
-                flux = sed.compute_fnu(filt_name)
-                if flux > 0:
-                    mags_out[j] = -2.5 * np.log10(flux) + 8.90
-                else:
-                    mags_out[j] = 99.0
-            except Exception:
-                mags_out[j] = 99.0
-
-        # Scale by mass
-        mags_out += -2.5 * (log_mass - 10.0)
-
-        return mags_out
-
-    def fit_sed(self, mags, mag_errs, photo_z, bands, **kw) -> SEDResult:
-        """Fit using CIGALE subprocess pipeline."""
-        import sys
-
-        try:
-            return self._fit_subprocess(mags, mag_errs, photo_z, bands, **kw)
-        except Exception as e:
-            print(f"WARNING: CIGALE fit failed ({e}), "
-                  f"falling back to chi2", file=sys.stderr)
-            return self.fit_sed_chi2(mags, mag_errs, photo_z, bands,
-                                     n_grid=kw.get('n_grid', 5000))
-
-    def _fit_subprocess(self, mags, mag_errs, photo_z, bands, **kw):
-        """Run pcigale via subprocess for batch fitting."""
-        import sys
-        import os
-        import tempfile
-        import subprocess
+    def _fit_subprocess(self, mags, mag_errs, photo_z, bands):
+        """Run the user-installed ``pcigale run`` on one catalog."""
         from .filters import map_filters
 
-        cig_filters = map_filters(bands, 'cigale')
+        cig_filters = map_filters(bands, "cigale")
         n_sources = mags.shape[0]
 
-        # Create temp directory for CIGALE run
-        with tempfile.TemporaryDirectory(prefix='cigale_') as tmpdir:
-            # Write input catalog
-            cat_path = os.path.join(tmpdir, 'input.txt')
-            with open(cat_path, 'w') as f:
-                cols = ['id', 'redshift']
+        with tempfile.TemporaryDirectory(prefix="cigale_") as tmpdir:
+            cat_path = os.path.join(tmpdir, "input.txt")
+            with open(cat_path, "w", encoding="utf-8") as handle:
+                cols = ["id", "redshift"]
                 for filt in cig_filters:
-                    cols.extend([filt, filt + '_err'])
-                f.write(' '.join(cols) + '\n')
-
+                    cols.extend([filt, filt + "_err"])
+                handle.write(" ".join(cols) + "\n")
                 for i in range(n_sources):
                     row = [str(i), f"{photo_z[i]:.4f}"]
                     for j in range(len(bands)):
                         flux = 10 ** (-0.4 * (mags[i, j] - 8.90)) * 1e3
-                        err = flux * (mag_errs[i, j] if np.isfinite(
-                            mag_errs[i, j]) else 0.1) * np.log(10) / 2.5
+                        err_mag = mag_errs[i, j] if np.isfinite(mag_errs[i, j]) else 0.1
+                        err = flux * err_mag * np.log(10) / 2.5
                         if not np.isfinite(flux) or mags[i, j] > 90:
-                            row.extend(['-9999', '-9999'])
+                            row.extend(["-9999", "-9999"])
                         else:
                             row.extend([f"{flux:.4f}", f"{err:.4f}"])
-                    f.write(' '.join(row) + '\n')
+                    handle.write(" ".join(row) + "\n")
 
-            # Write CIGALE config
-            cfg_path = os.path.join(tmpdir, 'pcigale.ini')
-            with open(cfg_path, 'w') as f:
-                f.write(f"data_file = input.txt\n")
-                f.write(f"sed_modules = sfhdelayed, bc03, "
-                        f"dustatt_calzleit, redshifting\n")
-                f.write(f"analysis_method = pdf_analysis\n")
+            cfg_path = os.path.join(tmpdir, "pcigale.ini")
+            with open(cfg_path, "w", encoding="utf-8") as handle:
+                handle.write("data_file = input.txt\n")
+                handle.write(
+                    "sed_modules = sfhdelayed, bc03, "
+                    "dustatt_calzleit, redshifting\n"
+                )
+                handle.write("analysis_method = pdf_analysis\n")
 
-            # Run CIGALE
             result = subprocess.run(
-                ['pcigale', 'run'],
+                ["pcigale", "run"],
                 cwd=tmpdir,
-                capture_output=True, text=True, timeout=3600,
+                capture_output=True,
+                text=True,
+                timeout=3600,
             )
-
             if result.returncode != 0:
-                raise RuntimeError(f"CIGALE failed: {result.stderr[:200]}")
+                raise RuntimeError(
+                    "pcigale failed (%s). A CIGALE fit is not produced here."
+                    % (result.stderr or result.stdout)[:200]
+                )
 
-            # Parse results
-            results_path = os.path.join(tmpdir, 'out', 'results.txt')
-            return self._parse_cigale_results(results_path, n_sources)
+            results_path = os.path.join(tmpdir, "out", "results.txt")
+            if not os.path.isfile(results_path):
+                raise RuntimeError(
+                    "pcigale did not write out/results.txt. "
+                    "A CIGALE fit is not produced here."
+                )
+            parsed = self._parse_cigale_results(results_path, n_sources)
+            if not np.any(np.isfinite(parsed.log_mass)):
+                raise RuntimeError(
+                    "pcigale did not produce a stellar-mass column. "
+                    "A CIGALE fit is not produced here."
+                )
+            return parsed
 
     def _parse_cigale_results(self, results_path, n_sources):
-        """Parse CIGALE output results file."""
+        """Read the table written by ``pcigale run``."""
         log_mass = np.full(n_sources, np.nan)
         log_mass_err = np.full(n_sources, np.nan)
         log_age = np.full(n_sources, np.nan)
@@ -164,41 +115,45 @@ class CIGALEBackend(SPSBackend):
         sfr = np.full(n_sources, np.nan)
         chi2 = np.full(n_sources, np.nan)
 
-        try:
-            with open(results_path, 'r') as f:
-                lines = f.readlines()
-            if len(lines) < 2:
-                raise RuntimeError("Empty results")
+        with open(results_path, encoding="utf-8") as handle:
+            lines = handle.readlines()
+        if len(lines) < 2:
+            raise RuntimeError("pcigale results.txt has no data rows")
 
-            header = lines[0].strip().split()
-            for line in lines[1:]:
-                vals = line.strip().split()
-                if not vals:
+        header = lines[0].strip().split()
+        for line in lines[1:]:
+            vals = line.strip().split()
+            if not vals:
+                continue
+            idx = int(vals[0])
+            if idx >= n_sources:
+                continue
+            for j, col in enumerate(header):
+                if j >= len(vals):
                     continue
-                idx = int(vals[0])
-                if idx >= n_sources:
-                    continue
-
-                for j, col in enumerate(header):
-                    v = float(vals[j]) if j < len(vals) else np.nan
-                    if 'stellar.m_star' in col.lower() and 'err' not in col:
-                        log_mass[idx] = np.log10(max(v, 1))
-                    elif 'stellar.m_star' in col.lower() and 'err' in col:
-                        log_mass_err[idx] = 0.3
-                    elif 'sfh.age_main' in col.lower() and 'err' not in col:
-                        log_age[idx] = np.log10(max(v * 1e6, 1)) + 0
-                    elif 'attenuation.Av' in col.lower():
-                        Av[idx] = v
-                    elif 'sfr' in col.lower() and 'err' not in col:
-                        sfr[idx] = np.log10(max(v, 1e-5))
-                    elif 'chi2' in col.lower():
-                        chi2[idx] = v
-        except Exception:
-            pass
+                v = float(vals[j])
+                low = col.lower()
+                if "stellar.m_star" in low and "err" not in low:
+                    log_mass[idx] = np.log10(max(v, 1.0))
+                elif "stellar.m_star" in low and "err" in low:
+                    log_mass_err[idx] = 0.3
+                elif "sfh.age_main" in low and "err" not in low:
+                    log_age[idx] = np.log10(max(v * 1e6, 1.0))
+                elif "attenuation.av" in low:
+                    Av[idx] = v
+                elif "sfr" in low and "err" not in low:
+                    sfr[idx] = np.log10(max(v, 1e-5))
+                elif "chi2" in low:
+                    chi2[idx] = v
 
         return SEDResult(
-            log_mass=log_mass, log_mass_err=log_mass_err,
-            log_age=log_age, log_age_err=log_age_err,
-            log_Z=log_Z, Av=Av, log_tau=log_tau,
-            sfr=sfr, chi2=chi2,
+            log_mass=log_mass,
+            log_mass_err=log_mass_err,
+            log_age=log_age,
+            log_age_err=log_age_err,
+            log_Z=log_Z,
+            Av=Av,
+            log_tau=log_tau,
+            sfr=sfr,
+            chi2=chi2,
         )

@@ -1,25 +1,32 @@
-"""Simulation PSF generation via WebbPSF (JWST) and TinyTim (HST)."""
+"""Names for JWST and HST simulation PSFs.
+
+WebbPSF is imported only when a JWST simulation PSF is requested and the
+user-installed package imports. TinyTim is a separate program: tiny1, tiny2,
+and tiny3 are used only when they are already on PATH. This module does not
+ship those programs and does not label another model with their names.
+"""
 
 import os
-import sys
 import shutil
+import sys
 import tempfile
+
 import numpy as np
 
 
 # ---- Availability checks ----
 
 def check_webbpsf_available():
-    """Check if webbpsf package is importable."""
+    """True when the user-installed webbpsf package imports."""
     try:
         import webbpsf  # noqa: F401
         return True
-    except ImportError:
+    except Exception:
         return False
 
 
 def check_tinytim_available():
-    """Check if TinyTim executables (tiny1, tiny2, tiny3) are on PATH."""
+    """True when the user-installed TinyTim programs are on PATH."""
     return (shutil.which('tiny1') is not None and
             shutil.which('tiny2') is not None and
             shutil.which('tiny3') is not None)
@@ -119,30 +126,16 @@ WEBBPSF_INSTRUMENTS = {
 def generate_webbpsf(instrument, filter_name, psf_size=201,
                      oversample=1, jitter_sigma=0.007,
                      focus_offset=0.0, output=None):
-    """Generate JWST PSF using WebbPSF.
+    """Generate a JWST PSF with the user-installed WebbPSF package.
 
-    Parameters
-    ----------
-    instrument : str
-        JWST instrument name (NIRCAM, MIRI, NIRISS, NIRSPEC, FGS).
-    filter_name : str
-        Filter name (e.g., F150W).
-    psf_size : int
-        Output PSF size in pixels.
-    oversample : int
-        Oversampling factor.
-    jitter_sigma : float
-        Jitter in arcsec (Gaussian sigma).
-    focus_offset : float
-        Focus offset in waves of optical path difference.
-    output : str, optional
-        Output FITS path.
-
-    Returns
-    -------
-    psf : 2D ndarray
-        PSF normalized to unit sum.
+    A missing package raises and does not write a FITS file. There is no
+    in-tree instrument PSF to substitute.
     """
+    if not check_webbpsf_available():
+        raise RuntimeError(
+            "webbpsf was not found. the external package is not called. "
+            "An instrument PSF is not produced here."
+        )
     import webbpsf
 
     inst_name = instrument.upper()
@@ -167,21 +160,17 @@ def generate_webbpsf(instrument, filter_name, psf_size=201,
     if focus_offset != 0.0:
         inst.options['defocus_waves'] = focus_offset
 
-    fov = psf_size * oversample
     hdulist = inst.calc_psf(oversample=oversample, fov_pixels=psf_size)
 
-    # Use the detector-sampled extension (ext 0 = oversampled, ext 1 = detector)
-    if oversample == 1:
-        psf = hdulist[0].data.astype(np.float64)
-    else:
-        psf = hdulist[0].data.astype(np.float64)
+    # Use the detector-sampled extension (ext 0).
+    psf = hdulist[0].data.astype(np.float64)
 
     # Ensure correct size
     if psf.shape[0] > psf_size or psf.shape[1] > psf_size:
         cy, cx = psf.shape[0] // 2, psf.shape[1] // 2
         half = psf_size // 2
         psf = psf[cy - half:cy - half + psf_size,
-                   cx - half:cx - half + psf_size]
+                  cx - half:cx - half + psf_size]
 
     # Normalize
     total = psf.sum()
@@ -271,28 +260,18 @@ def _tinytim_filter_number(instrument, filter_name):
 
 def generate_tinytim(instrument, filter_name, psf_size=201,
                      oversample=1, focus_offset=0.0, output=None):
-    """Generate HST PSF using TinyTim.
+    """Generate an HST PSF by running the user-installed TinyTim programs.
 
-    Parameters
-    ----------
-    instrument : str
-        HST instrument (ACS_WFC, WFC3_UVIS, WFC3_IR, WFPC2, etc.).
-    filter_name : str
-        Filter name (e.g., F814W).
-    psf_size : int
-        Output PSF size in pixels.
-    oversample : int
-        Oversampling factor.
-    focus_offset : float
-        Focus offset in microns of secondary mirror despace.
-    output : str, optional
-        Output FITS path.
-
-    Returns
-    -------
-    psf : 2D ndarray
-        PSF normalized to unit sum.
+    tiny1 writes the parameter file and tiny2 computes the PSF. The programs
+    are not bundled. If they are not on PATH, this raises and does not write
+    ``output``.
     """
+    if not check_tinytim_available():
+        raise RuntimeError(
+            "TinyTim executables (tiny1, tiny2, tiny3) were not found on PATH. "
+            "An instrument PSF is not produced here."
+        )
+
     import subprocess
     from astropy.io import fits
 
@@ -306,29 +285,27 @@ def generate_tinytim(instrument, filter_name, psf_size=201,
     tmpdir = tempfile.mkdtemp(prefix='tinytim_')
     try:
         paramfile = os.path.join(tmpdir, 'tinytim')
-
-        # tiny1: create parameter file
-        tiny1_input = f"{paramfile}\n{chip}\n{filt_num}\n{psf_size}\n{focus_offset}\n{paramfile}.tt3\n"
+        tiny1_input = (
+            f"{paramfile}\n{chip}\n{filt_num}\n{psf_size}\n"
+            f"{focus_offset}\n{paramfile}.tt3\n"
+        )
         result = subprocess.run(
             ['tiny1', paramfile],
             input=tiny1_input, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
             raise RuntimeError(f"tiny1 failed: {result.stderr}")
 
-        # tiny2: compute PSF
         result = subprocess.run(
             ['tiny2', paramfile + '.tt3'],
             capture_output=True, text=True, timeout=300)
         if result.returncode != 0:
             raise RuntimeError(f"tiny2 failed: {result.stderr}")
 
-        # Find output FITS
         psf_file = paramfile + '00.fits'
         if not os.path.exists(psf_file):
-            # Try alternative naming
-            for f in os.listdir(tmpdir):
-                if f.endswith('.fits') and 'tinytim' in f:
-                    psf_file = os.path.join(tmpdir, f)
+            for name in os.listdir(tmpdir):
+                if name.endswith('.fits') and 'tinytim' in name:
+                    psf_file = os.path.join(tmpdir, name)
                     break
 
         if not os.path.exists(psf_file):
@@ -337,11 +314,9 @@ def generate_tinytim(instrument, filter_name, psf_size=201,
         with fits.open(psf_file) as hdul:
             psf = hdul[0].data.astype(np.float64)
 
-        # Ensure correct size
         if psf.shape[0] != psf_size or psf.shape[1] != psf_size:
             out = np.zeros((psf_size, psf_size), dtype=np.float64)
             sy, sx = psf.shape
-            # Center crop or pad
             if sy >= psf_size and sx >= psf_size:
                 cy, cx = sy // 2, sx // 2
                 half = psf_size // 2
@@ -353,7 +328,6 @@ def generate_tinytim(instrument, filter_name, psf_size=201,
                 out[oy:oy + sy, ox:ox + sx] = psf
                 psf = out
 
-        # Normalize
         total = psf.sum()
         if total > 0:
             psf /= total
@@ -371,7 +345,6 @@ def generate_tinytim(instrument, filter_name, psf_size=201,
             print(f"Saved TinyTim PSF: {output}", file=sys.stderr)
 
         return psf
-
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 

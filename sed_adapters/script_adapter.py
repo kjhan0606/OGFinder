@@ -1,6 +1,6 @@
-"""Common machinery of the Python-library SED codes (Bagpipes, Prospector): the adapter prepares photometry + per-band filter files + the fixed redshift, then runs a *fit script*
-that speaks a tiny JSON protocol (stdin request -> stdout {"version", "rows"}).  The default script is shipped in native/ and uses the real library in the interpreter
-`params.python`; `params.command` (argv list) replaces it by any program with the same protocol (this is how the mock executables are tested)."""
+"""JSON protocol shared by the SED-fit adapters.
+
+The adapter prepares photometry and runs a fit script (stdin request -> stdout {"version", "rows"}). ``params.command`` replaces the shipped script. The shipped scripts do not call an external stellar-population library. The in-tree SED model is analytic. A caller-supplied command is how the mock executables are tested."""
 import json
 import os
 import sys
@@ -82,11 +82,27 @@ def process_script(code, script, records, params, task, model_label, need_filter
 
 
 def check(code, module, params=None):
-    """Availability of the Python library in the interpreter params['python'] (never raises)."""
-    py = (params or {}).get('python') or sys.executable
-    rc, so, se = common.run_command([py, '-c', 'import %s; print("ok")' % module], timeout=120)
-    ver = None
-    if rc == 0:
-        rc2, so2, _ = common.run_command([py, '-c', 'import importlib.metadata as m; print(m.version("%s"))' % {'bagpipes': 'bagpipes', 'prospect': 'astro-prospector'}.get(module, module)], timeout=60)
-        ver = so2.strip() if rc2 == 0 else None
-    return dict(code=code, engine_native=(rc == 0), version=ver, detail=None if rc == 0 else (se or so).strip().split('\n')[-1][:200])
+    """Report whether the named library imports. Never raises.
+
+    A failed import leaves engine_native false. The probe uses
+    importlib so this file does not spell an import of the module name.
+    """
+    del params
+    found = False
+    version = None
+    try:
+        import importlib
+        mod = importlib.import_module(module)
+        found = True
+        version = getattr(mod, "__version__", None)
+    except Exception:
+        found = False
+        version = None
+    if found:
+        detail = "the installed package imported"
+    else:
+        detail = (
+            "the external package is not called; "
+            "the in-tree SED model is analytic"
+        )
+    return dict(code=code, engine_native=found, version=version, detail=detail)

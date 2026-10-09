@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Photo-z and SED fitting with external codes (EAZY, CIGALE, Bagpipes, Prospector) through the adapters in sed_adapters/ (same adapters the AI-bridge profiles use).
+"""Photo-z and SED-fit adapters in sed_adapters/ (same adapters the AI-bridge profiles use).
 
-    sedcodes.py --task photoz --code eazy --catalog TSV --work DIR [--engine native|external] [--python PY] [--command "prog args"] [--mag-columns MAG_F105W,...]
+The native photo-z path calls ogfmeas.photoz.template_chi2 only when params supply numeric rest-frame templates. It does not call an external photo-z package. The shipped SED-fit scripts do not call an external stellar-population library; the in-tree SED model is analytic. ``--command`` still runs a caller-supplied program. Column names EZ_* and SC_* are historical and do not mean an external code produced the row.
+
+    sedcodes.py --task photoz --code eazy --catalog TSV --work DIR [--engine native|external|package] [--python PY] [--command "prog args"] [--mag-columns MAG_F105W,...]
     sedcodes.py --task sed_fit --code cigale|bagpipes|prospector --catalog TSV --work DIR [--z-column COL] ...
     sedcodes.py --check [--code X] [--python PY]            availability report (JSON)
     sedcodes.py --write-profiles FILE                         ai_bridge profile file with local_command profiles for every code
@@ -72,7 +74,7 @@ def main(argv=None):
     ap.add_argument('--meta-out', default='')
     ap.add_argument('--mag-columns', default='')
     ap.add_argument('--max-objects', type=int, default=100000)
-    ap.add_argument('--engine', default='native', choices=['native', 'external'])
+    ap.add_argument('--engine', default='native', choices=['native', 'external', 'package'])
     ap.add_argument('--python', default='')
     ap.add_argument('--command', default='')
     ap.add_argument('--eazy-data', dest='eazy_data', default='')

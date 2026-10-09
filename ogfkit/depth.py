@@ -9,6 +9,19 @@ map).  Hence
 
 and the per-tile *empirical* blank-aperture / blank-box scatter is compared with the model (`tile_table`).
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import math
 
 import numpy as np
@@ -46,7 +59,7 @@ def blank_circle_positions(mask, r, n, rng, box=None, max_tries=40):
 
 
 def circle_sums(sub, pos, r):
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(sub, np.float64)
     s, _, _ = sep.sum_circle(d, pos[:, 0], pos[:, 1], r, subpix=5)
     return s

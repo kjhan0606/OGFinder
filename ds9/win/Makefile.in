@@ -145,7 +145,6 @@ PREQS	= \
 	$(LIBDIR)/scidthemes \
 	$(APPDIR)/xpans.exe \
 	$(APPDIR)/install.vbs \
-	$(APPDIR)/tcc \
 	DLLs
 
 #--------------------------main
@@ -167,7 +166,7 @@ ds9Base.exe: $(OBJS) $(LLIBS)
 	$(CC) $(CFLAGS)	-o $@ \
 	$(OBJS) \
 	$(LLIBS) \
-	-L $(prefix)/openssl -lssl -lcrypto \
+	-L $(prefix)/sys-openssl/lib -lssl -lcrypto \
 	$(LIBS) \
 	$(TK_LIBS) \
 	-lgdi32 \
@@ -222,15 +221,12 @@ $(APPDIR)/xpans.exe: $(bindir)/xpans.exe
 $(APPDIR)/install.vbs: install.vbs
 	cp -p $? $@
 
-$(APPDIR)/tcc: $(prefix)/compilers/tcc-0.9.25-win32-bin.zip
-	$(RM) -rf $@
-	cd $(APPDIR); unzip $?
-	chmod +x $@/tcc.exe
-	touch $@
+# compilers/tcc-0.9.25-win32-bin.zip is not unpacked into the application.
+# The filter compiler is used only when FILTER_CC or tcc/tcc.exe is already there.
 
 DLLs:
-	cp $(prefix)/openssl/ssleay32.dll $(APPDIR)
-	cp $(prefix)/openssl/libeay32.dll $(APPDIR)
+	cp $(prefix)/sys-openssl/lib/libssl*.dll $(APPDIR)
+	cp $(prefix)/sys-openssl/lib/libcrypto*.dll $(APPDIR)
 	cp $(DLLDIR)/libgcc_s_s*-1.dll $(APPDIR)
 	cp $(DLLDIR)/libstdc++-6.dll $(APPDIR)
 	cp $(DLLDIR)/libxml2-2.dll $(APPDIR)

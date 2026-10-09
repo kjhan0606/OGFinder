@@ -1,5 +1,6 @@
-"""Bagpipes adapter (SED fitting at the record's redshift).  See script_adapter.py; real fits: `pip install bagpipes` in the interpreter `python`
-(nautilus sampler; no filter curves are shipped by Bagpipes - they are exported from an EAZY FILTER.RES (`eazy_data`/`filters_res`) or read from `filter_dir/<BAND>.dat`)."""
+"""SED-fit adapter. ``command`` runs a caller-supplied program with the JSON protocol in script_adapter.py.
+
+The shipped script calls the user-installed package only when that import works. A missing package exits without a bagpipes-labeled fit. Filter files are still exported when a caller command needs them. The in-tree SED model is analytic."""
 import sys
 
 from . import common, script_adapter

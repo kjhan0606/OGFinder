@@ -18,6 +18,19 @@ Enhanced pipeline features:
     - Sérsic-based filtering + A/B/C/D grading
 """
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import os
 import argparse
@@ -370,9 +383,9 @@ def mode_detect(args):
 def _detect_on_cleaned(cleaned, config):
     """Re-detect sources on cleaned image and return objects + rms."""
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
-        import sep_pjw as sep
+        sep = _import_ogfmeas()
     cleaned_c = np.ascontiguousarray(cleaned, dtype=np.float64)
     try:
         bkg = sep.Background(cleaned_c)
@@ -788,9 +801,9 @@ def mode_forced(args):
 
     # Background estimate
     try:
-        import sep
+        sep = _import_ogfmeas()
     except ImportError:
-        import sep_pjw as sep
+        sep = _import_ogfmeas()
     data_c = np.ascontiguousarray(data, dtype=np.float64)
     try:
         bkg = sep.Background(data_c, bw=64, bh=64)

@@ -9,15 +9,28 @@ Usage:
     python3 ds9_add_source.py image.fits --x 150.3 --y 200.1
 """
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse
 import sys
 import numpy as np
 
 try:
-    import sep
+    sep = _import_ogfmeas()
 except ImportError:
     try:
-        import sep_pjw as sep
+        sep = _import_ogfmeas()
     except ImportError:
         sep = None
 

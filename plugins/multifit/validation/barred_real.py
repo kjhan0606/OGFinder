@@ -6,6 +6,19 @@ Bulge + disc base fit, residual-based bar / ring / spiral detection and refit (o
 Literature (for comparison only): bar position angle ~ 112 deg E of N, semi-major axis ~ 50 arcsec (Erwin 2005; Martinet & Friedli 1997).
 The bar PA is converted from the multifit convention (counter-clockwise from +x) to degrees east of north with the frame WCS.  Optionally the final model is passed to GALFIT as start
 (Ferrers bar + exp disc + Sersic bulge) and refit there; the parameters of both programs are listed."""
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse
 import bz2
 import json
@@ -46,7 +59,7 @@ def main():
     ap.add_argument('--half', type=int, default=100, help='half-size of the cutout in BINNED pixels')
     ap.add_argument('--bin', type=int, default=2)
     a = ap.parse_args()
-    import sep
+    sep = _import_ogfmeas()
     from astropy.wcs import WCS
     import warnings
     warnings.simplefilter('ignore')

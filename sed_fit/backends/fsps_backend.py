@@ -5,9 +5,11 @@ from .base import SPSBackend, SEDResult
 
 
 class FSPSBackend(SPSBackend):
-    """Stellar population synthesis using python-fsps.
+    """Stellar population synthesis using the user-installed python-fsps.
 
-    Requires: pip install fsps (+ FSPS_DIR environment variable).
+    The import runs only when this backend is requested. ``auto`` does not
+    select it. Spectral libraries stay on the user's machine (SPS_HOME or
+    FSPS_DIR). This tree does not ship those files.
     """
 
     _sp = None  # cached StellarPopulation instance
@@ -17,7 +19,7 @@ class FSPSBackend(SPSBackend):
         try:
             import fsps
             return True
-        except ImportError:
+        except Exception:
             return False
 
     @classmethod
@@ -36,8 +38,15 @@ class FSPSBackend(SPSBackend):
             )
         return FSPSBackend._sp
 
+    def _missing(self):
+        raise RuntimeError(
+            "Backend 'fsps' was not found. The in-tree SED model is analytic."
+        )
+
     def generate_sed(self, z, log_mass, log_age, log_Z, Av, log_tau,
                      bands) -> np.ndarray:
+        if not type(self).is_available():
+            self._missing()
         from .filters import map_filters
         from .params import canonical_to_fsps
 
@@ -64,6 +73,8 @@ class FSPSBackend(SPSBackend):
     def generate_grid(self, n_samples, bands, output_path, seed=42,
                       param_ranges=None):
         """Optimized batch generation reusing SP object."""
+        if not type(self).is_available():
+            self._missing()
         import sys
         import h5py
         import os
@@ -129,6 +140,8 @@ class FSPSBackend(SPSBackend):
         return params, mags
 
     def fit_sed(self, mags, mag_errs, photo_z, bands, **kw) -> SEDResult:
+        if not type(self).is_available():
+            self._missing()
         n_grid = kw.get('n_grid', 5000)
         return self.fit_sed_chi2(mags, mag_errs, photo_z, bands,
                                  n_grid=n_grid)

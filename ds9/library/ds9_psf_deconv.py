@@ -422,13 +422,13 @@ def mode_sim_psf(args):
 
     if telescope == 'jwst':
         if not check_webbpsf_available():
-            print("ERROR: webbpsf package not installed. "
-                  "Install with: pip install webbpsf", file=sys.stderr)
+            print("ERROR: webbpsf was not found. "
+                  "An instrument PSF is not produced here.", file=sys.stderr)
             sys.exit(1)
 
         print(f"Generating WebbPSF: {instrument} / {filter_name} "
               f"({args.sim_psf_size}px)", file=sys.stderr)
-        psf = generate_webbpsf(
+        generate_webbpsf(
             instrument, filter_name,
             psf_size=args.sim_psf_size,
             oversample=args.sim_oversample,
@@ -441,13 +441,13 @@ def mode_sim_psf(args):
 
     elif telescope == 'hst':
         if not check_tinytim_available():
-            print("ERROR: TinyTim executables (tiny1, tiny2, tiny3) not found on PATH.",
-                  file=sys.stderr)
+            print("ERROR: TinyTim executables (tiny1, tiny2, tiny3) "
+                  "not found on PATH.", file=sys.stderr)
             sys.exit(1)
 
         print(f"Generating TinyTim PSF: {instrument} / {filter_name} "
               f"({args.sim_psf_size}px)", file=sys.stderr)
-        psf = generate_tinytim(
+        generate_tinytim(
             instrument, filter_name,
             psf_size=args.sim_psf_size,
             oversample=args.sim_oversample,
@@ -471,15 +471,15 @@ def mode_check_sim(args):
     tinytim_ok = 1 if check_tinytim_available() else 0
 
     print(f"#SIM_STATUS\tWEBBPSF={webbpsf_ok}\tTINYTIM={tinytim_ok}")
-
     if webbpsf_ok:
-        print("WebbPSF: available", file=sys.stderr)
+        print("WebbPSF: Available", file=sys.stderr)
     else:
-        print("WebbPSF: NOT found (pip install webbpsf)", file=sys.stderr)
+        print("WebbPSF: Not found", file=sys.stderr)
     if tinytim_ok:
         print("TinyTim: available", file=sys.stderr)
     else:
-        print("TinyTim: NOT found (tiny1/tiny2/tiny3 not on PATH)", file=sys.stderr)
+        print("TinyTim: NOT found (tiny1/tiny2/tiny3 not on PATH)",
+              file=sys.stderr)
 
 
 def main():

@@ -7,12 +7,25 @@ while accurately modeling the sky background.
 Parallelized via tiled processing using SharedArray + parallel_map.
 """
 
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import sys
 import numpy as np
 try:
-    import sep
+    sep = _import_ogfmeas()
 except ImportError:
-    import sep_pjw as sep
+    sep = _import_ogfmeas()
 
 from icl.background import (fit_polynomial_background,
                              fit_chebyshev_background,

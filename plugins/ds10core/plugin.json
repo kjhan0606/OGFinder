@@ -6,7 +6,7 @@
  "tab": "Measure",
  "order": 70,
  "dialog_tabs": 1,
- "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg); sky catalogue query / cross-match, MAST search and download, and user Python plugins; star aperture photometry with clicked stars and light curves (ds10core.tools.aper_phot).",
+ "description": "Stand-alone shell of the compute core that the Astrafex Web server also uses (one core, two shells): DS9/JSON/CSV regions with exact pixel statistics and masks, pixel table, weight/rms/exposure/mask map association, header-driven AB zero points, multi-band forced photometry (detection image, forced aperture/Kron/isophotal, correlated-noise errors, upper limits, colours; optional PSF matching) and a runner for astrafex-script/1 step lists, replay scripts and bundles exported from the web app. Runs headless; the core lives in the Astrafex Web repository and is started as a separate process. Includes the shared-core LSBG finder (ds10core.tools.lsbg); sky catalogue query / cross-match, MAST search and download, and user Python plugins; star aperture photometry with clicked stars and light curves (ds10core.tools.aper_phot); a saturation, bleed, persistence and DQ mask (run_pixmask.py); a spatially varying elliptical-Gaussian PSF (run_psfvar.py); a ground photometric solution zp + kX + cC (run_photcal.py); and star/galaxy separation from the half-light radius (run_stargal.py). Original-code tools on the same menu: TAN WCS (run_wcs.py), dither stack (run_dither.py), band resample (run_regrid.py), cosmic-ray and streak mask (run_crmask.py), source detection (run_detect.py), galactic extinction from a supplied E(B-V) (run_extinct.py), Lomb-Scargle (run_period.py), Lyman-break colours (run_dropout.py), completeness and number counts (run_counts.py), and a 1/Vmax luminosity function (run_lf.py). CCD reduction stays in the ccdreduce plugin.",
  "license": {
   "plugin": "original glue code: argument vectors only, imports no ds9, AST or SEP code",
   "core": "ds10core (Astrafex Web repository): original code, numpy + scipy (BSD-3) only; proprietary, owner decides; NOT GPL",
@@ -965,6 +965,826 @@
     "catalog": "aperseries_catalog.tsv"
    },
    "done_status": "Aperture photometry light curve (shared core)"
+  },
+  {
+   "id": "pixmask",
+   "label": "Saturation mask",
+   "title": "Astrafex Core: saturation, bleed, persistence and DQ",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.pixmask",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_pixmask.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/pixmask.fits",
+    "--summary",
+    "{work}/pixmask_summary.json",
+    {
+     "if": "pixmask-bleed",
+     "argv": [
+      "--bleed"
+     ]
+    },
+    {
+     "if": "pixmask-persist",
+     "argv": [
+      "--persist"
+     ]
+    },
+    "--bleed-axis",
+    "{pixmask-bleed-axis}",
+    "--bleed-nsig",
+    "{pixmask-bleed-nsig}",
+    "--bleed-max",
+    "{pixmask-bleed-max}",
+    "--persist-nsig",
+    "{pixmask-persist-nsig}",
+    "--persist-grow",
+    "{pixmask-persist-grow}",
+    "--dq-bits",
+    "{pixmask-dq-bits}",
+    {
+     "if": "pixmask-saturate",
+     "argv": [
+      "--saturate",
+      "{pixmask-saturate}"
+     ]
+    },
+    {
+     "if_file": "{pixmask-previous}",
+     "argv": [
+      "--previous",
+      "{pixmask-previous}"
+     ]
+    },
+    {
+     "if_file": "{pixmask-dq}",
+     "argv": [
+      "--dq",
+      "{pixmask-dq}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Saturation mask"
+  },
+  {
+   "id": "psfvar",
+   "label": "Varying PSF",
+   "title": "Astrafex Core: elliptical Gaussian that varies across the frame",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.psfvar",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_psfvar.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out-model",
+    "{work}/psf_model.json",
+    "--out-stamp",
+    "{work}/psf_center.fits",
+    "--summary",
+    "{work}/psfvar_summary.json",
+    "--degree",
+    "{psfvar-degree}",
+    "--stamp",
+    "{psfvar-stamp}",
+    "--thresh",
+    "{psfvar-thresh}",
+    "--minarea",
+    "{psfvar-minarea}",
+    "--snr-min",
+    "{psfvar-snr-min}",
+    {
+     "if_file": "{catalog}",
+     "argv": [
+      "--catalog",
+      "{catalog}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Varying PSF"
+  },
+  {
+   "id": "photcal",
+   "label": "Photometric solution",
+   "title": "Astrafex Core: zero point, airmass and colour term",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.photcal",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_photcal.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--out",
+    "{work}/photcal.tsv",
+    "--summary",
+    "{work}/photcal_summary.json",
+    "--std-column",
+    "{photcal-std-column}",
+    "--clip",
+    "{photcal-clip}",
+    {
+     "if": "photcal-inst-column",
+     "argv": [
+      "--inst-column",
+      "{photcal-inst-column}"
+     ]
+    },
+    {
+     "if": "photcal-airmass",
+     "argv": [
+      "--airmass",
+      "{photcal-airmass}"
+     ]
+    },
+    {
+     "if": "photcal-color-a",
+     "argv": [
+      "--color-a",
+      "{photcal-color-a}"
+     ]
+    },
+    {
+     "if": "photcal-color-b",
+     "argv": [
+      "--color-b",
+      "{photcal-color-b}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "photcal.tsv"
+   },
+   "done_status": "Photometric solution"
+  },
+  {
+   "id": "stargal",
+   "label": "Star-galaxy",
+   "title": "Astrafex Core: star or galaxy from the half-light radius",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image",
+    "catalog"
+   ],
+   "record": "ds10core.stargal",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_stargal.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--catalog",
+    "{catalog}",
+    "--out",
+    "{work}/stargal.tsv",
+    "--summary",
+    "{work}/stargal_summary.json",
+    "--snr-min",
+    "{stargal-snr-min}",
+    "--k-sigma",
+    "{stargal-k-sigma}",
+    "--elong-max",
+    "{stargal-elong-max}",
+    {
+     "if": "stargal-psf-fwhm",
+     "argv": [
+      "--psf-fwhm",
+      "{stargal-psf-fwhm}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "stargal.tsv"
+   },
+   "done_status": "Star-galaxy classification"
+  },
+  {
+   "id": "wcs",
+   "label": "Solve WCS",
+   "title": "Astrafex Core: match stars and write a TAN WCS",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.wcs",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_wcs.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/wcs_solved.fits",
+    "--summary",
+    "{work}/wcs_summary.json",
+    {
+     "if_file": "{wcs-catalog}",
+     "argv": [
+      "--cat",
+      "{wcs-catalog}"
+     ]
+    },
+    {
+     "if_eq": [
+      "wcs-survey",
+      "gaia_dr3"
+     ],
+     "argv": [
+      "--survey",
+      "{wcs-survey}"
+     ]
+    },
+    {
+     "if": "wcs-ra",
+     "argv": [
+      "--ra",
+      "{wcs-ra}"
+     ]
+    },
+    {
+     "if": "wcs-dec",
+     "argv": [
+      "--dec",
+      "{wcs-dec}"
+     ]
+    },
+    {
+     "if": "wcs-scale",
+     "argv": [
+      "--scale",
+      "{wcs-scale}"
+     ]
+    },
+    {
+     "if": "wcs-pa",
+     "argv": [
+      "--pa",
+      "{wcs-pa}"
+     ]
+    },
+    {
+     "if": "wcs-mag-limit",
+     "argv": [
+      "--mag-limit",
+      "{wcs-mag-limit}"
+     ]
+    },
+    {
+     "if": "wcs-radius",
+     "argv": [
+      "--radius",
+      "{wcs-radius}"
+     ]
+    }
+   ],
+   "network": true,
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "WCS solution"
+  },
+  {
+   "id": "dither",
+   "label": "Dither stack",
+   "title": "Astrafex Core: align dithered frames and combine them",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [],
+   "record": "ds10core.dither",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_dither.py",
+    "--core-dir",
+    "{core-dir}",
+    "--frames",
+    "{dither-frames}",
+    "--combine",
+    "{dither-combine}",
+    "--nsig",
+    "{dither-nsig}",
+    "--out",
+    "{work}/dither_stack.fits",
+    "--summary",
+    "{work}/dither_summary.json"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Dither stack"
+  },
+  {
+   "id": "regrid",
+   "label": "Resample",
+   "title": "Astrafex Core: resample onto a reference grid",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.regrid",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_regrid.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--ref",
+    "{regrid-ref}",
+    "--out",
+    "{work}/resampled.fits",
+    "--summary",
+    "{work}/regrid_summary.json"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Resampled image"
+  },
+  {
+   "id": "crmask",
+   "label": "Cosmic-ray mask",
+   "title": "Astrafex Core: cosmic rays and one satellite streak",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.crmask",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_crmask.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/crmask.fits",
+    "--summary",
+    "{work}/crmask_summary.json",
+    {
+     "if": "crmask-cr",
+     "argv": [
+      "--cr"
+     ]
+    },
+    {
+     "if": "crmask-streak",
+     "argv": [
+      "--streak"
+     ]
+    },
+    "--nsig",
+    "{crmask-nsig}",
+    "--grow",
+    "{crmask-grow}",
+    "--max-area",
+    "{crmask-max-area}",
+    "--star-fwhm",
+    "{crmask-star-fwhm}",
+    "--min-length",
+    "{crmask-min-length}",
+    "--clip-percent",
+    "{crmask-clip-percent}"
+   ],
+   "output": {
+    "mode": "text"
+   },
+   "done_status": "Cosmic-ray mask"
+  },
+  {
+   "id": "detect",
+   "label": "Detect sources",
+   "title": "Astrafex Core: threshold, connected pixels and moments",
+   "session": "AUTO",
+   "stage": "detect",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.detect",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_detect.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/detect_catalog.tsv",
+    "--segmap",
+    "{work}/detect_segmap.fits",
+    "--summary",
+    "{work}/detect_summary.json",
+    "--thresh",
+    "{det-thresh}",
+    "--minarea",
+    "{det-minarea}",
+    "--smooth-fwhm",
+    "{det-smooth-fwhm}",
+    "--back-size",
+    "{det-back-size}",
+    "--mag-zeropoint",
+    "{det-mag-zeropoint}",
+    "--max-sources",
+    "{det-max-sources}",
+    {
+     "if": "det-no-smooth",
+     "argv": [
+      "--no-smooth"
+     ]
+    },
+    {
+     "if": "det-deblend",
+     "argv": [
+      "--deblend",
+      "--deblend-nlevels",
+      "{det-deblend-nlevels}",
+      "--deblend-mincont",
+      "{det-deblend-mincont}"
+     ]
+    },
+    {
+     "if_not": "det-noise-correction",
+     "argv": [
+      "--no-noise-correction"
+     ]
+    },
+    {
+     "if_file": "{det-noise-map}",
+     "argv": [
+      "--noise-map",
+      "{det-noise-map}",
+      "--noise-kind",
+      "{det-noise-kind}"
+     ]
+    },
+    {
+     "if_file": "{det-bad-mask}",
+     "argv": [
+      "--bad-mask",
+      "{det-bad-mask}",
+      "--bad-mask-sense",
+      "{det-bad-mask-sense}"
+     ]
+    },
+    {
+     "if_file": "{mask}",
+     "argv": [
+      "--mask",
+      "{mask}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "detect_catalog.tsv"
+   },
+   "done_status": "Source detection"
+  },
+  {
+   "id": "extinct",
+   "label": "Galactic extinction",
+   "title": "Astrafex Core: E(B-V) to A(lambda) on one magnitude column",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.extinct",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_extinct.py",
+    "--core-dir",
+    "{core-dir}",
+    "--ebv",
+    "{extinct-ebv}",
+    "--rv",
+    "{extinct-rv}",
+    "--filter",
+    "{extinct-filter}",
+    {
+     "if": "extinct-wavelength-nm",
+     "argv": [
+      "--wavelength-nm",
+      "{extinct-wavelength-nm}"
+     ]
+    },
+    "--catalog",
+    "{catalog}",
+    "--mag-column",
+    "{extinct-mag-column}",
+    "--out",
+    "{work}/extinct.tsv",
+    "--summary",
+    "{work}/extinct_summary.json"
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "extinct.tsv"
+   },
+   "done_status": "Galactic extinction"
+  },
+  {
+   "id": "period",
+   "label": "Periodogram",
+   "title": "Astrafex Core: Lomb-Scargle periodogram of a light curve",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.period",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_period.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--out",
+    "{work}/periodogram.tsv",
+    "--summary",
+    "{work}/period_summary.json",
+    {
+     "if": "period-time-column",
+     "argv": [
+      "--time-column",
+      "{period-time-column}"
+     ]
+    },
+    {
+     "if": "period-value-column",
+     "argv": [
+      "--value-column",
+      "{period-value-column}"
+     ]
+    },
+    {
+     "if": "period-star",
+     "argv": [
+      "--star",
+      "{period-star}"
+     ]
+    },
+    {
+     "if": "period-min-period",
+     "argv": [
+      "--min-period",
+      "{period-min-period}"
+     ]
+    },
+    {
+     "if": "period-max-period",
+     "argv": [
+      "--max-period",
+      "{period-max-period}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "periodogram.tsv"
+   },
+   "done_status": "Periodogram"
+  },
+  {
+   "id": "dropout",
+   "label": "Lyman-break",
+   "title": "Astrafex Core: B, V, i, z and Y dropout colours",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.dropout",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_dropout.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--out",
+    "{work}/dropout.tsv",
+    "--summary",
+    "{work}/dropout_summary.json",
+    "--selection",
+    "{dropout-selection}",
+    {
+     "if": "dropout-chi2-opt-max",
+     "argv": [
+      "--chi2-opt-max",
+      "{dropout-chi2-opt-max}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "dropout.tsv"
+   },
+   "done_status": "Lyman-break selection"
+  },
+  {
+   "id": "counts",
+   "label": "Completeness and counts",
+   "title": "Astrafex Core: injection recovery and corrected number counts",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "record": "ds10core.counts",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_counts.py",
+    "--core-dir",
+    "{core-dir}",
+    "{image}",
+    "--out",
+    "{work}/counts.tsv",
+    "--summary",
+    "{work}/counts_summary.json",
+    "--kind",
+    "{counts-kind}",
+    "--n-bins",
+    "{counts-n-bins}",
+    "--per-bin",
+    "{counts-per-bin}",
+    "--per-image",
+    "{counts-per-image}",
+    "--mag-zeropoint",
+    "{counts-mag-zeropoint}",
+    "--psf-fwhm",
+    "{counts-psf-fwhm}",
+    "--match-radius",
+    "{counts-match-radius}",
+    "--thresh",
+    "{counts-thresh}",
+    "--minarea",
+    "{counts-minarea}",
+    "--smooth-fwhm",
+    "{counts-smooth-fwhm}",
+    "--back-size",
+    "{counts-back-size}",
+    "--seed",
+    "{counts-seed}",
+    {
+     "if": "counts-mag-min",
+     "argv": [
+      "--mag-min",
+      "{counts-mag-min}"
+     ]
+    },
+    {
+     "if": "counts-mag-max",
+     "argv": [
+      "--mag-max",
+      "{counts-mag-max}"
+     ]
+    },
+    {
+     "if": "counts-pixel-scale",
+     "argv": [
+      "--pixel-scale",
+      "{counts-pixel-scale}"
+     ]
+    },
+    {
+     "if": "counts-deblend",
+     "argv": [
+      "--deblend",
+      "--deblend-nlevels",
+      "{counts-deblend-nlevels}",
+      "--deblend-mincont",
+      "{counts-deblend-mincont}"
+     ]
+    },
+    {
+     "if_eq": [
+      "counts-kind",
+      "galaxy"
+     ],
+     "argv": [
+      "--re-bins",
+      "{counts-re-bins}"
+     ]
+    },
+    {
+     "if_file": "{catalog}",
+     "argv": [
+      "--catalog",
+      "{catalog}",
+      "--catalog-out",
+      "{work}/counts_annotated.tsv"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "counts.tsv"
+   },
+   "done_status": "Completeness and counts"
+  },
+  {
+   "id": "lf",
+   "label": "Luminosity function",
+   "title": "Astrafex Core: 1/Vmax bins and an STY Schechter fit",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "ds10core.lf",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_lf.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--out",
+    "{work}/lf.tsv",
+    "--summary",
+    "{work}/lf_summary.json",
+    "--z-min",
+    "{lf-z-min}",
+    "--n-bins",
+    "{lf-n-bins}",
+    "--completeness",
+    "{lf-completeness}",
+    "--h0",
+    "{lf-h0}",
+    "--omega-m",
+    "{lf-omega-m}",
+    {
+     "if": "lf-area",
+     "argv": [
+      "--area",
+      "{lf-area}"
+     ]
+    },
+    {
+     "if": "lf-mag-limit",
+     "argv": [
+      "--mag-limit",
+      "{lf-mag-limit}"
+     ]
+    },
+    {
+     "if": "lf-z-max",
+     "argv": [
+      "--z-max",
+      "{lf-z-max}"
+     ]
+    },
+    {
+     "if": "lf-mag-abs-min",
+     "argv": [
+      "--mag-abs-min",
+      "{lf-mag-abs-min}"
+     ]
+    },
+    {
+     "if": "lf-mag-abs-max",
+     "argv": [
+      "--mag-abs-max",
+      "{lf-mag-abs-max}"
+     ]
+    },
+    {
+     "if": "lf-completeness-curve",
+     "argv": [
+      "--completeness-curve",
+      "{lf-completeness-curve}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "lf.tsv"
+   },
+   "done_status": "Luminosity function"
   }
  ],
  "params": [
@@ -1883,6 +2703,1051 @@
    "type": "string",
    "default": "XXXX",
    "group": "Light curve"
+  },
+  {
+   "name": "pixmask-bleed",
+   "label": "Bleed",
+   "type": "bool",
+   "default": true,
+   "group": "Saturation mask",
+   "help": "Follow saturated pixels along the readout until the light falls back to the sky."
+  },
+  {
+   "name": "pixmask-persist",
+   "label": "Persistence",
+   "type": "bool",
+   "default": true,
+   "group": "Saturation mask",
+   "help": "Mark pixels that were saturated on the previous frame and are still high, but below saturation, on this frame."
+  },
+  {
+   "name": "pixmask-saturate",
+   "label": "Saturation",
+   "type": "string",
+   "default": "",
+   "group": "Saturation mask",
+   "help": "Counts at or above this value are saturated. Empty uses the SATURATE card, then SATLEVEL."
+  },
+  {
+   "name": "pixmask-previous",
+   "label": "Previous frame",
+   "type": "file",
+   "default": "",
+   "group": "Saturation mask",
+   "help": "FITS image of the exposure before this one, same width and height. Persistence is skipped when this is empty."
+  },
+  {
+   "name": "pixmask-dq",
+   "label": "DQ image",
+   "type": "file",
+   "default": "",
+   "group": "Saturation mask",
+   "help": "Integer FITS image of bad-pixel flags, same shape. Empty uses an IMAGE extension named DQ on this frame, when one is present."
+  },
+  {
+   "name": "pixmask-bleed-axis",
+   "label": "Bleed axis",
+   "type": "choice",
+   "choices": [
+    "columns",
+    "rows",
+    "both"
+   ],
+   "default": "columns",
+   "group": "Saturation mask",
+   "expert": 1,
+   "help": "columns follows constant x. rows follows constant y. both marks either."
+  },
+  {
+   "name": "pixmask-dq-bits",
+   "label": "DQ bit mask",
+   "type": "int",
+   "default": 0,
+   "min": 0,
+   "max": 65535,
+   "group": "Saturation mask",
+   "expert": 1,
+   "help": "A pixel is bad when its DQ value shares one of these bits. 0 marks every non-zero value."
+  },
+  {
+   "name": "pixmask-bleed-nsig",
+   "label": "Bleed threshold",
+   "type": "float",
+   "default": 10,
+   "min": 1,
+   "max": 100,
+   "unit": "sigma",
+   "group": "Saturation mask",
+   "expert": 1,
+   "help": "A bleed pixel stays above the sky by this many times 1.4826 times the MAD."
+  },
+  {
+   "name": "pixmask-bleed-max",
+   "label": "Bleed length",
+   "type": "int",
+   "default": 400,
+   "min": 1,
+   "max": 100000,
+   "unit": "pix",
+   "group": "Saturation mask",
+   "expert": 1,
+   "help": "Stop this many pixels away from the saturated pixel."
+  },
+  {
+   "name": "pixmask-persist-nsig",
+   "label": "Persistence threshold",
+   "type": "float",
+   "default": 8,
+   "min": 1,
+   "max": 100,
+   "unit": "sigma",
+   "group": "Saturation mask",
+   "expert": 1,
+   "help": "The current pixel must sit this far above the sky, and below saturation."
+  },
+  {
+   "name": "pixmask-persist-grow",
+   "label": "Grow traps",
+   "type": "int",
+   "default": 1,
+   "min": 0,
+   "max": 5,
+   "unit": "pix",
+   "group": "Saturation mask",
+   "expert": 1,
+   "help": "Dilate the previous frame's saturated pixels by this many pixels before the comparison."
+  },
+  {
+   "name": "psfvar-degree",
+   "label": "Polynomial degree",
+   "type": "choice",
+   "choices": [
+    "1",
+    "2"
+   ],
+   "default": "1",
+   "group": "Varying PSF",
+   "help": "1 is a plane (three terms). 2 adds the quadratic terms and needs more stars."
+  },
+  {
+   "name": "psfvar-stamp",
+   "label": "Stamp",
+   "type": "int",
+   "default": 25,
+   "min": 9,
+   "max": 51,
+   "unit": "pix",
+   "group": "Varying PSF",
+   "expert": 1,
+   "help": "Odd window around each star. Even values are rounded up to the next odd size."
+  },
+  {
+   "name": "psfvar-snr-min",
+   "label": "Minimum signal to noise",
+   "type": "float",
+   "default": 20,
+   "min": 3,
+   "max": 1000,
+   "group": "Varying PSF",
+   "expert": 1,
+   "help": "Used when no catalogue is open. A detection fainter than this is not a PSF star."
+  },
+  {
+   "name": "psfvar-thresh",
+   "label": "Detection threshold",
+   "type": "float",
+   "default": 8,
+   "min": 1,
+   "max": 50,
+   "unit": "sigma",
+   "group": "Varying PSF",
+   "expert": 1,
+   "help": "Used when no catalogue is open."
+  },
+  {
+   "name": "psfvar-minarea",
+   "label": "Minimum area",
+   "type": "int",
+   "default": 5,
+   "min": 1,
+   "max": 500,
+   "unit": "pix",
+   "group": "Varying PSF",
+   "expert": 1,
+   "help": "Used when no catalogue is open."
+  },
+  {
+   "name": "photcal-std-column",
+   "label": "Standard magnitude",
+   "type": "string",
+   "default": "MAG_STD",
+   "group": "Photometric solution",
+   "help": "Column of the known standard magnitudes. Rows without it are calibrated and do not enter the fit."
+  },
+  {
+   "name": "photcal-airmass",
+   "label": "Airmass",
+   "type": "string",
+   "default": "",
+   "group": "Photometric solution",
+   "help": "One airmass for every row. Empty uses an AIRMASS column. A constant airmass is absorbed by the zero point."
+  },
+  {
+   "name": "photcal-color-a",
+   "label": "Colour, blue",
+   "type": "string",
+   "default": "",
+   "group": "Photometric solution",
+   "help": "Magnitude column of the bluer band. The colour is this minus the redder column. Empty uses a COLOR column when the catalogue has one."
+  },
+  {
+   "name": "photcal-color-b",
+   "label": "Colour, red",
+   "type": "string",
+   "default": "",
+   "group": "Photometric solution",
+   "help": "Magnitude column of the redder band."
+  },
+  {
+   "name": "photcal-inst-column",
+   "label": "Instrumental magnitude",
+   "type": "string",
+   "default": "",
+   "group": "Photometric solution",
+   "expert": 1,
+   "help": "Empty uses MAG_INST, else MAG_ISO, else MAG."
+  },
+  {
+   "name": "photcal-clip",
+   "label": "Clip",
+   "type": "float",
+   "default": 3,
+   "min": 0,
+   "max": 20,
+   "unit": "sigma",
+   "group": "Photometric solution",
+   "expert": 1,
+   "help": "Drop standards beyond this many times the residual rms, then fit once more. 0 keeps every standard."
+  },
+  {
+   "name": "stargal-psf-fwhm",
+   "label": "PSF FWHM",
+   "type": "string",
+   "default": "",
+   "unit": "pix",
+   "group": "Star-galaxy",
+   "help": "Empty estimates the PSF from the smallest bright round sources. Set it when the field has few stars."
+  },
+  {
+   "name": "stargal-snr-min",
+   "label": "Minimum signal to noise",
+   "type": "float",
+   "default": 8,
+   "min": 1,
+   "max": 1000,
+   "group": "Star-galaxy",
+   "help": "Fainter sources stay unknown. A SNR column wins over the value measured on the image."
+  },
+  {
+   "name": "stargal-k-sigma",
+   "label": "Star window",
+   "type": "float",
+   "default": 3,
+   "min": 0.5,
+   "max": 10,
+   "unit": "sigma",
+   "group": "Star-galaxy",
+   "expert": 1,
+   "help": "Half-width of the star window, in units of the half-light-radius scatter."
+  },
+  {
+   "name": "stargal-elong-max",
+   "label": "Maximum elongation",
+   "type": "float",
+   "default": 1.6,
+   "min": 1,
+   "max": 10,
+   "group": "Star-galaxy",
+   "expert": 1,
+   "help": "A more elongated source is not called a star."
+  },
+  {
+   "name": "wcs-catalog",
+   "label": "Reference catalogue",
+   "type": "file",
+   "default": "",
+   "group": "Astrometry",
+   "help": "TSV with ra and dec in degrees. When a file is set it is used instead of the survey."
+  },
+  {
+   "name": "wcs-survey",
+   "label": "Survey",
+   "type": "choice",
+   "choices": [
+    "none",
+    "gaia_dr3"
+   ],
+   "default": "none",
+   "group": "Astrometry",
+   "help": "Query this survey when no catalogue file is set. none does not contact the network."
+  },
+  {
+   "name": "wcs-mag-limit",
+   "label": "Magnitude limit",
+   "type": "string",
+   "default": "",
+   "group": "Astrometry",
+   "help": "Keep catalogue stars brighter than this. Empty means no cut."
+  },
+  {
+   "name": "wcs-radius",
+   "label": "Extra radius",
+   "type": "string",
+   "default": "",
+   "unit": "deg",
+   "group": "Astrometry",
+   "help": "Added around the image footprint when querying a survey."
+  },
+  {
+   "name": "wcs-ra",
+   "label": "RA guess",
+   "type": "string",
+   "default": "",
+   "unit": "deg",
+   "group": "Astrometry",
+   "help": "Used only when the image has no supported WCS."
+  },
+  {
+   "name": "wcs-dec",
+   "label": "Dec guess",
+   "type": "string",
+   "default": "",
+   "unit": "deg",
+   "group": "Astrometry",
+   "help": "Used only when the image has no supported WCS."
+  },
+  {
+   "name": "wcs-scale",
+   "label": "Pixel scale",
+   "type": "string",
+   "default": "",
+   "unit": "arcsec/pix",
+   "group": "Astrometry",
+   "help": "Used only when the image has no supported WCS."
+  },
+  {
+   "name": "wcs-pa",
+   "label": "Position angle",
+   "type": "string",
+   "default": "",
+   "unit": "deg",
+   "group": "Astrometry",
+   "help": "CROTA2 of the guess. Empty is 0, north up and east left."
+  },
+  {
+   "name": "dither-frames",
+   "label": "Frames",
+   "type": "string",
+   "default": "",
+   "group": "Dither stack",
+   "help": "Two or more FITS paths joined by |. The first frame is the reference."
+  },
+  {
+   "name": "dither-combine",
+   "label": "Combine",
+   "type": "choice",
+   "choices": [
+    "sigclip",
+    "median"
+   ],
+   "default": "sigclip",
+   "group": "Dither stack",
+   "help": "sigclip rejects pixels well above the median, then takes the mean. median is the pixel-wise median."
+  },
+  {
+   "name": "dither-nsig",
+   "label": "Clip threshold",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 20,
+   "unit": "sigma",
+   "group": "Dither stack",
+   "help": "High-side threshold in units of 1.4826 times the MAD. Used only by sigclip."
+  },
+  {
+   "name": "regrid-ref",
+   "label": "Reference image",
+   "type": "file",
+   "default": "",
+   "group": "Resample",
+   "help": "FITS image whose shape and WCS become the output grid. Both images need a TAN, SIN or ARC WCS."
+  },
+  {
+   "name": "crmask-cr",
+   "label": "Cosmic rays",
+   "type": "bool",
+   "default": true,
+   "group": "Cosmic-ray mask",
+   "help": "Mark sharp residuals that are narrower than a star."
+  },
+  {
+   "name": "crmask-streak",
+   "label": "Satellite streak",
+   "type": "bool",
+   "default": true,
+   "group": "Cosmic-ray mask",
+   "help": "Mark one long straight excess. The brightest few percent of the residual are capped first."
+  },
+  {
+   "name": "crmask-nsig",
+   "label": "Threshold",
+   "type": "float",
+   "default": 5.0,
+   "min": 1,
+   "max": 50,
+   "unit": "sigma",
+   "group": "Cosmic-ray mask",
+   "help": "Residual threshold in units of 1.4826 times the MAD."
+  },
+  {
+   "name": "crmask-grow",
+   "label": "Grow cosmic rays",
+   "type": "int",
+   "default": 1,
+   "min": 0,
+   "max": 5,
+   "unit": "pix",
+   "group": "Cosmic-ray mask",
+   "help": "Dilate the cosmic-ray mask by this many pixels."
+  },
+  {
+   "name": "crmask-max-area",
+   "label": "Maximum cosmic-ray area",
+   "type": "int",
+   "default": 8,
+   "min": 1,
+   "max": 100,
+   "unit": "pix",
+   "group": "Cosmic-ray mask",
+   "expert": 1,
+   "help": "A hot patch larger than this is not a cosmic ray."
+  },
+  {
+   "name": "crmask-star-fwhm",
+   "label": "Star FWHM",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 20,
+   "unit": "pix",
+   "group": "Cosmic-ray mask",
+   "expert": 1,
+   "help": "A peak whose light is about this broad is a star and is not marked as a cosmic ray."
+  },
+  {
+   "name": "crmask-min-length",
+   "label": "Minimum streak length",
+   "type": "int",
+   "default": 40,
+   "min": 5,
+   "max": 100000,
+   "unit": "pix",
+   "group": "Cosmic-ray mask",
+   "expert": 1,
+   "help": "A straight excess shorter than this is ignored."
+  },
+  {
+   "name": "crmask-clip-percent",
+   "label": "Bright-pixel cap",
+   "type": "float",
+   "default": 2.0,
+   "min": 0,
+   "max": 20,
+   "unit": "%",
+   "group": "Cosmic-ray mask",
+   "expert": 1,
+   "help": "Cap the brightest this percent of the positive residual before the line search."
+  },
+  {
+   "name": "det-thresh",
+   "label": "Detection threshold",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 100,
+   "unit": "sigma",
+   "group": "Source detection",
+   "help": "Threshold above the local background, in units of the noise of the smoothed image."
+  },
+  {
+   "name": "det-minarea",
+   "label": "Minimum area",
+   "type": "int",
+   "default": 5,
+   "min": 1,
+   "max": 100000,
+   "unit": "pix",
+   "group": "Source detection",
+   "help": "Minimum number of connected pixels above threshold."
+  },
+  {
+   "name": "det-smooth-fwhm",
+   "label": "Smoothing FWHM",
+   "type": "float",
+   "default": 2.5,
+   "min": 0.5,
+   "max": 20,
+   "unit": "pix",
+   "group": "Source detection",
+   "help": "Gaussian matched filter, about the PSF FWHM."
+  },
+  {
+   "name": "det-no-smooth",
+   "label": "No smoothing",
+   "type": "bool",
+   "default": false,
+   "group": "Source detection",
+   "help": "Threshold the unsmoothed image."
+  },
+  {
+   "name": "det-back-size",
+   "label": "Background mesh",
+   "type": "int",
+   "default": 64,
+   "min": 8,
+   "max": 1024,
+   "unit": "pix",
+   "group": "Source detection",
+   "expert": 1,
+   "help": "Mesh size for the sigma-clipped background and noise."
+  },
+  {
+   "name": "det-mag-zeropoint",
+   "label": "Magnitude zero point",
+   "type": "string",
+   "default": "auto",
+   "group": "Source detection",
+   "help": "MAG_ISO uses this zero point. auto reads the image header. A number overrides it for this run."
+  },
+  {
+   "name": "det-max-sources",
+   "label": "Maximum sources",
+   "type": "int",
+   "default": 20000,
+   "min": 1,
+   "max": 1000000,
+   "group": "Source detection",
+   "expert": 1,
+   "help": "Keep the brightest N sources."
+  },
+  {
+   "name": "det-deblend",
+   "label": "Deblend",
+   "type": "bool",
+   "default": false,
+   "group": "Source detection",
+   "help": "Off by default. Turn it on to split a connected detection that has more than one peak."
+  },
+  {
+   "name": "det-deblend-nlevels",
+   "label": "Deblend levels",
+   "type": "int",
+   "default": 32,
+   "min": 2,
+   "max": 256,
+   "group": "Source detection",
+   "expert": 1,
+   "help": "Logarithmic intensity steps inside a segment. Used only when Deblend is on."
+  },
+  {
+   "name": "det-deblend-mincont",
+   "label": "Deblend contrast",
+   "type": "float",
+   "default": 0.005,
+   "min": 0,
+   "max": 1,
+   "group": "Source detection",
+   "expert": 1,
+   "help": "Minimum child flux divided by the parent flux. Used only when Deblend is on."
+  },
+  {
+   "name": "det-noise-correction",
+   "label": "Correlated-noise correction",
+   "type": "bool",
+   "default": true,
+   "group": "Source detection",
+   "help": "Raise thresholds and flux errors by the measured correlation of neighbouring pixels."
+  },
+  {
+   "name": "det-noise-map",
+   "label": "Noise map",
+   "type": "file",
+   "default": "",
+   "group": "Source detection",
+   "help": "Per-pixel noise image. Empty measures the noise from the science image."
+  },
+  {
+   "name": "det-noise-kind",
+   "label": "Noise kind",
+   "type": "choice",
+   "choices": [
+    "rms",
+    "weight",
+    "exposure"
+   ],
+   "default": "rms",
+   "group": "Source detection",
+   "help": "How to read the noise map: rms, inverse-variance weight, or an exposure map."
+  },
+  {
+   "name": "det-bad-mask",
+   "label": "Bad-pixel mask",
+   "type": "file",
+   "default": "",
+   "group": "Source detection",
+   "help": "Bad-pixel image of the same size. Empty does not apply an extra mask file."
+  },
+  {
+   "name": "det-bad-mask-sense",
+   "label": "Bad-pixel sense",
+   "type": "choice",
+   "choices": [
+    "bad",
+    "good"
+   ],
+   "default": "bad",
+   "group": "Source detection",
+   "help": "bad: non-zero pixels are bad. good: non-zero pixels are usable."
+  },
+  {
+   "name": "extinct-ebv",
+   "label": "E(B-V)",
+   "type": "float",
+   "default": 0.0,
+   "min": -1,
+   "max": 10,
+   "group": "Galactic extinction",
+   "help": "Colour excess you supply for this field. 0 leaves magnitudes unchanged. No dust map is read."
+  },
+  {
+   "name": "extinct-rv",
+   "label": "R_V",
+   "type": "float",
+   "default": 3.1,
+   "min": 0.5,
+   "max": 10,
+   "group": "Galactic extinction",
+   "help": "Total-to-selective extinction. 3.1 is the diffuse Milky Way value of the CCM89 curve."
+  },
+  {
+   "name": "extinct-filter",
+   "label": "Filter",
+   "type": "choice",
+   "choices": [
+    "none",
+    "F105W",
+    "F125W",
+    "F160W"
+   ],
+   "default": "none",
+   "group": "Galactic extinction",
+   "help": "F105W, F125W and F160W use their pivot wavelengths. none uses the wavelength below."
+  },
+  {
+   "name": "extinct-wavelength-nm",
+   "label": "Wavelength",
+   "type": "string",
+   "default": "",
+   "unit": "nm",
+   "group": "Galactic extinction",
+   "help": "Used when Filter is none, and it overrides a named filter when it is set."
+  },
+  {
+   "name": "extinct-mag-column",
+   "label": "Magnitude column",
+   "type": "string",
+   "default": "MAG_ISO",
+   "group": "Galactic extinction",
+   "help": "Column to correct. The new column is that name plus _DERED, and A_LAMBDA is added."
+  },
+  {
+   "name": "period-star",
+   "label": "Star",
+   "type": "string",
+   "default": "",
+   "group": "Periodogram",
+   "help": "1-based STAR column. Required when the file has more than one star. Empty is the only star."
+  },
+  {
+   "name": "period-time-column",
+   "label": "Time column",
+   "type": "string",
+   "default": "",
+   "group": "Periodogram",
+   "help": "Empty uses BJD_TDB, then JD_UTC. Values are days."
+  },
+  {
+   "name": "period-value-column",
+   "label": "Value column",
+   "type": "string",
+   "default": "",
+   "group": "Periodogram",
+   "help": "Empty uses REL_FLUX, then FLUX, then DMAG."
+  },
+  {
+   "name": "period-min-period",
+   "label": "Minimum period",
+   "type": "string",
+   "default": "",
+   "unit": "day",
+   "group": "Periodogram",
+   "expert": 1,
+   "help": "Empty uses twice the median spacing."
+  },
+  {
+   "name": "period-max-period",
+   "label": "Maximum period",
+   "type": "string",
+   "default": "",
+   "unit": "day",
+   "group": "Periodogram",
+   "expert": 1,
+   "help": "Empty uses the time baseline."
+  },
+  {
+   "name": "dropout-selection",
+   "label": "Sample",
+   "type": "choice",
+   "choices": [
+    "auto",
+    "B",
+    "V",
+    "i",
+    "z",
+    "Y"
+   ],
+   "default": "auto",
+   "group": "Lyman-break",
+   "help": "auto runs every sample whose filter columns are in the catalogue. A source in two samples is kept as the higher-redshift one."
+  },
+  {
+   "name": "dropout-chi2-opt-max",
+   "label": "Optical chi-squared maximum",
+   "type": "string",
+   "default": "",
+   "group": "Lyman-break",
+   "expert": 1,
+   "help": "Maximum optical chi-squared. Empty does not apply it."
+  },
+  {
+   "name": "counts-kind",
+   "label": "Sources",
+   "type": "choice",
+   "choices": [
+    "star",
+    "galaxy"
+   ],
+   "default": "star",
+   "group": "Completeness",
+   "help": "Stars are Gaussians. Galaxies are Sersic profiles with n of 1 or 4."
+  },
+  {
+   "name": "counts-mag-min",
+   "label": "Bright magnitude",
+   "type": "string",
+   "default": "",
+   "unit": "mag",
+   "group": "Completeness",
+   "help": "Empty, together with the faint limit, builds the grid from the image noise. That grid is not a measured limit."
+  },
+  {
+   "name": "counts-mag-max",
+   "label": "Faint magnitude",
+   "type": "string",
+   "default": "",
+   "unit": "mag",
+   "group": "Completeness",
+   "help": "Fainter magnitudes are larger. Set this together with the bright limit, or leave both empty."
+  },
+  {
+   "name": "counts-n-bins",
+   "label": "Magnitude bins",
+   "type": "int",
+   "default": 4,
+   "min": 2,
+   "max": 40,
+   "group": "Completeness",
+   "help": "The default 4 keeps a click short. A deeper grid is slower because each injected image is detected on its own."
+  },
+  {
+   "name": "counts-per-bin",
+   "label": "Objects per bin",
+   "type": "int",
+   "default": 6,
+   "min": 1,
+   "max": 200,
+   "group": "Completeness",
+   "help": "Injected objects in each magnitude bin. The default is 6."
+  },
+  {
+   "name": "counts-per-image",
+   "label": "Objects per image",
+   "type": "int",
+   "default": 6,
+   "min": 1,
+   "max": 200,
+   "group": "Completeness",
+   "expert": 1,
+   "help": "How many objects share one detection. One image is detected at a time."
+  },
+  {
+   "name": "counts-mag-zeropoint",
+   "label": "Magnitude zero point",
+   "type": "string",
+   "default": "auto",
+   "group": "Completeness",
+   "help": "Magnitude of one count. auto reads the image header the same way source detection does."
+  },
+  {
+   "name": "counts-psf-fwhm",
+   "label": "PSF FWHM",
+   "type": "float",
+   "default": 2.5,
+   "min": 0.3,
+   "max": 20,
+   "unit": "pix",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Gaussian PSF of the injected stars, and the kernel the galaxies are convolved with."
+  },
+  {
+   "name": "counts-match-radius",
+   "label": "Match radius",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 50,
+   "unit": "pix",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "A detection this close to an injected source counts as recovered."
+  },
+  {
+   "name": "counts-re-bins",
+   "label": "Galaxy radii",
+   "type": "string",
+   "default": "2,4",
+   "unit": "pix",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Effective-radius edges in pixels, comma-separated. Used only for galaxies."
+  },
+  {
+   "name": "counts-pixel-scale",
+   "label": "Pixel scale",
+   "type": "string",
+   "default": "",
+   "unit": "arcsec",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Arcsec per pixel. Counts per square arcminute stay blank when this is empty."
+  },
+  {
+   "name": "counts-seed",
+   "label": "Random seed",
+   "type": "int",
+   "default": 1,
+   "min": 0,
+   "max": 2147483647,
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Seed of the injected positions, magnitudes and galaxy shapes."
+  },
+  {
+   "name": "counts-thresh",
+   "label": "Detection threshold",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.5,
+   "max": 100,
+   "unit": "sigma",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Passed to the built-in detector on the image, the injected images and the mirrored image."
+  },
+  {
+   "name": "counts-minarea",
+   "label": "Minimum area",
+   "type": "int",
+   "default": 5,
+   "min": 1,
+   "max": 100000,
+   "unit": "pix",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Minimum connected pixels above threshold."
+  },
+  {
+   "name": "counts-smooth-fwhm",
+   "label": "Smoothing FWHM",
+   "type": "float",
+   "default": 2.5,
+   "min": 0.5,
+   "max": 20,
+   "unit": "pix",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Matched filter of the detector."
+  },
+  {
+   "name": "counts-back-size",
+   "label": "Background mesh",
+   "type": "int",
+   "default": 64,
+   "min": 8,
+   "max": 1024,
+   "unit": "pix",
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Mesh size of the detector background."
+  },
+  {
+   "name": "counts-deblend",
+   "label": "Deblend",
+   "type": "bool",
+   "default": false,
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Off by default. The same switch as source detection."
+  },
+  {
+   "name": "counts-deblend-nlevels",
+   "label": "Deblend levels",
+   "type": "int",
+   "default": 32,
+   "min": 2,
+   "max": 256,
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Used only when Deblend is on."
+  },
+  {
+   "name": "counts-deblend-mincont",
+   "label": "Deblend contrast",
+   "type": "float",
+   "default": 0.005,
+   "min": 0,
+   "max": 1,
+   "group": "Completeness",
+   "expert": 1,
+   "help": "Minimum child flux divided by the parent. Used only when Deblend is on."
+  },
+  {
+   "name": "lf-area",
+   "label": "Survey area",
+   "type": "string",
+   "default": "",
+   "unit": "arcmin^2",
+   "group": "Luminosity function",
+   "help": "Square arcminutes. Required when the catalogue has no VMAX column. Empty does not invent an area."
+  },
+  {
+   "name": "lf-mag-limit",
+   "label": "Magnitude limit",
+   "type": "string",
+   "default": "",
+   "unit": "mag",
+   "group": "Luminosity function",
+   "help": "Apparent magnitude limit. Empty uses one survey volume for every galaxy."
+  },
+  {
+   "name": "lf-z-min",
+   "label": "Minimum redshift",
+   "type": "float",
+   "default": 0.0,
+   "min": 0,
+   "max": 20,
+   "group": "Luminosity function",
+   "help": "Galaxies below this redshift are left out of the sum."
+  },
+  {
+   "name": "lf-z-max",
+   "label": "Maximum redshift",
+   "type": "string",
+   "default": "",
+   "group": "Luminosity function",
+   "help": "Empty uses the largest positive redshift in the catalogue when a distance is needed."
+  },
+  {
+   "name": "lf-n-bins",
+   "label": "Magnitude bins",
+   "type": "int",
+   "default": 8,
+   "min": 2,
+   "max": 40,
+   "group": "Luminosity function",
+   "help": "Bins of absolute magnitude, brighter first."
+  },
+  {
+   "name": "lf-completeness",
+   "label": "Completeness",
+   "type": "string",
+   "default": "1",
+   "group": "Luminosity function",
+   "help": "Used when a row has no completeness cell in (0, 1] and no curve applies."
+  },
+  {
+   "name": "lf-h0",
+   "label": "H0",
+   "type": "float",
+   "default": 70.0,
+   "min": 1,
+   "max": 200,
+   "unit": "km/s/Mpc",
+   "group": "Luminosity function",
+   "expert": 1,
+   "help": "Hubble constant for the flat Lambda-CDM distance. A calculation setting."
+  },
+  {
+   "name": "lf-omega-m",
+   "label": "Omega matter",
+   "type": "float",
+   "default": 0.3,
+   "min": 0.01,
+   "max": 1,
+   "group": "Luminosity function",
+   "expert": 1,
+   "help": "Matter density of the flat model. Omega lambda is 1 minus this value. A calculation setting."
+  },
+  {
+   "name": "lf-mag-abs-min",
+   "label": "Bright absolute magnitude",
+   "type": "string",
+   "default": "",
+   "unit": "mag",
+   "group": "Luminosity function",
+   "expert": 1,
+   "help": "Bright edge of the absolute-magnitude window. Empty uses the brightest galaxy in the sum."
+  },
+  {
+   "name": "lf-mag-abs-max",
+   "label": "Faint absolute magnitude",
+   "type": "string",
+   "default": "",
+   "unit": "mag",
+   "group": "Luminosity function",
+   "expert": 1,
+   "help": "Faint edge of the window. Empty uses the faintest galaxy in the sum."
+  },
+  {
+   "name": "lf-completeness-curve",
+   "label": "Completeness curve",
+   "type": "string",
+   "default": "",
+   "group": "Luminosity function",
+   "expert": 1,
+   "help": "TSV with MAG or MAG_MID, and COMPLETENESS. A catalogue cell in (0, 1] wins over this file."
   }
  ],
  "tcl": "ds10core.tcl"

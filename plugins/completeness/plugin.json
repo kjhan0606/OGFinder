@@ -367,7 +367,7 @@
    "type": "string",
    "default": "sextract",
    "group": "Detection",
-   "help": "sextract = the application's own ds9_sextract (uses the Extract tab thresholds); sep = SEP; or 'package.module:factory' of your own detection callback (see docs/completeness.md)."
+   "help": "sextract = ogfmeas.sextract (uses the Extract tab thresholds); sep = the same in-tree extractor with its own background settings; or 'package.module:factory' of your own detection callback (see docs/completeness.md)."
   },
   {
    "name": "mag-min",

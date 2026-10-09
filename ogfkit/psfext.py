@@ -7,6 +7,19 @@
 * error_budget(...)             what a wrong / truncated / mis-centred PSF does to galaxy photometry: max |dModel|/peak, flux error and the bias of (mag, R_e, n) of a Sersic fit.
 * stack_star_psf(data, xy, ...)  median stack of recentred stars with azimuthally averaged wings (the pixel noise of faint-star wings would otherwise make the PSF sum negative).
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import math
 
 import numpy as np
@@ -199,7 +212,7 @@ def denoise_wings(p, core=4.0, rmax=12):
 def stack_star_psf(data, xy, size=31, bkg=None, core=4.0, flux_radius=6.0, nmax=60, rmax=12):
     """Median stack of the given stars (0-based x, y), each recentred by a windowed centroid + cubic shift, sky = median of the outer ring, normalised inside flux_radius; wings from the
     azimuthal median (see denoise_wings).  -> (psf [size x size, unit sum], n_used)"""
-    import sep
+    sep = _import_ogfmeas()
     from scipy.ndimage import shift as ndshift
     d = np.ascontiguousarray(np.nan_to_num(np.asarray(data, float)))
     if bkg is not None:

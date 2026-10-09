@@ -4,11 +4,26 @@ import numpy as np
 from .base import SPSBackend, SEDResult
 
 
-class BagpipesBackend(SPSBackend):
-    """SED fitting using Bagpipes (Bayesian Analysis of Galaxies).
+def nautilus_sampler(requested=None):
+    """Return the Bagpipes sampler this tree calls.
 
-    Requires: pip install bagpipes
-    Features native Bayesian SED fitting via MultiNest/nautilus.
+    The Bagpipes default is MultiNest. That sampler is not called, including
+    when the user has it installed. The only accepted name is nautilus.
+    """
+    if requested is None or str(requested).strip().lower() in ("", "nautilus"):
+        return "nautilus"
+    raise RuntimeError(
+        "MultiNest is not called. The non-commercial sampler is not used. "
+        "The in-tree SED model is analytic."
+    )
+
+
+class BagpipesBackend(SPSBackend):
+    """SED fitting using the user-installed Bagpipes package.
+
+    The import runs only when this backend is requested. ``auto`` does not
+    select it. A missing package raises before any chi-squared fallback.
+    The fit calls nautilus. MultiNest is not called.
     """
 
     @classmethod
@@ -16,15 +31,23 @@ class BagpipesBackend(SPSBackend):
         try:
             import bagpipes
             return True
-        except ImportError:
+        except Exception:
             return False
 
     @classmethod
     def name(cls) -> str:
         return "bagpipes"
 
+    def _missing(self):
+        raise RuntimeError(
+            "Backend 'bagpipes' was not found. "
+            "The in-tree SED model is analytic."
+        )
+
     def generate_sed(self, z, log_mass, log_age, log_Z, Av, log_tau,
                      bands) -> np.ndarray:
+        if not type(self).is_available():
+            self._missing()
         import bagpipes
         from .params import canonical_to_bagpipes
         from .filters import map_filters
@@ -50,6 +73,9 @@ class BagpipesBackend(SPSBackend):
 
     def fit_sed(self, mags, mag_errs, photo_z, bands, **kw) -> SEDResult:
         """Native Bayesian fitting using bagpipes.fit()."""
+        if not type(self).is_available():
+            self._missing()
+        nautilus_sampler(kw.get("sampler"))
         import sys
 
         try:
@@ -62,6 +88,7 @@ class BagpipesBackend(SPSBackend):
 
     def _fit_native(self, mags, mag_errs, photo_z, bands, **kw):
         """Run Bagpipes Bayesian fitting for each source."""
+        sampler = nautilus_sampler(kw.get("sampler"))
         import sys
         import bagpipes
         from .filters import map_filters
@@ -122,7 +149,7 @@ class BagpipesBackend(SPSBackend):
                     spectrum_exists=False,
                 )
                 fit = bagpipes.fit(galaxy, fit_instr, run='temp')
-                fit.fit(verbose=False)
+                fit.fit(verbose=False, sampler=sampler)
 
                 post = fit.posterior
                 log_mass_out[i] = np.log10(np.median(

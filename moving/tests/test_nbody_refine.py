@@ -90,7 +90,7 @@ def _recover(span_nights, sig=0.2, seed=7):
     mjd0 = 61000.0
     state = _mba_state()
     times = np.concatenate([mjd0 + nt + np.arange(3) * 0.5 / 24.0 for nt in span_nights])
-    ra, dec, _meta = NR.observe(state, mjd0, times, code="500")
+    ra, dec, _meta = NR.observe(state, mjd0, times, code="500", allow_assist=False)
     rng = np.random.default_rng(seed)
     trks = _tracklets(mjd0, span_nights, ra, dec, sig, rng)
     gap = float(span_nights[-1] - span_nights[0] + 5)
@@ -116,7 +116,7 @@ def _assert_recovered(nights, seed):
     assert g["chi2_red"] < 4.0
     assert g["rms_arcsec"] < 0.5
     assert g["rms_arcsec"] <= g["two_body_raw_rms_arcsec"] + 0.05
-    truth = NR.propagate_helio(state, mjd0, g["nbody_mjd"])
+    truth = NR.propagate_helio(state, mjd0, g["nbody_mjd"], allow_assist=False)
     el_t = truth["elements"]
     el = g["elements"]
     assert abs(el["a"] - el_t["a"]) / el_t["a"] < 0.02, (el, el_t, g["nbody"])

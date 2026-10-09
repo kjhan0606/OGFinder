@@ -189,7 +189,7 @@ ds9base	: $(OBJS) $(LLIBS)
 	$(CXX) $(CFLAGS) -o $@ \
 	$(OBJS) \
 	$(LLIBS) \
-	-L $(prefix)/openssl -lssl -lcrypto \
+	-L $(prefix)/sys-openssl/lib -lssl -lcrypto \
 	$(TK_LIB_SPEC) \
 	$(TCL_LIB_SPEC) \
 	$(LIBS) \

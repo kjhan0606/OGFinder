@@ -7,6 +7,19 @@ Experiments (python3 trails_validate.py --exp detect,fp,cross,phot,stack --out D
   phot    aperture-photometry bias of objects near the trail: unmasked / masked / interpolated / interpolated+noise
   stack   5-frame stacks (mean/median/sigma-clip) with a different trail per frame, with and without trail masks
 Writes DIR/results.json and DIR/trails_validation.md."""
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse, json, math, os, sys, time
 import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -161,7 +174,7 @@ def run_fp(spec):
 
 # ---- photometry ---------------------------------------------------------------------------------
 def objects(img, sig, snr_min):
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(img, np.float32)
     bk = sep.Background(d, bw=32, bh=32)
     o = sep.extract(d - bk.back(), 4.0, err=sig, minarea=8)
@@ -308,7 +321,7 @@ def run_curved(spec):
 
 def run_flux(spec):
     import warnings; warnings.simplefilter('ignore')
-    import sep
+    sep = _import_ogfmeas()
     rng = np.random.default_rng(spec['seed'])
     img = get_field(spec); sig = sigma_of(img); ny, nx = img.shape
     d = np.ascontiguousarray(img, np.float32)

@@ -29,8 +29,8 @@ plugins = []
 
 # ------------------------------------------------------------------ Detect
 plugins.append(dict(id='extract', name='Source extraction', tab='Detect', order=10,
-  description='SExtractor-compatible detection (ds9_sextract), dual-image mode, catalog trimming.',
-  requires={'binaries': ['ds9_sextract']},
+  description='In-tree detection (ogfmeas.sextract), dual-image mode, catalog trimming.',
+  requires={},
   store={'array': 'catpanel', 'key': 'param,%s', 'save': 'CatalogPanelParamSave'},
   steps=[
     S('extract', 'Extract', 'CatalogPanelExtract', 'SExtractor > Extract', 'AUTO', 'detect', ['extract'], ['image'], settings='params'),

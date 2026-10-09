@@ -7,6 +7,19 @@ Hosts: Sersic galaxies (n 2-4, R_e 9-14 px, q 0.55-1, random PA, total flux 1e5,
 wide, radial FWHM 0.25 R_e), tidal tails (curved Gaussian ridge leaving the host at ~1 R_e, 3 R_e long, FWHM 0.4 R_e), each with a fraction f of the host flux; controls (smooth hosts, same noise);
 mergers: host + companion of flux ratio 1 / 0.5 / 0.25 / 0.1 at 1.0 / 1.6 / 2.5 R_e separation.  Reported: detection rate vs f with the false-positive rate on the controls, asymmetry and Lotz class of the
 mergers, pair classification of a mock catalog."""
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import argparse
 import json
 import math
@@ -110,7 +123,7 @@ REAL = {}
 def _real_setup(img_path, cat_path):
     from astropy.io import fits
     from ogfkit import tsvio
-    import sep
+    sep = _import_ogfmeas()
     d = np.ascontiguousarray(np.array(fits.getdata(img_path), float))
     d[~np.isfinite(d)] = 0.0
     bk = sep.Background(d, bw=64, bh=64)

@@ -17,9 +17,8 @@ proc OGFBandsInit {} {
 proc OGFImageInfo {fn} {
     set bin [OGFSextractBin]
     set d {}
-    if {![file executable $bin]} {return $d}
-    OGFPrepareLibPath
-    if {[catch {set out [exec $bin --info $fn 2>@stderr]}]} {return $d}
+    if {![file exists $bin]} {return $d}
+    if {[catch {set out [exec [OGFPython] $bin --info $fn 2>@stderr]}]} {return $d}
     foreach line [split $out \n] {
 	if {[regexp {^([A-Z0-9_]+)=(.*)$} $line -> k v]} {dict set d $k [string trim $v]}
     }
@@ -336,8 +335,8 @@ proc CatalogPanelBandsMeasure {{snr {}}} {
     if {![string is double -strict $snr]} return
     set ogfband(snrmin) $snr
     set sbin [OGFSextractBin]
-    if {![file executable $sbin]} {::ogf::cat::set status "ds9_sextract not found"; return}
-    OGFPrepareLibPath
+    if {![file exists $sbin]} {::ogf::cat::set status "ogfmeas/sextract.py not found"; return}
+    set py [OGFPython]
     set det $ogfband(detect)
     set detfile $ogfband($det,file)
     set catfile [CatalogPanelSaveTempCatalog bands]
@@ -350,7 +349,7 @@ proc CatalogPanelBandsMeasure {{snr {}}} {
     foreach b [OGFBandsSorted] {
 	::ogf::cat::set status "Measuring in $b ..."
 	update idletasks
-	set args [list $sbin $detfile --forced-catalog $catfile \
+	set args [list $py $sbin $detfile --forced-catalog $catfile \
 	    --measure-image $ogfband($b,file) --band $b \
 	    --mag-zeropoint $ogfband($b,zp) --snr-min $snr]
 	if {[catch {set out [exec {*}$args 2>@stderr]} err]} {

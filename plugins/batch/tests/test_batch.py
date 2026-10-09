@@ -16,8 +16,8 @@ sys.path.insert(0, ROOT)
 from ogfkit import cliexpand, batchrun  # noqa: E402
 
 CLI = os.path.join(PLUG, 'batch.py')
-SEXT = os.path.join(ROOT, 'bin', 'ds9_sextract')
-need_sext = pytest.mark.skipif(not os.path.exists(SEXT), reason='bin/ds9_sextract not built')
+SEXT = os.path.join(ROOT, 'ogfmeas', 'sextract.py')
+need_sext = pytest.mark.skipif(not os.path.exists(SEXT), reason='ogfmeas/sextract.py missing')
 
 
 def run(args):

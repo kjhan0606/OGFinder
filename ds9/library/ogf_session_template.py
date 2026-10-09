@@ -178,12 +178,12 @@ def lib_env():
 
 
 def sextract_info(root, path):
-    sb = os.path.join(root, 'bin', 'ds9_sextract')
+    sb = os.path.join(root, 'ogfmeas', 'sextract.py')
     d = {}
-    if not os.access(sb, os.X_OK) or not os.path.exists(path):
+    if not os.path.isfile(sb) or not os.path.exists(path):
         return d
     try:
-        out = subprocess.run([sb, '--info', path], capture_output=True, text=True, env=lib_env(), timeout=120).stdout
+        out = subprocess.run([sys.executable, sb, '--info', path], capture_output=True, text=True, env=lib_env(), timeout=120).stdout
     except Exception:
         return d
     for line in out.splitlines():
@@ -307,7 +307,7 @@ def expand(field, token, cat_written):
         if t == 'PY':
             return field.args.python
         if t == 'SEXTRACT':
-            return os.path.join(field.root, 'bin', 'ds9_sextract')
+            return os.path.join(field.root, 'ogfmeas', 'sextract.py')
         if t == 'LIB':
             return os.path.join(field.root, 'ds9', 'library')
         if t == 'ROOT':
@@ -500,9 +500,9 @@ def native_bands_measure(field, rec):
     detfile = field.registry[det]['file']
     catfile = os.path.join(field.work, 'bands_catalog.tsv')
     write_text(catfile, field.get_cat())
-    sbin = os.path.join(field.root, 'bin', 'ds9_sextract')
+    script = os.path.join(field.root, 'ogfmeas', 'sextract.py')
     for b in names:
-        argv = [sbin, detfile, '--forced-catalog', catfile, '--measure-image', field.registry[b]['file'],
+        argv = [field.args.python, script, detfile, '--forced-catalog', catfile, '--measure-image', field.registry[b]['file'],
                 '--band', b, '--mag-zeropoint', str(field.registry[b]['zp']), '--snr-min', str(snr)]
         out, dt = run_tool(field, rec, argv, b)
         raw = os.path.join(field.work, 'forced_%s.raw' % b)
@@ -1153,6 +1153,9 @@ def tool_versions(args):
         v['ogfinder_python_exe'] = args.python
     except Exception as e:
         v['ogfinder_python_error'] = str(e)
+    sx = os.path.join(root, 'ogfmeas', 'sextract.py')
+    if os.path.isfile(sx):
+        v['ogfmeas_sextract'] = {'path': sx, 'sha256': sha256_file(sx), 'size': os.path.getsize(sx)}
     sb = os.path.join(root, 'bin', 'ds9_sextract')
     if os.path.exists(sb):
         v['ds9_sextract'] = {'path': sb, 'sha256': sha256_file(sb), 'size': os.path.getsize(sb)}
@@ -1382,9 +1385,9 @@ def main(argv=None):
         if not os.path.exists(os.path.join(args.ogfinder_root, 'ds9', 'library', t)):
             print('ERROR: %s missing in %s/ds9/library' % (t, args.ogfinder_root), file=sys.stderr)
             return 2
-    if not os.path.exists(os.path.join(args.ogfinder_root, 'bin', 'ds9_sextract')) and any(
+    if not os.path.exists(os.path.join(args.ogfinder_root, 'ogfmeas', 'sextract.py')) and any(
             r['tool'] == 'sextract' for r in STEPS):
-        print('WARNING: %s/bin/ds9_sextract not found' % args.ogfinder_root, file=sys.stderr)
+        print('WARNING: %s/ogfmeas/sextract.py not found' % args.ogfinder_root, file=sys.stderr)
 
     def numeric_map(items, label):
         m = {}

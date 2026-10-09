@@ -15,6 +15,19 @@ Returns None when fewer than `min_stars` sources are usable (the caller then fal
 It does NOT model spatial variation (one sigma per axis per exposure pair) and it measures the *stars*; the registration of the moving/faint
 objects and of galaxies with a different centroid definition may be different.
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import numpy as np
 from . import imaging as I
 
@@ -22,7 +35,7 @@ from . import imaging as I
 def _sources(target, tplf, bkg_t, bkg_r, rms_t, snr_min, size_max=6.0, max_n=600):
     """Sources bright in BOTH the target and the template (so cosmic rays and movers drop out): stars *and* compact galaxies are fine here, only the
     relative centroid matters (the same windowed centroid is applied to both images).  Returns x, y, snr, r50 (target frame, 0-based pixels)."""
-    import sep
+    sep = _import_ogfmeas()
     sub = np.ascontiguousarray((target.data - bkg_t).astype(np.float32))
     o = sep.extract(sub, 5.0, err=np.ascontiguousarray(rms_t), mask=np.ascontiguousarray(target.bad), minarea=5, deblend_nthresh=32, deblend_cont=0.005)
     if len(o) == 0:
@@ -56,7 +69,7 @@ def measure_registration(target, tplf, tpl_bad, bkg_t, bkg_r, rms_t=None, nin_me
     """target: Chip (cropped); tplf: template image on the target grid (NaN already replaced by 0); tpl_bad: bool mask of template NaN;
     bkg_t / bkg_r: background levels; rms_t: background rms map of the target.  Returns a dict (sigma_x, sigma_y in pixels, raw_x/y, n_stars,
     centroid_noise_pix, mean_dx/dy) or None when fewer than `min_stars` usable sources."""
-    import sep
+    sep = _import_ogfmeas()
     if rms_t is None:
         _, rms_t = I.background(target.data, target.bad)
     src = None

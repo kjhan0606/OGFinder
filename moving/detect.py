@@ -4,8 +4,21 @@ difference_chip(): target chip vs template (built from other exposures, see refe
 deep coadd) -> ZOGY (or scaled subtraction) -> matched-filter score S -> sep detection of positive and
 negative peaks -> per-detection features.  Positions are in the (aligned) chip WCS.
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import numpy as np
-import sep
+sep = _import_ogfmeas()
 from scipy import ndimage as ndi
 from . import imaging as I, zogy as Z, regerr as RG
 from .util import log

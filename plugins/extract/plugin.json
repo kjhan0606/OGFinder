@@ -4,12 +4,8 @@
  "name": "Source extraction",
  "tab": "Detect",
  "order": 10,
- "description": "SExtractor-compatible detection (ds9_sextract), dual-image mode, catalog trimming.",
- "requires": {
-  "binaries": [
-   "ds9_sextract"
-  ]
- },
+ "description": "In-tree detection (ogfmeas.sextract), dual-image mode, catalog trimming.",
+ "requires": {},
  "store": {
   "array": "catpanel",
   "key": "param,%s",
@@ -33,12 +29,13 @@
    ],
    "settings": "params",
    "headless": {
-    "title": "Extract sources (ds9_sextract)",
+    "title": "Extract sources",
     "tool": "sextract",
     "record": "extract",
     "requires": "",
     "before": "OGFHeadlessExtractBefore",
     "cli": [
+     "{python}",
      "{sextract}",
      "{image}",
      "--detect-thresh",

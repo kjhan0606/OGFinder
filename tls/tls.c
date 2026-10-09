@@ -121,16 +121,20 @@ static unsigned char dh2048_g[]={
 
 static DH *get_dh2048()
 {
-    DH *dh=NULL;
+    DH *dh = NULL;
+    BIGNUM *p = NULL;
+    BIGNUM *g = NULL;
 
-    if ((dh=DH_new()) == NULL) return(NULL);
-
-    dh->p=BN_bin2bn(dh2048_p,sizeof(dh2048_p),NULL);
-    dh->g=BN_bin2bn(dh2048_g,sizeof(dh2048_g),NULL);
-
-    if ((dh->p == NULL) || (dh->g == NULL))
-	return(NULL);
-    return(dh);
+    if ((dh = DH_new()) == NULL) return NULL;
+    p = BN_bin2bn(dh2048_p, sizeof(dh2048_p), NULL);
+    g = BN_bin2bn(dh2048_g, sizeof(dh2048_g), NULL);
+    if (p == NULL || g == NULL || DH_set0_pqg(dh, p, NULL, g) != 1) {
+	BN_free(p);
+	BN_free(g);
+	DH_free(dh);
+	return NULL;
+    }
+    return dh;
 }
 #endif
 
@@ -175,10 +179,8 @@ int channelTypeVersion;
  * Based from /crypto/cryptlib.c of OpenSSL and NSOpenSSL.
  */
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 static Tcl_Mutex locks[CRYPTO_NUM_LOCKS];
-static Tcl_Mutex init_mx;
-static int initialized;
-
 static void CryptoThreadLockCallback (int mode, int n, const char *file, int line);
 static unsigned long CryptoThreadIdCallback   (void);
 
@@ -195,6 +197,9 @@ static unsigned long CryptoThreadIdCallback(void)
 {
     return (unsigned long) Tcl_GetCurrentThread();
 }
+#endif
+static Tcl_Mutex init_mx;
+static int initialized;
 #endif /* OPENSSL_THREADS */
 #endif /* TCL_THREADS */
 
@@ -1739,9 +1744,6 @@ static int TlsLibInit ()
 {
     int i;
     char rnd_seed[16] = "GrzSlplKqUdnnzP!";	/* 16 bytes */
-#if defined(OPENSSL_THREADS) && defined(TCL_THREADS)
-    size_t num_locks;
-#endif
     int status=TCL_OK;
 
     if (!initialized) {
@@ -1749,6 +1751,7 @@ static int TlsLibInit ()
 	if (!initialized) {
 	    initialized = 1;
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	    if (CRYPTO_set_mem_functions((void *(*)(size_t))Tcl_Alloc,
 					 (void *(*)(void *, size_t))Tcl_Realloc,
 					 (void(*)(void *))Tcl_Free) == 0) {
@@ -1757,6 +1760,8 @@ static int TlsLibInit ()
 
 #if defined(OPENSSL_THREADS) && defined(TCL_THREADS)
 	    /* should we consider allocating mutexes? */
+	    {
+	    size_t num_locks;
 	    num_locks = CRYPTO_num_locks();
 	    if (num_locks > CRYPTO_NUM_LOCKS) {
 		status=TCL_ERROR;
@@ -1765,6 +1770,8 @@ static int TlsLibInit ()
 
 	    CRYPTO_set_locking_callback(CryptoThreadLockCallback);
 	    CRYPTO_set_id_callback(CryptoThreadIdCallback);
+	    }
+#endif
 #endif
 
 	    if (SSL_library_init() != 1) {

@@ -7,6 +7,19 @@ The affine part is stored in a sidecar JSON next to the output and applied when 
 (imaging.apply_alignment).  Residual rms (mas) of the matched stars after the fit is reported.
 Centroids are windowed first moments (sep.winpos) with errors from sep's flux/centroid S/N model.
 """
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import os, json
 import numpy as np
 from .util import log, http_get, tangent_offsets, write_json, ensure_dir
@@ -49,7 +62,7 @@ def gaia_at_epoch(g, mjd):
 def detect_stars(chip, snr_min=10.0, max_n=3000):
     """Compact, unsaturated, isolated sources with windowed centroids.  Compactness is judged with the
     half-light radius (sep.flux_radius), whose stellar locus is narrow even for bright stars."""
-    import sep
+    sep = _import_ogfmeas()
     bkg, rms = I.background(chip.data, chip.bad)
     sub = np.ascontiguousarray((chip.data - bkg).astype(np.float32))
     o = sep.extract(sub, 4.0, err=np.ascontiguousarray(rms), mask=np.ascontiguousarray(chip.bad),
@@ -221,7 +234,7 @@ def align_chip_to_gaia(chip, gmax=20.5, snr_min=8.0, gaia=None, match_arcsec=1.0
 
 def sources_for_matching(chip, snr_min=6.0, max_n=4000):
     """All compact-or-extended sources with centroid, used for relative alignment (galaxies included)."""
-    import sep
+    sep = _import_ogfmeas()
     bkg, rms = I.background(chip.data, chip.bad)
     sub = np.ascontiguousarray((chip.data - bkg).astype(np.float32))
     o = sep.extract(sub, 4.0, err=np.ascontiguousarray(rms), mask=np.ascontiguousarray(chip.bad), minarea=6,

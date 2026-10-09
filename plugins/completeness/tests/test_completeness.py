@@ -135,7 +135,6 @@ def test_fit_curve_recovers_known_logistic():
     assert C.wilson(0, 10)[0] == 0.0 and C.wilson(10, 10)[1] == 1.0
 
 
-@pytest.mark.skipif(not os.path.exists('/workspace/OGFinder/bin/ds9_sextract'), reason='ds9_sextract not built')
 def test_cli_with_existing_extraction_and_catalog_metadata(tmp_path):
     data = noise_image((600, 600), sigma=0.1, seed=21)
     # a few real sources
@@ -169,7 +168,7 @@ def test_cli_with_existing_extraction_and_catalog_metadata(tmp_path):
     assert len(tsvio.read_catalog(str(tmp_path / 'c.tsv'))[1]) == 8
 
 
-@pytest.mark.skipif(not os.path.exists(FITS + '/hudf_f160w.fits') or not os.path.exists('/workspace/OGFinder/bin/ds9_sextract'), reason='HUDF not available')
+@pytest.mark.skipif(not os.path.exists(FITS + '/hudf_f160w.fits'), reason='HUDF not available')
 def test_hudf_crop_completeness_is_monotone_and_sane():
     data, _ = imageio.load_image(FITS + '/hudf_f160w.fits')
     crop = np.ascontiguousarray(data[1500:2100, 1500:2100])

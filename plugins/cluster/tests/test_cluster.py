@@ -1,4 +1,17 @@
 """Cluster / lensing tools against synthetic truth (and a real HUDF crop when the FITS files exist).  Numbers are printed with -s."""
+def _import_ogfmeas():
+    """In-tree measurements. Finds ogfmeas from this file so a script does not need PYTHONPATH."""
+    import pathlib
+    import sys
+    for parent in pathlib.Path(__file__).resolve().parents:
+        if (parent / "ogfmeas" / "__init__.py").is_file():
+            folder = str(parent)
+            if folder not in sys.path:
+                sys.path.insert(0, folder)
+            break
+    import ogfmeas
+    return ogfmeas.measurement_library()
+
 import json
 import math
 import os
@@ -138,7 +151,7 @@ def test_density_peak_recovery_and_masked_area():
 
 
 def _arc_catalog(seed, tmp, **kw):
-    import sep
+    sep = _import_ogfmeas()
     from scipy import ndimage as ndi
     img, truth = cs.arc_field(seed, **kw)
     bk = sep.Background(np.ascontiguousarray(img))
@@ -238,7 +251,7 @@ HUDF = [os.path.join(FITS, 'hudf_f105w.fits'), os.path.join(FITS, 'hudf_f125w.fi
 
 @pytest.mark.skipif(not all(os.path.exists(p) for p in HUDF), reason='HUDF FITS files not available')
 def test_hudf_multiband_null_and_injection(tmp_path):
-    import sep
+    sep = _import_ogfmeas()
     from scipy import ndimage as ndi
     sl = (slice(1000, 2800), slice(1000, 2800))
     imgs = [imageio.load_image(p)[0][sl].astype(np.float64) for p in HUDF]

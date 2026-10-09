@@ -74,6 +74,9 @@ def binary_info(root):
         p = os.path.join(root, 'bin', n)
         if os.path.isfile(p):
             out[n] = dict(path=p, size=os.path.getsize(p), sha256=sha256_file(p))
+    script = os.path.join(root, 'ogfmeas', 'sextract.py')
+    if os.path.isfile(script):
+        out['ogfmeas_sextract'] = dict(path=script, size=os.path.getsize(script), sha256=sha256_file(script))
     return out
 
 

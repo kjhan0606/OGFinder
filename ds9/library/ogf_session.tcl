@@ -143,7 +143,7 @@ proc OGFSessTemplate {argv {useroutputs {}}} {
 	    set t @\{OUT\}/[file tail $a]
 	} elseif {$i == 0 && $a eq [OGFPython]} {
 	    set t @\{PY\}
-	} elseif {$a eq $sbin || [file tail $a] eq "ds9_sextract"} {
+	} elseif {$a eq $sbin || [file tail $a] eq "ds9_sextract" || [file tail $a] eq "sextract.py"} {
 	    set t @\{SEXTRACT\}
 	} elseif {[string match *.py $a] && [file tail $a] ne $a && [string match ds9_* [file tail $a]]} {
 	    set t @\{LIB\}/[file tail $a]
@@ -186,7 +186,7 @@ proc OGFSessLog {step class argv args} {
     set tool $o(-tool)
     if {$tool eq {}} {
 	set a0 [lindex $argv 0]
-	if {[file tail $a0] eq "ds9_sextract"} {set tool sextract} elseif {$a0 ne {}} {set tool python} else {set tool internal}
+	if {[string match *sextract.py* [join $argv " "]] || [string match *ds9_sextract* [join $argv " "]]} {set tool sextract} elseif {$a0 ne {}} {set tool python} else {set tool internal}
     }
     set images [OGFSessArgvImages $argv]
     foreach im $images {
