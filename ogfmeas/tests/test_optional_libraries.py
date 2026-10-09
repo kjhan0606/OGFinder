@@ -79,6 +79,52 @@ def test_default_stamp_matches_numpy():
     assert np.allclose(make_galaxy_stamp(**kw), _make_numpy(**kw))
 
 
+def test_sersic_puts_half_the_light_inside_re():
+    from ai_merge.simulation.profiles import sersic_surface_brightness
+    re = 4.0
+    flux = 100.0
+    n = 1.0
+    half = 40.0
+    step = 0.05
+    axis = np.arange(-half, half, step) + step / 2.0
+    yy, xx = np.meshgrid(axis, axis, indexing="ij")
+    image = sersic_surface_brightness(np.hypot(xx, yy), re, n, flux) * step * step
+    total = float(image.sum())
+    inside = float(image[np.hypot(xx, yy) <= re].sum())
+    assert abs(total - flux) / flux < 0.01
+    assert abs(inside / total - 0.5) < 0.01
+
+
+def test_numpy_stamp_keeps_flux_shear_and_offset():
+    from ai_merge.simulation.profiles import _make_numpy
+    flux = 100.0
+    round_img = _make_numpy(48, flux, 3.0, 1.0, 0.0, 0.4, 1.5, 0.0, 0.0)
+    assert abs(float(round_img.sum()) - flux) / flux < 0.01
+    yy, xx = np.mgrid[0:48, 0:48]
+    cx = (round_img * xx).sum() / round_img.sum()
+    cy = (round_img * yy).sum() / round_img.sum()
+    assert abs(cx - 23.5) < 0.05
+    assert abs(cy - 23.5) < 0.05
+    wide = _make_numpy(48, flux, 4.0, 1.0, 0.5, 0.0, 1.5, 0.0, 0.0)
+    tall = _make_numpy(48, flux, 4.0, 1.0, 0.5, np.pi / 2.0, 1.5, 0.0, 0.0)
+    x = xx - 23.5
+    y = yy - 23.5
+
+    def moments(img):
+        w = img.sum()
+        return float((img * x * x).sum() / w), float((img * y * y).sum() / w)
+
+    mxx, myy = moments(wide)
+    assert mxx > myy * 1.5
+    mxx_t, myy_t = moments(tall)
+    assert myy_t > mxx_t * 1.5
+    shifted = _make_numpy(48, flux, 3.0, 1.0, 0.0, 0.0, 1.5, 1.5, -0.8)
+    scx = float((shifted * xx).sum() / shifted.sum())
+    scy = float((shifted * yy).sum() / shifted.sum())
+    assert abs(scx - (23.5 + 1.5)) < 0.1
+    assert abs(scy - (23.5 - 0.8)) < 0.1
+
+
 def test_explicit_galsim_missing_is_not_found(monkeypatch):
     monkeypatch.setitem(sys.modules, "galsim", None)
     from ai_merge.simulation.profiles import make_galaxy_stamp

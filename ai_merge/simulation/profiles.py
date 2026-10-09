@@ -1,12 +1,17 @@
 """Sersic galaxy stamps.
 
-The default stamp is the in-tree numpy profile. GalSim runs only when
+The default stamp is drawn in-tree: a Sérsic surface brightness, reduced
+shear, pixel integration, and a Gaussian PSF. GalSim runs only when
 ``backend='galsim'`` and the user-installed package imports.
 """
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from scipy.special import gammaincinv, gamma
+from scipy.special import gammaincinv, gammaln
+
+# Samples along each pixel edge. The Sérsic is integrated, then the PSF is applied.
+_OVERSAMPLE = 5
+_FWHM_TO_SIGMA = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
 
 def make_galaxy_stamp(stamp_size, flux, re, sersic_n, ellip, theta_rad,
@@ -87,44 +92,76 @@ def _make_galsim(stamp_size, flux, re, sersic_n, ellip, theta_rad,
     return img.array.astype(np.float64)
 
 
+def sersic_b(n):
+    """Half-light parameter b_n from the regularised lower incomplete gamma."""
+    return float(gammaincinv(2.0 * n, 0.5))
+
+
+def sersic_surface_brightness(r, re, n, flux):
+    """Round Sérsic surface brightness. The integral over the plane equals ``flux``."""
+    r = np.asarray(r, dtype=np.float64)
+    re = float(re)
+    n = float(n)
+    flux = float(flux)
+    b = sersic_b(n)
+    log_ie = (np.log(flux) + 2.0 * n * np.log(b) - np.log(2.0 * np.pi)
+              - np.log(n) - b - gammaln(2.0 * n) - 2.0 * np.log(re))
+    expo = -b * (np.power(r / re, 1.0 / n) - 1.0)
+    return np.exp(log_ie + expo)
+
+
+def sheared_radius(x, y, ellip, theta_rad):
+    """Intrinsic radius after an area-preserving reduced shear.
+
+    ``ellip`` is the shear magnitude |g|, capped at 0.95. ``theta_rad`` is the
+    position angle of that shear, the same angle the explicit GalSim path
+    passes to ``shear(g1, g2)``.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    g = min(max(float(ellip), 0.0), 0.95)
+    if g < 1e-12:
+        return np.hypot(x, y)
+    g1 = g * np.cos(2.0 * theta_rad)
+    g2 = g * np.sin(2.0 * theta_rad)
+    norm = np.sqrt(1.0 - g * g)
+    xi = ((1.0 - g1) * x - g2 * y) / norm
+    yi = (-g2 * x + (1.0 + g1) * y) / norm
+    return np.hypot(xi, yi)
+
+
+def _draw_sersic_fine(stamp_size, flux, re, n, ellip, theta_rad, x_offset, y_offset):
+    """Flux in each subpixel of an oversampled stamp. PSF is not applied yet."""
+    step = 1.0 / _OVERSAMPLE
+    n_fine = int(stamp_size) * _OVERSAMPLE
+    pos = (np.arange(n_fine, dtype=np.float64) + 0.5) * step
+    half = stamp_size / 2.0
+    x_rel = pos - half - float(x_offset)
+    y_rel = pos - half - float(y_offset)
+    yy, xx = np.meshgrid(y_rel, x_rel, indexing="ij")
+    radius = sheared_radius(xx, yy, ellip, theta_rad)
+    return sersic_surface_brightness(radius, re, n, flux) * (step * step)
+
+
+def convolve_gaussian_fwhm(image, fwhm_pixels, pixel_scale=1.0):
+    """Convolve with a unit-sum Gaussian. ``fwhm_pixels`` is the full width at half maximum."""
+    sigma = max(float(fwhm_pixels), 0.5) / _FWHM_TO_SIGMA / float(pixel_scale)
+    return gaussian_filter(np.asarray(image, dtype=np.float64), sigma=sigma, mode="constant", cval=0.0)
+
+
 def _make_numpy(stamp_size, flux, re, sersic_n, ellip, theta_rad,
                 psf_fwhm, x_offset, y_offset):
-    """Numpy fallback: analytic Sersic + Gaussian PSF convolution."""
-    n = max(0.3, min(sersic_n, 6.2))
-    re_safe = max(0.5, re)
-
-    # Sersic b_n parameter
-    b_n = gammaincinv(2.0 * n, 0.5)
-
-    # Coordinate grid
-    cy, cx = stamp_size / 2.0 + y_offset, stamp_size / 2.0 + x_offset
-    y, x = np.mgrid[0:stamp_size, 0:stamp_size].astype(np.float64)
-    x = x - cx + 0.5
-    y = y - cy + 0.5
-
-    # Rotation
-    cos_t = np.cos(theta_rad)
-    sin_t = np.sin(theta_rad)
-    xr = x * cos_t + y * sin_t
-    yr = -x * sin_t + y * cos_t
-
-    # Elliptical radius
-    q = max(1.0 - ellip, 0.05)
-    r = np.sqrt(xr**2 + (yr / q)**2)
-
-    # Sersic profile (unnormalized)
-    profile = np.exp(-b_n * ((r / re_safe)**(1.0 / n) - 1.0))
-
-    # Normalize to total flux
-    total = profile.sum()
-    if total > 0:
-        profile *= flux / total
-
-    # PSF convolution using Gaussian filter
-    psf_sigma = max(0.3, psf_fwhm) / 2.3548  # FWHM to sigma
-    image = gaussian_filter(profile, sigma=psf_sigma)
-
-    return image
+    """In-tree Sérsic stamp: shear, pixel integral, then a Gaussian PSF."""
+    stamp_size = int(stamp_size)
+    if stamp_size < 1 or float(flux) <= 0.0:
+        return np.zeros((max(stamp_size, 0), max(stamp_size, 0)), dtype=np.float64)
+    n = max(0.3, min(float(sersic_n), 6.2))
+    re_safe = max(0.5, float(re))
+    fine = _draw_sersic_fine(
+        stamp_size, float(flux), re_safe, n, ellip, theta_rad, x_offset, y_offset)
+    blurred = convolve_gaussian_fwhm(fine, psf_fwhm, pixel_scale=1.0 / _OVERSAMPLE)
+    blocks = blurred.reshape(stamp_size, _OVERSAMPLE, stamp_size, _OVERSAMPLE)
+    return blocks.sum(axis=(1, 3))
 
 
 def make_pair_stamp(stamp_size, params1, params2, psf_fwhm, noise_std):
