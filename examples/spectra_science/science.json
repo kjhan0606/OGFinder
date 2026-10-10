@@ -1,0 +1,405 @@
+{
+  "objects": {
+    "1": {
+      "truth": {
+        "z": 0.2,
+        "kind": "star-forming"
+      },
+      "parameters": {
+        "frame": "air",
+        "ebv_mw": 0.0,
+        "inst_fwhm_a": 2.0,
+        "zmax": 0.6,
+        "snr_min": 4.0,
+        "h0": 70.0,
+        "om0": 0.3
+      },
+      "analysis": {
+        "type": "star-forming",
+        "redshift": {
+          "z": 0.199999151741059,
+          "z_err": 4.2531077472791173e-07,
+          "quality": 3,
+          "source": "emission"
+        },
+        "emission": {
+          "z": 0.199999151741059,
+          "quality": 3,
+          "n_lines": 4
+        },
+        "absorption": {
+          "z": null,
+          "quality": 0,
+          "n_lines": 0
+        },
+        "uv": null,
+        "dispersion": {
+          "sigma": 84.99446792351645,
+          "sigma_err": 0.12415062712662071,
+          "kind": "gas",
+          "corrected": true,
+          "n": 4,
+          "note": "Gaussian line width. Not a stellar-template LOSVD."
+        },
+        "bpt": "star-forming",
+        "broad": {
+          "flag": false,
+          "line": null,
+          "fwhm_kms": null,
+          "cut_kms": 1200.0,
+          "reference": "Hao et al. 2005, ApJ 629, 61"
+        },
+        "balmer": {
+          "used": false,
+          "ebv": 0.0,
+          "ratio": 2.841538088599854
+        },
+        "ha_flux": 99.91479085918701,
+        "sfr": {
+          "sfr": 6.166279810770952e+16,
+          "sfr_err": 85944983046851.97,
+          "applies": true,
+          "flux_unit": "file",
+          "error_includes_balmer": false,
+          "calibration": "Murphy2011/KennicuttEvans2012"
+        },
+        "preprocess": {
+          "n_pix": 3000,
+          "dlambda": 0.99999943790408,
+          "n_dropped": 2,
+          "n_no_extinction": 0,
+          "frame": "vacuum",
+          "input_frame": "air",
+          "ebv_mw": 0.0,
+          "milky_way": "not applied"
+        },
+        "calibrations": {
+          "air_vacuum": "SDSS/Morton (VALD form)",
+          "milky_way": "Cardelli, Clayton & Mathis 1989, Rv=3.1",
+          "nebular_dust": "Calzetti 2000, Rv=4.05; case B Ha/Hb=2.86 at 1e4 K; the 0.44 stellar/gas factor is not applied",
+          "bpt": "Kewley et al. 2001; Kauffmann et al. 2003; Seyfert/LINER Kewley et al. 2006, MNRAS 372, 961",
+          "broad_line": "FWHM > 1200 km/s. Ha and Hb: Hao et al. 2005, ApJ 629, 61. CIV, C III] and Mg II use the same width cut.",
+          "sfr": "Murphy et al. 2011 as adopted by Kennicutt & Evans 2012; Kroupa IMF; 5.37e-42 * L_Ha",
+          "dispersion": "Gaussian sigma; instrumental FWHM removed in quadrature when given; not a template LOSVD",
+          "cosmology": "FlatLambdaCDM",
+          "h0": 70.0,
+          "om0": 0.3,
+          "flux_unit": "file"
+        }
+      },
+      "cli": {
+        "command": [
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/plugins/spectra/spectra.py",
+          "--task",
+          "science",
+          "--catalog",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/work/1/catalog.tsv",
+          "--work",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/work/1",
+          "--spec-dir",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/data",
+          "--spec-pattern",
+          "spec_{NUMBER}.txt",
+          "--wave-frame",
+          "air",
+          "--ebv-mw",
+          "0.0",
+          "--inst-fwhm",
+          "2.0",
+          "--zmax",
+          "0.6",
+          "--snr-min",
+          "4.0",
+          "--h0",
+          "70.0",
+          "--omega-m",
+          "0.3"
+        ],
+        "columns": {
+          "NUMBER": "1",
+          "SP_SCI_Z": "0.199999",
+          "SP_SCI_ZERR": "4.25311e-07",
+          "SP_SCI_ZQ": "3",
+          "SP_SCI_ZSRC": "emission",
+          "SP_SIGMA": "84.9945",
+          "SP_SIGMA_ERR": "0.124151",
+          "SP_SIGMA_KIND": "gas",
+          "SP_TYPE": "star-forming",
+          "SP_SFR": "6.16628e+16",
+          "SP_SFR_EBV": "",
+          "SP_HA_FLUX": "99.9148"
+        },
+        "stderr": "spectra science: {\"n_science\": 1, \"n_linked\": 1}"
+      }
+    },
+    "2": {
+      "truth": {
+        "z": 0.0002,
+        "kind": "star"
+      },
+      "parameters": {
+        "frame": "vacuum",
+        "ebv_mw": 0.0,
+        "inst_fwhm_a": 2.0,
+        "zmax": 0.5,
+        "snr_min": 5.0,
+        "h0": 70.0,
+        "om0": 0.3
+      },
+      "analysis": {
+        "type": "star",
+        "redshift": {
+          "z": 0.00019987662152373212,
+          "z_err": 5.211892837041065e-07,
+          "quality": 3,
+          "source": "absorption"
+        },
+        "emission": {
+          "z": 0.20727869898813434,
+          "quality": 1,
+          "n_lines": 1
+        },
+        "absorption": {
+          "z": 0.00019987662152373212,
+          "quality": 3,
+          "n_lines": 8
+        },
+        "uv": null,
+        "dispersion": {
+          "sigma": 76.41543987083942,
+          "sigma_err": 0.07166969654700472,
+          "kind": "stellar",
+          "corrected": true,
+          "n": 6,
+          "note": "Gaussian line width. Not a stellar-template LOSVD."
+        },
+        "bpt": null,
+        "broad": {
+          "flag": false,
+          "line": null,
+          "fwhm_kms": null,
+          "cut_kms": 1200.0,
+          "reference": "Hao et al. 2005, ApJ 629, 61"
+        },
+        "balmer": {
+          "used": false,
+          "ebv": null,
+          "ratio": null
+        },
+        "ha_flux": null,
+        "sfr": {
+          "sfr": null,
+          "sfr_err": null,
+          "applies": false,
+          "flux_unit": "file",
+          "error_includes_balmer": false,
+          "calibration": "Murphy2011/KennicuttEvans2012"
+        },
+        "preprocess": {
+          "n_pix": 5400,
+          "dlambda": 1.0,
+          "n_dropped": 0,
+          "n_no_extinction": 0,
+          "frame": "vacuum",
+          "input_frame": "vacuum",
+          "ebv_mw": 0.0,
+          "milky_way": "not applied"
+        },
+        "calibrations": {
+          "air_vacuum": "SDSS/Morton (VALD form)",
+          "milky_way": "Cardelli, Clayton & Mathis 1989, Rv=3.1",
+          "nebular_dust": "Calzetti 2000, Rv=4.05; case B Ha/Hb=2.86 at 1e4 K; the 0.44 stellar/gas factor is not applied",
+          "bpt": "Kewley et al. 2001; Kauffmann et al. 2003; Seyfert/LINER Kewley et al. 2006, MNRAS 372, 961",
+          "broad_line": "FWHM > 1200 km/s. Ha and Hb: Hao et al. 2005, ApJ 629, 61. CIV, C III] and Mg II use the same width cut.",
+          "sfr": "Murphy et al. 2011 as adopted by Kennicutt & Evans 2012; Kroupa IMF; 5.37e-42 * L_Ha",
+          "dispersion": "Gaussian sigma; instrumental FWHM removed in quadrature when given; not a template LOSVD",
+          "cosmology": "FlatLambdaCDM",
+          "h0": 70.0,
+          "om0": 0.3,
+          "flux_unit": "file"
+        }
+      },
+      "cli": {
+        "command": [
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/plugins/spectra/spectra.py",
+          "--task",
+          "science",
+          "--catalog",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/work/2/catalog.tsv",
+          "--work",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/work/2",
+          "--spec-dir",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/data",
+          "--spec-pattern",
+          "spec_{NUMBER}.txt",
+          "--wave-frame",
+          "vacuum",
+          "--ebv-mw",
+          "0.0",
+          "--inst-fwhm",
+          "2.0",
+          "--zmax",
+          "0.5",
+          "--snr-min",
+          "5.0",
+          "--h0",
+          "70.0",
+          "--omega-m",
+          "0.3"
+        ],
+        "columns": {
+          "NUMBER": "2",
+          "SP_SCI_Z": "0.000199877",
+          "SP_SCI_ZERR": "5.21189e-07",
+          "SP_SCI_ZQ": "3",
+          "SP_SCI_ZSRC": "absorption",
+          "SP_SIGMA": "76.4154",
+          "SP_SIGMA_ERR": "0.0716697",
+          "SP_SIGMA_KIND": "stellar",
+          "SP_TYPE": "star",
+          "SP_SFR": "",
+          "SP_SFR_EBV": "",
+          "SP_HA_FLUX": ""
+        },
+        "stderr": "spectra science: {\"n_science\": 1, \"n_linked\": 1}"
+      }
+    },
+    "3": {
+      "truth": {
+        "z": 1.6,
+        "kind": "broad-line"
+      },
+      "parameters": {
+        "frame": "vacuum",
+        "ebv_mw": 0.0,
+        "inst_fwhm_a": 2.0,
+        "zmax": 2.0,
+        "snr_min": 4.0,
+        "h0": 70.0,
+        "om0": 0.3
+      },
+      "analysis": {
+        "type": "broad-line AGN",
+        "redshift": {
+          "z": 1.6000950618974328,
+          "z_err": 0.00010129492799351134,
+          "quality": 3,
+          "source": "uv"
+        },
+        "emission": {
+          "z": 0.07934456824091596,
+          "quality": 0,
+          "n_lines": 0
+        },
+        "absorption": {
+          "z": 0.004,
+          "quality": 0,
+          "n_lines": 0
+        },
+        "uv": {
+          "z": 1.6000950618974328,
+          "z_err": 0.00010129492799351134,
+          "quality": 3,
+          "n_lines": 3
+        },
+        "dispersion": {
+          "sigma": 1607.432684911011,
+          "sigma_err": 12.11619540038517,
+          "kind": "gas",
+          "corrected": true,
+          "n": 3,
+          "note": "Gaussian line width. Not a stellar-template LOSVD."
+        },
+        "bpt": null,
+        "broad": {
+          "flag": true,
+          "line": "CIV",
+          "fwhm_kms": 3853.396438721958,
+          "cut_kms": 1200.0,
+          "reference": "1200 km/s width cut; Hao et al. 2005 measured Ha and Hb only"
+        },
+        "balmer": {
+          "used": false,
+          "ebv": null,
+          "ratio": null
+        },
+        "ha_flux": null,
+        "sfr": {
+          "sfr": null,
+          "sfr_err": null,
+          "applies": false,
+          "flux_unit": "file",
+          "error_includes_balmer": false,
+          "calibration": "Murphy2011/KennicuttEvans2012"
+        },
+        "preprocess": {
+          "n_pix": 5300,
+          "dlambda": 1.0,
+          "n_dropped": 0,
+          "n_no_extinction": 0,
+          "frame": "vacuum",
+          "input_frame": "vacuum",
+          "ebv_mw": 0.0,
+          "milky_way": "not applied"
+        },
+        "calibrations": {
+          "air_vacuum": "SDSS/Morton (VALD form)",
+          "milky_way": "Cardelli, Clayton & Mathis 1989, Rv=3.1",
+          "nebular_dust": "Calzetti 2000, Rv=4.05; case B Ha/Hb=2.86 at 1e4 K; the 0.44 stellar/gas factor is not applied",
+          "bpt": "Kewley et al. 2001; Kauffmann et al. 2003; Seyfert/LINER Kewley et al. 2006, MNRAS 372, 961",
+          "broad_line": "FWHM > 1200 km/s. Ha and Hb: Hao et al. 2005, ApJ 629, 61. CIV, C III] and Mg II use the same width cut.",
+          "sfr": "Murphy et al. 2011 as adopted by Kennicutt & Evans 2012; Kroupa IMF; 5.37e-42 * L_Ha",
+          "dispersion": "Gaussian sigma; instrumental FWHM removed in quadrature when given; not a template LOSVD",
+          "cosmology": "FlatLambdaCDM",
+          "h0": 70.0,
+          "om0": 0.3,
+          "flux_unit": "file"
+        }
+      },
+      "cli": {
+        "command": [
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/plugins/spectra/spectra.py",
+          "--task",
+          "science",
+          "--catalog",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/work/3/catalog.tsv",
+          "--work",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/work/3",
+          "--spec-dir",
+          "/home/kjhan/BACKUP/Astrafek/OGFinder/examples/spectra_science/data",
+          "--spec-pattern",
+          "spec_{NUMBER}.txt",
+          "--wave-frame",
+          "vacuum",
+          "--ebv-mw",
+          "0.0",
+          "--inst-fwhm",
+          "2.0",
+          "--zmax",
+          "2.0",
+          "--snr-min",
+          "4.0",
+          "--h0",
+          "70.0",
+          "--omega-m",
+          "0.3"
+        ],
+        "columns": {
+          "NUMBER": "3",
+          "SP_SCI_Z": "1.6001",
+          "SP_SCI_ZERR": "0.000101295",
+          "SP_SCI_ZQ": "3",
+          "SP_SCI_ZSRC": "uv",
+          "SP_SIGMA": "1607.43",
+          "SP_SIGMA_ERR": "12.1162",
+          "SP_SIGMA_KIND": "gas",
+          "SP_TYPE": "broad-line AGN",
+          "SP_SFR": "",
+          "SP_SFR_EBV": "",
+          "SP_HA_FLUX": ""
+        },
+        "stderr": "spectra science: {\"n_science\": 1, \"n_linked\": 1}"
+      }
+    }
+  }
+}
