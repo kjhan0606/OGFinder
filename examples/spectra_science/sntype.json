@@ -1,0 +1,253 @@
+{
+  "calibration": "Continuum is a 401-pixel running median. Velocity grid 2000 to 35000 km/s in steps of 500. Depth is the median of the three pixels at rest*(1-v/c), so the window cannot slide onto a neighbouring ion. Each ion votes only within 1000 km/s of its own depth peaks, so a wing is not a second line. H-alpha and Si II 6355 therefore do not share one trough. A line is detected when at least two of those pixels have depth signal-to-noise >= 5. Hydrogen requires both H-alpha and H-beta. Helium requires at least two of He I 5876, 6678, and 7065. Si II is strong when a > 0.35 (Gal-Yam 2017; near-peak normal Type Ia, Silverman et al. 2012 notation). Ic requires Si not strong and O I 7774, including the case a(Si)/a(O I) < 1. Ic-BL requires type Ic and an Si II or O I minimum, or its half-depth blue edge, at >= 0.1c. A strong Si II line stays Ia. Narrow emission is a separate Gaussian at the host redshift: flux/err > 5, FWHM < 2000 km/s, centroid within 1000 km/s. Gal-Yam's narrow component is a few hundred km/s and the intermediate component is about 2000 km/s; the 1000 km/s window rejects a photospheric peak. IIn: Schlegel 1990 and Filippenko 1997. Ibn: Pastorello et al. 2007, Nature, 447, 829, on at least two He I lines and no hydrogen. Type II is not split into II-P and II-L. Si II 5972 is recorded and is not a 91bg or 91T subtype. quality is 0 when no type is assigned and 1 when these rules assign one. Equal photospheric scores keep the lower velocity. The host redshift is required. Supernova line velocities are not used as a redshift. This is not a template cross-correlation.",
+  "objects": {
+    "1": {
+      "truth": {
+        "kind": "Ia",
+        "z": 0.05,
+        "v": 10000.0,
+        "sigma_v": 2500.0,
+        "seed": 1,
+        "frame": "vacuum"
+      },
+      "analysis": {
+        "type": "Ia",
+        "z": 0.05,
+        "quality": 1,
+        "v": 10165.899058055666,
+        "v_line": "SiII6355",
+        "a_si": 0.5565521063747747,
+        "a_ha": null,
+        "a_he": null,
+        "a_oi": 0.13821715053427064,
+        "hydrogen": false,
+        "helium_n": 0,
+        "v_grid": 10248.697433074984,
+        "narrow_ha": {
+          "ok": false,
+          "fwhm": 1055.7364996421904,
+          "dv": 666.8436243154761,
+          "snr": -0.9545944107526567
+        },
+        "note": "Phase is unknown, so the 0.35 Si II cut is the near-peak normal Type Ia cut. A trough near 6150 A is assigned at one photospheric velocity: deep Si II without H-beta is Type Ia, although that absorption in SNe Ib can be hydrogen. Depth is not a pseudo-equivalent width and not a SNID match. No template library is used."
+      },
+      "cli": {
+        "NUMBER": "1",
+        "SN_TYPE": "Ia",
+        "SN_Z": "0.05",
+        "SN_ZQ": "1",
+        "SN_V": "10165.9",
+        "SN_VLINE": "SiII6355",
+        "SN_A_SI": "0.556552",
+        "SN_A_HA": "",
+        "SN_A_HE": "",
+        "SN_A_OI": "0.138217"
+      }
+    },
+    "2": {
+      "truth": {
+        "kind": "II",
+        "z": 0.05,
+        "v": 8000.0,
+        "sigma_v": 2500.0,
+        "seed": 2,
+        "frame": "vacuum"
+      },
+      "analysis": {
+        "type": "II",
+        "z": 0.05,
+        "quality": 1,
+        "v": 8082.266267739631,
+        "v_line": "Ha",
+        "a_si": null,
+        "a_ha": 0.4495386635521641,
+        "a_he": null,
+        "a_oi": null,
+        "hydrogen": true,
+        "helium_n": 0,
+        "v_grid": 7999.999999999999,
+        "narrow_ha": {
+          "ok": false,
+          "fwhm": 4662.689831505029,
+          "dv": -921.880684724816,
+          "snr": 1.6494039301904768
+        },
+        "note": "Phase is unknown, so the 0.35 Si II cut is the near-peak normal Type Ia cut. A trough near 6150 A is assigned at one photospheric velocity: deep Si II without H-beta is Type Ia, although that absorption in SNe Ib can be hydrogen. Depth is not a pseudo-equivalent width and not a SNID match. No template library is used."
+      },
+      "cli": {
+        "NUMBER": "2",
+        "SN_TYPE": "II",
+        "SN_Z": "0.05",
+        "SN_ZQ": "1",
+        "SN_V": "8082.27",
+        "SN_VLINE": "Ha",
+        "SN_A_SI": "",
+        "SN_A_HA": "0.449539",
+        "SN_A_HE": "",
+        "SN_A_OI": ""
+      }
+    },
+    "3": {
+      "truth": {
+        "kind": "Ib",
+        "z": 0.05,
+        "v": 9000.0,
+        "sigma_v": 2500.0,
+        "seed": 3,
+        "frame": "vacuum"
+      },
+      "analysis": {
+        "type": "Ib",
+        "z": 0.05,
+        "quality": 1,
+        "v": 8783.405617044047,
+        "v_line": "HeI5876",
+        "a_si": null,
+        "a_ha": null,
+        "a_he": 0.3928202562895865,
+        "a_oi": null,
+        "hydrogen": false,
+        "helium_n": 3,
+        "v_grid": 8750.158524958422,
+        "narrow_ha": {
+          "ok": false,
+          "fwhm": 4012.0862516432453,
+          "dv": 907.3746726337772,
+          "snr": 4.346308497275783
+        },
+        "note": "Phase is unknown, so the 0.35 Si II cut is the near-peak normal Type Ia cut. A trough near 6150 A is assigned at one photospheric velocity: deep Si II without H-beta is Type Ia, although that absorption in SNe Ib can be hydrogen. Depth is not a pseudo-equivalent width and not a SNID match. No template library is used."
+      },
+      "cli": {
+        "NUMBER": "3",
+        "SN_TYPE": "Ib",
+        "SN_Z": "0.05",
+        "SN_ZQ": "1",
+        "SN_V": "8783.41",
+        "SN_VLINE": "HeI5876",
+        "SN_A_SI": "",
+        "SN_A_HA": "",
+        "SN_A_HE": "0.39282",
+        "SN_A_OI": ""
+      }
+    },
+    "4": {
+      "truth": {
+        "kind": "Ic-BL",
+        "z": 0.05,
+        "v": 32000.0,
+        "sigma_v": 8000.0,
+        "seed": 7,
+        "frame": "vacuum"
+      },
+      "analysis": {
+        "type": "Ic-BL",
+        "z": 0.05,
+        "quality": 1,
+        "v": 31491.243003132528,
+        "v_line": "OI7774",
+        "a_si": 0.15133394936015276,
+        "a_ha": null,
+        "a_he": null,
+        "a_oi": 0.13306202554478685,
+        "hydrogen": false,
+        "helium_n": 0,
+        "v_grid": 31500.0,
+        "narrow_ha": {
+          "ok": false,
+          "fwhm": 569.0101187166605,
+          "dv": -198.96329866850246,
+          "snr": 2.427156776827719
+        },
+        "note": "Phase is unknown, so the 0.35 Si II cut is the near-peak normal Type Ia cut. A trough near 6150 A is assigned at one photospheric velocity: deep Si II without H-beta is Type Ia, although that absorption in SNe Ib can be hydrogen. Depth is not a pseudo-equivalent width and not a SNID match. No template library is used."
+      },
+      "cli": {
+        "NUMBER": "4",
+        "SN_TYPE": "Ic-BL",
+        "SN_Z": "0.05",
+        "SN_ZQ": "1",
+        "SN_V": "31491.2",
+        "SN_VLINE": "OI7774",
+        "SN_A_SI": "0.151334",
+        "SN_A_HA": "",
+        "SN_A_HE": "",
+        "SN_A_OI": "0.133062"
+      }
+    },
+    "5": {
+      "truth": {
+        "kind": "IIn",
+        "z": 0.05,
+        "v": 0.0,
+        "sigma_v": 2500.0,
+        "seed": 6,
+        "frame": "vacuum"
+      },
+      "analysis": {
+        "type": "IIn",
+        "z": 0.05,
+        "quality": 1,
+        "v": -1.8121033180529678,
+        "v_line": "Ha",
+        "a_si": null,
+        "a_ha": null,
+        "a_he": null,
+        "a_oi": null,
+        "hydrogen": true,
+        "helium_n": 0,
+        "v_grid": null,
+        "narrow_ha": {
+          "ok": true,
+          "fwhm": 938.137164051744,
+          "dv": -1.8121033180529678,
+          "snr": 254.94187264053042
+        },
+        "note": "Phase is unknown, so the 0.35 Si II cut is the near-peak normal Type Ia cut. A trough near 6150 A is assigned at one photospheric velocity: deep Si II without H-beta is Type Ia, although that absorption in SNe Ib can be hydrogen. Depth is not a pseudo-equivalent width and not a SNID match. No template library is used."
+      },
+      "cli": {
+        "NUMBER": "5",
+        "SN_TYPE": "IIn",
+        "SN_Z": "0.05",
+        "SN_ZQ": "1",
+        "SN_V": "-1.8121",
+        "SN_VLINE": "Ha",
+        "SN_A_SI": "",
+        "SN_A_HA": "",
+        "SN_A_HE": "",
+        "SN_A_OI": ""
+      }
+    }
+  },
+  "missing_host_redshift": {
+    "file": "sn_2.txt",
+    "analysis": {
+      "type": "unknown",
+      "z": null,
+      "quality": 0,
+      "v": null,
+      "v_line": null,
+      "a_si": null,
+      "a_ha": null,
+      "a_he": null,
+      "a_oi": null,
+      "hydrogen": false,
+      "helium_n": 0,
+      "v_grid": null,
+      "narrow_ha": null,
+      "note": "A host redshift is required. Supernova line velocities are not used as a redshift."
+    },
+    "cli": {
+      "NUMBER": "2",
+      "SN_TYPE": "unknown",
+      "SN_Z": "",
+      "SN_ZQ": "0",
+      "SN_V": "",
+      "SN_VLINE": "",
+      "SN_A_SI": "",
+      "SN_A_HA": "",
+      "SN_A_HE": "",
+      "SN_A_OI": ""
+    },
+    "stderr": "spectra sntype: {\"n_sntype\": 1, \"n_linked\": 1}"
+  },
+  "cli_stderr": "spectra sntype: {\"n_sntype\": 5, \"n_linked\": 5}"
+}

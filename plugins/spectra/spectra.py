@@ -6,6 +6,7 @@
     spectra.py --task plot --number N --catalog TSV --work DIR --out PNG [same link options]
     spectra.py --task kin  --catalog TSV --work DIR [same link options] [--kin-line Ha --kin-z Z --kin-inc DEG ...]   (2D slit / IFU-cube kinematics, see docs/spectra.md)
     spectra.py --task science --catalog TSV --work DIR [same link options] [--wave-frame vacuum --ebv-mw 0 --inst-fwhm 0 --h0 70 --omega-m 0.3]
+    spectra.py --task sntype --catalog TSV --work DIR [same link options] [--z-column Z_HOST --wave-frame vacuum --ebv-mw 0]
 
 link/fit follow the add_columns contract.  The link table (DIR/spectra_links.tsv: NUMBER FILE KIND X Y ROW) is written by every task; a user-supplied --link-file
 (columns NUMBER FILE, optional KIND X Y ROW) overrides the file-name pattern.  fit also writes DIR/spectra_results.json (per object: redshift, lines).
@@ -25,13 +26,14 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, spectra as sp, meta as ometa, kinematics as kin, specscience as sci  # noqa: E402
+from ogfkit import tsvio, spectra as sp, meta as ometa, kinematics as kin, specscience as sci, sntype as sn  # noqa: E402
 
 COLUMNS = {
     'link': ['SP_FILE', 'SP_KIND', 'SP_OK'],
     'fit': ['SP_Z', 'SP_ZERR', 'SP_ZQ', 'SP_NLINES', 'SP_SNR', 'SP_LINE_FLUX', 'SP_LINE_FLUXERR', 'SP_LINE_FWHM_KMS', 'SP_LINE_EW'],
     'kin': ['SP_KIN_VSYS', 'SP_KIN_VSINI', 'SP_KIN_VC', 'SP_KIN_VC_ERR', 'SP_KIN_RT', 'SP_KIN_PA', 'SP_KIN_INC', 'SP_KIN_SIGMA', 'SP_KIN_CHI2R', 'SP_KIN_N'],
     'science': ['SP_SCI_Z', 'SP_SCI_ZERR', 'SP_SCI_ZQ', 'SP_SCI_ZSRC', 'SP_SIGMA', 'SP_SIGMA_ERR', 'SP_SIGMA_KIND', 'SP_TYPE', 'SP_SFR', 'SP_SFR_EBV', 'SP_HA_FLUX'],
+    'sntype': ['SN_TYPE', 'SN_Z', 'SN_ZQ', 'SN_V', 'SN_VLINE', 'SN_A_SI', 'SN_A_HA', 'SN_A_HE', 'SN_A_OI'],
 }
 C_KMS = 299792.458
 
@@ -344,6 +346,34 @@ def task_science(a, cols, rows, W):
     return out, dict(n_science=n_ok, n_linked=sum(l['OK'] for l in links)), links, results
 
 
+def task_sntype(a, cols, rows, W):
+    links = build_links(a, rows)
+    out = []
+    results = {}
+    n_ok = 0
+    for r, lk in zip(rows, links):
+        d = {}
+        if lk['OK']:
+            try:
+                s = load_1d(a, lk)
+                err = s['err']
+                if err is not None:
+                    err = np.where(np.isfinite(err) & (err > 0), err, np.nan)
+                zk = tsvio.fnum(r.get(a.z_column)) if a.z_column and a.z_column in r else float('nan')
+                an = sn.sn_analysis(s['wave'], s['flux'], err, z_host=zk if np.isfinite(zk) and zk > 0 else None,
+                                    frame=a.wave_frame, ebv_mw=a.ebv_mw)
+                d.update(SN_TYPE=an.get('type'), SN_Z=an.get('z'), SN_ZQ=an.get('quality'), SN_V=an.get('v'),
+                         SN_VLINE=an.get('v_line'), SN_A_SI=an.get('a_si'), SN_A_HA=an.get('a_ha'),
+                         SN_A_HE=an.get('a_he'), SN_A_OI=an.get('a_oi'))
+                n_ok += 1
+                results[lk['NUMBER']] = an
+            except Exception as ex:
+                results[lk['NUMBER']] = dict(error=str(ex))
+                sys.stderr.write('spectra sntype: object %s: %s\n' % (lk['NUMBER'], ex))
+        out.append((r['NUMBER'], d))
+    return out, dict(n_sntype=n_ok, n_linked=sum(l['OK'] for l in links)), links, results
+
+
 def task_link(a, cols, rows, W):
     links = build_links(a, rows)
     out = [(r['NUMBER'], dict(SP_FILE=os.path.basename(l['FILE']) if l['OK'] else None, SP_KIND=l['KIND'] if l['OK'] else None, SP_OK=l['OK'])) for r, l in zip(rows, links)]
@@ -406,7 +436,7 @@ def plot_object(a, rows, links, number, out_png, results=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--task', required=True, choices=['link', 'fit', 'plot', 'kin', 'science'])
+    ap.add_argument('--task', required=True, choices=['link', 'fit', 'plot', 'kin', 'science', 'sntype'])
     ap.add_argument('--catalog', required=True)
     ap.add_argument('--work', default='.')
     ap.add_argument('--meta-out', default='')
@@ -461,6 +491,10 @@ def main(argv=None):
     elif a.task == 'science':
         out, summ, links, results = task_science(a, cols, rows, a.work)
         with open(os.path.join(a.work, 'spectra_science.json'), 'w') as fh:
+            json.dump(json_clean(results), fh)
+    elif a.task == 'sntype':
+        out, summ, links, results = task_sntype(a, cols, rows, a.work)
+        with open(os.path.join(a.work, 'spectra_sntype.json'), 'w') as fh:
             json.dump(json_clean(results), fh)
     else:
         out, summ, links, _ = task_link(a, cols, rows, a.work)

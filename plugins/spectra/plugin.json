@@ -5,7 +5,7 @@
  "short": "Spectra",
  "tab": "Measure",
  "order": 33,
- "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window. The science step adds air/vacuum and Milky Way corrections, absorption lines, a Gaussian dispersion, a spectral type, and an H-alpha star-formation rate.",
+ "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window. The science step adds air/vacuum and Milky Way corrections, absorption lines, a Gaussian dispersion, a spectral type, and an H-alpha star-formation rate. The supernova step types H, He, Si, and O at one photospheric velocity and needs a host redshift.",
  "requires": {
   "python": [
    "numpy",
@@ -588,6 +588,81 @@
      "SP_SFR",
      "SP_SFR_EBV",
      "SP_HA_FLUX"
+    ]
+   }
+  },
+  {
+   "id": "sntype",
+   "label": "Supernova type",
+   "title": "Type a supernova from H, He, Si, and O at one photospheric velocity. The known-redshift column is required; line velocities are not a redshift.",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_sntype",
+   "catalog_tmp": "spectra_sntype",
+   "done_status": "supernova type measured",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "sntype",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--z-column",
+    "{z-column}",
+    "--wave-frame",
+    "{wave-frame}",
+    "--ebv-mw",
+    "{ebv-mw}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SN_TYPE",
+     "SN_Z",
+     "SN_ZQ",
+     "SN_V",
+     "SN_VLINE",
+     "SN_A_SI",
+     "SN_A_HA",
+     "SN_A_HE",
+     "SN_A_OI"
     ]
    }
   },
