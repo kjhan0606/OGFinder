@@ -5,7 +5,7 @@
  "short": "Spectra",
  "tab": "Measure",
  "order": 33,
- "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window.",
+ "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window. The science step adds air/vacuum and Milky Way corrections, absorption lines, a Gaussian dispersion, a spectral type, and an H-alpha star-formation rate.",
  "requires": {
   "python": [
    "numpy",
@@ -207,6 +207,60 @@
     "[NII]6585",
     "[SII]6718"
    ]
+  },
+  {
+   "name": "wave-frame",
+   "label": "Wavelength frame",
+   "type": "choice",
+   "default": "vacuum",
+   "group": "Science",
+   "help": "Air wavelengths are converted to vacuum with the SDSS/Morton formula before the lines are matched.",
+   "choices": [
+    "vacuum",
+    "air"
+   ]
+  },
+  {
+   "name": "ebv-mw",
+   "label": "Milky Way E(B-V)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Science",
+   "help": "Cardelli, Clayton & Mathis 1989, Rv=3.1. 0 leaves the flux unchanged.",
+   "min": 0,
+   "max": 5
+  },
+  {
+   "name": "inst-fwhm",
+   "label": "Instrumental FWHM (A)",
+   "type": "float",
+   "default": 0.0,
+   "group": "Science",
+   "help": "Removed in quadrature from the Gaussian line width. 0 reports the observed width and leaves the corrected dispersion empty.",
+   "min": 0,
+   "max": 50,
+   "unit": "A"
+  },
+  {
+   "name": "h0",
+   "label": "H0 (km/s/Mpc)",
+   "type": "float",
+   "default": 70.0,
+   "group": "Science",
+   "help": "Flat Lambda-CDM Hubble constant used for the H-alpha star-formation rate.",
+   "min": 10,
+   "max": 200,
+   "unit": "km/s/Mpc"
+  },
+  {
+   "name": "omega-m",
+   "label": "Omega_m",
+   "type": "float",
+   "default": 0.3,
+   "group": "Science",
+   "help": "Matter density of the same cosmology.",
+   "min": 0,
+   "max": 1
   },
   {
    "name": "kin-line",
@@ -443,6 +497,97 @@
      "SP_LINE_FLUXERR",
      "SP_LINE_FWHM_KMS",
      "SP_LINE_EW"
+    ]
+   }
+  },
+  {
+   "id": "science",
+   "label": "Measure redshift, type, dispersion, SFR",
+   "title": "Preprocess, fit emission and absorption lines, and report dispersion, type, redshift and H-alpha SFR",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_science",
+   "catalog_tmp": "spectra_science",
+   "done_status": "spectrum science measured",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "science",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--snr-min",
+    "{snr-min}",
+    "--kernel-sigma-px",
+    "{kernel-sigma-px}",
+    "--cont-width",
+    "{cont-width}",
+    "--z-column",
+    "{z-column}",
+    "--zmax",
+    "{zmax}",
+    "--wave-frame",
+    "{wave-frame}",
+    "--ebv-mw",
+    "{ebv-mw}",
+    "--inst-fwhm",
+    "{inst-fwhm}",
+    "--h0",
+    "{h0}",
+    "--omega-m",
+    "{omega-m}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SP_SCI_Z",
+     "SP_SCI_ZERR",
+     "SP_SCI_ZQ",
+     "SP_SCI_ZSRC",
+     "SP_SIGMA",
+     "SP_SIGMA_ERR",
+     "SP_SIGMA_KIND",
+     "SP_TYPE",
+     "SP_SFR",
+     "SP_SFR_EBV",
+     "SP_HA_FLUX"
     ]
    }
   },

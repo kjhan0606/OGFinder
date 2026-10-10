@@ -270,8 +270,9 @@ def noise_level(resid, mask=None):
 
 # ------------------------------------------------------------------ lines
 
-def detect_lines(wave, flux, err=None, cont=None, kernel_sigma_px=2.0, snr_min=4.0, min_sep_px=4):
-    """Matched-filter (Gaussian) detection of emission lines.  Returns a list of dicts (wave, snr, index), strongest first."""
+def detect_lines(wave, flux, err=None, cont=None, kernel_sigma_px=2.0, snr_min=4.0, min_sep_px=4, sign=1.0):
+    """Matched-filter (Gaussian) detection of emission lines.  sign=-1 detects absorption lines instead.
+    Returns a list of dicts (wave, snr, index), strongest first; snr is reported positive for both."""
     from scipy.ndimage import maximum_filter1d
     f = np.asarray(flux, float)
     if cont is None:
@@ -279,6 +280,8 @@ def detect_lines(wave, flux, err=None, cont=None, kernel_sigma_px=2.0, snr_min=4
     else:
         m = None
     res = np.nan_to_num(f - cont)
+    if sign < 0:
+        res = -res
     sig = noise_level(res, m) if err is None else float(np.nanmedian(err))
     h = int(math.ceil(4 * kernel_sigma_px))
     x = np.arange(-h, h + 1)
