@@ -5,7 +5,7 @@
  "short": "Spectra",
  "tab": "Measure",
  "order": 33,
- "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window. The science step adds air/vacuum and Milky Way corrections, absorption lines, a Gaussian dispersion, a spectral type, and an H-alpha star-formation rate. The supernova step types H, He, Si, and O at one photospheric velocity and needs a host redshift.",
+ "description": "Link spectra (1D tables / images, 2D spectra, IFU cubes) to catalog objects, extract them, fit emission lines with Gaussians, find redshifts from the lines and look at the spectra in a viewer window. The science step adds air/vacuum and Milky Way corrections, absorption lines, a Gaussian dispersion, a spectral type, and an H-alpha star-formation rate. The supernova step types H, He, Si, and O at one photospheric velocity and needs a host redshift. Learned steps assign a stellar temperature letter from a user model, a galaxy type from autoencoder neighbours of the line diagnostic, and a supernova type by cross-correlation with a user template directory.",
  "requires": {
   "python": [
    "numpy",
@@ -353,6 +353,22 @@
    "max": 90,
    "unit": "deg",
    "expert": true
+  },
+  {
+   "name": "learn-model",
+   "label": "Learned model file",
+   "type": "string",
+   "default": "",
+   "group": "Learned types",
+   "help": "npz written by tools/train_speclearn.py. The star step needs a star model and the galaxy step needs a galaxy model. No model is shipped."
+  },
+  {
+   "name": "sn-templates",
+   "label": "Supernova template directory",
+   "type": "string",
+   "default": "",
+   "group": "Learned types",
+   "help": "Directory of .txt or .dat spectra. A # type NAME header sets the type; otherwise the file-name prefix does. No template library is included."
   }
  ],
  "steps": [
@@ -663,6 +679,221 @@
      "SN_A_HA",
      "SN_A_HE",
      "SN_A_OI"
+    ]
+   }
+  },
+  {
+   "id": "startype",
+   "label": "Stellar temperature letter",
+   "title": "Temperature letter O B A F G K M from a user model. Not an MK luminosity class. A blank redshift column is used as redshift 0.",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_startype",
+   "catalog_tmp": "spectra_startype",
+   "done_status": "stellar temperature letter assigned",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "startype",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--model",
+    "{learn-model}",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--z-column",
+    "{z-column}",
+    "--wave-frame",
+    "{wave-frame}",
+    "--ebv-mw",
+    "{ebv-mw}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "ST_TYPE",
+     "ST_P",
+     "ST_Z"
+    ]
+   }
+  },
+  {
+   "id": "galtype",
+   "label": "Galaxy neighbour type",
+   "title": "Galaxy or AGN type by nearest neighbours in an autoencoder. The names are the line diagnostic of those neighbours. The redshift column is required.",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_galtype",
+   "catalog_tmp": "spectra_galtype",
+   "done_status": "galaxy neighbour type assigned",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "galtype",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--model",
+    "{learn-model}",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--z-column",
+    "{z-column}",
+    "--wave-frame",
+    "{wave-frame}",
+    "--ebv-mw",
+    "{ebv-mw}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "GL_TYPE",
+     "GL_P",
+     "GL_K",
+     "GL_Z"
+    ]
+   }
+  },
+  {
+   "id": "snmatch",
+   "label": "Supernova template match",
+   "title": "Cross-correlate a continuum-removed supernova with a user template directory. No template library is included. The redshift column is the host redshift.",
+   "session": "AUTO",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "record": "analysis.spectra_snmatch",
+   "catalog_tmp": "spectra_snmatch",
+   "done_status": "supernova template matched",
+   "after": "OGFSpectraAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/spectra.py",
+    "--task",
+    "snmatch",
+    "--catalog",
+    "{catalog}",
+    "--work",
+    "{work}/spectra",
+    "--meta-out",
+    "{work}/catalog_meta.json",
+    "--template-dir",
+    "{sn-templates}",
+    "--spec-dir",
+    "{spec-dir}",
+    "--spec-pattern",
+    "{spec-pattern}",
+    "--link-file",
+    "{link-file}",
+    "--kind",
+    "{kind}",
+    "--wave-unit",
+    "{wave-unit}",
+    "--row-column",
+    "{row-column}",
+    "--extract-mode",
+    "{extract-mode}",
+    "--extract-halfwidth",
+    "{extract-halfwidth}",
+    "--sky-inner",
+    "{sky-inner}",
+    "--sky-outer",
+    "{sky-outer}",
+    "--aperture-radius",
+    "{aperture-radius}",
+    {
+     "if": "cube-xy",
+     "argv": [
+      "--cube-xy",
+      "1"
+     ]
+    },
+    "--z-column",
+    "{z-column}",
+    "--wave-frame",
+    "{wave-frame}",
+    "--ebv-mw",
+    "{ebv-mw}"
+   ],
+   "output": {
+    "mode": "add_columns",
+    "columns": [
+     "SNX_TYPE",
+     "SNX_SCORE",
+     "SNX_Z",
+     "SNX_TEMPLATE"
     ]
    }
   },

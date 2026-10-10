@@ -7,6 +7,9 @@
     spectra.py --task kin  --catalog TSV --work DIR [same link options] [--kin-line Ha --kin-z Z --kin-inc DEG ...]   (2D slit / IFU-cube kinematics, see docs/spectra.md)
     spectra.py --task science --catalog TSV --work DIR [same link options] [--wave-frame vacuum --ebv-mw 0 --inst-fwhm 0 --h0 70 --omega-m 0.3]
     spectra.py --task sntype --catalog TSV --work DIR [same link options] [--z-column Z_HOST --wave-frame vacuum --ebv-mw 0]
+    spectra.py --task startype --catalog TSV --work DIR --model star.npz [same link options] [--z-column Z]
+    spectra.py --task galtype  --catalog TSV --work DIR --model galaxy.npz [same link options] [--z-column Z]
+    spectra.py --task snmatch  --catalog TSV --work DIR --template-dir DIR [same link options] [--z-column Z_HOST]
 
 link/fit follow the add_columns contract.  The link table (DIR/spectra_links.tsv: NUMBER FILE KIND X Y ROW) is written by every task; a user-supplied --link-file
 (columns NUMBER FILE, optional KIND X Y ROW) overrides the file-name pattern.  fit also writes DIR/spectra_results.json (per object: redshift, lines).
@@ -26,7 +29,7 @@ if ROOT not in sys.path:
 import warnings  # noqa: E402
 warnings.filterwarnings('ignore')
 
-from ogfkit import tsvio, spectra as sp, meta as ometa, kinematics as kin, specscience as sci, sntype as sn  # noqa: E402
+from ogfkit import tsvio, spectra as sp, meta as ometa, kinematics as kin, specscience as sci, sntype as sn, speclearn as learn  # noqa: E402
 
 COLUMNS = {
     'link': ['SP_FILE', 'SP_KIND', 'SP_OK'],
@@ -34,6 +37,9 @@ COLUMNS = {
     'kin': ['SP_KIN_VSYS', 'SP_KIN_VSINI', 'SP_KIN_VC', 'SP_KIN_VC_ERR', 'SP_KIN_RT', 'SP_KIN_PA', 'SP_KIN_INC', 'SP_KIN_SIGMA', 'SP_KIN_CHI2R', 'SP_KIN_N'],
     'science': ['SP_SCI_Z', 'SP_SCI_ZERR', 'SP_SCI_ZQ', 'SP_SCI_ZSRC', 'SP_SIGMA', 'SP_SIGMA_ERR', 'SP_SIGMA_KIND', 'SP_TYPE', 'SP_SFR', 'SP_SFR_EBV', 'SP_HA_FLUX'],
     'sntype': ['SN_TYPE', 'SN_Z', 'SN_ZQ', 'SN_V', 'SN_VLINE', 'SN_A_SI', 'SN_A_HA', 'SN_A_HE', 'SN_A_OI'],
+    'startype': ['ST_TYPE', 'ST_P', 'ST_Z'],
+    'galtype': ['GL_TYPE', 'GL_P', 'GL_K', 'GL_Z'],
+    'snmatch': ['SNX_TYPE', 'SNX_SCORE', 'SNX_Z', 'SNX_TEMPLATE'],
 }
 C_KMS = 299792.458
 
@@ -374,6 +380,85 @@ def task_sntype(a, cols, rows, W):
     return out, dict(n_sntype=n_ok, n_linked=sum(l['OK'] for l in links)), links, results
 
 
+def _catalog_z(a, r):
+    if a.z_column and a.z_column in r and str(r.get(a.z_column)).strip() != '':
+        zk = tsvio.fnum(r.get(a.z_column))
+        if np.isfinite(zk):
+            return float(zk)
+    return None
+
+
+def _prepared_1d(a, lk):
+    s = load_1d(a, lk)
+    err = s['err']
+    if err is not None:
+        err = np.where(np.isfinite(err) & (err > 0), err, np.nan)
+    return sci.prepare_spectrum(s['wave'], s['flux'], err, frame=a.wave_frame, ebv_mw=a.ebv_mw)
+
+
+def task_startype(a, rows, model):
+    links = build_links(a, rows)
+    out, results, n_ok = [], {}, 0
+    for r, lk in zip(rows, links):
+        d = {}
+        if lk['OK']:
+            try:
+                prep = _prepared_1d(a, lk)
+                z = _catalog_z(a, r)
+                an = learn.classify_star(prep['wave'], prep['flux'], prep['err'], z, model)
+                an['z'] = z
+                d.update(ST_TYPE=an.get('type'), ST_P=an.get('p'), ST_Z=z)
+                n_ok += 1
+                results[lk['NUMBER']] = an
+            except Exception as ex:
+                results[lk['NUMBER']] = dict(error=str(ex))
+                sys.stderr.write('spectra startype: object %s: %s\n' % (lk['NUMBER'], ex))
+        out.append((r['NUMBER'], d))
+    return out, dict(n_startype=n_ok, n_linked=sum(l['OK'] for l in links)), links, results
+
+
+def task_galtype(a, rows, model):
+    links = build_links(a, rows)
+    out, results, n_ok = [], {}, 0
+    for r, lk in zip(rows, links):
+        d = {}
+        if lk['OK']:
+            try:
+                prep = _prepared_1d(a, lk)
+                z = _catalog_z(a, r)
+                an = learn.classify_galaxy(prep['wave'], prep['flux'], prep['err'], z, model)
+                an['z'] = z
+                d.update(GL_TYPE=an.get('type'), GL_P=an.get('p'), GL_K=an.get('k'), GL_Z=z)
+                n_ok += 1
+                results[lk['NUMBER']] = an
+            except Exception as ex:
+                results[lk['NUMBER']] = dict(error=str(ex))
+                sys.stderr.write('spectra galtype: object %s: %s\n' % (lk['NUMBER'], ex))
+        out.append((r['NUMBER'], d))
+    return out, dict(n_galtype=n_ok, n_linked=sum(l['OK'] for l in links)), links, results
+
+
+def task_snmatch(a, rows, templates):
+    links = build_links(a, rows)
+    out, results, n_ok = [], {}, 0
+    for r, lk in zip(rows, links):
+        d = {}
+        if lk['OK']:
+            try:
+                prep = _prepared_1d(a, lk)
+                z = _catalog_z(a, r)
+                an = learn.match_supernova(prep['wave'], prep['flux'], prep['err'], z, templates)
+                an['z'] = z
+                d.update(SNX_TYPE=an.get('type'), SNX_SCORE=an.get('score'), SNX_Z=z, SNX_TEMPLATE=an.get('template'))
+                n_ok += 1
+                results[lk['NUMBER']] = an
+            except Exception as ex:
+                results[lk['NUMBER']] = dict(error=str(ex))
+                sys.stderr.write('spectra snmatch: object %s: %s\n' % (lk['NUMBER'], ex))
+        out.append((r['NUMBER'], d))
+    return out, dict(n_snmatch=n_ok, n_linked=sum(l['OK'] for l in links)), links, results
+
+
 def task_link(a, cols, rows, W):
     links = build_links(a, rows)
     out = [(r['NUMBER'], dict(SP_FILE=os.path.basename(l['FILE']) if l['OK'] else None, SP_KIND=l['KIND'] if l['OK'] else None, SP_OK=l['OK'])) for r, l in zip(rows, links)]
@@ -436,7 +521,7 @@ def plot_object(a, rows, links, number, out_png, results=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--task', required=True, choices=['link', 'fit', 'plot', 'kin', 'science', 'sntype'])
+    ap.add_argument('--task', required=True, choices=['link', 'fit', 'plot', 'kin', 'science', 'sntype', 'startype', 'galtype', 'snmatch'])
     ap.add_argument('--catalog', required=True)
     ap.add_argument('--work', default='.')
     ap.add_argument('--meta-out', default='')
@@ -473,7 +558,26 @@ def main(argv=None):
     ap.add_argument('--kin-slit-psi', type=float, default=0.0)
     ap.add_argument('--number', default='')
     ap.add_argument('--out', default='')
+    ap.add_argument('--model', default='')
+    ap.add_argument('--template-dir', default='')
     a = ap.parse_args(argv)
+    prepared = None
+    if a.task in ('startype', 'galtype', 'snmatch'):
+        try:
+            if a.task == 'snmatch':
+                prepared = learn.load_templates(a.template_dir)
+            else:
+                prepared = learn.load_model(a.model)
+                want = 'star' if a.task == 'startype' else 'galaxy'
+                if prepared.get('kind') != want:
+                    sys.stderr.write('spectra %s: model kind %s was not a %s model\n' % (a.task, prepared.get('kind'), want))
+                    return 1
+        except FileNotFoundError as ex:
+            sys.stderr.write('spectra %s: %s\n' % (a.task, ex))
+            return 1
+        except Exception as ex:
+            sys.stderr.write('spectra %s: %s\n' % (a.task, ex))
+            return 1
     os.makedirs(a.work, exist_ok=True)
     cols, rows = tsvio.read_catalog(a.catalog)
     if a.task == 'plot':
@@ -495,6 +599,18 @@ def main(argv=None):
     elif a.task == 'sntype':
         out, summ, links, results = task_sntype(a, cols, rows, a.work)
         with open(os.path.join(a.work, 'spectra_sntype.json'), 'w') as fh:
+            json.dump(json_clean(results), fh)
+    elif a.task == 'startype':
+        out, summ, links, results = task_startype(a, rows, prepared)
+        with open(os.path.join(a.work, 'spectra_startype.json'), 'w') as fh:
+            json.dump(json_clean(results), fh)
+    elif a.task == 'galtype':
+        out, summ, links, results = task_galtype(a, rows, prepared)
+        with open(os.path.join(a.work, 'spectra_galtype.json'), 'w') as fh:
+            json.dump(json_clean(results), fh)
+    elif a.task == 'snmatch':
+        out, summ, links, results = task_snmatch(a, rows, prepared)
+        with open(os.path.join(a.work, 'spectra_snmatch.json'), 'w') as fh:
             json.dump(json_clean(results), fh)
     else:
         out, summ, links, _ = task_link(a, cols, rows, a.work)
