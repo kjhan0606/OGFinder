@@ -18,6 +18,8 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 2절의 전단 프로필 평균은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`의 `--task stack`에 있다. 픽셀 영상 스택은 그 함수가 거절한다. 이 디렉터리의 합성 실행은 렌즈 하나의 접선 전단만 맞추며, 그 결과에는 `science_measurement`가 없다.
 
+3절의 접선 우표 진단은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 있다. 접선 방향으로 돌린 평균이 진단이고, 하늘 좌표 평균은 영점 그림이다. 이 함수는 질량을 맞추지 않는다. 이 디렉터리의 합성 실행에는 우표 스택이 없다.
+
 ## 실행
 
 OGFinder 루트에서:

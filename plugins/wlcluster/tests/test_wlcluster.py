@@ -707,3 +707,114 @@ def test_cli_stack_writes_the_average_profile(tmp_path, cosmo):
     assert 'Gaussian PSF' in doc['metacal_scope']
     header = (work / 'wl_stack_profile.tsv').read_text().splitlines()[0].split('\t')
     assert 'GT' in header and 'DELTASIGMA' in header
+
+
+def _tangential_stamps(cosmo, phis, radii, gt, z_lens=0.3, z_source=1.0):
+    """Centred stamps with one tangential shear. Positions sit on those proper radii."""
+    distance = float(cosmo.angular_diameter(z_lens))
+    stamps, x, y, g1, g2 = [], [], [], [], []
+    for phi, radius in zip(phis, radii):
+        comp1, comp2 = wl.components_from_tangential(float(phi), float(gt), 0.0)
+        comp1 = float(np.asarray(comp1))
+        comp2 = float(np.asarray(comp2))
+        image, _psf = wl.draw_galaxy(49, comp1, comp2, psf_sigma=1.2, noise=0.0, re=4.0, seed=1)
+        theta = (float(radius) / distance) / wl.ARCSEC
+        stamps.append(image)
+        x.append(theta * math.cos(float(phi)))
+        y.append(theta * math.sin(float(phi)))
+        g1.append(comp1)
+        g2.append(comp2)
+    n = len(phis)
+    return stamps, x, y, g1, g2, np.full(n, z_source), np.ones(n), z_lens
+
+
+def test_tangential_stamp_stack_keeps_the_sign_and_the_sky_average_cancels(cosmo):
+    angles = np.linspace(0.0, 2.0 * math.pi, 8, endpoint=False)
+    phis = np.concatenate([angles, angles])
+    radii = np.concatenate([np.full(8, 0.7), np.full(8, 1.2)])
+    stamps, x, y, g1, g2, z, w, z_lens = _tangential_stamps(cosmo, phis, radii, 0.15)
+    doc = wl.stack_tangential_stamps(
+        stamps, x, y, g1, g2, z, w, z_lens, cosmo, rmin=0.5, rmax=1.5, nbins=2, min_per_bin=4)
+    assert doc['success']
+    assert doc['status'] == 'diagnostic'
+    assert doc['mass'] is None
+    assert 'null image' in doc['note']
+    assert 'DES Y3' in doc['note'] and 'lensfit' in doc['note'] and 'S19A' in doc['note']
+    assert 'Gaussian PSF' in doc['metacal_scope']
+    assert 'Lewis 2009' in doc['reference']
+    assert len(doc['profile']) == 2
+    assert len(doc['images']) == 2
+    for row in doc['profile']:
+        assert row['n'] == 8
+        assert row['gt'] == pytest.approx(0.15)
+        assert row['e_t'] > 0.05
+        assert row['e_t_stack'] > 0.05
+        assert row['e_t'] * row['gt'] > 0
+        assert row['n_same_sign'] == row['n']
+        assert row['e_abs_sky'] < 1e-6
+        assert row['e_abs_sky'] < 0.02 * row['e_t_stack']
+        assert abs(row['e_x_stack']) < 0.02 * row['e_t_stack']
+        assert row['position_angle_span'] > 0.75 * 2.0 * math.pi
+    turned = [row for row in doc['sources'] if row['e_t'] is not None]
+    assert len(turned) == 16
+    assert all(row['e_t'] > 0 and row['gt'] > 0 for row in turned)
+
+    quiet, x0, y0, g10, g20, z0, w0, z0_lens = _tangential_stamps(cosmo, angles, np.full(8, 1.0), 0.0)
+    zero = wl.stack_tangential_stamps(
+        quiet, x0, y0, g10, g20, z0, w0, z0_lens, cosmo, rmin=0.5, rmax=1.5, nbins=1)
+    assert abs(zero['profile'][0]['e_t_stack']) < 1e-8
+    assert zero['profile'][0]['e_abs_sky'] < 1e-8
+
+    flipped, xf, yf, g1f, g2f, zf, wf, zf_lens = _tangential_stamps(cosmo, angles, np.full(8, 1.0), -0.15)
+    neg = wl.stack_tangential_stamps(
+        flipped, xf, yf, g1f, g2f, zf, wf, zf_lens, cosmo, rmin=0.5, rmax=1.5, nbins=1)
+    row = neg['profile'][0]
+    assert row['gt'] == pytest.approx(-0.15)
+    assert row['e_t_stack'] < -0.05
+    assert row['n_same_sign'] == row['n']
+    assert row['e_abs_sky'] < 1e-6
+
+
+def test_stamps_at_one_angle_keep_a_sky_signal(cosmo):
+    phis = np.zeros(8)
+    stamps, x, y, g1, g2, z, w, z_lens = _tangential_stamps(cosmo, phis, np.full(8, 1.0), 0.15)
+    doc = wl.stack_tangential_stamps(
+        stamps, x, y, g1, g2, z, w, z_lens, cosmo, rmin=0.5, rmax=1.5, nbins=1)
+    row = doc['profile'][0]
+    assert row['position_angle_span'] == pytest.approx(0.0)
+    assert row['e_t_stack'] > 0.05
+    assert row['e_abs_sky'] == pytest.approx(row['e_t_stack'], rel=1e-5, abs=1e-8)
+    assert row['n_same_sign'] == row['n']
+
+
+def test_a_cluster_image_stack_is_not_a_postage_stamp_diagnostic(cosmo):
+    with pytest.raises(ValueError, match='a stack of cluster images is not a tangential postage-stamp diagnostic'):
+        wl.stack_tangential_stamps(np.zeros((2, 9, 9)), [1.0], [1.0], [0.0], [0.0], [1.0], [1.0], 0.3, cosmo)
+    with pytest.raises(ValueError, match='a cluster image is not a list of postage stamps'):
+        wl.stack_tangential_stamps(np.zeros((9, 9)), [1.0], [1.0], [0.0], [0.0], [1.0], [1.0], 0.3, cosmo)
+    with pytest.raises(ValueError, match='postage stamps in one stack have the same shape'):
+        wl.stack_tangential_stamps(
+            [np.zeros((9, 9)), np.zeros((11, 11))], [1.0, 1.0], [1.0, 1.0],
+            [0.0, 0.0], [0.0, 0.0], [1.0, 1.0], [1.0, 1.0], 0.3, cosmo)
+
+    angles = np.linspace(0.0, 2.0 * math.pi, 8, endpoint=False)
+    stamps, x, y, g1, g2, z, w, z_lens = _tangential_stamps(cosmo, angles, np.full(8, 1.0), 0.15)
+    # The extra rows are a foreground galaxy and a satellite. select_sources drops both.
+    blank = np.zeros((49, 49))
+    doc = wl.stack_tangential_stamps(
+        stamps + [blank, blank],
+        list(x) + [x[0], x[1]], list(y) + [y[0], y[1]],
+        list(g1) + [0.4, -0.4], list(g2) + [0.0, 0.2],
+        list(z) + [0.05, 1.0], list(w) + [1.0, 1.0], z_lens, cosmo,
+        rmin=0.5, rmax=1.5, nbins=1,
+        member=['background'] * 8 + ['background', 'satellite'])
+    assert doc['n_sources'] == 8
+    assert doc['profile'][0]['n'] == 8
+    assert doc['profile'][0]['gt'] == pytest.approx(0.15)
+
+    empty = wl.stack_tangential_stamps(
+        stamps, x, y, g1, g2, np.full(8, z_lens), w, z_lens, cosmo, rmin=0.5, rmax=1.5, nbins=1)
+    assert empty['success'] is False
+    assert empty['status'] == 'insufficient_sample'
+    assert empty['profile'] == []
+    assert empty['mass'] is None

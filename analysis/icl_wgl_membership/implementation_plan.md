@@ -65,13 +65,15 @@ Astra 자문 두 건을 이후 구현의 완료 조건으로 넣는다. 1차는 
 
 현재 분광 제한은 신뢰성 중심의 표본에는 맞다. 광시야 표본으로 넓히기 전에, 형상 목록과 신뢰할 분광 목록의 교집합에서 살아남는 소스 수를 먼저 센다. 그 수가 질량을 농도 가정과 경계 조건에만 맡기게 되면 과학 측정 플래그를 세우지 않는다.
 
-## 3. 접선 정렬 우표 진단
+## 3. 접선 정렬 우표 진단 — 구현됨. `stack_tangential_stamps`가 `ogfkit/wlcluster.py`에 있음
+
+`stack_tangential_stamps`는 소스마다 렌즈 중심에 대한 위치각의 반대로 우표를 돌린 뒤 고리별로 평균하고, 돌리지 않은 평균을 같은 결과의 하늘 좌표 그림으로 돌려준다. 정렬된 우표의 접선 타원율은 `-e1`이라 `select_sources`의 `g_t`와 부호가 같다. 두 값은 소스 표와 고리 표에 나란히 있다. 하늘 좌표 평균은 접선 방향이 여러 각으로 퍼져 있을 때의 영점 그림이다. 한 위치각만 있으면 그 그림에도 신호가 남는다. 픽셀 큐브로 포갠 은하단 영상은 `a stack of cluster images is not a tangential postage-stamp diagnostic`으로 거절된다. 이 함수는 질량을 맞추지 않는다. 설명에는 하나의 둥근 가우스 PSF와 천체별 대각 응답이 적혀 있고, 이 진단을 S19A re-Gaussianization, KiDS lensfit, DES Y3 메타캘리브레이션으로 부르지 않는다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 메뉴와 `plugin.json`은 아직 연결하지 않았다. 저장된 합성 실행에는 우표 스택이 없다.
 
 이 단계는 질량의 본 숫자가 아니다. 본 숫자는 2단계의 은하별 측정이다. 진단이 합성 시험에 통과하기 전에는 논문 본문에 넣지 않는다.
 
 Lewis 2009의 조건으로 제한한다. 일정 전단과 일정 PSF에서, 접선 방향으로 돌린 우표의 평균에는 신호가 남고, 하늘 좌표 그대로 포갠 평균에서는 상쇄된다. 접선 방향이 다른 우표를 하늘 좌표 그대로 포개면 전단이 상쇄될 수 있으므로, 그 그림은 진단의 영점 그림으로만 둔다. 여러 은하단 전체 영상을 합쳐 전단을 재는 근거로 이 시험을 인용하지 않는다.
 
-구현:
+아래 네 항목은 그 시험으로 고정했다.
 
 1. 소스마다 렌즈 중심에 대한 위치각으로 우표를 돌린 뒤 고리별로 평균한다.
 2. 돌리지 않은 평균을 같은 함수의 대조 결과로 같이 반환한다.
@@ -127,8 +129,8 @@ HST Frontier Fields(Abell S1063를 포함한 여섯 은하단, MAST)는 중심 �
 
 1. 스케일 픽셀 스택과 1절 후속. 구현됨. 함수는 `icl/wgl.py`에 있고 시험은 `icl/tests/test_wgl.py`에 있다. 메뉴와 `plugin.json`은 아직 연결하지 않았다.
 2. 전단 프로필 평균과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_shear_profiles`이고, 플러그인은 `plugins/wlcluster`의 `--task stack`이다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 저장된 합성 실행은 렌즈 하나만 맞춘다.
-3. 접선 정렬 우표 진단과 그 합성 시험.
+3. 접선 정렬 우표 진단과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`이고 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 메뉴와 `plugin.json`은 아직 연결하지 않았다. 이 진단은 질량이 아니다.
 4. 가이드 15.5·15.6과 방법론 논문 초고.
 5. HSC PDR3 global-sky, CAMIRA, S19A의 공통 영역에서 유효 표본과 5절 점검표를 채운 뒤에만 관측 과학 문장을 추가한다.
 
-1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 요청이 있을 때 구현한다. 4절의 가이드와 논문 초고는 3절 시험 뒤에 둔다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.
+1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 메뉴는 아직 연결하지 않았다. 4절의 가이드와 논문 초고는 요청이 있을 때 구현한다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.

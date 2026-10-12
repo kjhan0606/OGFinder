@@ -41,6 +41,11 @@ A stack of cluster profiles lives in stack_shear_profiles. Each cluster is a she
 catalogue: positions, two shear components, a redshift, and a weight. The function
 bins each catalogue with select_sources, averages those profiles, and can fit the
 average. It does not accept an image, and it does not measure shapes on a coadd.
+
+stack_tangential_stamps is a postage-stamp diagnostic. Each source stamp is rotated
+by minus its position angle and averaged in annuli, and the same stamps are averaged
+again without that rotation. The sky-coordinate mean is the null image. The function
+does not fit a mass and does not accept a stack of cluster images.
 """,
 import math
 
@@ -92,6 +97,13 @@ LSS_SKIP_NOTE = (
 LSS_USED_NOTE = (
     'The covariance is the shape noise plus the Gaussian large-scale-structure variance of the '
     'annulus-averaged tangential shear, for one source plane. It is not a survey covariance.')
+STAMP_NOTE = (
+    'Tangential postage-stamp diagnostic for a constant shear and a constant PSF. '
+    'The aligned average keeps the tangential ellipticity. The sky-coordinate average is the null image. '
+    'This result is not a shear measured on a stack of cluster images, and it is not the mass. '
+    'The ellipticity is an adaptive moment. When the catalogue shear comes from measure_stamps, '
+    'that measurement uses one round Gaussian PSF and a per-object diagonal response. '
+    'This diagnostic is not an S19A re-Gaussianization, a KiDS lensfit calibration, or a DES Y3 metacalibration.')
 
 
 def rho_crit(z, H0, Om):
@@ -1908,6 +1920,50 @@ def _psf_correct(mom, mom_psf):
     return dict(e1=mom['e1'] * fac, e2=mom['e2'] * fac, T=T - Tp, flux=mom['flux'])
 
 
+def _rotate_stamp(image, angle):
+    """Rotate stamp content counter-clockwise by angle radians. Column is x and row is y."""
+    img = np.asarray(image, float)
+    if img.ndim != 2:
+        raise ValueError('a postage stamp is a two-dimensional image')
+    n0, n1 = img.shape
+    cy = (n0 - 1) / 2.0
+    cx = (n1 - 1) / 2.0
+    yy, xx = np.mgrid[0:n0, 0:n1]
+    dx, dy = xx - cx, yy - cy
+    ca = math.cos(float(angle))
+    sa = math.sin(float(angle))
+    # I_rot(p) = I(R^{-1} p), with R the counter-clockwise rotation.
+    xs = ca * dx + sa * dy + cx
+    ys = -sa * dx + ca * dy + cy
+    return map_coordinates(img, [ys, xs], order=1, mode='constant', cval=0.0, prefilter=False)
+
+
+def _as_stamp_list(stamps):
+    """One two-dimensional stamp per source. A cube of cluster frames is rejected."""
+    if isinstance(stamps, np.ndarray) and stamps.ndim != 2:
+        raise ValueError('a stack of cluster images is not a tangential postage-stamp diagnostic')
+    if isinstance(stamps, np.ndarray):
+        raise ValueError('a cluster image is not a list of postage stamps')
+    if not isinstance(stamps, (list, tuple)) or len(stamps) == 0:
+        raise ValueError('postage stamps are a list of source images')
+    out = []
+    for item in stamps:
+        arr = np.asarray(item, float)
+        if arr.ndim != 2:
+            raise ValueError('a stack of cluster images is not a tangential postage-stamp diagnostic')
+        out.append(arr)
+    return out
+
+
+def _aligned_ellipticity(image):
+    """Tangential and cross ellipticity of a stamp whose radial axis lies along +x."""
+    mom = adaptive_moments(image)
+    if mom is None:
+        return None
+    et, ex = tangential([1.0], [0.0], [mom['e1']], [mom['e2']])
+    return float(et[0]), float(ex[0]), float(mom['e1']), float(mom['e2'])
+
+
 def shear_image(image, g1, g2):
     """Apply a reduced shear by I_obs(theta) = I(A theta), A = [[1-g1, -g2], [-g2, 1+g1]], about the stamp centre."""
     img = np.asarray(image, float)
@@ -2085,6 +2141,122 @@ def measure_stamps(image, x_pix, y_pix, psf_fwhm_pix=0.0, stamp=32, dg=0.01):
         cut = img[iy - half:iy + half + 1, ix - half:ix + half + 1].copy()
         out.append(metacal_stamp(cut, psf, dg=dg))
     return out
+
+
+def stack_tangential_stamps(stamps, x_arcsec, y_arcsec, g1, g2, z, weight, z_lens, cosmo,
+                            rmin=0.3, rmax=3.0, nbins=8, z_gap=0.1, gmax=1.5, member=None,
+                            min_per_bin=1):
+    """Average postage stamps in annuli, once rotated onto the tangential axis and once in sky coordinates.
+
+    ``stamps`` has one image per catalogue row. The rotation is minus the position angle
+    from select_sources, so +x is radial. On that image the tangential ellipticity is -e1,
+    which has the same sign as g_t. The unrotated mean is the null image when the
+    tangential directions differ. No mass is fitted. A cube of cluster frames is rejected.
+    """
+    images = _as_stamp_list(stamps)
+    x_arcsec = np.asarray(x_arcsec, float).reshape(-1)
+    if len(images) != x_arcsec.size:
+        raise ValueError('one postage stamp is required for each catalogue row')
+    shape = images[0].shape
+    if min(shape) < 5:
+        raise ValueError('a postage stamp needs at least 5 pixels on a side')
+    for image in images:
+        if image.shape != shape:
+            raise ValueError('postage stamps in one stack have the same shape')
+    if int(nbins) < 1 or float(rmin) <= 0 or float(rmax) <= float(rmin):
+        raise ValueError('radial bins need 0 < rmin < rmax and nbins >= 1')
+    base = dict(
+        product='tangential postage-stamp diagnostic',
+        note=STAMP_NOTE,
+        metacal_scope=METACAL_SCOPE,
+        reference='Lewis 2009 MNRAS 398, 471; Kuijken 1999 A&A 352, 355',
+        mass=None,
+        weight_note='Each retained stamp has equal weight in the image average and in the ellipticity mean.',
+        n_input=int(x_arcsec.size),
+        success=False,
+        status='insufficient_sample',
+        profile=[],
+        sources=[])
+    sel = select_sources(
+        x_arcsec, y_arcsec, g1, g2, z, weight, z_lens, cosmo,
+        z_gap=z_gap, rmin=rmin, rmax=rmax, gmax=gmax, member=member)
+    if len(sel['R']) == 0:
+        base['note'] = 'No source was retained behind the lens. ' + STAMP_NOTE
+        return _plain(base)
+    edges = bin_edges(rmin, rmax, nbins)
+    bins = np.digitize(sel['R'], edges) - 1
+    ones = np.ones(shape, float)
+    profile = []
+    sources = []
+    images_out = []
+    for i in range(len(edges) - 1):
+        mask = np.where(bins == i)[0]
+        if mask.size < int(min_per_bin):
+            continue
+        acc_al = np.zeros(shape, float)
+        acc_sky = np.zeros(shape, float)
+        w_al = np.zeros(shape, float)
+        e_t_vals = []
+        e_x_vals = []
+        same_sign = 0
+        finite_e = 0
+        for j in mask:
+            stamp = images[int(sel['index'][j])]
+            phi = float(sel['phi'][j])
+            aligned = _rotate_stamp(stamp, -phi)
+            cover = _rotate_stamp(ones, -phi)
+            valid = cover >= 0.5
+            acc_al += np.where(valid, aligned, 0.0)
+            w_al += valid.astype(float)
+            acc_sky += stamp
+            ell = _aligned_ellipticity(aligned)
+            gt = float(sel['gt'][j])
+            gx = float(sel['gx'][j])
+            row = dict(index=int(sel['index'][j]), phi=phi, R=float(sel['R'][j]), gt=gt, gx=gx,
+                       e_t=None, e_x=None)
+            if ell is not None and np.isfinite(ell[0]) and np.isfinite(ell[1]):
+                row['e_t'] = ell[0]
+                row['e_x'] = ell[1]
+                e_t_vals.append(ell[0])
+                e_x_vals.append(ell[1])
+                finite_e += 1
+                if row['e_t'] * gt > 0:
+                    same_sign += 1
+            sources.append(row)
+        mean_al = np.zeros(shape, float)
+        np.divide(acc_al, w_al, out=mean_al, where=w_al > 0)
+        mean_sky = acc_sky / float(mask.size)
+        ell_al = _aligned_ellipticity(mean_al)
+        mom_sky = adaptive_moments(mean_sky)
+        phis = np.mod(sel['phi'][mask], 2.0 * math.pi)
+        order = np.sort(phis)
+        gaps = np.diff(np.concatenate([order, [order[0] + 2.0 * math.pi]]))
+        span = float(2.0 * math.pi - np.max(gaps))
+        profile.append(dict(
+            bin=int(i),
+            R=float((edges[i] * edges[i + 1]) ** 0.5),
+            n=int(mask.size),
+            n_ellipticity=int(finite_e),
+            n_same_sign=int(same_sign),
+            position_angle_span=span,
+            gt=float(np.mean(sel['gt'][mask])),
+            gx=float(np.mean(sel['gx'][mask])),
+            e_t=None if not e_t_vals else float(np.mean(e_t_vals)),
+            e_x=None if not e_x_vals else float(np.mean(e_x_vals)),
+            e_t_stack=None if ell_al is None else ell_al[0],
+            e_x_stack=None if ell_al is None else ell_al[1],
+            e1_sky=None if mom_sky is None else float(mom_sky['e1']),
+            e2_sky=None if mom_sky is None else float(mom_sky['e2']),
+            e_abs_sky=None if mom_sky is None else float(math.hypot(mom_sky['e1'], mom_sky['e2']))))
+        images_out.append(dict(bin=int(i), aligned=mean_al, sky=mean_sky))
+    base['profile'] = profile
+    base['sources'] = sources
+    base['images'] = images_out
+    base['n_sources'] = int(len(sel['R']))
+    if profile:
+        base['success'] = True
+        base['status'] = 'diagnostic'
+    return _plain(base)
 
 
 def _passes_selection(side, min_resolution, emax):
