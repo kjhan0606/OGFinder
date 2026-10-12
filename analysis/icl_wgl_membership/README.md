@@ -26,6 +26,8 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 스케일 스택의 메뉴 항목은 ICL의 `Stack BCG+diffuse`이다. 프로그램은 `plugins/icl/icl_stack.py`이고 `icl.wgl.stack_clusters`를 호출한다. 한 프레임 프로파일은 `ds9/library/ds9_icl.py`에 그대로 있다. local-sky 프레임과, 제품 이름이 `deepCoadd`가 아닌 프레임은 거절된다. 산출물 키는 `bcg+diffuse`이고, 서베이 점검표가 비어 있으면 과학 측정 플래그는 내려가 있다.
 
+실제 목록으로 그 메뉴 명령을 준비하는 절차는 `hsc_debug/`에 있다. `bash hsc_debug/run_debug.sh`는 `ASTRAFEK_DATA`(기본 `/gpfs/kjhan/Astrafek/data`) 아래에 CAMIRA S20A 별마스크 목록을 받고 은하단 4개를 고른다. `masses.tsv`의 정의가 `200c`이고 `cutouts/frames.tsv`가 global-sky를 적을 때 `05_stack.py`가 메뉴와 같은 인자로 `icl_stack.py`를 실행한다. 2026-10-12 실행에는 그 두 파일이 없었고, 스택 JSON은 만들어지지 않았다. 이 절차는 과학 측정을 기록하지 않는다.
+
 ## 실행
 
 OGFinder 루트에서:
