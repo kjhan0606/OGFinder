@@ -20,6 +20,8 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 3절의 접선 우표 진단은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 있다. 접선 방향으로 돌린 평균이 진단이고, 하늘 좌표 평균은 영점 그림이다. 이 함수는 질량을 맞추지 않는다. 이 디렉터리의 합성 실행에는 우표 스택이 없다.
 
+4절의 사용자 안내 15.5·15.6절은 `ds10-web/docs/user_guide/sections/own_files.tex`에 있고, 방법론 초고는 `methods_draft.md`에 있다. 합성 실행이 기록하는 주장과 기록하지 않는 주장은 그 두 곳에 같은 표로 있다.
+
 ## 실행
 
 OGFinder 루트에서:

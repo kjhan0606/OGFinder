@@ -82,9 +82,9 @@ Lewis 2009의 조건으로 제한한다. 일정 전단과 일정 PSF에서, 접�
 
 합성 시험이 요구하는 것은 접선 정렬에서 신호 유지, 하늘 좌표 평균에서 상쇄, 그리고 그 타원율이 은하별 접선 전단과 같은 부호로 놓이는 것이다.
 
-## 4. 가이드 15.5·15.6과 방법론 논문
+## 4. 가이드 15.5·15.6과 방법론 논문 — 초고가 가이드와 `methods_draft.md`에 있음
 
-2단계와 3단계의 시험이 통과한 뒤에만 `ds10-web/docs/user_guide`의 15.5절과 15.6절을 고친다. 푸터 날짜 “8 October 2026”과 이미 인쇄된 쪽수에 대한 과거 문장은 그대로 둔다. 가이드에 적을 명령은 시험에 쓴 명령과 같아야 한다.
+`ds10-web/docs/user_guide/sections/own_files.tex`의 15.5절과 15.6절, 그리고 같은 안내의 약중력 흐름도를 고쳤다. 푸터 날짜 “8 October 2026”은 그대로 두었다. 가이드에 적은 셸 명령은 `plugins/wlcluster/tests/test_wlcluster.py`의 무잡음 질량 시험과 스택 시험의 플래그이고, 시험 명령은 그 파일과 `icl/tests/test_wgl.py`, `icl/tests/test_members.py`의 pytest이다. 방법론 초고는 `methods_draft.md`이다. 5절의 이름 있는 자료는 이 초고에 넣지 않았다.
 
 가이드와 초고가 반드시 담을 내용:
 
@@ -130,7 +130,7 @@ HST Frontier Fields(Abell S1063를 포함한 여섯 은하단, MAST)는 중심 �
 1. 스케일 픽셀 스택과 1절 후속. 구현됨. 함수는 `icl/wgl.py`에 있고 시험은 `icl/tests/test_wgl.py`에 있다. 메뉴와 `plugin.json`은 아직 연결하지 않았다.
 2. 전단 프로필 평균과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_shear_profiles`이고, 플러그인은 `plugins/wlcluster`의 `--task stack`이다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 저장된 합성 실행은 렌즈 하나만 맞춘다.
 3. 접선 정렬 우표 진단과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`이고 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 메뉴와 `plugin.json`은 아직 연결하지 않았다. 이 진단은 질량이 아니다.
-4. 가이드 15.5·15.6과 방법론 논문 초고.
+4. 가이드 15.5·15.6과 방법론 논문 초고. 구현됨. 가이드는 `ds10-web/docs/user_guide/sections/own_files.tex`이고 초고는 `analysis/icl_wgl_membership/methods_draft.md`이다. 푸터 날짜 “8 October 2026”은 그대로이다.
 5. HSC PDR3 global-sky, CAMIRA, S19A의 공통 영역에서 유효 표본과 5절 점검표를 채운 뒤에만 관측 과학 문장을 추가한다.
 
-1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 메뉴는 아직 연결하지 않았다. 4절의 가이드와 논문 초고는 요청이 있을 때 구현한다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.
+1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 우표 진단의 메뉴는 아직 연결하지 않았다. 4절은 `ds10-web/docs/user_guide/sections/own_files.tex`의 15.5·15.6절과 `methods_draft.md`에 반영했다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.
