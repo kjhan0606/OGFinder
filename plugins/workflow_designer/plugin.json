@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "id": "workflow_designer",
+  "name": "Science workflows",
+  "short": "Workflows",
+  "tab": "Measure",
+  "order": 1,
+  "description": "Choose a science goal, follow a guided flow, open existing analysis tools, and save verified checkpoints with explicit output files.",
+  "primary": "open",
+  "tcl": "workflow_designer.tcl",
+  "steps": [{"id": "open", "label": "Science pipelines / Resume session...", "proc": "OGFWorkflowOpen", "session": "NONE"}]
+}

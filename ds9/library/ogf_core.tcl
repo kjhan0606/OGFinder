@@ -1087,6 +1087,21 @@ proc ::ogf::step::run {id sid {mode gui}} {
     } elseif {[dict exists $step requires]} {
 	lappend opts -requires [dict get $step requires]
     }
+    # Explicit manifest products must enter the recorder, including non-catalogue
+    # reports. A captured stdout message is not a substitute for the report file.
+    set products {}
+    foreach name [::ogf::json::get $out files] {
+        set path [expand $id $name $ctx]
+        if {[file pathtype $path] eq "relative"} {set path [file join [dict get $ctx work] $path]}
+        lappend products $path
+    }
+    set name [::ogf::json::get $out catalog]
+    if {$name ne {}} {
+        set path [expand $id $name $ctx]
+        if {[file pathtype $path] eq "relative"} {set path [file join [dict get $ctx work] $path]}
+        lappend products $path
+    }
+    if {[llength $products]} {lappend opts -outputs [lsort -unique $products]}
     return [::ogf::job::run $argv {*}$opts]
 }
 

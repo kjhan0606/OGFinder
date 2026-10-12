@@ -174,6 +174,8 @@ proc OGFUIBuild {f} {
     trace add variable ::ogfsess(steps) write OGFUIProgressSoon
     OGFUIShowTab Detect
     OGFUIProgressRefresh
+    # Science recipes live in the main analysis panel, alongside its existing tools.
+    after idle {if {[info commands OGFWorkflowOpen] ne {}} {OGFWorkflowOpen}}
 }
 
 # The chip row is one line of ogfui(panelwidth) pixels.  When the chips of a tab are wider than that, the last ones are

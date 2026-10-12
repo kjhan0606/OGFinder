@@ -1785,6 +1785,429 @@
     "catalog": "lf.tsv"
    },
    "done_status": "Luminosity function"
+  },
+  {
+   "id": "workflow-audit",
+   "label": "Audit image pixels and headers",
+   "stage": "measure",
+   "needs": [
+    "image"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "audit.json"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_workflow.py",
+    "--core-dir",
+    "{core-dir}",
+    "audit",
+    "{image}",
+    "--summary",
+    "{work}/audit.json"
+   ],
+   "record": "ds10core.workflow-audit",
+   "session": "AUTO"
+  },
+  {
+   "id": "profile-stack",
+   "label": "Equal-cluster kpc profile stack",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "profile_stack.tsv",
+    "files": [
+     "profile_stack.json",
+     "profile_stack_input.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_workflow.py",
+    "--core-dir",
+    "{core-dir}",
+    "stack",
+    "{catalog}",
+    "--out",
+    "{work}/profile_stack.tsv",
+    "--summary",
+    "{work}/profile_stack.json",
+    "--bootstrap",
+    "{workflow-bootstrap}",
+    "--seed",
+    "{workflow-seed}"
+   ],
+   "record": "ds10core.profile-stack",
+   "session": "AUTO"
+  },
+  {
+   "id": "spectrum-audit",
+   "label": "Audit 1D spectrum",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "spectrum_audit.json",
+     "spectrum_audit_input.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum.py",
+    "--core-dir",
+    "{core-dir}",
+    "audit",
+    "{catalog}",
+    "--summary",
+    "{work}/spectrum_audit.json",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}"
+   ],
+   "record": "ds10core.spectrum-audit",
+   "session": "AUTO"
+  },
+  {
+   "id": "spectrum-continuum",
+   "label": "Fit masked polynomial continuum",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "set",
+    "catalog": "continuum.tsv",
+    "files": [
+     "continuum.json",
+     "continuum_input.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum.py",
+    "--core-dir",
+    "{core-dir}",
+    "continuum",
+    "{catalog}",
+    "--summary",
+    "{work}/continuum.json",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}",
+    "--out",
+    "{work}/continuum.tsv",
+    "--degree",
+    "{spectrum-degree}",
+    "--clip",
+    "{spectrum-clip}",
+    "--iterations",
+    "{spectrum-iterations}"
+   ],
+   "record": "ds10core.spectrum-continuum",
+   "session": "AUTO"
+  },
+  {
+   "id": "spectrum-lines",
+   "label": "Measure identified isolated spectral lines",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "lines.json",
+     "lines_input.tsv",
+     "lines_measurements.tsv",
+     "lines_model.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_lines.py",
+    "--core-dir",
+    "{core-dir}",
+    "lines",
+    "{catalog}",
+    "--summary",
+    "{work}/lines.json",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}",
+    "--lines",
+    "{spectrum-lines}",
+    "--redshift",
+    "{spectrum-redshift}",
+    "--window",
+    "{spectrum-window}",
+    "--polarity",
+    "{spectrum-polarity}",
+    "--min-snr",
+    "{spectrum-min-snr}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-lines"
+  },
+  {
+   "id": "spectrum-redshift",
+   "label": "Check identified multi-line redshift candidate",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "redshift.json",
+     "redshift_input.tsv",
+     "redshift_measurements.tsv",
+     "redshift_model.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_lines.py",
+    "--core-dir",
+    "{core-dir}",
+    "redshift",
+    "{catalog}",
+    "--summary",
+    "{work}/redshift.json",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}",
+    "--lines",
+    "{spectrum-lines}",
+    "--redshift",
+    "{spectrum-redshift}",
+    "--window",
+    "{spectrum-window}",
+    "--polarity",
+    "{spectrum-polarity}",
+    "--min-snr",
+    "{spectrum-min-snr}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-redshift"
+  },
+  {
+   "id": "spectrum-search",
+   "label": "Search spectral peaks and redshift proposals",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "search.json",
+     "search_input.tsv",
+     "search_peaks.tsv",
+     "search_candidates.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_search.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--summary",
+    "{work}/search.json",
+    "--lines",
+    "{spectrum-lines}",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}",
+    "--polarity",
+    "{spectrum-polarity}",
+    "--min-snr",
+    "{spectrum-min-snr}",
+    "--z-min",
+    "{spectrum-z-min}",
+    "--z-max",
+    "{spectrum-z-max}",
+    "--tolerance",
+    "{spectrum-tolerance}",
+    "--baseline",
+    "{spectrum-baseline}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-search"
+  },
+  {
+   "id": "spectrum-joint",
+   "label": "Joint emission Gaussian components and local continuum",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "joint.json",
+     "joint_input.tsv",
+     "joint_components.tsv",
+     "joint_model.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_joint.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--summary",
+    "{work}/joint.json",
+    "--components",
+    "{spectrum-components}",
+    "--fit-range",
+    "{spectrum-fit-range}",
+    "--shift-limit",
+    "{spectrum-shift-limit}",
+    "--redshift",
+    "{spectrum-redshift}",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}",
+    "--min-snr",
+    "{spectrum-min-snr}",
+    "--continuum-model",
+    "{spectrum-continuum-model}",
+    "--agn-index",
+    "{spectrum-agn-index}",
+    "--pivot",
+    "{spectrum-pivot}",
+    "--template-note",
+    "{spectrum-template-note}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-joint"
+  },
+  {
+   "id": "spectrum-decompose",
+   "label": "Fit supplied host/FeII and fixed power-law templates",
+   "stage": "measure",
+   "needs": [
+    "catalog"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "decompose.json",
+     "decompose_input.tsv",
+     "decomposition.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_templates.py",
+    "--core-dir",
+    "{core-dir}",
+    "{catalog}",
+    "--summary",
+    "{work}/decompose.json",
+    "--wave-frame",
+    "{spectrum-wave-frame}",
+    "--flux-unit",
+    "{spectrum-flux-unit}",
+    "--exclude",
+    "{spectrum-exclude}",
+    "--fit-range",
+    "{spectrum-fit-range}",
+    "--agn-index",
+    "{spectrum-agn-index}",
+    "--pivot",
+    "{spectrum-pivot}",
+    "--template-note",
+    "{spectrum-template-note}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-decompose"
+  },
+  {
+   "id": "spectrum-diagnostic",
+   "label": "Joint component ratios and correlated errors",
+   "stage": "measure",
+   "needs": [],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "diagnostic.json",
+     "diagnostic_joint_input.json",
+     "diagnostic_ratios.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_diagnostic.py",
+    "--core-dir",
+    "{core-dir}",
+    "{spectrum-diagnostic-input}",
+    "--summary",
+    "{work}/diagnostic.json",
+    "--ratios",
+    "{spectrum-ratios}",
+    "--min-snr",
+    "{spectrum-ratio-min-snr}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-diagnostic"
+  },
+  {
+   "id": "spectrum-inference",
+   "label": "Bundled BPT, extinction, luminosity and broad Halpha mass",
+   "stage": "measure",
+   "needs": [],
+   "output": {
+    "mode": "capture",
+    "files": [
+     "inference.json",
+     "inference_joint_input.json",
+     "inference_config.json",
+     "inference_summary.tsv"
+    ]
+   },
+   "cli": [
+    "{python}",
+    "{plugin_dir}/run_spectrum_inference.py",
+    "--core-dir",
+    "{core-dir}",
+    "{spectrum-inference-input}",
+    "--summary",
+    "{work}/inference.json",
+    "--config",
+    "{spectrum-inference-config}"
+   ],
+   "session": "AUTO",
+   "record": "ds10core.spectrum-inference"
   }
  ],
  "params": [
@@ -2120,14 +2543,14 @@
   },
   {
    "name": "lsbg-mu-eff-min",
-   "label": "LSBG μ_eff min",
+   "label": "LSBG \u03bc_eff min",
    "type": "float",
    "default": 24.2,
    "group": "LSBG"
   },
   {
    "name": "lsbg-mu-eff-max",
-   "label": "LSBG μ_eff max",
+   "label": "LSBG \u03bc_eff max",
    "type": "float",
    "default": 28.8,
    "group": "LSBG"
@@ -3748,6 +4171,257 @@
    "group": "Luminosity function",
    "expert": 1,
    "help": "TSV with MAG or MAG_MID, and COMPLETENESS. A catalogue cell in (0, 1] wins over this file."
+  },
+  {
+   "name": "workflow-bootstrap",
+   "label": "Cluster bootstrap draws",
+   "type": "int",
+   "default": 1000,
+   "min": 100,
+   "max": 10000,
+   "group": "Stack"
+  },
+  {
+   "name": "workflow-seed",
+   "label": "Bootstrap seed",
+   "type": "int",
+   "default": 0,
+   "min": 0,
+   "max": 2147483647,
+   "group": "Stack"
+  },
+  {
+   "name": "spectrum-wave-frame",
+   "label": "Wavelength frame (required)",
+   "type": "choice",
+   "choices": [
+    "",
+    "air",
+    "vacuum"
+   ],
+   "default": "",
+   "group": "Input"
+  },
+  {
+   "name": "spectrum-flux-unit",
+   "label": "Flux unit (required)",
+   "type": "string",
+   "default": "",
+   "group": "Input"
+  },
+  {
+   "name": "spectrum-exclude",
+   "label": "Excluded wavelength intervals",
+   "type": "string",
+   "default": "",
+   "group": "Continuum",
+   "help": "Angstrom intervals LOW:HIGH;LOW:HIGH for lines, tellurics and defects. No automatic physical line masks."
+  },
+  {
+   "name": "spectrum-degree",
+   "label": "Chebyshev degree",
+   "type": "int",
+   "default": 3,
+   "min": 0,
+   "max": 12,
+   "group": "Continuum"
+  },
+  {
+   "name": "spectrum-clip",
+   "label": "Residual clipping",
+   "type": "float",
+   "default": 3,
+   "min": 0.5,
+   "max": 20,
+   "group": "Continuum"
+  },
+  {
+   "name": "spectrum-iterations",
+   "label": "Clipping iterations",
+   "type": "int",
+   "default": 5,
+   "min": 1,
+   "max": 20,
+   "group": "Continuum"
+  },
+  {
+   "name": "spectrum-lines",
+   "label": "Identified lines NAME:REST_A;NAME:REST_A (required)",
+   "type": "string",
+   "default": "",
+   "group": "Lines",
+   "help": "User identified isolated lines; rest wavelengths in the declared air/vacuum frame. No automatic identification."
+  },
+  {
+   "name": "spectrum-redshift",
+   "label": "Initial redshift guess",
+   "type": "float",
+   "default": 0.0,
+   "min": -0.99,
+   "max": 20.0,
+   "group": "Lines"
+  },
+  {
+   "name": "spectrum-window",
+   "label": "Observed half-window (Angstrom)",
+   "type": "float",
+   "default": 30.0,
+   "min": 0.1,
+   "max": 500.0,
+   "group": "Lines"
+  },
+  {
+   "name": "spectrum-polarity",
+   "label": "Line polarity",
+   "type": "choice",
+   "choices": [
+    "emission",
+    "absorption"
+   ],
+   "default": "emission",
+   "group": "Lines"
+  },
+  {
+   "name": "spectrum-min-snr",
+   "label": "Minimum integrated flux S/N",
+   "type": "float",
+   "default": 5.0,
+   "min": 3.0,
+   "max": 100.0,
+   "group": "Lines"
+  },
+  {
+   "name": "spectrum-z-min",
+   "label": "Search minimum redshift",
+   "type": "float",
+   "default": 0.0,
+   "min": -0.99,
+   "max": 20.0,
+   "group": "Search"
+  },
+  {
+   "name": "spectrum-z-max",
+   "label": "Search maximum redshift",
+   "type": "float",
+   "default": 2.0,
+   "min": -0.98,
+   "max": 21.0,
+   "group": "Search"
+  },
+  {
+   "name": "spectrum-tolerance",
+   "label": "Peak match tolerance (Angstrom)",
+   "type": "float",
+   "default": 3.0,
+   "min": 0.01,
+   "max": 100.0,
+   "group": "Search"
+  },
+  {
+   "name": "spectrum-baseline",
+   "label": "Search baseline samples (odd)",
+   "type": "int",
+   "default": 101,
+   "min": 21,
+   "max": 501,
+   "group": "Search"
+  },
+  {
+   "name": "spectrum-components",
+   "label": "Joint components NAME:REST_A:SIGMA_MIN_A:SIGMA_MAX_A",
+   "type": "string",
+   "default": "",
+   "group": "Joint lines"
+  },
+  {
+   "name": "spectrum-fit-range",
+   "label": "Joint fit observed interval LOW:HIGH (Angstrom)",
+   "type": "string",
+   "default": "",
+   "group": "Joint lines"
+  },
+  {
+   "name": "spectrum-shift-limit",
+   "label": "Joint center shift bound at reference line (Angstrom)",
+   "type": "float",
+   "default": 10.0,
+   "min": 0.01,
+   "max": 500.0,
+   "group": "Joint lines"
+  },
+  {
+   "name": "spectrum-continuum-model",
+   "label": "Joint continuum model",
+   "type": "choice",
+   "choices": [
+    "linear",
+    "templates"
+   ],
+   "default": "linear",
+   "group": "Templates"
+  },
+  {
+   "name": "spectrum-agn-index",
+   "label": "Fixed F_lambda power-law index",
+   "type": "float",
+   "default": -1.5,
+   "min": -5.0,
+   "max": 3.0,
+   "group": "Templates"
+  },
+  {
+   "name": "spectrum-pivot",
+   "label": "Observed power-law pivot (Angstrom)",
+   "type": "float",
+   "default": 5000.0,
+   "min": 1.0,
+   "max": 10000000.0,
+   "group": "Templates"
+  },
+  {
+   "name": "spectrum-template-note",
+   "label": "Template provenance/frame/grid/resolution preparation (required)",
+   "type": "string",
+   "default": "",
+   "group": "Templates"
+  },
+  {
+   "name": "spectrum-ratios",
+   "label": "Ratios LABEL=NUM+NUM/DEN+DEN",
+   "type": "string",
+   "default": "",
+   "group": "Diagnostics"
+  },
+  {
+   "name": "spectrum-ratio-min-snr",
+   "label": "Minimum sum S/N for ratios",
+   "type": "float",
+   "default": 5.0,
+   "min": 5.0,
+   "max": 100.0,
+   "group": "Diagnostics"
+  },
+  {
+   "name": "spectrum-diagnostic-input",
+   "label": "Joint report JSON (workflow connects automatically)",
+   "type": "string",
+   "default": "",
+   "group": "Diagnostics"
+  },
+  {
+   "name": "spectrum-inference-config",
+   "label": "BPT/dust/luminosity/BH configuration JSON",
+   "type": "string",
+   "default": "{}",
+   "group": "Physical inference",
+   "help": "Explicit component identities, dust k, luminosity distance, flux conversion and broad Halpha calibration prerequisites. Missing sections are not calculated."
+  },
+  {
+   "name": "spectrum-inference-input",
+   "label": "Joint report JSON (workflow connects automatically)",
+   "type": "string",
+   "default": "",
+   "group": "Physical inference"
   }
  ],
  "tcl": "ds10core.tcl"
