@@ -1,6 +1,7 @@
 # OGFinder / Astrafex Desktop 인수인계 (HANDOVER)
 
 작성: 2026-10-08 (Asia/Seoul), 소유자 Juhan Kim <kjhan0606@gmail.com>.
+추가: 2026-10-12 (Asia/Seoul). 6장. 1–5장은 2026-10-08 기록이다. 전체 서술은 ds10-web `HANDOVER.md` 11장이다.
 
 **전체 인수인계 문서는 Astrafex Web 저장소의 [`HANDOVER.md`](https://github.com/kjhan0606/ds10-web/blob/master/HANDOVER.md)** (`kjhan0606/ds10-web`, private)이다.
 프로젝트 목적, 이름(Astrafex), 아키텍처, 기능별 검증 결과, 작업 규칙, 남은 일은 모두 거기에 있다. 이 문서는 OGFinder에만 해당하는 부분만 다룬다.
@@ -79,6 +80,8 @@ scripts/run_all_checks.sh --only geometry,mouse                      # 일부만
 
 ## 4. 최근 commit (이번 인수인계 시점)
 
+아래 목록은 2026-10-08, master `ad8761063` 기록이다. 2026-10-12의 HEAD `4dee078b467d6f1dac1aaef8ef2f80a55f577222`와 그 사이 24개 commit은 6장이다.
+
 master `ad8761063` (2026-10-08, 이 문서) 기준 최근 commit. 한 줄은 `git log` 제목이다. 전체 이력은 약 5573 commit이고, 기능 단위 기록은 `docs/progress_log.md`다.
 
 * `16798dd79` (2026-10-08) trails stack을 실제 HST dither (jc8m32010)에서 돌리며 WCS 왜곡, CR 제거, 스케일을 고침.
@@ -92,3 +95,52 @@ master `ad8761063` (2026-10-08, 이 문서) 기준 최근 commit. 한 줄은 `gi
 ## 5. 규칙 요약 (전체는 ds10-web `HANDOVER.md` 7장)
 
 파일 지정 commit만; `ast/config.h.in` commit 금지; 무거운 작업은 `flock /tmp/astrafex_heavy.lock`으로 하나씩 (RAM 15 GB, swap 없음); process는 PID로 kill (`pkill -f` 금지); push는 사용자가 지시할 때만; git identity `Juhan Kim <kjhan0606@gmail.com>`; 기능 추가 시 `docs/`와 ds10-web 사용자 설명서도 갱신.
+
+## 6. 2026-10-12 추가
+
+이 머신의 작업 폴더는 `/home/kjhan/BACKUP/Astrafek`이다. HEAD는 `origin/master`와 같은 `4dee078b467d6f1dac1aaef8ef2f80a55f577222`이다. 스케일 ICL, 멤버 맞춤, HSC 디버그가 멈춘 지점, 커밋에서 빼 둘 파일은 ds10-web `HANDOVER.md` 11장에 있다. 여기에는 이 저장소에서 이어서 볼 것만 적는다.
+
+### 6.1 `ad8761063` 다음 commit
+
+`git log --oneline ad8761063..HEAD` 24개. 한 줄은 제목이다.
+
+* `4dee078b4` Add the CAMIRA member match and the masked kpc stack step.
+* `893b6e3af` Keep the full spectroscopic slice for the HSC stack list.
+* `7956b45b6` Save the HSC stack debug procedure as scripts for the paper.
+* `7e57dcd68` Wire the scaled BCG+diffuse stack into the ICL menu.
+* `c8d3e44a0` Count lens sources at the named-data gate before any observed sentence.
+* `0b81eb9bc` Draft the methods note for the scaled light stack and the lensing mass.
+* `dd26ab3f0` Add a tangential postage-stamp diagnostic beside the shear catalogue.
+* `5c72e470f` Average tangential shear profiles before the next NFW fit.
+* `dd4a87e9c` Name the scaled stack BCG+diffuse and keep a kpc comparison beside it.
+* `e441eb7f5` Record the synthetic ICL and weak-lensing self-consistency run.
+* `e7cfadc2a` Label satellites and background galaxies for ICL masks and weak lensing.
+* `1bbecb041` Scale cluster images by apparent size and M_200c before an ICL stack.
+* `3bbaa6dd2` Add cluster weak lensing from metacalibration through an NFW mass.
+* `9a4adcb8f` Add learned spectrum steps for a temperature letter, galaxy neighbours, and a user template match.
+* `01e6610a3` Add a supernova type from one host redshift and the line depths.
+* `8b2325e68` Add a synthetic spectrum example for preprocessing and the science step.
+* `0282c122c` Classify one spectrum from the lines that actually fit.
+* `92ef9a1f0` Draw the default galaxy stamp with an in-tree Sérsic, shear, and Gaussian PSF.
+* `b7c00b6e0` Use in-tree models for the standalone measurements, orbits, and SED fits.
+* `7b3b757cb` Record orbit ranging for linked groups and stop the GUI checks leaving Xvfb up.
+* `e2f307324` Refine accepted nightlink groups in an N-body child process.
+* `1d3edf8b6` Record the ACS satellite-trail truth sample (recall 6/9, precision 6/12)
+* `2984e9971` Record the visual inspection of the 29 SDSS trail candidates
+* `8984e74f7` HANDOVER.md: fill check-result, geometry, and git-log placeholders from the repo
+
+### 6.2 이 저장소에서 이어서 볼 경로
+
+* `analysis/icl_wgl_membership/`: 합성 자기일관성 (`run_analysis.py`, `history.json`), `implementation_plan.md`, `methods_draft.md`. `history.json`의 `parent_commit`은 `9a4adcb8f421838115acbff9c8612671d4fff723`이다. 그 파일은 고치지 않고, 스크립트는 다시 돌리지 않는다.
+* `analysis/icl_wgl_membership/hsc_debug/`: 논문에 함께 제공하는 디버그 스크립트 01–08과 `run_debug.sh`. 실행 데이터는 `/gpfs/kjhan/Astrafek/data`에만 있다. 카탈로그, FITS, 로그는 커밋하지 않는다.
+* 메뉴에 연결된 스택은 `plugins/icl/icl_stack.py`의 `Stack BCG+diffuse`이다. 산출물 키 `bcg+diffuse`는 BCG를 남긴 평균이다. 가린 kpc 평균의 이름은 `bcg-and-members-masked`이고 `hsc_debug/08_mask_stack.py`가 쓴다. 2026-10-12 실행은 컷아웃 HTTP 401에서 멈추었고, `cutouts/frames.tsv`가 없어 평균 파일은 쓰이지 않았다. `science_measurement`는 거짓이다.
+* 접선 우표 진단은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`이다. 메뉴에는 연결되어 있지 않다.
+
+### 6.3 작업 트리에 남은 파일
+
+2026-10-12에 커밋하지 않고 남겨 둔 파일이다. 인수인계 커밋에 넣지 않는다.
+
+* 수정: `ds9/library/ds9_psf_deconv.py`, `plugins/galaxy_model/galaxy_model.tcl`, `plugins/star_psf/plugin.json`, `plugins/star_psf/star_psf.tcl`, `psf_deconv/psf/sim_psf.py`
+* 미추적: `plugins/galaxy_model/galaxy_fit.py`, `plugins/galaxy_model/tests/`, `psf_deconv/tests/test_diffraction_psf.py`
+
+나선 은하는 exponential disc(preset `exp`)로 둔다. bulge+disk는 연결하지 않는다. `ast/config.h.in`과 빌드 산출물은 커밋하지 않는다.
