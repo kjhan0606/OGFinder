@@ -51,8 +51,8 @@ def main():
 - 분광 행에서 `|z_spec-z_cl|/(1+z_cl)` 의 중앙값은 {p50:.5f}, 68퍼센타일은 {p68:.5f}이다.
 - 선택 창은 그 분수가 0.01보다 작은 행이다. Oguri et al. 2018 (arXiv:1701.00818) 은 `Δz/(1+z)` 의 산란이 대부분의 구간에서 0.01보다 좋다고 적는다.
 - 적색이동 구간은 {z_lo:.2f} 이상 {z_hi:.2f} 미만이다. 0.10부터 1.20까지 0.05 폭의 정확한 경계 가운데, 이 창을 통과한 행이 가장 많은 구간이다. 그 행은 {n_window}개이다.
-- 그 구간의 `N_mem` 90퍼센타일은 {nmem:.4f}이다. 이 값 이상인 {n_rich}개 가운데 richness 가 큰 순서로, 서로 0.3도보다 멀리 떨어진 4개를 골랐다. 최소 각거리는 {sep:.4f}도이다.
-- 고른 식별자는 {ids} 이다. 표는 `logs/selected_clusters.tsv` 이다.
+- 그 {n_window}개를 스택 표본으로 둔다. 중심이 0.1도(6각분)보다 가까운 쌍은 richness 가 큰 쪽만 남겨 {n_selected}개이다. 빠진 식별자는 {dropped} 이다. 남은 표본의 최소 각거리는 {sep:.4f}도이다.
+- 표는 `logs/selected_clusters.tsv` 이다.
 
 ## 질량 관문
 
@@ -74,10 +74,9 @@ cutout 상태는 `logs/cutout_status.json` 에 있다. 영상이 없으면 스�
         z_lo=summary['z_lo'],
         z_hi=summary['z_hi'],
         n_window=summary['n_window'],
-        nmem=summary['nmem_p90'],
-        n_rich=summary['n_rich'],
+        n_selected=summary['n_selected'],
+        dropped=' '.join(str(i) for i in summary['dropped_ids']) or '(none)',
         sep=summary['min_sep_deg'],
-        ids=' '.join(str(i) for i in summary['ids']),
     )
     with open(os.path.join(logs, 'debug_status.md'), 'w', encoding='utf-8') as handle:
         handle.write(text)

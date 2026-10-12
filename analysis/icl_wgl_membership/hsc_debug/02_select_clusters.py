@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Select four CAMIRA clusters for the ICL-stack debug.
+"""Select the CAMIRA stack sample for the ICL debug.
 
 The catalog columns are id, name, RA, Dec, z_cl, N_mem, and the BCG
 spectroscopic redshift (-1 when absent). There is no mass column.
@@ -8,9 +8,8 @@ The redshift slice is the 0.05-wide bin, on exact edges from 0.10 to 1.20,
 that contains the most rows with a spectroscopic BCG redshift inside the
 fractional window. The fractional window is |z_spec - z_cl| / (1 + z_cl) < 0.01,
 the scatter Oguri et al. 2018 (arXiv:1701.00818) quote for most of their range.
-Richness keeps rows at or above the 90th percentile of that slice
-(numpy.percentile, linear). Four rows are then taken in descending richness,
-with each pair more than 0.3 degrees apart.
+Every row in that slice is kept. Pairs closer than 0.1 deg (6 arcmin) keep the
+richer cluster, so neighbouring cutouts do not cover the same BCG.
 """
 import json
 import math
@@ -22,8 +21,7 @@ import numpy as np
 ROOT = os.environ.get('ASTRAFEK_DATA', '/gpfs/kjhan/Astrafek/data')
 CATALOG = os.path.join(ROOT, 'catalog', 'camira_s20a_wide_sm.tbl')
 FRAC_MAX = 0.01
-SEP_MIN_DEG = 0.3
-N_KEEP = 4
+SEP_MIN_DEG = 0.1
 
 
 def read_catalog(path):
@@ -67,20 +65,18 @@ def main():
         row for row in spec
         if z_lo <= row[4] < z_hi and abs(row[6] - row[4]) / (1.0 + row[4]) < FRAC_MAX
     ]
-    nmem = np.array([row[5] for row in window])
-    threshold = float(np.percentile(nmem, 90))
-    rich = sorted((row for row in window if row[5] >= threshold), key=lambda row: -row[5])
     chosen = []
-    for row in rich:
+    dropped = []
+    for row in sorted(window, key=lambda item: -item[5]):
         if all(angular_sep_deg(row, other) > SEP_MIN_DEG for other in chosen):
             chosen.append(row)
-        if len(chosen) == N_KEEP:
-            break
-    if len(chosen) < N_KEEP:
-        raise SystemExit('fewer than %d separated clusters' % N_KEEP)
+        else:
+            dropped.append(row)
+    if len(chosen) < 2:
+        raise SystemExit('fewer than 2 separated clusters')
     seps = [
         angular_sep_deg(chosen[i], chosen[j])
-        for i in range(N_KEEP) for j in range(i + 1, N_KEEP)
+        for i in range(len(chosen)) for j in range(i + 1, len(chosen))
     ]
     os.makedirs(os.path.join(ROOT, 'logs'), exist_ok=True)
     table = os.path.join(ROOT, 'logs', 'selected_clusters.tsv')
@@ -98,8 +94,9 @@ def main():
         'z_lo': z_lo,
         'z_hi': z_hi,
         'n_window': len(window),
-        'nmem_p90': threshold,
-        'n_rich': len(rich),
+        'n_selected': len(chosen),
+        'sep_min_deg': SEP_MIN_DEG,
+        'dropped_ids': [row[0] for row in dropped],
         'min_sep_deg': min(seps),
         'ids': [row[0] for row in chosen],
         'numpy': np.__version__,
@@ -108,8 +105,8 @@ def main():
     with open(os.path.join(ROOT, 'logs', 'selection_summary.json'), 'w', encoding='utf-8') as handle:
         json.dump(summary, handle, indent=1)
         handle.write('\n')
-    print('selected %s' % ' '.join(str(i) for i in summary['ids']))
-    print('window %.2f %.2f n %d Nmem_p90 %.4f' % (z_lo, z_hi, len(window), threshold))
+    print('selected %d dropped %s' % (len(chosen), ' '.join(str(i) for i in summary['dropped_ids'])))
+    print('window %.2f %.2f n_window %d min_sep_deg %.4f' % (z_lo, z_hi, len(window), min(seps)))
 
 
 if __name__ == '__main__':
