@@ -880,3 +880,11 @@ proc OGFIclProfileHeadlessAfter {} {
     ::ogf::cat::set icl,has_profile 1
     catch {CatalogPanelICLDrawAnnuli}
 }
+
+proc OGFIclStackAfter {} {
+    set dir [file join [OGFSessWorkDir] iclstack]
+    foreach {k f} {stack_file icl_stack.json stack_u icl_stack_u.fits stack_kpc icl_stack_kpc.fits stack_profile icl_stack_profile.tsv} {
+	set p [file join $dir $f]
+	if {[file exists $p]} {::ogf::cat::set icl,$k $p}
+    }
+}

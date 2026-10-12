@@ -24,6 +24,8 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 5절의 이름 있는 자료 관문은 `icl/named_gate.py`의 `named_data_gate`에 있다. 호출자가 준 행에서 HSC-SSP PDR3 `deepCoadd` global-sky, CAMIRA, S19A의 공통 영역과 분광 제한을 통과한 소스 수를 센다. 이 함수는 릴리스를 읽지 않는다. 세어진 수는 호출자가 준 행의 수이고, 과학 측정 플래그는 내려가 있다. 관측 과학 문장은 아직 없다.
 
+스케일 스택의 메뉴 항목은 ICL의 `Stack BCG+diffuse`이다. 프로그램은 `plugins/icl/icl_stack.py`이고 `icl.wgl.stack_clusters`를 호출한다. 한 프레임 프로파일은 `ds9/library/ds9_icl.py`에 그대로 있다. local-sky 프레임과, 제품 이름이 `deepCoadd`가 아닌 프레임은 거절된다. 산출물 키는 `bcg+diffuse`이고, 서베이 점검표가 비어 있으면 과학 측정 플래그는 내려가 있다.
+
 ## 실행
 
 OGFinder 루트에서:

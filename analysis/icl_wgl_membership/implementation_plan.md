@@ -24,7 +24,7 @@ Astra 자문 두 건을 이후 구현의 완료 조건으로 넣는다. 1차는 
 
 끝난 범위는 `icl/wgl.py`의 \(u\) 워프와 `mean_stack`, 마스크 이웃이 보간에 섞이면 그 출력점을 빼는 처리, 합성 두 은하단 실행이다. 이 범위가 보여주는 것은 좌표·단위 변환과 마스크 처리의 자기일관성, 적어 둔 멤버십 규칙의 실행, 재현 가능한 입출력이다.
 
-후속은 같은 모듈에 들어 있다. `stack_clusters`는 \(u\) 스택을 반환하고 `kpc`에 공통 고유거리 스택을 붙인다. 산출물 이름은 `bcg+diffuse`이다. `named_light_fraction`은 호출자가 고른 정의와, BCG가 분자에 있으면 `bcg+icl`이라는 이름을 적는다. `forward_scaled_profile`과 `mass_interpretation`이 질량 오차의 전방모형, 같은 렌즈 자료의 공분산, richness 메모, 질량으로 표본을 나눌 때의 Eddington 메모를 담는다. `mean_stack`의 `radial`이 반지름별 참여 은하단을 적고, 역분산 평균은 `inverse_variance_sb`에만 둔다. `area_corrected_residual`은 열린 픽셀에 남은 추가 광량을 적는다. `survey_checklist`의 `science_measurement`는 필수 항목이 채워진 뒤에만 참이다. 시험은 `icl/tests/test_wgl.py`이다. 메뉴와 `plugin.json`은 아직 연결하지 않았다.
+후속은 같은 모듈에 들어 있다. `stack_clusters`는 \(u\) 스택을 반환하고 `kpc`에 공통 고유거리 스택을 붙인다. 산출물 이름은 `bcg+diffuse`이다. `named_light_fraction`은 호출자가 고른 정의와, BCG가 분자에 있으면 `bcg+icl`이라는 이름을 적는다. `forward_scaled_profile`과 `mass_interpretation`이 질량 오차의 전방모형, 같은 렌즈 자료의 공분산, richness 메모, 질량으로 표본을 나눌 때의 Eddington 메모를 담는다. `mean_stack`의 `radial`이 반지름별 참여 은하단을 적고, 역분산 평균은 `inverse_variance_sb`에만 둔다. `area_corrected_residual`은 열린 픽셀에 남은 추가 광량을 적는다. `survey_checklist`의 `science_measurement`는 필수 항목이 채워진 뒤에만 참이다. 시험은 `icl/tests/test_wgl.py`이다. 스케일 스택의 메뉴 항목은 `plugins/icl/plugin.json`의 `Stack BCG+diffuse`이고 프로그램은 `plugins/icl/icl_stack.py`이다. 한 프레임 프로파일은 `ds9/library/ds9_icl.py`에 그대로 있다.
 
 아래 일곱 항목은 그 시험으로 고정했다.
 
@@ -129,10 +129,11 @@ HST Frontier Fields(Abell S1063를 포함한 여섯 은하단, MAST)는 중심 �
 
 ## 순서
 
-1. 스케일 픽셀 스택과 1절 후속. 구현됨. 함수는 `icl/wgl.py`에 있고 시험은 `icl/tests/test_wgl.py`에 있다. 메뉴와 `plugin.json`은 아직 연결하지 않았다.
+1. 스케일 픽셀 스택과 1절 후속. 구현됨. 함수는 `icl/wgl.py`에 있고 시험은 `icl/tests/test_wgl.py`에 있다. 스케일 스택은 메뉴 `Stack BCG+diffuse`에 연결했다. 한 프레임 프로파일은 `ds9_icl.py`이다.
 2. 전단 프로필 평균과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_shear_profiles`이고, 플러그인은 `plugins/wlcluster`의 `--task stack`이다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 저장된 합성 실행은 렌즈 하나만 맞춘다.
 3. 접선 정렬 우표 진단과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`이고 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 메뉴와 `plugin.json`은 아직 연결하지 않았다. 이 진단은 질량이 아니다.
 4. 가이드 15.5·15.6과 방법론 논문 초고. 구현됨. 가이드는 `ds10-web/docs/user_guide/sections/own_files.tex`이고 초고는 `analysis/icl_wgl_membership/methods_draft.md`이다. 푸터 날짜 “8 October 2026”은 그대로이다.
 5. HSC PDR3 global-sky, CAMIRA, S19A의 공통 영역에서 유효 표본과 5절 점검표를 채운 뒤에만 관측 과학 문장을 추가한다. 관문은 구현됨. 함수는 `icl/named_gate.py`의 `named_data_gate`이고 시험은 `icl/tests/test_named_gate.py`이다. 릴리스를 읽어 채운 유효 표본은 아직 없다. 관측 과학 문장은 추가하지 않았다.
+6. 스케일 ICL 스택의 메뉴. 구현됨. 메뉴 항목은 ICL의 `Stack BCG+diffuse`이고 프로그램은 `plugins/icl/icl_stack.py`이다. 시험은 `plugins/icl/tests/test_icl_stack.py`이다. 우표 진단의 메뉴는 아직 연결하지 않았다. 관측 과학 문장은 추가하지 않았다.
 
-1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 우표 진단의 메뉴는 아직 연결하지 않았다. 4절은 `ds10-web/docs/user_guide/sections/own_files.tex`의 15.5·15.6절과 `methods_draft.md`에 반영했다. 5절의 관문은 `icl/named_gate.py`의 `named_data_gate`와 `icl/tests/test_named_gate.py`에 있다. 자료 다운로드와 서베이 환원은 하지 않았다. 관측 과학 문장은 릴리스에서 유효 표본과 5절 점검표를 채운 뒤에 추가한다.
+1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 우표 진단의 메뉴는 아직 연결하지 않았다. 4절은 `ds10-web/docs/user_guide/sections/own_files.tex`의 15.5·15.6절과 `methods_draft.md`에 반영했다. 5절의 관문은 `icl/named_gate.py`의 `named_data_gate`와 `icl/tests/test_named_gate.py`에 있다. 자료 다운로드와 서베이 환원은 하지 않았다. 관측 과학 문장은 릴리스에서 유효 표본과 5절 점검표를 채운 뒤에 추가한다. 스케일 스택의 메뉴는 `plugins/icl/icl_stack.py`와 `plugins/icl/plugin.json`의 `Stack BCG+diffuse`에 있다. 우표 진단의 메뉴는 아직 연결하지 않았다.

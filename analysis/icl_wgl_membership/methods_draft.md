@@ -10,7 +10,7 @@ A colour can be formed from surface-brightness profiles in more than one band. T
 
 \(M_{200c}\) is the mass inside the radius where the mean density is \(200\rho_{\rm crit}\). \(M_{200m}\) is the mass inside the radius where the mean density is 200 times the mean matter density. The stack and the lens fit use \(M_{200c}\). A mass quoted as \(M_{200m}\) or \(M_{500c}\) needs its conversion written beside the radius. With redshift and cosmology fixed, a mass error moves the alignment radius by one third of the logarithmic mass change. The forward model averages the caller's mass draws. The \(u\) stack itself uses the point mass.
 
-The desktop one-frame profile (`ds9/library/ds9_icl.py --mode profile`) is a separate path. The scaled stack is not wired to that menu.
+The desktop one-frame profile (`ds9/library/ds9_icl.py --mode profile`) is a separate path. The scaled stack is the menu item Stack BCG+diffuse. The program is `plugins/icl/icl_stack.py`. It calls `stack_clusters` and writes `icl_stack_u.fits`, `icl_stack_kpc.fits`, `icl_stack_profile.tsv` and `icl_stack.json`. A frame marked local-sky, or a named product other than `deepCoadd`, is refused. `science_measurement` stays false while the survey checklist is empty.
 
 ## Membership
 

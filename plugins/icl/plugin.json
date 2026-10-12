@@ -310,6 +310,44 @@
    ]
   },
   {
+   "id": "stack",
+   "label": "Stack BCG+diffuse",
+   "title": "Scaled BCG+diffuse stack of the JSON frames",
+   "session": "AUTO",
+   "needs": [],
+   "record": "icl.stack",
+   "done_status": "BCG+diffuse stack written",
+   "after": "OGFIclStackAfter",
+   "cli": [
+    "{python}",
+    "{plugin_dir}/icl_stack.py",
+    "--clusters",
+    "{clusters}",
+    "--work",
+    "{work}/iclstack",
+    "--u-max",
+    "{u-max}",
+    "--n-side",
+    "{n-side}",
+    "--delta",
+    "{stack-delta}",
+    "--h0",
+    "{h0}",
+    "--omega-m",
+    "{omega-m}",
+    {
+     "if": "kpc-max",
+     "argv": [
+      "--kpc-max",
+      "{kpc-max}"
+     ]
+    }
+   ],
+   "output": {
+    "mode": "text"
+   }
+  },
+  {
    "id": "save_profile",
    "label": "Save Profile...",
    "proc": "CatalogPanelICLSaveProfile",
@@ -643,6 +681,73 @@
    "group": "Profile",
    "help": "BCG centre, image pixel (0-based).",
    "key": "icl,center_y"
+  },
+  {
+   "name": "clusters",
+   "label": "Cluster stack list (JSON)",
+   "type": "string",
+   "default": "",
+   "group": "Scaled stack",
+   "help": "JSON list of frames, or an object with a clusters list. Each frame has image, center, pixel_scale, mass and z. A local sky is refused. A named product other than deepCoadd is refused."
+  },
+  {
+   "name": "u-max",
+   "label": "Stack u max",
+   "type": "float",
+   "default": 2.0,
+   "group": "Scaled stack",
+   "help": "Outer scaled radius u = theta / theta_200c of the BCG+diffuse stack.",
+   "min": 0.01,
+   "max": 20
+  },
+  {
+   "name": "n-side",
+   "label": "Stack n side",
+   "type": "int",
+   "default": 201,
+   "group": "Scaled stack",
+   "help": "Pixels along one side of the scaled stack.",
+   "min": 3,
+   "max": 2001
+  },
+  {
+   "name": "stack-delta",
+   "label": "Stack overdensity",
+   "type": "float",
+   "default": 200.0,
+   "group": "Scaled stack",
+   "help": "Overdensity of the alignment radius. 200 uses M_200c.",
+   "min": 1,
+   "max": 10000
+  },
+  {
+   "name": "h0",
+   "label": "H0",
+   "type": "float",
+   "default": 70.0,
+   "group": "Scaled stack",
+   "help": "Hubble constant used to turn mass and redshift into theta_200c.",
+   "min": 1,
+   "max": 200,
+   "unit": "km/s/Mpc"
+  },
+  {
+   "name": "omega-m",
+   "label": "Omega_m",
+   "type": "float",
+   "default": 0.3,
+   "group": "Scaled stack",
+   "help": "Matter density used with H0 for the angular-diameter distance.",
+   "min": 0.01,
+   "max": 1
+  },
+  {
+   "name": "kpc-max",
+   "label": "Stack kpc max (blank = from u max)",
+   "type": "string",
+   "default": "",
+   "group": "Scaled stack",
+   "help": "Outer proper radius of the comparison stack, in kpc. Blank uses u max times the largest R_delta."
   }
  ],
  "store": {
