@@ -22,6 +22,8 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 4절의 사용자 안내 15.5·15.6절은 `ds10-web/docs/user_guide/sections/own_files.tex`에 있고, 방법론 초고는 `methods_draft.md`에 있다. 합성 실행이 기록하는 주장과 기록하지 않는 주장은 그 두 곳에 같은 표로 있다.
 
+5절의 이름 있는 자료 관문은 `icl/named_gate.py`의 `named_data_gate`에 있다. 호출자가 준 행에서 HSC-SSP PDR3 `deepCoadd` global-sky, CAMIRA, S19A의 공통 영역과 분광 제한을 통과한 소스 수를 센다. 이 함수는 릴리스를 읽지 않는다. 세어진 수는 호출자가 준 행의 수이고, 과학 측정 플래그는 내려가 있다. 관측 과학 문장은 아직 없다.
+
 ## 실행
 
 OGFinder 루트에서:

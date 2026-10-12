@@ -98,11 +98,13 @@ Lewis 2009의 조건으로 제한한다. 일정 전단과 일정 PSF에서, 접�
 
 홍보 논문의 첫 판은 방법론 논문이다. 개별 은하단 NFW 적합을 같은 글에 두는 것은, 같은 좌표·우주론·멤버십을 두 관측량에 쓰는 소프트웨어 사례로서 적절하다. 평균 별빛과 평균 질량의 관계는 2단계가 같은 표본으로 끝난 뒤에만 문장으로 쓴다.
 
-## 5. 이름 있는 자료 — 과학 주장 앞의 관문
+## 5. 이름 있는 자료 — 관문이 `icl/named_gate.py`에 있음. 릴리스에서 센 표본은 아직 없다
 
 코드를 돌리는 일과 과학 측정은 따로다. 하늘 처리에서 확산광이 얼마나 빠졌는지, 마스크 밖 위성광이 얼마나 남는지, 반지름별 참여 표본을 확인하지 않은 매끈한 스택은 물리 측정으로 적지 않는다.
 
 첫 조합은 HSC-SSP PDR3 영상, CAMIRA 은하단 목록, S19A 공개 형상 목록이다. 공통 footprint와 버전을 맞춘 뒤, 현재 분광 제한을 유지할 때 살아남는 렌즈 소스 수를 먼저 센다. ICL 영상은 `deepCoadd/`의 global-sky 영상으로 고른다. 검출·측광에 쓴 local-sky 영상은 카탈로그와 짝이 맞아도 ICL 입력으로 바로 쓰지 않는다. 근거는 HSC CAMIRA 릴리스, S19A 형상·PDF 안내, HSC PDR3 FAQ이다.
+
+`named_data_gate`는 호출자가 준 영상·은하단·형상 행에서 버전과 footprint를 맞춘다. ICL로 받는 영상은 제품이 `deepCoadd`이고 sky가 `global` 또는 `global-sky`인 프레임이다. local-sky 프레임은 그 안에 은하단과 형상 열이 있어도 공통 영역 밖에 둔다. 렌즈 소스 수는 분광 품질 열을 호출자가 공급한 뒤에만 센다. 유한한 적색이동은 품질 플래그를 대신하지 않는다. 분광 창은 `icl/members.py`의 `classify_spectroscopic`이고, 렌즈로 남는 조건은 `background_for_lensing`의 `z_gap`이다. `|z-z_cl|=dz`는 창 밖이다. 측광 적색이동은 `z`로 복사하지 않는다. `select_sources`의 반지름 창과 전단 절단은 이 수에 넣지 않는다. 실패 모드 여덟 항목과 SDSS·DESI DR1의 밝기·색·표면밝기·반지름 표는 결과에 있고, 호출자가 칸을 채우기 전에는 비어 있다. 칸을 채워도 `science_measurement`는 거짓이고 `observed_sentence`는 비어 있다. 이 함수는 릴리스 파일을 읽지 않고 내려받지도 않는다. 시험이 확인하는 수는 호출자가 만든 행의 수이다. 1절의 `survey_checklist`와 이 관문은 별개다. 시험은 `icl/tests/test_named_gate.py`이다.
 
 다른 공개 자료는 역할이 정해져 있다.
 
@@ -131,6 +133,6 @@ HST Frontier Fields(Abell S1063를 포함한 여섯 은하단, MAST)는 중심 �
 2. 전단 프로필 평균과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_shear_profiles`이고, 플러그인은 `plugins/wlcluster`의 `--task stack`이다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 저장된 합성 실행은 렌즈 하나만 맞춘다.
 3. 접선 정렬 우표 진단과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`이고 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 메뉴와 `plugin.json`은 아직 연결하지 않았다. 이 진단은 질량이 아니다.
 4. 가이드 15.5·15.6과 방법론 논문 초고. 구현됨. 가이드는 `ds10-web/docs/user_guide/sections/own_files.tex`이고 초고는 `analysis/icl_wgl_membership/methods_draft.md`이다. 푸터 날짜 “8 October 2026”은 그대로이다.
-5. HSC PDR3 global-sky, CAMIRA, S19A의 공통 영역에서 유효 표본과 5절 점검표를 채운 뒤에만 관측 과학 문장을 추가한다.
+5. HSC PDR3 global-sky, CAMIRA, S19A의 공통 영역에서 유효 표본과 5절 점검표를 채운 뒤에만 관측 과학 문장을 추가한다. 관문은 구현됨. 함수는 `icl/named_gate.py`의 `named_data_gate`이고 시험은 `icl/tests/test_named_gate.py`이다. 릴리스를 읽어 채운 유효 표본은 아직 없다. 관측 과학 문장은 추가하지 않았다.
 
-1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 우표 진단의 메뉴는 아직 연결하지 않았다. 4절은 `ds10-web/docs/user_guide/sections/own_files.tex`의 15.5·15.6절과 `methods_draft.md`에 반영했다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.
+1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 `ogfkit/wlcluster.py`의 `stack_tangential_stamps`에 반영했다. 우표 진단의 메뉴는 아직 연결하지 않았다. 4절은 `ds10-web/docs/user_guide/sections/own_files.tex`의 15.5·15.6절과 `methods_draft.md`에 반영했다. 5절의 관문은 `icl/named_gate.py`의 `named_data_gate`와 `icl/tests/test_named_gate.py`에 있다. 자료 다운로드와 서베이 환원은 하지 않았다. 관측 과학 문장은 릴리스에서 유효 표본과 5절 점검표를 채운 뒤에 추가한다.
