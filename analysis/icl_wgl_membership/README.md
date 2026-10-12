@@ -16,6 +16,8 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 1절 후속인 공통 kpc 스택, 질량 오차 전방모형, 반지름별 참여 표본, 서베이 점검 관문은 `icl/wgl.py`에 있다. 점검 항목이 비어 있으면 과학 측정 플래그는 내려가 있다. 이 합성 실행은 그 목록을 채우지 않는다.
 
+2절의 전단 프로필 평균은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`의 `--task stack`에 있다. 픽셀 영상 스택은 그 함수가 거절한다. 이 디렉터리의 합성 실행은 렌즈 하나의 접선 전단만 맞추며, 그 결과에는 `science_measurement`가 없다.
+
 ## 실행
 
 OGFinder 루트에서:

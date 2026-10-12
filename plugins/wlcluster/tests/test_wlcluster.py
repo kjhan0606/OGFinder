@@ -493,6 +493,7 @@ def test_internal_mcal_on_a_noiseless_gaussian():
     assert abs(doc['c1']) < 0.005
     assert abs(doc['c2']) < 0.005
     assert 'not a survey' in doc['note']
+    assert 'Gaussian PSF' in doc['metacal_scope']
     disc = wl.calibrate_shear(kind='sersic', n_sersic=1.0, noise=0.0, psf_sigma=0.0)
     assert disc['success']
     assert math.isfinite(disc['m'])
@@ -508,4 +509,201 @@ def test_cli_mcal_writes_json_without_a_catalog(tmp_path):
     doc = json.loads((work / 'wl_mcal.json').read_text())
     assert doc['success']
     assert 'not a survey' in doc['note']
+    assert 'Gaussian PSF' in doc['metacal_scope']
     assert abs(doc['m']) < 0.05
+
+
+def _catalogue(cosmo, n, rmin, rmax, mass, z_lens, z_source, seed, **extra):
+    x, y, g1, g2 = _draw(cosmo, n, rmin, rmax, mass, 4.0, z_lens, z_source, 0.0, seed)
+    record = dict(id='a', z_lens=z_lens, mass=mass, x_arcsec=x, y_arcsec=y, g1=g1, g2=g2,
+                  z=np.full(n, z_source), weight=np.ones(n))
+    record.update(extra)
+    return record
+
+
+def _stack(cosmo, records, **kw):
+    kw.setdefault('two_halo', False)
+    kw.setdefault('samples', 0)
+    kw.setdefault('sigma_e', 1e-3)
+    kw.setdefault('concentration', 'fixed')
+    kw.setdefault('c_fixed', 4.0)
+    kw.setdefault('power', 'linear')
+    kw.setdefault('lss_cov', False)
+    kw.setdefault('min_per_bin', 8)
+    return wl.stack_shear_profiles(records, cosmo=cosmo, **kw)
+
+
+def test_stacked_copies_keep_one_shear_profile(cosmo):
+    mass = 1.0e15
+    one = _catalogue(cosmo, 360, 0.4, 2.5, mass, 0.3, 1.0, 11)
+    other = dict(one, id='b')
+    alone = _stack(cosmo, [one], rmin=0.4, rmax=2.5, nbins=4, fit=False, per_cluster_mass=False)
+    pair = _stack(cosmo, [one, other], rmin=0.4, rmax=2.5, nbins=4, fit=True, per_cluster_mass=True)
+    assert len(pair['profile']) >= 2
+    assert len(pair['profile']) == len(alone['profile'])
+    for left, right in zip(alone['profile'], pair['profile']):
+        assert right['gt'] == pytest.approx(left['gt'], rel=1e-6, abs=1e-8)
+        assert right['n_clusters'] == 2
+        assert right['deltasigma'] == pytest.approx(right['gt'] / right['sigma_crit_inv'] / 1e12, rel=1e-6)
+    assert pair['success']
+    assert abs(math.log10(pair['M200c_Msun'] / mass)) < 0.03
+    assert pair['per_cluster'][0]['success'] and pair['per_cluster'][1]['success']
+    assert pair['science_measurement'] is False
+    assert 'mean tangential shear' in pair['deltasigma_note']
+    assert 'member contamination' in pair['density_note']
+    assert pair['covariance'] == 'shape'
+
+
+def test_zero_shear_averages_near_zero(cosmo):
+    record = _catalogue(cosmo, 300, 0.4, 2.5, 1.0e15, 0.3, 1.0, 12)
+    record['g1'] = np.zeros_like(record['g1'])
+    record['g2'] = np.zeros_like(record['g2'])
+    other = dict(record, id='b')
+    stacked = _stack(cosmo, [record, other], rmin=0.4, rmax=2.5, nbins=4, fit=False, per_cluster_mass=False)
+    assert stacked['profile']
+    assert max(abs(row['gt']) for row in stacked['profile']) < 1e-8
+
+
+def test_a_stacked_image_is_not_a_shear_catalogue(cosmo):
+    with pytest.raises(ValueError):
+        wl.stack_shear_profiles(np.zeros((3, 12, 12)), cosmo=cosmo)
+    with pytest.raises(ValueError):
+        wl.stack_shear_profiles([np.zeros((12, 12)), np.zeros((12, 12))], cosmo=cosmo)
+    with pytest.raises(ValueError):
+        wl.stack_shear_profiles([dict(image=np.zeros((8, 8)), z_lens=0.3)], cosmo=cosmo)
+
+
+def test_inverse_critical_density_is_not_the_value_at_the_mean_redshift(cosmo):
+    z = np.array([0.55, 2.4])
+    weight = np.array([1.0, 1.0])
+    got = wl.photometric_geometry(
+        cosmo, 0.25, z, weight, z_gap=0.05,
+        cluster_window=(0.2, 0.3), background_window=(0.6, 1.4))
+    assert got['mean_z'] == pytest.approx(1.475)
+    assert got['label_window']['background'][0] == pytest.approx(0.6)
+    ratio = got['mean_sigma_crit_inv'] / got['sigma_crit_inv_of_mean_z']
+    assert abs(ratio - 1.0) > 1e-3
+    assert 'spectroscopic redshift column' in got['note']
+    with pytest.raises(ValueError):
+        wl.stack_shear_profiles([dict(z_lens=0.3, z_phot=np.ones(3))], cosmo=cosmo)
+
+
+def test_empty_spectroscopic_intersection_is_not_a_fit(cosmo):
+    record = _catalogue(cosmo, 40, 0.4, 2.5, 1.0e15, 0.3, 1.0, 13)
+    record['spec_quality'] = np.zeros(len(record['z']))
+    stacked = _stack(cosmo, [record], rmin=0.4, rmax=2.5, nbins=4)
+    assert stacked['success'] is False
+    assert stacked['status'] == 'insufficient_sample'
+    assert stacked['n_spec_intersection'] == 0
+    assert stacked['science_measurement'] is False
+    assert 'M200c_Msun' not in stacked
+    unmatched = _catalogue(cosmo, 20, 0.4, 2.5, 1.0e15, 0.3, 1.0, 14)
+    unmatched['crossmatch_ok'] = np.zeros(len(unmatched['z']), bool)
+    lost = _stack(cosmo, [unmatched], rmin=0.4, rmax=2.5, nbins=4, fit=False, per_cluster_mass=False)
+    assert lost['status'] == 'insufficient_sample'
+    assert lost['success'] is False
+
+
+def test_survey_weights_drop_the_shape_noise_formula(cosmo):
+    record = _catalogue(cosmo, 300, 0.4, 2.5, 1.0e15, 0.3, 1.0, 15)
+    record['weight'] = np.full(len(record['z']), 0.4)
+    other = dict(record, id='b')
+    omitted = _stack(cosmo, [record, other], rmin=0.4, rmax=2.5, nbins=4, fit=False, per_cluster_mass=False)
+    assert omitted['covariance'] == 'omitted'
+    assert omitted['profile'][0]['gt_err'] is None
+    assert 'omitted' in omitted['covariance_note']
+    kept = _stack(cosmo, [record, other], rmin=0.4, rmax=2.5, nbins=4, fit=False,
+                  per_cluster_mass=False, inverse_variance_weights=True)
+    assert kept['profile'][0]['gt_err'] > 0
+    record['icl_weight'] = 3.0
+    noted = _stack(cosmo, [record], rmin=0.4, rmax=2.5, nbins=4, fit=False, per_cluster_mass=False)
+    assert 'same population' in noted['population_note']
+
+
+def test_boost_multiplies_the_shear_and_its_error(cosmo):
+    record = _catalogue(cosmo, 400, 0.4, 2.5, 1.0e15, 0.3, 1.0, 16)
+    bare = _stack(cosmo, [record], rmin=0.4, rmax=2.5, nbins=4, sigma_e=0.2, fit=False, per_cluster_mass=False)
+    rng = np.random.default_rng(16)
+    inner = np.sqrt(0.4 ** 2 + rng.random(20) * (0.55 ** 2 - 0.4 ** 2))
+    outer = np.sqrt(1.7 ** 2 + rng.random(900) * (2.5 ** 2 - 1.7 ** 2))
+    random_R = np.concatenate([inner, outer])
+    boosted_record = dict(record, random_R=random_R)
+    boosted = _stack(cosmo, [boosted_record], rmin=0.4, rmax=2.5, nbins=4, sigma_e=0.2,
+                     fit=False, per_cluster_mass=False)
+    assert boosted['profile'][0]['boost'] > 1.05
+    assert boosted['profile'][0]['gt_err'] == pytest.approx(
+        bare['profile'][0]['gt_err'] * boosted['profile'][0]['boost'], rel=1e-6)
+    wider = _stack(cosmo, [boosted_record], rmin=0.4, rmax=2.5, nbins=4, sigma_e=0.2,
+                   boost_uncertainty=0.05, fit=False, per_cluster_mass=False)
+    assert wider['profile'][0]['gt_err'] > boosted['profile'][0]['gt_err']
+
+
+def test_two_source_planes_do_not_gain_a_large_scale_structure_term(cosmo):
+    near = _catalogue(cosmo, 200, 0.4, 2.5, 1.0e15, 0.3, 0.8, 17, id='near')
+    far = _catalogue(cosmo, 200, 0.4, 2.5, 1.0e15, 0.3, 1.6, 18, id='far')
+    stacked = _stack(cosmo, [near, far], rmin=0.4, rmax=2.5, nbins=4, lss_cov=True,
+                     fit=False, per_cluster_mass=False)
+    assert stacked['covariance'] == 'shape'
+    assert 'one source plane' in stacked['covariance_note']
+    assert 'survey covariance' in stacked['covariance_note']
+
+
+def test_r200c_stack_uses_the_caller_mass(cosmo):
+    record = _catalogue(cosmo, 280, 0.5, 2.2, 1.0e15, 0.3, 1.0, 19)
+    other = dict(record, id='b')
+    radius = wl.r200c_mpc(record['mass'], record['z_lens'], cosmo)
+    stacked = _stack(cosmo, [record, other], radius='r200c', rmin=0.25, rmax=1.2, nbins=4,
+                     fit=False, per_cluster_mass=False)
+    assert stacked['radius'] == 'r200c'
+    assert stacked['profile']
+    assert stacked['profile'][0]['R'] < 1.2
+    assert 'caller mass' in stacked['radius_note']
+    assert radius > 0
+
+
+def test_science_measurement_waits_for_the_sensitivity_gates(cosmo):
+    record = _catalogue(cosmo, 360, 0.4, 2.5, 1.0e15, 0.3, 1.0, 21)
+    record['spec_quality'] = np.ones(len(record['z']))
+    open_gate = _stack(
+        cosmo, [record], rmin=0.4, rmax=2.5, nbins=4, per_cluster_mass=False, sensitivity=True,
+        bcg_mass_offset_mpc=0.02,
+        sensitivity_supplied={
+            'non_sphericity': {'note': 'caller triaxial row for this methods test'},
+            'projection': {'note': 'caller projection row for this methods test'}})
+    assert open_gate['success']
+    assert open_gate['n_spec_intersection'] > 0
+    assert open_gate['science_measurement'] is True
+    assert open_gate['sensitivity']['bcg_mass_offset_mpc'] == pytest.approx(0.02)
+    assert open_gate['sensitivity']['non_sphericity']['source'] == 'caller'
+    closed = _stack(cosmo, [record], rmin=0.4, rmax=2.5, nbins=4, per_cluster_mass=False, sensitivity=True)
+    assert closed['science_measurement'] is False
+    assert 'non_sphericity' in closed['science_gaps']
+
+
+def test_cli_stack_writes_the_average_profile(tmp_path, cosmo):
+    mass = 1.0e15
+    record = _catalogue(cosmo, 280, 0.4, 2.5, mass, 0.3, 1.0, 22)
+    other = dict(record, id='b')
+
+    def _dump(item):
+        out = {}
+        for key, value in item.items():
+            out[key] = value.tolist() if isinstance(value, np.ndarray) else value
+        return out
+
+    path = tmp_path / 'clusters.json'
+    path.write_text(json.dumps({'clusters': [_dump(record), _dump(other)]}))
+    work = tmp_path / 'stack'
+    proc = _run([
+        '--task', 'stack', '--clusters', str(path), '--work', str(work),
+        '--radius', 'mpc', '--rmin', '0.4', '--rmax', '2.5', '--nbins', '4',
+        '--concentration', 'fixed', '--c-fixed', '4', '--no-two-halo', '--power', 'linear',
+        '--no-lss-cov', '--sigma-e', '0.001', '--samples', '0', '--min-per-bin', '8'])
+    assert proc.returncode == 0, proc.stderr
+    doc = json.loads((work / 'wl_stack.json').read_text())
+    assert doc['success']
+    assert doc['status'] == 'stacked'
+    assert abs(math.log10(doc['M200c_Msun'] / mass)) < 0.03
+    assert 'Gaussian PSF' in doc['metacal_scope']
+    header = (work / 'wl_stack_profile.tsv').read_text().splitlines()[0].split('\t')
+    assert 'GT' in header and 'DELTASIGMA' in header

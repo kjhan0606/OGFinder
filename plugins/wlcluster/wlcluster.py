@@ -6,9 +6,13 @@
     wlcluster.py --task mcal   --work DIR
 
 shapes measures a shear on each stamp (metacalibration) and writes WL_E1, WL_E2,
-WL_G1, WL_G2, WL_RESP, WL_FLAG and WL_W. mass converts a g1, g2 catalogue in the
+WL_G1, WL_G2, WL_RESP, WL_FLAG and WL_W. The shape step uses one round Gaussian PSF
+and a per-object diagonal response. That is not a survey calibration.
+mass converts a g1, g2 catalogue in the
 tangent plane into a tangential profile and an NFW mass. Both follow the
 add_columns contract. mass writes DIR/wl_profile.tsv and DIR/wl_mass.json.
+stack reads a JSON list of shear catalogues, averages their tangential profiles,
+and fits that average. It does not read an image stack.
 Positions in the catalogue are 1-based. A sky catalogue uses
 x = -(RA-RA_c) cos(Dec_c), y = Dec-Dec_c, in arcsec, so east is to the left.
 """
@@ -162,7 +166,7 @@ def task_shapes(a, cols, rows):
             WL_E1=rec['e1'], WL_E2=rec['e2'], WL_G1=rec['g1'], WL_G2=rec['g2'],
             WL_RESP=resp, WL_FLAG=int(rec['flag']), WL_W=(1.0 if ok else None))))
     meta = dict(task='shapes', n_shapes=len(rows), n_shapes_ok=n_ok, psf_fwhm_pix=a.psf_fwhm,
-                min_resolution=a.min_resolution, emax=a.emax)
+                min_resolution=a.min_resolution, emax=a.emax, metacal_scope=wl.METACAL_SCOPE)
     meta.update(selection)
     write_meta(a.meta_out, meta, len(rows))
     return out
@@ -236,6 +240,62 @@ def task_mass(a, cols, rows):
     return out
 
 
+def _records_from_json(payload):
+    if isinstance(payload, list):
+        records = payload
+    elif isinstance(payload, dict) and isinstance(payload.get('clusters'), list):
+        records = payload['clusters']
+    else:
+        raise SystemExit('wlcluster: clusters JSON needs a list of shear catalogues')
+    if not records:
+        raise SystemExit('wlcluster: clusters JSON has no catalogues')
+    if isinstance(records[0], list) or (isinstance(records[0], dict) and 'image' in records[0] and 'g1' not in records[0]):
+        raise SystemExit('wlcluster: a stacked image is not a shear catalogue')
+    return records
+
+
+def task_stack(a):
+    """Average shear catalogues. The input is JSON, not a coadded image."""
+    if not a.clusters or not os.path.isfile(a.clusters):
+        raise SystemExit('wlcluster: clusters file was not found: %s' % (a.clusters or ''))
+    if a.rmin <= 0 or a.rmax <= a.rmin:
+        raise SystemExit('wlcluster: rmin and rmax must satisfy 0 < rmin < rmax')
+    with open(a.clusters, encoding='utf-8') as handle:
+        payload = json.load(handle)
+    records = _records_from_json(payload)
+    cosmo = wl.Cosmology(H0=a.h0, Om=a.omega_m, ns=a.ns, sigma8=a.sigma8)
+    boost = None if a.boost_uncertainty == 0 else a.boost_uncertainty
+    try:
+        result = wl.stack_shear_profiles(
+            records, cosmo=cosmo, radius=a.radius, rmin=a.rmin, rmax=a.rmax, nbins=a.nbins,
+            z_gap=a.z_gap, sigma_e=a.sigma_e, min_per_bin=a.min_per_bin, gmax=a.gmax,
+            boost_uncertainty=boost, icl_weights_differ=a.icl_weights_differ,
+            concentration=a.concentration, c_fixed=a.c_fixed, two_halo=a.two_halo,
+            reduced=a.reduced, power=a.power, lss_cov=a.lss_cov, count_slope=a.count_slope,
+            samples=a.samples, seed=a.seed, miscenter=a.miscenter, f_cen=a.f_cen,
+            sigma_off=a.sigma_off)
+    except ValueError as exc:
+        raise SystemExit('wlcluster: %s' % exc)
+    result['task'] = 'stack'
+    os.makedirs(a.work, exist_ok=True)
+    profile = result.get('profile') or []
+    columns = ['R', 'N', 'N_CLUSTERS', 'GT', 'GT_ERR', 'GX', 'DELTASIGMA', 'DELTASIGMA_ERR', 'BOOST']
+    rows = []
+    for row in profile:
+        rows.append(dict(
+            R=row.get('R'), N=row.get('n'), N_CLUSTERS=row.get('n_clusters'),
+            GT=row.get('gt'), GT_ERR=row.get('gt_err'), GX=row.get('gx'),
+            DELTASIGMA=row.get('deltasigma'), DELTASIGMA_ERR=row.get('deltasigma_err'),
+            BOOST=row.get('boost')))
+    tsvio.write_table(os.path.join(a.work, 'wl_stack_profile.tsv'), columns, rows)
+    with open(os.path.join(a.work, 'wl_stack.json'), 'w', encoding='utf-8') as handle:
+        json.dump(result, handle, indent=1)
+        handle.write('\n')
+    write_meta(a.meta_out, {k: v for k, v in result.items() if k not in ('profile', 'per_cluster', 'photometric', 'sensitivity')}, len(records))
+    print('clusters %d status %s' % (result.get('n_clusters_used') or 0, result.get('status')))
+    return result
+
+
 def task_mcal(a):
     """Internal m and c on galaxies drawn in this program. No catalogue is read."""
     if a.stamp < 16:
@@ -260,7 +320,11 @@ def task_mcal(a):
 
 def build_parser():
     ap = argparse.ArgumentParser(description='Cluster weak lensing')
-    ap.add_argument('--task', required=True, choices=['shapes', 'mass', 'mcal'])
+    ap.add_argument('--task', required=True, choices=['shapes', 'mass', 'mcal', 'stack'])
+    ap.add_argument('--clusters', default='')
+    ap.add_argument('--radius', default='mpc', choices=['mpc', 'r200c'])
+    ap.add_argument('--icl-weights-differ', action='store_true')
+    ap.add_argument('--boost-uncertainty', type=float, default=0.0)
     ap.add_argument('--catalog', default='')
     ap.add_argument('--work', default='')
     ap.add_argument('--meta-out', default='')
@@ -338,6 +402,11 @@ def main(argv=None):
         if not a.work:
             raise SystemExit('wlcluster: work directory was not found')
         task_mcal(a)
+        return
+    if a.task == 'stack':
+        if not a.work:
+            raise SystemExit('wlcluster: work directory was not found')
+        task_stack(a)
         return
     if not a.catalog or not os.path.isfile(a.catalog):
         raise SystemExit('wlcluster: catalog was not found: %s' % (a.catalog or ''))

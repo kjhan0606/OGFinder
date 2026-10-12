@@ -38,11 +38,13 @@ Astra 자문 두 건을 이후 구현의 완료 조건으로 넣는다. 1차는 
 
 합성 실행에 이미 있는 폐쇄 검증(형상 잡음 없는 이론 전단, 입력과 같은 농도, `sigma_e=1e-3`, `samples=0`, 겹치지 않는 인공 광원)은 그 상태로 둔다. 라벨 유무 비교에 들어간, 배경 적색이동을 받은 별을 member dilution 교정 시험으로 승격하지 않는다. 광량비 확인을 BCG–ICL 분해나 미검출 위성 보정 시험으로 부르지 않는다.
 
-## 2. 약중력 프로필 평균 — `ogfkit/wlcluster.py`, 그다음 `plugins/wlcluster`
+## 2. 약중력 프로필 평균 — 구현됨. `stack_shear_profiles`가 `ogfkit/wlcluster.py`와 `plugins/wlcluster`에 있음
+
+`stack_shear_profiles`는 은하단별 전단 목록의 접선 프로필을 평균한 뒤 그 평균에 구면 NFW를 맞춘다. 픽셀 영상은 `a stacked image is not a shear catalogue`로 거절된다. 분광 품질 플래그와 교차대응은 `select_sources` 앞에서 걸러진다. 반지름은 고유거리 Mpc이거나, 호출자가 준 \(M_{200c}\)로 나눈 \(R/R_{200c}\)이다. 그 질량을 오차 없는 정렬 좌표로 적지 않는다. `deltasigma`는 평균 접선 전단을 평균 \(\Sigma_{\rm crit}^{-1}\)로 나눈 값이고 단위는 \(\mathrm{M}_\odot\,\mathrm{pc}^{-2}\)이다. 모형은 소스별 reduced shear를 쓴다. 역분산으로 인증되지 않은 가중에는 `sigma_e/sqrt(sum w)`를 적지 않는다. boost가 전단에 곱해지면 형태 오차에도 그 배율이 들어가고, `boost_uncertainty`가 있으면 그 분산을 제곱합으로 더한다. 거대구조 항은 한 소스 평면, Mpc 반지름, 인증된 가중, 빈 둘 이상일 때만 형태 잡음에 더해지며, 서베이 공분산으로 적히지 않는다. 측광 \(n(z)\)는 `photometric`에 남고 분광 열로 복사되지 않는다. `science_measurement`는 분광 교집합, 제약된 적합, 민감도 표, 호출자가 적은 비구면과 투영, BCG–질량 중심 어긋남이 모두 있을 때만 참이다. 채워진 관문은 이름 있는 자료의 질량과 서베이 보정을 대신하지 않는다. 라이브러리 기본은 `two_halo=False`, `power='linear'`, `samples=0`이다. 플러그인 `--task stack`은 JSON 목록을 읽어 `wl_stack_profile.tsv`와 `wl_stack.json`을 쓴다. 기존 질량 작업의 메뉴 기본인 Halofit와 two-halo는 그대로이다. `measure_stamps`의 범위는 하나의 둥근 가우스 PSF와 천체별 대각 응답이며 `METACAL_SCOPE`에 적혀 있다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. `analysis/icl_wgl_membership`의 저장된 합성 실행은 렌즈 하나의 적합으로 남아 있고, 그 실행에는 `science_measurement`가 없다.
 
 목표 과학이 평균 별빛과 평균 질량분포의 관계이면, 개별 은하단 질량 몇 개를 ICL 평균 옆에 놓는 것으로 끝내지 않는다. 같은 은하단 표본과 같은 선택함수로 전단 또는 \(\Delta\Sigma\) 프로필을 평균하거나, 개별 렌즈 우도를 결합한다. ICL 가중과 렌즈 가중이 다르면 두 결과가 대표하는 집단이 다르다는 문장을 결과 파일에 남긴다. Shirasaki & Takada 2018이 이 결합의 참고이다.
 
-구현 순서:
+아래 여덟 항목은 그 시험으로 고정했다.
 
 1. 은하단마다 기존 `select_sources`와 `mass` 단계를 돌린다. 중심, 렌즈 적색이동, 소스 적색이동 또는 \(n(z)\), 모양 또는 모양을 잴 이미지가 있어야 한다. 분광 품질 플래그와 잘못된 교차대응은 이 함수에 들어오기 전에 걸러 낸다. 유한한 분광값을 그대로 신뢰값으로 두지 않는다.
 2. 각 프로필을 고유거리 Mpc, 또는 그 은하단의 \(R_{200c}\)로 나눈 반지름에 올려 가중 평균한다. 평균 함수는 `ogfkit/wlcluster.py`에 두고 numpy/scipy만 쓴다. 픽셀 영상을 입력으로 받지 않는다.
@@ -124,9 +126,9 @@ HST Frontier Fields(Abell S1063를 포함한 여섯 은하단, MAST)는 중심 �
 ## 순서
 
 1. 스케일 픽셀 스택과 1절 후속. 구현됨. 함수는 `icl/wgl.py`에 있고 시험은 `icl/tests/test_wgl.py`에 있다. 메뉴와 `plugin.json`은 아직 연결하지 않았다.
-2. 전단 프로필 평균과 그 합성 시험.
+2. 전단 프로필 평균과 그 합성 시험. 구현됨. 함수는 `ogfkit/wlcluster.py`의 `stack_shear_profiles`이고, 플러그인은 `plugins/wlcluster`의 `--task stack`이다. 시험은 `plugins/wlcluster/tests/test_wlcluster.py`이다. 저장된 합성 실행은 렌즈 하나만 맞춘다.
 3. 접선 정렬 우표 진단과 그 합성 시험.
 4. 가이드 15.5·15.6과 방법론 논문 초고.
 5. HSC PDR3 global-sky, CAMIRA, S19A의 공통 영역에서 유효 표본과 5절 점검표를 채운 뒤에만 관측 과학 문장을 추가한다.
 
-1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2–3절은 요청이 있을 때 구현한다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.
+1절 후속은 `icl/wgl.py`와 `icl/tests/test_wgl.py`에 반영했다. 2절은 `ogfkit/wlcluster.py`의 `stack_shear_profiles`와 `plugins/wlcluster`에 반영했다. 3절은 요청이 있을 때 구현한다. 4절의 가이드와 논문 초고는 3절 시험 뒤에 둔다. 5절의 자료 다운로드와 서베이 환원은 그 요청에 포함되지 않는다.

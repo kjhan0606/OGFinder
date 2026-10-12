@@ -36,6 +36,11 @@ variance of the annulus-averaged tangential shear, or an azimuthal jackknife tha
 A selection response for a resolution cut and an absolute-ellipticity cut is separate from the
 per-object shear response. An internal m and c from a Gaussian or Sersic drawing is not a
 survey calibration and is not applied to the mass unless the caller copies m across.
+
+A stack of cluster profiles lives in stack_shear_profiles. Each cluster is a shear
+catalogue: positions, two shear components, a redshift, and a weight. The function
+bins each catalogue with select_sources, averages those profiles, and can fit the
+average. It does not accept an image, and it does not measure shapes on a coadd.
 """,
 import math
 
@@ -62,6 +67,31 @@ DUFFY_A = 5.71
 DUFFY_B = -0.084
 DUFFY_C = -0.47
 DUFFY_PIVOT = 2.0e12  # h^-1 Msun
+
+METACAL_SCOPE = (
+    'measure_stamps uses one round Gaussian PSF and a per-object diagonal response. '
+    'A spatially varying PSF, an ensemble response beyond the resolution and ellipticity cuts, '
+    'noise correlation, and detection or blending bias remain survey-calibration tasks. '
+    'Completing this step does not complete a survey calibration.')
+DELTASIGMA_NOTE = (
+    'deltasigma is the mean tangential shear divided by the mean of Sigma_crit^{-1}, '
+    'written in Msun/pc^2 so the column matches a single-cluster profile. '
+    'The mass model uses the reduced shear of each source.')
+DENSITY_NOTE = (
+    'A change in source number density combines member contamination, obscuration, '
+    'detection loss, and magnification. The boost factor does not separate those contributions.')
+POPULATION_NOTE = (
+    'The ICL weights and the lensing weights differ, so the two averages do not represent the same population. '
+    'Shirasaki & Takada 2018 MNRAS 478, 4277 combine profiles drawn from one sample.')
+WEIGHT_NOTE = (
+    'sigma_e/sqrt(sum w) applies when w is an inverse-variance weight and weight 1 has variance sigma_e^2. '
+    'These weights were not certified on that scale, so the formula is omitted.')
+LSS_SKIP_NOTE = (
+    'The large-scale-structure term was left off. It is added only for one source plane, '
+    'and it is not a survey covariance.')
+LSS_USED_NOTE = (
+    'The covariance is the shape noise plus the Gaussian large-scale-structure variance of the '
+    'annulus-averaged tangential shear, for one source plane. It is not a survey covariance.')
 
 
 def rho_crit(z, H0, Om):
@@ -1142,6 +1172,689 @@ def fit_mass(sel, edges, cosmo, z_lens, sigma_e=0.26, concentration='duffy', c_f
     return base, rows
 
 
+def _plain(value):
+    """JSON-ready copy. Non-finite floats become None."""
+    if isinstance(value, dict):
+        return {str(key): _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return _plain(value.tolist())
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    if isinstance(value, (np.integer, int)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        number = float(value)
+        return number if np.isfinite(number) else None
+    return value
+
+
+def r200c_mpc(mass, z, cosmo):
+    """Proper R_200c in Mpc. M_200c is a solar mass."""
+    mass = float(mass)
+    z = float(z)
+    if not np.isfinite(mass) or mass <= 0:
+        raise ValueError('mass must be positive')
+    if not np.isfinite(z) or z < 0:
+        raise ValueError('redshift must be non-negative')
+    rho = rho_crit(z, cosmo.H0, cosmo.Om)
+    return (3.0 * mass / (4.0 * math.pi * 200.0 * rho)) ** (1.0 / 3.0)
+
+
+def photometric_geometry(cosmo, z_lens, z_grid, probability, z_gap=0.1,
+                         cluster_window=None, background_window=None):
+    """Label window and lensing efficiency from a sample n(z) or per-source P(z).
+
+    `probability` matches `z_grid`, or has shape (n_source, n_z). The mean of
+    Sigma_crit^{-1} is the probability-weighted mean behind the lens.
+    sigma_crit_inv_of_mean_z evaluates Sigma_crit at the probability-weighted mean
+    redshift. The two numbers stay separate. No spectroscopic redshift column is filled.
+    """
+    z_grid = np.asarray(z_grid, float).reshape(-1)
+    prob = np.asarray(probability, float)
+    if prob.ndim == 1:
+        if prob.shape != z_grid.shape:
+            raise ValueError('n(z) length does not match z_grid')
+        prob = prob.reshape(1, -1)
+    elif prob.ndim != 2 or prob.shape[1] != z_grid.size:
+        raise ValueError('P(z) must have one column per redshift')
+    behind = (z_grid > float(z_lens) + float(z_gap)) & np.isfinite(z_grid)
+    if not np.any(behind):
+        raise ValueError('n(z) has no source behind the lens')
+    zz = z_grid[behind]
+    pp = np.where(np.isfinite(prob[:, behind]), np.clip(prob[:, behind], 0.0, None), 0.0)
+    weight = pp.sum(axis=1)
+    usable = weight > 0
+    if not np.any(usable):
+        raise ValueError('n(z) has no source behind the lens')
+    inv = 1.0 / np.asarray(cosmo.sigma_crit(z_lens, zz), float)
+    finite = np.isfinite(inv) & (inv > 0)
+    if not np.any(finite):
+        raise ValueError('Sigma_crit is not finite behind the lens')
+    pp = pp[:, finite]
+    zz = zz[finite]
+    inv = inv[finite]
+    weight = pp.sum(axis=1)
+    usable = weight > 0
+    per_inv = (pp[usable] * inv).sum(axis=1) / weight[usable]
+    per_z = (pp[usable] * zz).sum(axis=1) / weight[usable]
+    src_w = weight[usable]
+    mean_inv = float(np.sum(src_w * per_inv) / np.sum(src_w))
+    mean_z = float(np.sum(src_w * per_z) / np.sum(src_w))
+    inv_at_mean = float(1.0 / np.asarray(cosmo.sigma_crit(z_lens, mean_z), float))
+    return dict(
+        label_window=dict(
+            cluster=None if cluster_window is None else [float(cluster_window[0]), float(cluster_window[1])],
+            background=None if background_window is None else [float(background_window[0]), float(background_window[1])]),
+        mean_sigma_crit_inv=mean_inv,
+        sigma_crit_inv_of_mean_z=inv_at_mean,
+        mean_z=mean_z,
+        n_sources=int(np.count_nonzero(usable)),
+        note=('The mean of Sigma_crit^{-1} and Sigma_crit^{-1} at the mean redshift are different quantities. '
+              'This result does not fill a spectroscopic redshift column.'))
+
+
+def _column(record, name, n=None, dtype=float):
+    if name not in record:
+        raise ValueError('cluster record needs %s' % name)
+    values = np.asarray(record[name], dtype).reshape(-1)
+    if n is not None and values.size != n:
+        raise ValueError('%s length does not match the catalogue' % name)
+    return values
+
+
+def _reject_image_input(clusters):
+    if isinstance(clusters, np.ndarray):
+        raise ValueError('a stacked image is not a shear catalogue')
+    if isinstance(clusters, (list, tuple)) and clusters and isinstance(clusters[0], np.ndarray):
+        raise ValueError('a stacked image is not a shear catalogue')
+    if isinstance(clusters, dict) and 'image' in clusters and 'g1' not in clusters:
+        raise ValueError('a stacked image is not a shear catalogue')
+
+
+def _filter_cluster_rows(record):
+    """Drop quality failures and bad cross-matches before select_sources.
+
+    A finite spectroscopic redshift is not a quality flag. A photometric point
+    estimate is not accepted in place of the spectroscopic column.
+    """
+    if not isinstance(record, dict):
+        raise ValueError('a stacked image is not a shear catalogue')
+    if 'image' in record and 'g1' not in record:
+        raise ValueError('a stacked image is not a shear catalogue')
+    if 'z_phot' in record and 'z' not in record:
+        raise ValueError('a photometric point redshift is not a spectroscopic column')
+    x = _column(record, 'x_arcsec')
+    n = int(x.size)
+    y = _column(record, 'y_arcsec', n)
+    g1 = _column(record, 'g1', n)
+    g2 = _column(record, 'g2', n)
+    z = _column(record, 'z', n) if 'z' in record else np.full(n, np.nan)
+    w = _column(record, 'weight', n)
+    keep = np.ones(n, bool)
+    quality_supplied = 'spec_quality' in record
+    if quality_supplied:
+        quality = np.asarray(record['spec_quality']).reshape(-1)
+        if quality.size != n:
+            raise ValueError('spec_quality length does not match the catalogue')
+        if quality.dtype == bool or quality.dtype == np.bool_:
+            keep &= quality.astype(bool)
+        else:
+            quality = np.asarray(quality, float)
+            minimum = float(record.get('min_spec_quality', 1))
+            keep &= np.isfinite(quality) & (quality >= minimum)
+    if 'crossmatch_ok' in record:
+        matched = np.asarray(record['crossmatch_ok'], bool).reshape(-1)
+        if matched.size != n:
+            raise ValueError('crossmatch_ok length does not match the catalogue')
+        keep &= matched
+    shape = np.isfinite(g1) & np.isfinite(g2) & np.isfinite(x) & np.isfinite(y)
+    if quality_supplied:
+        intersection = int(np.count_nonzero(keep & shape & np.isfinite(z)))
+    else:
+        intersection = None
+    member = None
+    if record.get('member') is not None:
+        member = np.asarray(record['member']).reshape(-1)
+        if member.size != n:
+            raise ValueError('member labels do not match the catalogue')
+        member = member[keep]
+    return dict(
+        x=x[keep], y=y[keep], g1=g1[keep], g2=g2[keep], z=z[keep], w=w[keep], member=member,
+        n_in=n, n_kept=int(np.count_nonzero(keep)), n_spec_intersection=intersection,
+        spec_quality_supplied=quality_supplied)
+
+
+def _weights_certified(selections, inverse_variance_weights):
+    if inverse_variance_weights is True:
+        return True
+    if inverse_variance_weights is False:
+        return False
+    for sel in selections:
+        weight = np.asarray(sel['w'], float)
+        if weight.size and not np.allclose(weight, 1.0):
+            return False
+    return True
+
+
+def _annotate_shape_error(rows, sigma_e, certified, boost_uncertainty):
+    for row in rows:
+        if not certified or not (row['sw'] > 0):
+            row['gt_err'] = None
+            row['gx_err'] = None
+            row['deltasigma_err'] = None
+            row['error_formula'] = 'omitted'
+            continue
+        boost = float(row['boost'])
+        err = float(sigma_e) / math.sqrt(float(row['sw'])) * boost
+        if boost_uncertainty is not None and np.isfinite(boost_uncertainty) and boost != 0.0:
+            raw = float(row['gt']) / boost
+            err = math.sqrt(err * err + (raw * float(boost_uncertainty)) ** 2)
+        row['gt_err'] = float(err)
+        row['gx_err'] = float(err)
+        inv = row['sigma_crit_inv']
+        row['deltasigma_err'] = float(err / inv / 1e12) if inv and np.isfinite(inv) and inv > 0 else None
+        row['error_formula'] = 'sigma_e/sqrt(sum w), with the boost factor'
+    return rows
+
+
+def _mag_factor(count_slope):
+    count_slope = float(count_slope)
+    if count_slope == 0.0:
+        return 0.0
+    mag = 5.0 * count_slope - 2.0
+    return 0.0 if abs(mag) < 1e-12 else mag
+
+
+def _concentration_of(mode, mass, z, cosmo, c_fixed, logc):
+    if mode == 'fixed':
+        return float(c_fixed)
+    if mode == 'free':
+        return 10.0 ** float(logc)
+    if mode == 'duffy':
+        return float(cosmo.duffy_c(mass, z))
+    raise ValueError('concentration must be duffy, free, or fixed')
+
+
+def _model_on_bins(state, mass, concentration, reduced, mag):
+    shear = _model_gt(state['sel'], state['bins'], state['rows'], state['model'], mass, concentration, reduced)
+    if mag == 0.0:
+        return {row['bin']: float(value) for row, value in zip(state['rows'], shear)}
+    kappa = _model_kappa(state['sel'], state['bins'], state['rows'], state['model'], mass, concentration)
+    out = {}
+    for row, value, kap in zip(state['rows'], shear, kappa):
+        out[row['bin']] = float(value * (1.0 + mag * kap)) if np.isfinite(value) and np.isfinite(kap) else np.nan
+    return out
+
+
+def _average_model(states, obs_rows, mass, mode, c_fixed, logc, cosmo, reduced, mag):
+    predicted = []
+    for state in states:
+        conc = _concentration_of(mode, mass, state['z_lens'], cosmo, c_fixed, logc)
+        state['_cache'] = _model_on_bins(state, mass, conc, reduced, mag)
+    for row in obs_rows:
+        values = []
+        weights = []
+        for index, weight in row['contributors']:
+            value = states[index]['_cache'].get(row['bin'], np.nan)
+            if np.isfinite(value) and weight > 0:
+                values.append(value)
+                weights.append(weight)
+        if not values:
+            predicted.append(np.nan)
+        else:
+            weights = np.asarray(weights, float)
+            predicted.append(float(np.sum(weights * np.asarray(values, float)) / np.sum(weights)))
+    return np.asarray(predicted, float)
+
+
+def _fit_average(states, obs_rows, cosmo, concentration, c_fixed, reduced, count_slope,
+                 samples, seed, covariance=None):
+    """Least-squares NFW on the stacked tangential shear. samples>0 adds a short Metropolis."""
+    if concentration not in ('duffy', 'free', 'fixed'):
+        raise ValueError('concentration must be duffy, free, or fixed')
+    mag = _mag_factor(count_slope)
+    free_c = concentration == 'free'
+    obs = np.array([row['gt'] for row in obs_rows], float)
+    if len(obs_rows) < 2 or not np.isfinite(obs).all():
+        return dict(success=False, note='fewer than two radial bins have a tangential shear')
+    certified = all(row.get('gt_err') not in (None, 0) and np.isfinite(row['gt_err']) and row['gt_err'] > 0
+                    for row in obs_rows)
+    if certified:
+        err = np.array([row['gt_err'] for row in obs_rows], float)
+    else:
+        err = np.ones(len(obs_rows), float)
+    chol = None
+    if covariance is not None:
+        cov = np.asarray(covariance, float)
+        if cov.shape != (len(obs_rows), len(obs_rows)):
+            raise ValueError('covariance shape does not match the stacked bins')
+        chol, _jitter = _cholesky_cov(cov)
+
+    def residual(p):
+        logc = float(p[1]) if free_c else None
+        model = _average_model(states, obs_rows, 10.0 ** float(p[0]), concentration, c_fixed, logc, cosmo, reduced, mag)
+        if not np.isfinite(model).all():
+            return np.full(obs.shape, 1e3)
+        delta = obs - model
+        if chol is not None:
+            return np.linalg.solve(chol, delta)
+        return delta / err
+
+    p0 = [14.8]
+    lo = [12.5]
+    hi = [16.0]
+    if free_c:
+        p0.append(math.log10(4.0))
+        lo.append(math.log10(1.5))
+        hi.append(math.log10(12.0))
+    fit = least_squares(residual, p0, bounds=(lo, hi), xtol=1e-6, ftol=1e-6, max_nfev=80)
+    try:
+        cov = np.linalg.inv(fit.jac.T @ fit.jac)
+        curv = np.sqrt(np.clip(np.diag(cov), 0, None))
+    except np.linalg.LinAlgError:
+        curv = np.full(len(fit.x), 0.05)
+
+    def pack(p):
+        logc = float(p[1]) if free_c else None
+        mass = 10.0 ** float(p[0])
+        # One concentration number for the record: the first lens, or the fixed value.
+        conc = _concentration_of(concentration, mass, states[0]['z_lens'], cosmo, c_fixed, logc)
+        return mass, conc
+
+    chain_mass = None
+    if samples and int(samples) > 0:
+        rng = np.random.default_rng(seed)
+        step = np.maximum(curv, 0.01)
+        x = fit.x.copy()
+        lp = -0.5 * float(np.sum(residual(x) ** 2))
+        burn = max(20, int(samples) // 3)
+        kept = []
+        for i in range(burn + int(samples)):
+            prop = x + rng.normal(0.0, step)
+            if np.any(prop < np.asarray(lo)) or np.any(prop > np.asarray(hi)):
+                continue
+            trial = residual(prop)
+            if not np.isfinite(trial).all():
+                continue
+            lp2 = -0.5 * float(np.sum(trial ** 2))
+            if math.log(rng.random()) < lp2 - lp:
+                x, lp = prop, lp2
+            if i >= burn:
+                kept.append(x.copy())
+        if kept:
+            packed = [pack(row) for row in kept]
+            chain_mass = np.array([item[0] for item in packed])
+            chain_conc = np.array([item[1] for item in packed])
+    mass, conc = pack(fit.x)
+    if chain_mass is not None:
+        mass = float(np.median(chain_mass))
+        conc = float(np.median(chain_conc))
+        p16, p84 = [float(v) for v in np.percentile(chain_mass, [16, 84])]
+        method = 'metropolis'
+        n_keep = int(chain_mass.size)
+    else:
+        dlog = float(curv[0]) if len(curv) else 0.0
+        p16 = 10 ** (math.log10(mass) - dlog)
+        p84 = 10 ** (math.log10(mass) + dlog)
+        method = 'least_squares'
+        n_keep = 0
+    model = _average_model(states, obs_rows, mass, concentration, c_fixed,
+                           math.log10(conc) if free_c else None, cosmo, reduced, mag)
+    final = [math.log10(mass)]
+    if free_c:
+        final.append(math.log10(conc))
+    chi2 = float(np.sum(residual(np.asarray(final, float)) ** 2))
+    npar = 1 + int(free_c)
+    span = np.asarray(hi) - np.asarray(lo)
+    at_bound = bool(np.any(np.abs(fit.x - np.asarray(lo)) <= 1e-4 * np.maximum(span, 1.0))
+                    or np.any(np.abs(np.asarray(hi) - fit.x) <= 1e-4 * np.maximum(span, 1.0)))
+    for row, pred in zip(obs_rows, model):
+        row['gt_model'] = float(pred) if np.isfinite(pred) else None
+    return dict(success=bool(fit.success) or method == 'metropolis', at_bound=at_bound, method=method,
+                M200c_Msun=float(mass), M200c_p16=float(p16), M200c_p84=float(p84),
+                c200=float(conc), chi2=chi2, dof=int(len(obs_rows) - npar),
+                n_bins=len(obs_rows), n_samples=n_keep, concentration=concentration,
+                error_formula='sigma_e/sqrt(sum w)' if certified else 'omitted')
+
+
+def _halo(state, cosmo, two_halo, power, miscenter, f_cen, sigma_off):
+    radii = np.asarray(state['sel']['R'], float)
+    grid = np.geomspace(max(float(np.min(radii)) * 0.5, 1e-3), float(np.max(radii)) * 1.5, 48)
+    return HaloModel(cosmo, state['z_lens'], grid, two_halo=two_halo, miscenter=miscenter,
+                     f_cen=f_cen, sigma_off=sigma_off, power=power)
+
+
+def _refit_variant(states, obs_rows, cosmo, settings, miscenter=False, f_cen=0.8, sigma_off=0.1, rows=None):
+    """One extra least-squares fit. The caller passes the rows that define the radial window."""
+    saved = [(state['model'], state['rows']) for state in states]
+    used = obs_rows if rows is None else rows
+    if len(used) < 2:
+        for state, (model, old_rows) in zip(states, saved):
+            state['model'] = model
+            state['rows'] = old_rows
+        return None
+    for state in states:
+        state['model'] = _halo(state, cosmo, settings['two_halo'], settings['power'], miscenter, f_cen, sigma_off)
+        state['rows'] = [row for row in state['rows'] if any(row['bin'] == item['bin'] for item in used)]
+    # A cluster row list that no longer matches `bins` still works: _model_gt indexes by bin.
+    try:
+        fitted = _fit_average(states, used, cosmo, settings['concentration'], settings['c_fixed'],
+                              settings['reduced'], settings['count_slope'], 0, 1)
+    finally:
+        for state, (model, old_rows) in zip(states, saved):
+            state['model'] = model
+            state['rows'] = old_rows
+    if not fitted.get('success'):
+        return None
+    return fitted.get('M200c_Msun')
+
+
+def _sensitivity_table(states, obs_rows, cosmo, settings, reference, supplied, bcg_offset):
+    supplied = {} if supplied is None else dict(supplied)
+    concentration_rows = [dict(name='reference', concentration=settings['concentration'],
+                               c_fixed=settings['c_fixed'], M200c_Msun=reference.get('M200c_Msun'))]
+    other_c = float(settings['c_fixed']) * 1.5 if settings['concentration'] == 'fixed' else 4.0
+    other_mode = 'fixed'
+    alt_settings = dict(settings, concentration=other_mode, c_fixed=other_c)
+    # The variant fitter reads settings at call time; swap the closure values via a copied dict
+    # by temporarily calling _fit_average through _refit_variant, which uses `settings`.
+    alt_mass = None
+    saved_settings = dict(settings)
+    settings.update(concentration=other_mode, c_fixed=other_c)
+    try:
+        alt_mass = _refit_variant(states, obs_rows, cosmo, settings)
+    finally:
+        settings.clear()
+        settings.update(saved_settings)
+    concentration_rows.append(dict(name='varied', concentration=other_mode, c_fixed=other_c, M200c_Msun=alt_mass))
+    centred = _refit_variant(states, obs_rows, cosmo, settings, miscenter=True, f_cen=0.8, sigma_off=0.1)
+    inner = [row for row in obs_rows if row['bin'] != obs_rows[-1]['bin']]
+    outer = [row for row in obs_rows if row['bin'] != obs_rows[0]['bin']]
+    radius_rows = [
+        dict(name='drop_outer_bin', M200c_Msun=_refit_variant(states, obs_rows, cosmo, settings, rows=inner)),
+        dict(name='drop_inner_bin', M200c_Msun=_refit_variant(states, obs_rows, cosmo, settings, rows=outer))]
+
+    def caller_row(key, fallback):
+        block = supplied.get(key)
+        if isinstance(block, dict) and str(block.get('note', '')).strip():
+            out = dict(block)
+            out['supplied'] = True
+            out['source'] = 'caller'
+            return out
+        return dict(supplied=False, source='model', note=fallback)
+
+    return dict(
+        concentration=concentration_rows,
+        centering=dict(f_cen=0.8, sigma_off_mpc=0.1, M200c_Msun=centred,
+                       note='Centring variation is a centred fraction 0.8 and a Rayleigh offset of 0.1 Mpc.'),
+        fit_radius=radius_rows,
+        non_sphericity=caller_row(
+            'non_sphericity', 'The reference model is spherical. No triaxial mass is computed here.'),
+        projection=caller_row(
+            'projection', 'Line-of-sight structure is not varied here.'),
+        bcg_mass_offset_mpc=None if bcg_offset is None else float(bcg_offset))
+
+
+def _science_gaps(intersection, quality_supplied, fit, sensitivity):
+    gaps = []
+    if not quality_supplied or intersection is None or intersection <= 0:
+        gaps.append('spec_intersection')
+    if fit is None or not fit.get('success') or int(fit.get('dof', 0)) <= 0 or fit.get('at_bound'):
+        gaps.append('fit_constraint')
+    if sensitivity is None:
+        gaps.append('sensitivity')
+    else:
+        if not sensitivity['non_sphericity'].get('supplied'):
+            gaps.append('non_sphericity')
+        if not sensitivity['projection'].get('supplied'):
+            gaps.append('projection')
+        if sensitivity.get('bcg_mass_offset_mpc') is None:
+            gaps.append('bcg_mass_offset')
+    return gaps
+
+
+def _one_source_plane(states):
+    redshifts = np.concatenate([np.asarray(state['sel']['z'], float) for state in states]) if states else np.zeros(0)
+    lenses = np.array([state['z_lens'] for state in states], float)
+    if redshifts.size == 0 or lenses.size == 0:
+        return False
+    return float(np.nanmax(redshifts) - np.nanmin(redshifts)) < 1e-4 and float(np.nanmax(lenses) - np.nanmin(lenses)) < 1e-4
+
+
+def stack_shear_profiles(clusters, cosmo=None, radius='mpc', rmin=0.3, rmax=3.0, nbins=8,
+                         z_gap=0.1, sigma_e=0.26, min_per_bin=8, gmax=1.5,
+                         inverse_variance_weights=None, boost_uncertainty=None,
+                         icl_weights_differ=False, concentration='fixed', c_fixed=4.0,
+                         two_halo=False, reduced=True, power='linear', lss_cov=False,
+                         count_slope=0.0, samples=0, seed=1, per_cluster_mass=True, fit=True,
+                         sensitivity=False, sensitivity_supplied=None, bcg_mass_offset_mpc=None,
+                         miscenter=False, f_cen=0.8, sigma_off=0.1):
+    """Average tangential-shear profiles, then fit that average with a spherical NFW.
+
+    Each cluster record holds x_arcsec, y_arcsec, g1, g2, z, weight, and z_lens.
+    spec_quality and crossmatch_ok, when present, are applied before select_sources.
+    radius is 'mpc' or 'r200c'. An r200c stack reads record['mass'] as M_200c.
+    The default samples value is 0, so the fit reports the least-squares point.
+    Pixel images are rejected.
+    """
+    _reject_image_input(clusters)
+    if not isinstance(clusters, (list, tuple)) or len(clusters) == 0:
+        raise ValueError('no clusters to stack')
+    if radius not in ('mpc', 'r200c'):
+        raise ValueError('radius must be mpc or r200c')
+    if power not in ('linear', 'halofit'):
+        raise ValueError('power must be linear or halofit')
+    cosmo = Cosmology() if cosmo is None else cosmo
+    edges = bin_edges(rmin, rmax, nbins)
+    states = []
+    photometric = []
+    intersections = []
+    quality_flags = []
+    for i, record in enumerate(clusters):
+        if isinstance(record, np.ndarray):
+            raise ValueError('a stacked image is not a shear catalogue')
+        filt = _filter_cluster_rows(record)
+        quality_flags.append(filt['spec_quality_supplied'])
+        intersections.append(filt['n_spec_intersection'])
+        if 'z_grid' in record and 'probability' in record:
+            photometric.append(photometric_geometry(
+                cosmo, float(record['z_lens']), record['z_grid'], record['probability'], z_gap=z_gap,
+                cluster_window=record.get('cluster_window'), background_window=record.get('background_window')))
+        if filt['n_kept'] == 0:
+            continue
+        z_lens = float(record['z_lens'])
+        scale = 1.0
+        if radius == 'r200c':
+            if 'mass' not in record:
+                raise ValueError('an r200c stack needs a mass on each cluster')
+            scale = r200c_mpc(record['mass'], z_lens, cosmo)
+        sel = select_sources(
+            filt['x'], filt['y'], filt['g1'], filt['g2'], filt['z'], filt['w'], z_lens, cosmo,
+            z_gap=z_gap, rmin=rmin * scale, rmax=rmax * scale, gmax=gmax, member=filt['member'])
+        if len(sel['R']) == 0:
+            continue
+        scaled = dict(sel)
+        scaled['R'] = sel['R'] / scale
+        random_R = record.get('random_R')
+        if random_R is not None:
+            random_R = np.asarray(random_R, float) / scale
+        rows, bins, _boost = _profile_from_selection(scaled, edges, sigma_e, random_R)
+        rows = [row for row in rows if row['n'] >= int(min_per_bin) and np.isfinite(row['gt'])]
+        if not rows:
+            continue
+        state = dict(id=str(record['id']) if record.get('id') is not None else str(i),
+                     z_lens=z_lens, sel=sel, rows=rows, bins=bins, scale=float(scale),
+                     n_spec_intersection=filt['n_spec_intersection'])
+        state['model'] = _halo(state, cosmo, two_halo, power, miscenter, f_cen, sigma_off)
+        states.append(state)
+    quality_supplied = any(quality_flags)
+    if quality_supplied:
+        intersection_total = int(sum(value or 0 for value in intersections))
+    else:
+        intersection_total = None
+    population = bool(icl_weights_differ) or any(isinstance(record, dict) and 'icl_weight' in record for record in clusters)
+    base = dict(
+        product='tangential shear profile stack',
+        radius=radius,
+        radius_unit='proper Mpc' if radius == 'mpc' else 'R/R_200c',
+        deltasigma_unit='Msun/pc^2',
+        deltasigma_note=DELTASIGMA_NOTE,
+        density_note=DENSITY_NOTE,
+        population_note=POPULATION_NOTE if population else None,
+        n_clusters=len(clusters),
+        n_clusters_used=len(states),
+        n_spec_intersection=intersection_total,
+        spec_quality_note=None if quality_supplied else 'A finite redshift was not treated as a spectroscopic quality flag.',
+        photometric=photometric,
+        metacal_scope=METACAL_SCOPE,
+        reference='Shirasaki & Takada 2018 MNRAS 478, 4277',
+        science_measurement=False)
+    if radius == 'r200c':
+        base['radius_note'] = (
+            'The scaled radius uses the caller mass as R_200c. '
+            'That mass is not an error-free alignment coordinate.')
+    if quality_supplied and intersection_total == 0:
+        base.update(success=False, status='insufficient_sample', profile=[],
+                    note='The spectroscopic intersection has no sources.',
+                    science_gaps=['spec_intersection'])
+        return _plain(base)
+    if not states:
+        base.update(success=False, status='insufficient_sample', profile=[],
+                    note='No cluster retained a source behind the lens.',
+                    science_gaps=['spec_intersection'])
+        return _plain(base)
+
+    certified = _weights_certified([state['sel'] for state in states], inverse_variance_weights)
+    for state in states:
+        _annotate_shape_error(state['rows'], sigma_e, certified, boost_uncertainty)
+    by_bin = {}
+    for index, state in enumerate(states):
+        for row in state['rows']:
+            err = row.get('gt_err')
+            weight = (1.0 / err ** 2) if certified and err not in (None,) and err > 0 else 1.0
+            by_bin.setdefault(row['bin'], []).append((index, weight, row))
+    profile = []
+    for bin_id in sorted(by_bin):
+        parts = by_bin[bin_id]
+        weights = np.array([part[1] for part in parts], float)
+        gt = np.array([part[2]['gt'] for part in parts], float)
+        gx = np.array([part[2]['gx'] for part in parts], float)
+        inv = np.array([part[2]['sigma_crit_inv'] for part in parts], float)
+        mean_gt = float(np.sum(weights * gt) / np.sum(weights))
+        mean_gx = float(np.sum(weights * gx) / np.sum(weights))
+        mean_inv = float(np.sum(weights * inv) / np.sum(weights))
+        if certified and np.all(np.array([part[2]['gt_err'] or 0 for part in parts]) > 0):
+            err = float(1.0 / math.sqrt(np.sum(weights)))
+            formula = 'sigma_e/sqrt(sum w), clusters combined as independent shape noise'
+        else:
+            err = None
+            formula = 'omitted'
+        dS = mean_gt / mean_inv if mean_inv and np.isfinite(mean_inv) and mean_inv > 0 else None
+        profile.append(dict(
+            bin=int(bin_id),
+            R=float((edges[bin_id] * edges[bin_id + 1]) ** 0.5),
+            n=int(sum(part[2]['n'] for part in parts)),
+            n_clusters=len(parts),
+            ids=[states[part[0]]['id'] for part in parts],
+            gt=mean_gt, gx=mean_gx, gt_err=err,
+            deltasigma=(dS / 1e12) if dS is not None else None,
+            deltasigma_err=(err / mean_inv / 1e12) if err is not None and dS is not None else None,
+            sigma_crit_inv=mean_inv,
+            boost=float(np.mean([part[2]['boost'] for part in parts])),
+            contributors=[(part[0], float(part[1])) for part in parts],
+            error_formula=formula))
+    covariance = 'shape' if certified else 'omitted'
+    covariance_note = '' if certified else WEIGHT_NOTE
+    fit_covariance = None
+    lss_marginal = None
+    if lss_cov:
+        if _one_source_plane(states) and radius == 'mpc' and certified and len(profile) >= 2:
+            distance = float(states[0]['sel']['Dl'])
+            theta1 = np.array([edges[row['bin']] / distance for row in profile])
+            theta2 = np.array([edges[row['bin'] + 1] / distance for row in profile])
+            z_source = float(np.median(states[0]['sel']['z']))
+            try:
+                matter = lss_bin_covariance(theta1, theta2, cosmo, z_source, power=power)
+                shape = np.diag([row['gt_err'] ** 2 for row in profile])
+                fit_covariance = matter + shape
+                lss_marginal = np.sqrt(np.clip(np.diag(0.5 * (fit_covariance + fit_covariance.T)), 0, None))
+                covariance = 'shape+lss'
+                covariance_note = LSS_USED_NOTE
+            except (ValueError, FloatingPointError) as exc:
+                covariance_note = '%s (%s)' % (LSS_SKIP_NOTE, exc)
+        else:
+            covariance_note = LSS_SKIP_NOTE
+    for row in profile:
+        row.pop('contributors', None)
+    # The fit closure needs the contributors that pop() removed. Rebuild from by_bin.
+    for row in profile:
+        row['contributors'] = [(part[0], float(part[1])) for part in by_bin[row['bin']]]
+    base['profile'] = profile
+    base['covariance'] = covariance
+    if covariance_note:
+        base['covariance_note'] = covariance_note
+    settings = dict(concentration=concentration, c_fixed=float(c_fixed), two_halo=bool(two_halo),
+                    power=power, reduced=bool(reduced), count_slope=float(count_slope))
+    per_cluster = []
+    if per_cluster_mass:
+        for state in states:
+            mpc_edges = edges * state['scale']
+            summary, _rows = fit_mass(
+                state['sel'], mpc_edges, cosmo, state['z_lens'], sigma_e=sigma_e,
+                concentration=concentration, c_fixed=c_fixed, two_halo=two_halo, reduced=reduced,
+                power=power, lss_cov=False, samples=int(samples), seed=seed,
+                min_per_bin=min_per_bin, count_slope=count_slope, miscenter=miscenter,
+                f_cen=f_cen, sigma_off=sigma_off)
+            summary['id'] = state['id']
+            per_cluster.append(summary)
+    base['per_cluster'] = per_cluster
+    fitted = None
+    saved_model = [row.get('gt_model') for row in profile]
+    if fit:
+        fitted = _fit_average(
+            states, profile, cosmo, concentration, c_fixed, reduced, count_slope, samples, seed,
+            covariance=fit_covariance)
+        saved_model = [row.get('gt_model') for row in profile]
+        fitted['covariance'] = covariance
+        if covariance_note:
+            fitted['covariance_note'] = covariance_note
+        base['fit'] = fitted
+        base['success'] = bool(fitted.get('success'))
+        base['M200c_Msun'] = fitted.get('M200c_Msun')
+        base['c200'] = fitted.get('c200')
+        base['at_bound'] = fitted.get('at_bound')
+        base['status'] = 'stacked'
+    else:
+        base['success'] = False
+        base['status'] = 'profile_only'
+        base['fit'] = None
+    table = None
+    if sensitivity and fitted is not None and fitted.get('success'):
+        table = _sensitivity_table(states, profile, cosmo, settings, fitted, sensitivity_supplied, bcg_mass_offset_mpc)
+    elif sensitivity_supplied or bcg_mass_offset_mpc is not None:
+        table = _sensitivity_table(states, profile, cosmo, settings, fitted or {}, sensitivity_supplied, bcg_mass_offset_mpc)
+    base['sensitivity'] = table
+    for row, value in zip(profile, saved_model):
+        row['gt_model'] = value
+    if lss_marginal is not None:
+        for row, value in zip(profile, lss_marginal):
+            row['gt_err_shape'] = row['gt_err']
+            row['gt_err'] = float(value)
+            if row.get('sigma_crit_inv'):
+                row['deltasigma_err'] = float(value / row['sigma_crit_inv'] / 1e12)
+    gaps = _science_gaps(intersection_total, quality_supplied, fitted, table)
+    base['science_gaps'] = gaps
+    base['science_measurement'] = len(gaps) == 0
+    base['science_note'] = (
+        'science_measurement records whether the caller filled the sensitivity and spectroscopic-intersection gates. '
+        'A filled gate is not a named-data mass and not a survey calibration.')
+    for row in profile:
+        row.pop('contributors', None)
+    return _plain(base)
+
+
 # ------------------------------------------------------------------------------- shapes: metacalibration of one stamp
 def adaptive_moments(image, niter=30):
     """Gaussian-weighted second moments. Returns e1, e2, T=mxx+myy, flux, or None."""
@@ -1352,6 +2065,8 @@ def measure_stamps(image, x_pix, y_pix, psf_fwhm_pix=0.0, stamp=32, dg=0.01):
     """Metacalibration at catalog positions. x_pix, y_pix are 0-based pixel coordinates.
 
     psf_fwhm_pix <= 0 measures the stamp with no PSF model. Returns a list of metacal dicts.
+    The PSF in this function is one round Gaussian, and the response is the per-object
+    diagonal response. METACAL_SCOPE names what this step leaves to a survey calibration.
     """
     img = np.asarray(image, float)
     half = max(int(stamp) // 2, 5)
@@ -1514,7 +2229,7 @@ def calibrate_shear(kind='gaussian', g_values=None, re=4.0, n_sersic=1.0, size=4
     note = 'internal simple-galaxy simulation, not a survey calibration'
     if len(rows) < 4:
         return dict(success=False, m=None, c1=None, c2=None, n=len(rows), n_fail=n_fail,
-                    kind=kind, note=note)
+                    kind=kind, note=note, metacal_scope=METACAL_SCOPE)
     design = []
     observed = []
     for g1t, g2t, g1m, g2m in rows:
@@ -1530,4 +2245,5 @@ def calibrate_shear(kind='gaussian', g_values=None, re=4.0, n_sersic=1.0, size=4
                                 + (pred2 - np.array([r[3] for r in rows])) ** 2)))
     return dict(success=True, m=one_m - 1.0, c1=c1, c2=c2, rms=rms, n=len(rows), n_fail=n_fail,
                 kind=kind, n_sersic=float(n_sersic) if kind == 'sersic' else None,
-                psf_sigma_pix=float(psf_sigma), noise=float(noise), note=note)
+                psf_sigma_pix=float(psf_sigma), noise=float(noise), note=note,
+                metacal_scope=METACAL_SCOPE)
