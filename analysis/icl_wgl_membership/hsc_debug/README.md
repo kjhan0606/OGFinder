@@ -15,6 +15,11 @@ bash scripts/run_debug.sh
 3. `03_mass_gate.py` 는 목록의 질량이 `M_200c` 가 아니라는 점(Oguri et al. 2018, arXiv:1701.00818 은 `M_200m`)을 기록한다. `clusters.json` 을 만들지 않는다.
 4. `04_cutout_status.py` 는 `cutouts/` 안의 FITS 유무만 적는다. 영상을 내려받지 않는다. HSC 영상은 로그인 뒤 아카이브에서 가져온다.
 5. `05_stack.py` 는 `masses.tsv` 와 `cutouts/frames.tsv` 가 있을 때 메뉴와 같은 명령으로 `icl_stack.py` 를 실행한다. 둘 중 하나가 없으면 스택을 실행하지 않는다.
+6. `06_fetch_members.py` 는 CAMIRA S20A Wide 별마스크 멤버 목록을 받아 고른 은하단에 맞춘다. 파일에는 머리글이 없다. 멤버 행은 모두 남기고, 가중치 하한을 두지 않는다. BCG 위치는 은하단 목록의 좌표이다.
+7. `07_fetch_cutouts.py` 는 unagi 가 적는 PDR3 컷아웃 주소로 HSC-I `type=coadd` 한 장(20각초)을 확인한다. 계정은 환경 변수 `HSC_USER`, `HSC_PASSWORD` 가 있을 때만 붙인다. 응답이 FITS 가 아니면 다운로드를 멈춘다. FITS 이면 첫 2차원 HDU 의 헤더만 남기고, global-sky 코애드로 확인되기 전에는 나머지 은하단을 받지 않는다.
+8. `08_mask_stack.py` 는 `cutouts/frames.tsv` 의 sky 가 `global` 또는 `global-sky` 이고 product 가 비어 있거나 `deepCoadd` 또는 `coadd/bg` 일 때, BCG와 멤버 발자국을 가린 뒤 `warp_metric` 과 `mean_stack` 으로 kpc 평균을 만든다. 산출물 이름은 `bcg-and-members-masked` 이다. `M_200c` 를 쓰지 않고 `icl_stack.py` 를 호출하지 않는다. SEP 은 목록 좌표의 픽셀 발자국만 잡고, 맞추지 못한 검출은 표에만 남긴다.
+
+2026-10-12 실행에서 멤버 파일은 고른 213개 은하단에 모두 맞춰졌고, 멤버 행은 9607개이다. 그 가운데 205개는 은하단 목록 좌표와 같은 멤버 행이 있다. 컷아웃 확인의 HTTP 상태는 401이고 FITS 는 받지 못했다. `cutouts/frames.tsv` 가 없어 가린 평균은 쓰이지 않았다.
 
 `masses.tsv` 의 머리글은 `id`, `m200c_msun`, `mass_definition`, `citation` 이다. `mass_definition` 값은 `200c` 이다. 식은 그 인용에서 그대로 옮긴다.
 

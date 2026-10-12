@@ -65,6 +65,10 @@ Murata et al. 2019 (arXiv:1904.07524) 의 헤일로 질량은 `R_200m` 안의 �
 ## 영상
 
 cutout 상태는 `logs/cutout_status.json` 에 있다. 영상이 없으면 스택 입력 파일을 만들지 않는다.
+
+## 멤버와 마스크 평균
+
+`06_fetch_members.py` 가 CAMIRA 멤버 행을 고른 은하단에 맞춘다. `07_fetch_cutouts.py` 는 문서에 있는 PDR3 컷아웃 주소로 한 장을 확인하고, FITS 가 아니면 나머지를 받지 않는다. `08_mask_stack.py` 는 `cutouts/frames.tsv` 가 global-sky 영상을 적을 때 BCG와 멤버를 가린 kpc 평균을 쓴다. 그 상태는 `logs/member_summary.json`, `logs/cutout_fetch_status.json`, `logs/mask_stack_status.json` 에 있다.
 """.format(
         root=ROOT,
         n_rows=summary['n_rows'],

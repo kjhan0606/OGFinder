@@ -26,7 +26,7 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 스케일 스택의 메뉴 항목은 ICL의 `Stack BCG+diffuse`이다. 프로그램은 `plugins/icl/icl_stack.py`이고 `icl.wgl.stack_clusters`를 호출한다. 한 프레임 프로파일은 `ds9/library/ds9_icl.py`에 그대로 있다. local-sky 프레임과, 제품 이름이 `deepCoadd`가 아닌 프레임은 거절된다. 산출물 키는 `bcg+diffuse`이고, 서베이 점검표가 비어 있으면 과학 측정 플래그는 내려가 있다.
 
-실제 목록으로 그 메뉴 명령을 준비하는 절차는 `hsc_debug/`에 있다. `bash hsc_debug/run_debug.sh`는 `ASTRAFEK_DATA`(기본 `/gpfs/kjhan/Astrafek/data`) 아래에 CAMIRA S20A 별마스크 목록을 받고, 분광 창을 통과한 한 적색이동 구간의 은하단을 고른다. `masses.tsv`의 정의가 `200c`이고 `cutouts/frames.tsv`가 global-sky를 적을 때 `05_stack.py`가 메뉴와 같은 인자로 `icl_stack.py`를 실행한다. 2026-10-12 실행에는 그 두 파일이 없었고, 스택 JSON은 만들어지지 않았다. 이 절차는 과학 측정을 기록하지 않는다.
+실제 목록으로 그 메뉴 명령을 준비하는 절차는 `hsc_debug/`에 있다. `bash hsc_debug/run_debug.sh`는 `ASTRAFEK_DATA`(기본 `/gpfs/kjhan/Astrafek/data`) 아래에 CAMIRA S20A 별마스크 목록을 받고, 분광 창을 통과한 한 적색이동 구간의 은하단을 고른다. `masses.tsv`의 정의가 `200c`이고 `cutouts/frames.tsv`가 global-sky를 적을 때 `05_stack.py`가 메뉴와 같은 인자로 `icl_stack.py`를 실행한다. 2026-10-12 실행에는 그 두 파일이 없었고, 스택 JSON은 만들어지지 않았다. 같은 절차의 `06_fetch_members.py`는 같은 릴리스의 멤버 목록을 맞추고, `07_fetch_cutouts.py`는 PDR3 컷아웃 한 장을 확인하며, `08_mask_stack.py`는 BCG와 멤버를 가린 kpc 평균을 `bcg-and-members-masked`로 쓴다. 그 평균은 `M_200c`를 쓰지 않는다. 2026-10-12 실행에서 213개 은하단의 멤버 행 9607개가 맞춰졌고, 컷아웃 확인은 HTTP 401이었다. 가린 평균은 쓰이지 않았다. 이 절차는 과학 측정을 기록하지 않는다.
 
 ## 실행
 
