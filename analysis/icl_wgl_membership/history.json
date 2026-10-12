@@ -1,0 +1,430 @@
+{
+  "product": "Astrafex Desktop",
+  "analysis": "scaled ICL stack, ICL light fraction, weak-lensing mass, spectroscopic and photometric membership",
+  "date": "2026-10-12",
+  "kind": "synthetic self-consistency",
+  "statement": "The numbers in this file are the output of run_analysis.py on the synthetic clusters defined in that script. They record this run. A paper cites the repository path below and the commit that contains this directory.",
+  "cosmology": {
+    "H0": 70.0,
+    "Om": 0.3,
+    "ns": 0.96,
+    "sigma8": 0.8,
+    "note": "Caller settings of Cosmology(), the same defaults as the weak-lensing library."
+  },
+  "delta": 200.0,
+  "membership": {
+    "spectroscopic_half_width": 0.03,
+    "spectroscopic_boundary": "|z - z_cluster| = dz is outside the cluster",
+    "photoz_cluster_window": "[z_cluster - 0.02, z_cluster + 0.02)",
+    "photoz_background_window": "[z_cluster + 0.40, z_cluster + 1.20)",
+    "pz_p_min": 0.8,
+    "red_sequence_width": 0.1,
+    "red_sequence_magnitude_limit": 22.5,
+    "red_sequence_min_satellites": 2,
+    "red_sequence_form": "colour = a + b (mag - m0), fit to spectroscopic satellites only"
+  },
+  "icl": {
+    "surface_brightness": "S0 exp(-u / u_scale), counts per arcsec^2",
+    "S0": 2.5,
+    "u_scale": 0.45,
+    "u_max": 2.2,
+    "n_side": 89,
+    "max_relative_residual": 0.0016200099538240219,
+    "masked_peak_sb": 2.5,
+    "unmasked_peak_sb": 317.97539719148597,
+    "radial_profile": [
+      {
+        "u_min": 0.0,
+        "u_max": 0.31428571428571433,
+        "n": 121,
+        "sb_mean": 1.6000491748020642,
+        "model_mean": 1.600623208546227
+      },
+      {
+        "u_min": 0.31428571428571433,
+        "u_max": 0.6285714285714287,
+        "n": 375,
+        "sb_mean": 0.8638363080829469,
+        "model_mean": 0.8638425182812427
+      },
+      {
+        "u_min": 0.6285714285714287,
+        "u_max": 0.9428571428571431,
+        "n": 609,
+        "sb_mean": 0.43612837127121096,
+        "model_mean": 0.4360755321936956
+      },
+      {
+        "u_min": 0.9428571428571431,
+        "u_max": 1.2571428571428573,
+        "n": 880,
+        "sb_mean": 0.21801516639777194,
+        "model_mean": 0.21797881376741424
+      },
+      {
+        "u_min": 1.2571428571428573,
+        "u_max": 1.5714285714285716,
+        "n": 1131,
+        "sb_mean": 0.10780817992323176,
+        "model_mean": 0.10778625634677816
+      },
+      {
+        "u_min": 1.5714285714285716,
+        "u_max": 1.8857142857142861,
+        "n": 1352,
+        "sb_mean": 0.05374334775702435,
+        "model_mean": 0.05373140916926209
+      },
+      {
+        "u_min": 1.8857142857142861,
+        "u_max": 2.2,
+        "n": 1596,
+        "sb_mean": 0.026986538816453368,
+        "model_mean": 0.026980311786794532
+      }
+    ],
+    "clusters": [
+      {
+        "name": "A",
+        "z": 0.25,
+        "mass_Msun": 1200000000000000.0,
+        "pixels_per_radius": 40,
+        "pixel_scale_arcsec": 12.88844791087464,
+        "theta_delta_arcsec": 515.5379164349856,
+        "r_delta_mpc": 2.015774219257812,
+        "red_sequence": {
+          "ok": true,
+          "n": 2,
+          "a": 1.1119999999999999,
+          "b": -0.030000000000000047,
+          "m0": 19.6,
+          "rms": 2.220446049250313e-16,
+          "mag_limit": 22.5,
+          "width": 0.1,
+          "min_satellites": 2
+        },
+        "labels": [
+          {
+            "name": "bcg",
+            "label": "bcg",
+            "counts": 0.0
+          },
+          {
+            "name": "spec_red_1",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "spec_red_2",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "spec_blue",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "spec_background_red",
+            "label": "background",
+            "counts": 180000.0
+          },
+          {
+            "name": "photo_satellite",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "photo_background_red",
+            "label": "background",
+            "counts": 180000.0
+          },
+          {
+            "name": "red_sequence",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "unknown_blue",
+            "label": "unknown",
+            "counts": 180000.0
+          },
+          {
+            "name": "star",
+            "label": "star",
+            "counts": 180000.0
+          },
+          {
+            "name": "pz_satellite",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "faint_red",
+            "label": "unknown",
+            "counts": 180000.0
+          }
+        ],
+        "n_diffuse_masked": 11,
+        "fraction_counts_kept": 1080000.0,
+        "fraction_counts_rejected": 900000.0
+      },
+      {
+        "name": "B",
+        "z": 0.62,
+        "mass_Msun": 300000000000000.0,
+        "pixels_per_radius": 26,
+        "pixel_scale_arcsec": 6.237363056959257,
+        "theta_delta_arcsec": 162.17143948094068,
+        "r_delta_mpc": 1.1005401224402396,
+        "red_sequence": {
+          "ok": true,
+          "n": 2,
+          "a": 1.1119999999999999,
+          "b": -0.030000000000000047,
+          "m0": 19.6,
+          "rms": 2.220446049250313e-16,
+          "mag_limit": 22.5,
+          "width": 0.1,
+          "min_satellites": 2
+        },
+        "labels": [
+          {
+            "name": "bcg",
+            "label": "bcg",
+            "counts": 0.0
+          },
+          {
+            "name": "spec_red_1",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "spec_red_2",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "spec_blue",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "spec_background_red",
+            "label": "background",
+            "counts": 180000.0
+          },
+          {
+            "name": "photo_satellite",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "photo_background_red",
+            "label": "background",
+            "counts": 180000.0
+          },
+          {
+            "name": "red_sequence",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "unknown_blue",
+            "label": "unknown",
+            "counts": 180000.0
+          },
+          {
+            "name": "star",
+            "label": "star",
+            "counts": 180000.0
+          },
+          {
+            "name": "pz_satellite",
+            "label": "satellite",
+            "counts": 180000.0
+          },
+          {
+            "name": "faint_red",
+            "label": "unknown",
+            "counts": 180000.0
+          }
+        ],
+        "n_diffuse_masked": 11,
+        "fraction_counts_kept": 1080000.0,
+        "fraction_counts_rejected": 900000.0
+      }
+    ]
+  },
+  "weak_lensing": {
+    "z_lens": 0.3,
+    "z_source": 1.0,
+    "input_M200c_Msun": 1000000000000000.0,
+    "input_c200": 4.0,
+    "rmin_Mpc": 0.3,
+    "rmax_Mpc": 3.0,
+    "z_gap": 0.1,
+    "samples": 0,
+    "two_halo": false,
+    "power": "linear",
+    "concentration": "fixed",
+    "n_background": 500,
+    "n_stars": 180,
+    "n_satellites": 40,
+    "labelled": {
+      "success": true,
+      "method": "least_squares",
+      "M200c_Msun": 999267888168311.5,
+      "c200": 4.0,
+      "chi2": 0.02306597176106172,
+      "n_src": 500,
+      "n_bins": 6,
+      "dof": 5,
+      "covariance": "shape",
+      "power": "linear",
+      "two_halo": false,
+      "profile": [
+        {
+          "R_Mpc": 0.3634582975885765,
+          "n": 12,
+          "gt": 0.11824313078956973,
+          "gt_err": 0.0002886751345948129,
+          "gt_model": 0.11821298554177873,
+          "deltasigma": 335.1971139042868,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 0.5334838230116767,
+          "n": 8,
+          "gt": 0.0906036882586219,
+          "gt_err": 0.00035355339059327376,
+          "gt_model": 0.09059394110154273,
+          "deltasigma": 256.844474690218,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 0.7830471647047609,
+          "n": 29,
+          "gt": 0.06701523945339814,
+          "gt_err": 0.0001856953381770519,
+          "gt_model": 0.06700913636986995,
+          "deltasigma": 189.97564342541287,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 1.1493560548671862,
+          "n": 52,
+          "gt": 0.04558600543484797,
+          "gt_err": 0.0001386750490563073,
+          "gt_model": 0.04558940397998761,
+          "deltasigma": 129.22778138697637,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 1.6870239755710468,
+          "n": 140,
+          "gt": 0.029850695009022304,
+          "gt_err": 8.451542547285165e-05,
+          "gt_model": 0.029854969500870267,
+          "deltasigma": 84.62112554232196,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 2.476212555804055,
+          "n": 259,
+          "gt": 0.019345078397443528,
+          "gt_err": 6.213697660012e-05,
+          "gt_model": 0.019350337079340807,
+          "deltasigma": 54.839671478380964,
+          "boost": 1.0
+        }
+      ]
+    },
+    "unlabelled": {
+      "success": true,
+      "method": "least_squares",
+      "M200c_Msun": 649679700830661.2,
+      "c200": 4.0,
+      "chi2": 8358.989011883941,
+      "n_src": 680,
+      "n_bins": 6,
+      "dof": 5,
+      "covariance": "shape",
+      "power": "linear",
+      "two_halo": false,
+      "profile": [
+        {
+          "R_Mpc": 0.3634582975885765,
+          "n": 13,
+          "gt": 0.10914750534421822,
+          "gt_err": 0.0002773500981126146,
+          "gt_model": 0.09055213394258729,
+          "deltasigma": 309.412720527034,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 0.5334838230116767,
+          "n": 11,
+          "gt": 0.06589359146081593,
+          "gt_err": 0.00030151134457776364,
+          "gt_model": 0.0701110518523761,
+          "deltasigma": 186.79598159288585,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 0.7830471647047609,
+          "n": 44,
+          "gt": 0.044169135094285134,
+          "gt_err": 0.00015075567228888182,
+          "gt_model": 0.05055392166477115,
+          "deltasigma": 125.2112195303857,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 1.1493560548671862,
+          "n": 78,
+          "gt": 0.03039067028989864,
+          "gt_err": 0.00011322770341445957,
+          "gt_model": 0.0342656357680335,
+          "deltasigma": 86.15185425798424,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 1.6870239755710468,
+          "n": 175,
+          "gt": 0.023880556007217838,
+          "gt_err": 7.559289460184545e-05,
+          "gt_model": 0.02187887355934156,
+          "deltasigma": 67.69690043385759,
+          "boost": 1.0
+        },
+        {
+          "R_Mpc": 2.476212555804055,
+          "n": 359,
+          "gt": 0.013956477172528896,
+          "gt_err": 5.277798139692596e-05,
+          "gt_model": 0.014031717902583092,
+          "deltasigma": 39.56399697186817,
+          "boost": 1.0
+        }
+      ]
+    },
+    "log10_labelled_over_input": -0.00031806857373341133,
+    "log10_unlabelled_over_labelled": -0.18698263393125994,
+    "n_photometric_background_without_spectroscopic_redshift": 30,
+    "photometric_background_kept_for_lensing": 0
+  },
+  "data_availability": {
+    "repository": "https://github.com/kjhan0606/OGFinder",
+    "path": "analysis/icl_wgl_membership/",
+    "script": "analysis/icl_wgl_membership/run_analysis.py",
+    "history": "analysis/icl_wgl_membership/history.json",
+    "modules": [
+      "icl/wgl.py",
+      "icl/members.py",
+      "ogfkit/wlcluster.py"
+    ],
+    "parent_commit": "9a4adcb8f421838115acbff9c8612671d4fff723",
+    "parent_commit_note": "HEAD when this file was written. The citation commit is the commit that adds this directory."
+  }
+}
