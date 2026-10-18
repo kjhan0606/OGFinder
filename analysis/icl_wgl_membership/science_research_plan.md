@@ -607,7 +607,8 @@ mask growth, photon noise 및 전체 공분산을 검증하지 않는다. 원자
 
 ### Weak-lensing 교정 입력
 
-약한 중력렌즈 stack의 calibrated 단계는 아직 완료되지 않았다. HSC S19A shape 문서는
+약한 중력렌즈용 fiducial n(z) 입력 정합성과 두 B-mode 극성 가정의 예비 stack은 끝났지만,
+과학용 calibrated 분석은 아직 완료되지 않았다. HSC S19A shape 문서는
 4개 source tomographic bin의 `n(z)`를 포함하는 공식 자료
 `hsc_y3_fourier_space_data_vector.sacc`를 안내하고, point/photo-z 기반 추정에는
 dilution 및 selection-bias 교정이 필요하다고 명시한다
@@ -615,8 +616,23 @@ dilution 및 selection-bias 교정이 필요하다고 명시한다
 사용자의 명시 승인에 따라 이 SACC 파일만 다운로드했다. 파일은 승인된 shape-row
 export와 동일한 sample data 경로에 보존했고, 실제 tracer와 `source_zbin`의 빈 수를
 대조했다. 추가 영상·원자료 shape row·개별 photo-z PDF 반출은 이 단계에 포함하지
-않았다. 보정 stack 계산은 B-mode mask 극성, random-lens/null 처리, n(z) 불확실도,
-source 중복 및 공간 공분산 관문이 해결될 때까지 과학 측정으로 해석하지 않는다.
+않았다. 2026-10-19에 승인된 800 렌즈/3,069,544 shape 행과 SACC를 사용해 HSC의
+shape·selection 보정을 적용한 두 개의 B-mode mask bit 극성 민감도 stack을 계산했다.
+raw 0을 masked로 보면 2,153,004 pair/609 lens, raw 1을 masked로 보면 76,864 pair/26 lens가
+0.1–3 Mpc에 남는다. 첫 가정의 weak-shear `DeltaSigma`는 0.1–0.2 Mpc에서
+161.5±11.5, 2–3 Mpc에서 15.3±0.9 `Msun/pc^2`이고, 두 번째 가정은 각각
+58.1±61.1, 12.8±4.9 `Msun/pc^2`이다. 이 오차는 독립 pair shape noise만 나타내며
+서베이 공분산이 아니다. 외관상 profile이 더 자연스러워 보인다는 이유로 bit 극성을
+선택하지 않았다. 전체 출력과 한계는
+[B-mode 극성 민감도 보고서](hsc_debug/wl_bmode_polarity_sensitivity_2026-10-19.md)에
+있다. random-lens 차감, source overlap/공간 공분산, n(z) 오차 전파 및 reduced-shear
+보정이 남아 `science_measurement=false`를 유지한다.
+
+HSC PDR3 안내에서 random points가 공개 데이터베이스에 있다고 확인했다
+([HSC PDR3 available data](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/)).
+다음은 그 table schema와 800 렌즈 표본에 맞는 footprint/depth/PSF 조건을 확인하는
+count-only 질의 초안을 준비하는 단계다. random position row 조회·반출은 기존 다운로드
+승인 원칙에 따라 별도 승인을 얻기 전에는 실행하지 않는다.
 
 ### 2026-10-19 반경별 ICL–위성 공간 블록 불확실도
 

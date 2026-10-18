@@ -440,3 +440,21 @@ for dilution and selection-bias corrections. This input gate now passes, but
 the calibrated stack is not yet a science measurement: B-mode mask polarity,
 random-lens subtraction, n(z) uncertainty, source overlap, and spatial
 covariance still need resolution.
+
+### B-mode polarity sensitivity stack
+
+The HSC column description does not state whether raw `b_mode_mask=0` or `1`
+marks the excluded region. Do not select a polarity based on which profile
+looks more physical. The two-hypothesis calibrated stack uses only the
+previously approved row export and SACC input; it does not query HSC or download
+anything. Submit the reproducible Slurm runner with:
+
+```bash
+sbatch analysis/icl_wgl_membership/hsc_debug/run_wl_bmode_polarity_sensitivity.sbatch
+```
+
+The script refuses to overwrite its output path. The completed run and its
+interpretation are recorded in
+[`wl_bmode_polarity_sensitivity_2026-10-19.md`](wl_bmode_polarity_sensitivity_2026-10-19.md).
+The two scenarios are sensitivity bounds only; neither is a decoded catalog
+convention or a science measurement.

@@ -20,6 +20,7 @@ from s19a_shape_stack import (
     subtract_random_lens_profile,
     tomographic_nz_lensing_efficiency,
 )
+from run_wl_bmode_polarity_sensitivity import calculate_sensitivity
 
 
 @pytest.fixture(scope="module")
@@ -273,6 +274,27 @@ def test_tomographic_nz_efficiency_matches_pdf_and_excludes_bin_zero(cosmo):
     assert beta[4] == 0.0
     with pytest.raises(ValueError, match="exceeds the supplied n\\(z\\) bins"):
         tomographic_nz_lensing_efficiency([0.3], [5], z, np.tile(nz, (4, 1)), cosmo)
+
+
+def test_bmode_polarity_sensitivity_keeps_both_hypotheses(cosmo):
+    pairs, _source_ids, z_pdf, _pdf, edges, _injected = _synthetic_catalog(cosmo)
+    pairs["source_zbin"] = np.ones(len(pairs["object_id"]), dtype=int)
+    pairs["b_mode_mask_raw"] = np.arange(len(pairs["object_id"]), dtype=np.int8) % 2
+    nz = np.exp(-0.5 * ((z_pdf - 1.0) / 0.16) ** 2)
+    scenarios, differences = calculate_sensitivity(
+        pairs, z_pdf, np.tile(nz, (4, 1)), edges, cosmo,
+    )
+    exclude_zero = scenarios["exclude_raw_0_hypothesis"]["stack"]
+    exclude_one = scenarios["exclude_raw_1_hypothesis"]["stack"]
+
+    assert exclude_zero["counts"]["used_pairs"] == 200
+    assert exclude_one["counts"]["used_pairs"] == 200
+    assert exclude_zero["counts"]["used_pairs"] + exclude_one["counts"]["used_pairs"] == 400
+    assert len(differences) == len(edges) - 1
+    assert all(row["delta_sigma_exclude_0_minus_exclude_1_msun_mpc2"] is not None
+               for row in differences)
+    assert exclude_zero["science_measurement"] is False
+    assert exclude_one["science_measurement"] is False
 
 
 def test_load_hsc_y3_nz_sacc_returns_four_ordered_tracers(tmp_path, monkeypatch):
