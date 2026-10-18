@@ -255,8 +255,11 @@ profile에 기여하는 현상을 허용하되 최종 공분산은 하늘 블록
 pair 정보를 잃으므로 분석 입력으로 쓰지 않는다.
 렌즈별 원뿔의 shape 행 수만 세는 CAS SQL 32개 배치는
 `sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01/`에 준비되어 있으나
-아직 제출하지 않았다. count 결과가 나와야 source 행의 예상 크기와 overlap별
-다운로드량을 정량화할 수 있다.
+아직 제출하지 않았다. `hsc_debug/submit_wl_shape_counts.py --plan`은 SQL 해시와
+렌즈 ID를 로컬 검증하며, `--submit`은 lageunha 대화형 터미널에서 800개 aggregate
+count만 요청하도록 준비했다. 현재 세션에는 HSC 환경변수가 없고 대화형 인증도
+연결되어 있지 않아 CAS count query는 아직 실행되지 않았다. count 결과가 나와야
+source 행의 예상 크기와 overlap별 다운로드량을 정량화할 수 있다.
 
 ## 7. 실행과 장기 유지
 

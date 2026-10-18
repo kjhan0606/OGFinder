@@ -138,3 +138,18 @@ python3 analysis/icl_wgl_membership/hsc_debug/prepare_wl_shape_preflight.py \
 32개 SQL 배치와 `preflight_manifest.json`이 생성된다. 렌즈별 source 행 수와 예상
 전송량을 확인한 뒤 자료 전송 여부를 정하고, 사전계산 단계에서는 shape 행을
 가져오지 않는다.
+
+검증 및 count-only 실행기는 `submit_wl_shape_counts.py`다. `--plan`은 SQL 해시와
+800개 렌즈 ID를 검증하며 네트워크를 사용하지 않는다. `--submit`은 `lageunha`의
+대화형 터미널에서 한 번 숨김 비밀번호를 입력받아 32개 배치를 순차 실행하고,
+렌즈당 정수 count 한 개씩만 저장한다. shape·좌표·photo-z 행은 반환하지 않는다.
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/submit_wl_shape_counts.py --plan
+python3 analysis/icl_wgl_membership/hsc_debug/submit_wl_shape_counts.py --submit
+```
+
+기존 제출 결과는 `<preflight>/cas_counts/`에서 재개·해시 검증한다. count 합계는
+중복 원천 은하가 여러 렌즈 원뿔에 들면 여러 lens-source 후보로 세는 기획용 수이며,
+선택 후 실제 source 수나 다운로드 바이트가 아니다. shape source 행의 반출은 별도
+용량 산정과 사용자 승인을 거친다.
