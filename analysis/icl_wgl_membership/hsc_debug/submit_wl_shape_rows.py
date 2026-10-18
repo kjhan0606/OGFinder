@@ -35,7 +35,7 @@ DEFAULT_PREFLIGHT = Path(
 )
 DEFAULT_RESULTS = Path(
     "/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/"
-    "wl_shape_rows_export_2026-10-18_01"
+    "wl_shape_rows_export_2026-10-18_03"
 )
 
 
@@ -193,6 +193,34 @@ def run(args):
                         if error.code in (400, 401, 403, 406, 429):
                             item["status"] = "pending"
                             save(checkpoint, state)
+                        if error.code == 406:
+                            # CAS occasionally returns a useful JSON validation
+                            # message with 406. Show only allowlisted fields and
+                            # redact credentials before reporting it.
+                            try:
+                                raw_detail = error.read(4096).decode("utf-8", "replace")
+                                payload = json.loads(raw_detail)
+                                detail = next((payload[key] for key in ("error", "message", "detail", "reason")
+                                               if isinstance(payload, dict) and key in payload), None)
+                                if detail is not None:
+                                    detail = str(detail)
+                                    for secret in (args.user, password):
+                                        if secret:
+                                            detail = detail.replace(secret, "[redacted]")
+                                    print("CAS 406 detail: " + detail[:500], file=sys.stderr)
+                                elif isinstance(payload, dict):
+                                    print("CAS 406 JSON keys: " + ", ".join(sorted(payload.keys())), file=sys.stderr)
+                            except json.JSONDecodeError:
+                                detail = raw_detail.strip()
+                                for secret in (args.user, password):
+                                    if secret:
+                                        detail = detail.replace(secret, "[redacted]")
+                                if any(token in detail.upper() for token in ("SELECT", "FROM ", "LENS_ID")):
+                                    detail = "[response omitted: request-related content]"
+                                if detail:
+                                    print("CAS 406 detail: " + detail[:300], file=sys.stderr)
+                            except Exception:
+                                pass
                         raise
                     item.update(status="submitted", job_id=str(submitted["id"]))
                     save(checkpoint, state)

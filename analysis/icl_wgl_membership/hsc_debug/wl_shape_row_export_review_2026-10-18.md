@@ -18,7 +18,7 @@ Both its checkpoint and summary say `source_rows_downloaded=false`,
 ## Proposed row export
 
 The prepared plan is
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_plan_2026-10-18_02/`.
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_plan_2026-10-18_04/`.
 It contains 32 count-matched SQL batches, each covering 25 lenses. The SQL
 uses the same PDR3 joins and 3 Mpc cone geometry as the completed count-only
 preflight, but returns only these 22 explicit columns:
@@ -79,9 +79,20 @@ References:
 
 ## Execution status
 
-`prepare_wl_shape_rows.py` builds the query plan locally and makes no network
-request. `submit_wl_shape_rows.py --plan` validates the plan without contacting
-CAS. Submission requires `--submit --approved-source-row-export` in an
-interactive `lageunha` session. No source-row SQL has been submitted, and no
-source row has been downloaded. This document records a request ready for
-review; it is not a data-release approval.
+`submit_wl_shape_rows.py --submit --approved-source-row-export` completed all
+32 batches on `lageunha` after explicit user approval. The first plan attempts
+were rejected by CAS because the aperture magnitude and PSF moments were
+attributed to the wrong joined tables. The SQL was corrected to read aperture
+magnitude from `weaklensing_hsm_regauss` and PSF moments from `meas2`; the final
+plan is the version 04 path above. No rejected request created a CAS job or
+downloaded data.
+
+The completed export is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_03/`.
+Its checkpoint and summary both report `complete`, with 32/32 batch CSVs and
+exactly 3,069,544 lens-source pair rows. Every batch matched its count-only
+per-lens totals and contained no duplicate `(lens_id, object_id)` pair. The
+files total 909,833,598 bytes (0.847 GiB). The 22 output columns match the
+approved plan; `credentials_saved=false`, full photo-z PDFs were not included,
+and `science_measurement=false`. This is a validated shape-row export, not yet
+a calibrated weak-lensing measurement; retain the open gates listed above.

@@ -23,7 +23,7 @@ DEFAULT_PREFLIGHT = Path(
 )
 DEFAULT_OUTPUT = Path(
     "/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/"
-    "wl_shape_rows_plan_2026-10-18_02"
+    "wl_shape_rows_plan_2026-10-18_04"
 )
 
 OUTPUT_COLUMNS = [
@@ -65,11 +65,11 @@ def lens_query(lens):
         "b.i_hsmshaperegauss_derived_shear_bias_m AS m",
         "b.i_hsmshaperegauss_derived_shear_bias_c1 AS c1",
         "b.i_hsmshaperegauss_derived_shear_bias_c2 AS c2",
-        "c.i_apertureflux_10_mag AS mag_a10",
+        "b.i_apertureflux_10_mag AS mag_a10",
         "b.i_hsmshaperegauss_resolution AS resolution",
-        "c.i_sdssshape_psf_shape11 AS psf_shape11",
-        "c.i_sdssshape_psf_shape22 AS psf_shape22",
-        "c.i_sdssshape_psf_shape12 AS psf_shape12",
+        "a.i_sdssshape_psf_shape11 AS psf_shape11",
+        "a.i_sdssshape_psf_shape22 AS psf_shape22",
+        "a.i_sdssshape_psf_shape12 AS psf_shape12",
         "b.b_mode_mask AS b_mode_mask_raw", "b.hsc_y3_zbin AS source_zbin",
     ]
     return (

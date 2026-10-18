@@ -2,7 +2,7 @@ import csv
 
 import pytest
 
-from prepare_wl_shape_rows import OUTPUT_COLUMNS
+from prepare_wl_shape_rows import OUTPUT_COLUMNS, lens_query
 from submit_wl_shape_rows import validate_rows
 
 
@@ -17,6 +17,19 @@ def _row(lens_id, object_id):
     return {key: "" for key in OUTPUT_COLUMNS} | {
         "lens_id": lens_id, "object_id": object_id,
     }
+
+
+def test_lens_query_uses_catalog_table_for_each_shape_product():
+    sql = lens_query({
+        "lens_id": "lens-a", "ra_deg": 10, "dec_deg": -2,
+        "z_lens": 0.3, "radius_arcsec": 1200,
+    })
+    assert "b.i_apertureflux_10_mag AS mag_a10" in sql
+    assert "a.i_sdssshape_psf_shape11 AS psf_shape11" in sql
+    assert "a.i_sdssshape_psf_shape22 AS psf_shape22" in sql
+    assert "a.i_sdssshape_psf_shape12 AS psf_shape12" in sql
+    assert "c.i_ra AS source_ra_deg" in sql
+    assert "a.i_hsmshaperegauss_e1 AS e1" in sql
 
 
 def test_row_export_checks_pair_counts_and_accepts_empty_lens(tmp_path):
