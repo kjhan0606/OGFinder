@@ -24,3 +24,41 @@ bash scripts/run_debug.sh
 `masses.tsv` 의 머리글은 `id`, `m200c_msun`, `mass_definition`, `citation` 이다. `mass_definition` 값은 `200c` 이다. 식은 그 인용에서 그대로 옮긴다.
 
 `cutouts/frames.tsv` 의 머리글은 `id`, `filename`, `sky`, `product` 이다. `sky` 는 `global` 또는 `global-sky` 이다. `product` 는 비우거나 `deepCoadd` 이다. 중심은 astropy `world_to_pixel` 의 0-기반 픽셀이고, 픽셀 크기는 헤더의 CD 또는 CDELT 이다.
+
+2026-10-12 인증 프로브 후속: `probe_login.py --global-sky`가 HSC-I
+`coadd/bg` 요청에 HTTP 200을 받았다. 저장한 공식 매뉴얼은 이를
+`deepCoadd`의 coaddition 직후, aggressive background subtraction 이전
+산출물로 연결한다. 전체 FITS 헤더에서 primary의 `FLUXMAG0=63095734448.01944`
+(AB 영점 27), IMAGE/MASK/VARIANCE HDU 1/2/3을 확인했다. 이번 헤더 전용
+프로브는 영상 픽셀을 남기지 않았고 다른 은하단 요청도 하지 않았다.
+교정·제품 출처 검토는 `/gpfs/kjhan/Astrafek/data/logs/cutout_global_review.json`이다.
+이 한 건의 제품 출처 관문은 통과했으나 sky 잔류량·PSF·마스크·random·주입/회수
+검증과 12개 시범 영상은 미완료이다. 이 기록은 위의 초기 401 이력을 대체하지 않는다.
+
+2026-10-12 수집 확장: 이후 12개 FITS 다운로드가 모두 완료됐으며, 파일 크기와
+SHA-256, FITS 구조와 WCS를 재검사했다. 이제 213개 후보 전체를 받도록
+`hsc_pilot.py prepare --all-selected`로 목록을 만들고 기존 `download_pilot.py`의
+입력 제한을 확장했다.
+기존 12개를 재사용하고 추가 201개(약 10.28 GiB)를 요청한다.
+계획은 `../implementation_plan.md`의 첫 절, 실행 데이터는
+`/gpfs/kjhan/Astrafek/data/sample_2026-10-12`이다.
+
+별도로 만들었던 제출 스크립트는 Slurm 환경 전달 오류로 철회했다. 기존에
+성공했던 다운로드·비밀번호 입력 경로를 그대로 사용한다. OGFinder 루트의
+SSH 터미널에서 아래 명령을 실행하고 노드 배정 뒤 비밀번호를 입력한다.
+`/`를 포함한 특수문자는 그대로 입력한다.
+
+```bash
+srun -p a10 -N1 -n1 --cpus-per-task=1 --mem=4G --gres=gpu:1 --time=12:00:00 --pty \
+  /home/kjhan/miniconda3/bin/python3 analysis/icl_wgl_membership/hsc_debug/download_pilot.py \
+  --user kjhan0606 --resume \
+  --manifest /gpfs/kjhan/Astrafek/data/sample_2026-10-12/sample_manifest.json \
+  --work /gpfs/kjhan/Astrafek/data/sample_2026-10-12/download_01
+```
+
+오류가 나면 완료분을 보존하고 멈추며 같은 명령으로 이어받는다. 터미널을
+열어 둔 채 실행하고 중복 실행하지 않는다. 실제 진행 상태는 실행 디렉터리의
+`download_01/download_status.json`, 전체 완료 목록은 그 디렉터리의
+`download_manifest.json`이다. 상위 디렉터리의 이전 제출 상태는 과거 이력이다.
+비밀번호는 기존 프로그램의 메모리에만 둔다. GPU 연산은 없지만 장시간 작업은
+Slurm에서 실행하고 GPU를 요청해야 한다는 서버 규정을 따른다.

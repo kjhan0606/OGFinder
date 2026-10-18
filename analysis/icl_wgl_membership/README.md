@@ -30,7 +30,18 @@ Astrafex Desktop에서 돌린 합성 자기일관성 실행이다. 두 은하단
 
 ## 실행
 
+2026-10-12 평가 뒤 승인된 다음 순서는 작은 HSC-I BCG+확산광 kpc 시범이다.
+측정 정의와 명령은 [`pilot_README.md`](pilot_README.md), 단계별 완료 범위는
+계획서 맨 앞 절이다. `hsc_pilot.py`와 `icl/pilot.py`가 개별 고리 프로파일,
+면적 보존 영상 대조, 마스크 변형과 matched-random/영역별 공분산을 출력한다.
+관측 검증은 미완료이고 시범 과학 측정 플래그는 항상 거짓이다.
+입력 공분산의 기록과 전파는 `covariance_recorded`와
+`covariance_propagated=false`로 구별한다.
+
 OGFinder 루트에서:
+
+아래는 저장된 합성 기록을 만든 명령의 설명이다. 현재 인수 규칙대로 그 기록을
+보존하며 이 명령은 재실행하지 않는다. 새 시범은 `pilot_README.md`를 따른다.
 
 ```bash
 python analysis/icl_wgl_membership/run_analysis.py

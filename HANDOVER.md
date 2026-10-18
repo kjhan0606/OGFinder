@@ -318,3 +318,11 @@ AGN diagnostic 노드를 두 버전에 연결했습니다. 선행 lines의 joint
 정상 회귀 126개 재통과 후 독립 합성 주입(z guess=0/.35, truth=guess+.0008, flux scale=1/1e-17)의 참값 회수 및 외부/Balmer 소광 질량오차 유한차분 검증을 추가했습니다. 운동학 보고서 변조 세 경우에서 질량을 차단하지 않는 결함을 발견하여 finite/양의 기준파장·유효 z·fitted shift와 common z의 일치 및 finite uncertainty 검사로 수정했습니다. 최종 서버 108개, Desktop 18개, 실제 브라우저 8개, 총 134개 통과(lageunha CPU/BLAS 1 thread). Web typecheck/build 및 Desktop manifest 0 problems. 범위·허용오차·결함 재현/수정·검증 한계는 docs/validation_spectrum_2026-10-13.md에 기록했습니다. 실제 관측 승인 검증·HSC 데이터 변경·커밋·푸시 없음.
 
 커밋 준비 추가 검증: 커밋 대상 파일만 추출한 lageunha 체크아웃에서도 서버 126개·Desktop 18개·실제 브라우저 8개, 총 152개 및 Web typecheck/build 통과. 파이프라인 직접 의존 morphology/PSF stamp/counts 포함, 기존 런처·요금제·persona·회절 PSF 변경 제외. 상세와 기존 zero-noise 테스트 RuntimeWarning 3개는 검증 보고서 마지막 절.
+
+### 2026-10-16 ICL 스태킹 자료 준비도
+
+HSC-I 은하단 영상 800장은 파일 누락·크기 불일치 없이 확보했고 총 42.24 GiB다. 영상 구조·WCS 오류는 0건이다. 대조장은 798개 대상에 연결되며 2개 대상에는 대응 대조장이 없다. Slurm job 424800/424865는 완료했다. 전체 paired 면적 결과는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/prestack_full_pair_area_support_2026-10-16_01/`에 있다.
+
+탐색 조건 Kron 2.5·면적 바닥 40%·50–300 kpc는 공통 면적 138쌍(쌍별 필터 일치 137), 공동 5° 하늘 블록 44개로 표본 수 스크린을 통과했다. 면적 지원만 집계한 결과라 광도 프로필·flux covariance·영상 스택은 계산하지 않았다. Kron 3.5·50% 기준은 50–300 kpc 4쌍, 50–500 kpc 1쌍이다. 40% 바닥과 작은 마스크는 탐색 조건이며 과학 측정 정의로 채택하지 않았다. 후보 138쌍은 i 44개/i2 94개이고 richness 50+는 없다.
+
+주입·회수와 공분산 진단은 선택된 50쌍 표본의 coadd 단계 검증이다. 50–300 kpc에서는 입력 프로필을 조건부로 회수했지만, 외곽 평면 차감은 넓은 프로필을 낮추고 300–500 kpc 표본은 부족하다. PSF 날개, 상류 sky 전달, 필터 응답/소광, 전체 표본 BCG·천체 마스크, 위성–ICL 광량 누출과 전체 표본 flux covariance는 미해결이다. 최종 과학 스택은 아직 없으며 `science_measurement=false`를 유지한다. 자세한 기록은 `analysis/icl_wgl_membership/hsc_debug/prestack_validation_README.md`와 `analysis/icl_wgl_membership/science_research_plan.md`에 있다.

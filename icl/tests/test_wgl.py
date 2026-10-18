@@ -282,7 +282,9 @@ def test_same_lens_mass_is_not_recorded_as_independent_evidence():
         mass_origin='same_lens', delta_ln_mass=0.0, lensing_covariance=cov,
         u=u, model_sb=model, stack_sb=model)
     assert same['independent_evidence'] is False
-    assert same['covariance_propagated'] is True
+    assert same['covariance_recorded'] is True
+    assert same['covariance_propagated'] is False
+    assert same['lensing_covariance'] == pytest.approx(cov)
     assert same['smeared_model'] == pytest.approx(model)
     assert same['residual'] == pytest.approx(np.zeros_like(model))
     assert any('same result' in note for note in same['notes'])

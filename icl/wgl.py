@@ -500,9 +500,9 @@ def mass_interpretation(mass_origin=None, splits_sample=False, delta_ln_mass=Non
     """Say what an agreement between this stack and a mass is allowed to mean.
 
     `independent_evidence` stays false. A same-lens mass is not an independent check.
-    When that origin is named and a covariance is supplied, the covariance is kept
-    with the smeared model and `covariance_propagated` is true. The array is the one
-    the caller passed; this function does not invent a new covariance.
+    A supplied covariance is recorded, not propagated through a joint likelihood.
+    The array is the one the caller passed; this function does not calculate the
+    covariance between a mass-based alignment and the light profile.
     """
     origin = None if mass_origin is None else str(mass_origin)
     if origin not in (None, 'same_lens', 'richness', 'external'):
@@ -542,7 +542,8 @@ def mass_interpretation(mass_origin=None, splits_sample=False, delta_ln_mass=Non
         'smeared_model': smeared,
         'residual': residual,
         'lensing_covariance': covariance,
-        'covariance_propagated': covariance is not None and origin == 'same_lens',
+        'covariance_recorded': covariance is not None,
+        'covariance_propagated': False,
     }
 
 

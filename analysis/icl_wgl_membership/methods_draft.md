@@ -4,6 +4,18 @@ This is a methods draft for Astrafex Desktop. It describes software that puts a 
 
 ## Light
 
+The approved 2026-10-12 preparation starts with a separate mass-independent
+HSC-I pilot (`hsc_pilot.py`, `icl/pilot.py`). Its primary estimator averages
+native-pixel annular profiles with equal cluster weights, keeping the BCG and
+masking all other detections. Calibration, Galactic extinction, defect and
+bright-star masks need evidence. An area-overlap image is a radial diagnostic,
+not an aligned-morphology measurement. Matched random fields and joint regional
+jackknife are diagnostic outputs. Every pilot result has
+`science_measurement=false`; sky transfer, PSF wings, selection, and realistic
+injection/recovery still require validation. No observed result is reported
+here. Operational definitions are in `pilot_README.md`. A covariance passed
+to `mass_interpretation` is recorded, not propagated through a joint likelihood.
+
 `icl.wgl.stack_clusters` warps each cluster image to \(u=\theta/\theta_\Delta\). With \(\Delta=200\), \(\theta_\Delta\) follows from \(M_{200c}\) and the angular-diameter distance. The product key is `bcg+diffuse`, because the mean still contains the BCG. A pure diffuse fraction names the centre cut, the surface-brightness limit, or the model decomposition that defined it. The same frames are averaged on one proper-kpc grid and returned beside the \(u\) stack. The comparison coordinate is that kpc stack. The warp is counts per square arcsecond. That unit does not put frames with different zero points on one scale. The default mean divides by the number of covered pixels. Pixel weights in the warp are 0 or 1. An inverse-variance mean is a separate array, written only when the caller passed a variance map.
 
 A colour can be formed from surface-brightness profiles in more than one band. The desktop colour profile writes those surface-brightness columns and their differences. A metallicity, an [Fe/H], or a \(Z/H\) is not a column of that menu and not a product of the scaled stack.
