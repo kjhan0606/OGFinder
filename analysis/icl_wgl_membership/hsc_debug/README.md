@@ -100,6 +100,7 @@ sbatch analysis/icl_wgl_membership/hsc_debug/run_measure_full_sample_profiles.sh
 차감 프로필, 공분산, CAMIRA 멤버 위치 수밀도와 탐색 상관이 저장된다. 자동
 마스크·BCG 검토, extinction 및 passband 교정, 상류 sky/PSF 전달은 승인되지 않은
 상태이므로 산출물은 `science_measurement=false`인 탐색 결과다.
+정량·정성 품질 판정은 [`../stack_quality_assessment_2026-10-18.md`](../stack_quality_assessment_2026-10-18.md)에 기록했다.
 
 첫 제출의 `_01` 경로는 800개 대상 프로필을 읽은 뒤 요약 단계의 대조장 필터
 열 이름 오류로 실패했다. 해당 부분 산출물은 실패 기록으로 보존하며 분석에
