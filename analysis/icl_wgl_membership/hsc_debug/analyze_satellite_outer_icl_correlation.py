@@ -222,25 +222,31 @@ def main():
     fig.savefig(work / "satellite_icl_correlation.png", dpi=160)
     plt.close(fig)
 
+    satellite_support_rule = satellite_summary.get("method", {}).get(
+        "support", "all seven radial bins required for each satellite profile")
+    limitations = [
+        "The ICL pair sample has central-mask/BCG limitations; center-eligible sensitivity subsets are smaller.",
+        "The retained satellite profiles are an area/mask/control-selected subset of the 800-cluster images.",
+        "Neither input has calibrated PSF wings, sky transfer, correlated-noise covariance, extinction, or complete member mass/weight information.",
+        "Nominal p-values and this selected-sample correlation do not establish a physical ICL-satellite relation.",
+    ]
+    if satellite_summary.get("schema") == "hsc-satellite-outer-profile-per-annulus-v1":
+        limitations.append(
+            "Satellite annuli were selected independently; the 50-75 kpc ICL correlation uses only clusters supported in that outer bin and cannot establish a radial trend on a common cluster sample.")
     summary = {
         "schema": "hsc-satellite-outer-icl-correlation-v1",
         "status": "complete", "science_measurement": False,
         "method": {
             "icl_variable": "raw K2.5, common-coverage >=40%, 50-300 kpc target-control pair delta; 200-300 kpc bin",
             "satellite_variable": "equal-satellite-weighted per-cluster target-control mean; 50-75 kpc bin",
+            "satellite_support_rule": satellite_support_rule,
             "matching": "same cluster ID and exact filter; one row per cluster/filter",
             "filters": "i and i2 analyzed independently",
             "covariates": "redshift and richness linear residuals for partial Pearson diagnostic",
             "uncertainty": "ordinary cluster bootstrap; not spatial-block bootstrap and not corrected for coadd covariance",
             "center_eligible": "auto_unique_center_candidate=True and center_masked_k2p5=False",
         },
-        "limitations": [
-            "Only 26 i and 66 i2 clusters overlap the selected ICL pair sample and retained satellite profiles.",
-            "The ICL pair sample has central-mask/BCG limitations; center-eligible sensitivity subsets are smaller.",
-            "The retained satellite profiles are an area/mask/control-selected subset of the 800-cluster images.",
-            "Neither input has calibrated PSF wings, sky transfer, correlated-noise covariance, extinction, or complete member mass/weight information.",
-            "Nominal p-values and this selected-sample correlation do not establish a physical ICL-satellite relation.",
-        ],
+        "limitations": limitations,
         "replicas": args.replicas, "seed": args.seed,
         "stack_summary_sha256": sha256(stack_summary_path),
         "icl_pair_table_sha256": sha256(pair_path),
