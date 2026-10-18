@@ -101,6 +101,30 @@ i2의 양의 50–75 kpc 구간도 49개 은하단을 선택한 탐색값이다.
 중앙 절대값은 1.43 nJy/arcsec², 최댓값은 27.93이다. 이는 추가된 반경별 지원이 기존
 완전 프로필 결과와 같은 대조 하늘 표본을 뜻하지 않음을 보여 준다.
 
+## 모든 반경 공통 은하단 표본
+
+반경별 클러스터 구성이 달라지는 영향을 줄이기 위해, 7개 위성 반경 모두에서 적어도
+하나의 유효한 위성 프로필이 있는 은하단만 남겼다. 공통 은하단은 i 29개, i2 103개이며
+각 필터 안에서는 모든 반경 평균이 동일한 은하단 목록을 사용한다. 다만 반경별 위성 수와
+개별 위성은 달라지므로 이는 같은 위성의 추적 프로필은 아니다. 평균은 은하단 동일 가중이고,
+95% 구간은 5도 하늘 셀을 함께 재표집한 spatial-block bootstrap이다.
+
+| 반경 (kpc) | i: 은하단/위성 수 | i 평균 [95% 구간] | i2: 은하단/위성 수 | i2 평균 [95% 구간] |
+|---|---:|---:|---:|---:|
+| 5–10 | 29/125 | 763.2 [605.9, 890.3] | 103/465 | 652.1 [562.0, 757.9] |
+| 10–15 | 29/112 | 200.9 [147.7, 246.9] | 103/411 | 150.9 [121.4, 183.7] |
+| 15–20 | 29/92 | 90.4 [60.8, 122.5] | 103/374 | 59.0 [46.5, 74.5] |
+| 20–30 | 29/73 | 44.9 [24.9, 69.1] | 103/309 | 19.9 [14.4, 26.8] |
+| 30–40 | 29/75 | 17.9 [6.4, 34.3] | 103/309 | 6.2 [3.9, 8.7] |
+| 40–50 | 29/69 | 9.2 [1.8, 19.0] | 103/282 | 2.9 [1.3, 4.5] |
+| 50–75 | 29/56 | 2.9 [-1.1, 8.0] | 103/262 | 1.0 [-0.2, 2.1] |
+
+공통 은하단 조건에서도 외곽 평균은 두 대역 모두 0과 양립한다. 7×7 공간 부트스트랩
+공분산은 두 필터에서 모두 full-rank이며 양의 정부호였다. i 공분산은 17개 하늘 셀
+(최대 셀 6개 은하단), i2는 46개 셀(최대 10개)로 추정했고 조건수는 각각 약
+9.7×10³, 3.2×10⁴다. 행렬이 수치상 완전 계수라는 사실은 outer-bin의 낮은 신호대잡음,
+coadd pixel covariance, PSF/sky 계통오차가 해결됐다는 뜻은 아니다.
+
 ## ICL 반경별 지원 재구성
 
 기존 ICL stack은 50–300 kpc의 네 구간이 모두 공통면적 기준을 통과해야 해 137쌍만
@@ -132,14 +156,20 @@ matched-control ICL 스택의 raw 200–300 kpc 차감값과 조인했다.
 | 50–300 kpc strict 공통 표본 | 반경별 지원 | i2 | 46 | 0.162 | 0.283 | [-0.146, 0.455] | 0.410 [0.035, 0.672] |
 | 200–300 kpc annulus 단독 | 반경별 지원 | i | 26 | 0.275 | 0.175 | [-0.142, 0.640] | 0.079 [-0.339, 0.563] |
 | 200–300 kpc annulus 단독 | 반경별 지원 | i2 | 68 | 0.111 | 0.368 | [-0.146, 0.352] | 0.293 [-0.010, 0.530] |
+| 200–300 kpc annulus + 7-bin 공통 은하단 | 반경별 지원 | i | 21 | 0.312 | 0.169 | [-0.122, 0.620] | 0.120 [-0.225, 0.521] |
+| 200–300 kpc annulus + 7-bin 공통 은하단 | 반경별 지원 | i2 | 53 | 0.166 | 0.234 | [-0.061, 0.369] | 0.234 [0.024, 0.421] |
 
-새로운 200–300 kpc annulus 단독 조인의 중심 후보 고유·비가림 표본은 i 8개, i2 15개다.
-그 subset Spearman 값은 i 0.143 (p=0.736; bootstrap 95% [-0.781, 0.679]), i2 0.221
-(p=0.428; [-0.385, 0.688])이고, partial r 구간은 각각 [-1.000, 1.000],
-[-0.177, 0.715]다. 이전 strict-ICL/per-bin 위성 조인에서 보였던 i2 partial r의 95% 구간
-([0.035, 0.672])은 ICL의 annulus 선택을 바꾼 뒤 [-0.010, 0.530]으로 0을 포함한다.
-표본 정의와 중심 민감도에 따라 달라지는 탐색 진단이므로 위성 외곽광–ICL 상관 증거로
-해석할 수 없다.
+앞의 결과 구간은 은하단 재표집이고, 마지막 두 행은 5도 spatial-block 재표집이다.
+공통 표본의 i2 partial 상관 구간만 0을 제외하지만 비조정 Spearman 구간은 0을 포함하고,
+이 진단은 중심 적합성이나 영상 계통오차를 반영하지 않는다.
+
+가장 넓은 반경별 표본의 중심 후보 고유·비가림 조인은 i 8개/i2 15개였고, 7-bin 공통
+은하단 표본에서는 i 8개/i2 10개다. 공통 표본의 center-eligible i2는 Spearman ρ=0.636,
+명목 p=0.048, spatial-block 95% 구간 [0.209, 0.975]이지만 partial r 구간은
+[-0.005, 1.000]이고 n=10이다. 작은 선택 표본, 다른 지원 정의에서의 비재현, 사후적인
+민감도 비교를 감안하면 발견으로 볼 수 없다. 이전 strict-ICL/per-bin 위성 조인에서 보인
+i2 partial 구간 [0.035, 0.672]도 annulus 단독 ICL 표본에서는 [-0.010, 0.530]으로
+0을 포함한다. 전체적으로 위성 외곽광–ICL 물리적 관계는 아직 입증되지 않았다.
 
 ## 용도 판정과 다음 검증
 
@@ -167,11 +197,14 @@ BCG·별·검출원 마스크를 수동 점검하며, 넓은 PSF 날개와 sky �
   `validate_satellite_outer_profiles_per_bin.py`,
   `test_measure_satellite_outer_profiles_per_bin.py`,
   `measure_icl_annulus_support.py`, `validate_icl_annulus_support.py`, `s19a_shape_stack.py`,
-  `test_s19a_shape_stack.py`, `analyze_satellite_outer_icl_correlation.py`
+  `test_s19a_shape_stack.py`, `analyze_satellite_outer_icl_correlation.py`,
+  `analyze_satellite_common_support.py`, `validate_satellite_common_support.py`,
+  `test_analyze_satellite_common_support.py`
 - 권위 있는 800장 프로필 결과: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_profile_full_2026-10-18_03/`
 - 반경별 지원 stack: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_profile_perbin_full_2026-10-18_01/`
 - ICL 반경별 지원: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annulus_support_2026-10-18_01/`
-- 최신 ICL–위성 상관 진단: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_association_perbin_2026-10-18_03/`
+- annulus별 ICL–위성 상관: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_association_perbin_2026-10-18_03/`
+- 모든 반경 공통 은하단 민감도·상관: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_common_support_2026-10-18_01/`
 - 독립 준비자료 감사: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_detection_psf_2026-10-18_01/`
 
 완전 프로필 `_03` 결과는 800/800 프레임, 오류 0, 90개 위성 프로필, 630개 방사 구간 행,
@@ -184,4 +217,6 @@ BCG·별·검출원 마스크를 수동 점검하며, 넓은 PSF 날개와 sky �
 반경별 ICL 산출은 800/800 대상·798/798 대조장, 1,355 쌍-반경 행, 224개 200–300 kpc
 쌍, 출력 해시 3개를 검증했다. strict 표본 137행의 200–300 kpc 값이 전부 일치했다.
 새 상관 결과는 26개 i/68개 i2 조인을 사용했고 3개 산출물 해시와 양 입력 계보 해시를
-검증했다. 모든 새 결과는 `science_measurement=false`다.
+검증했다. 모든 반경 공통 표본은 i 29개/i2 103개 은하단이며, 98개 공분산 원소의 대칭성·
+유한값·양의 정부호 및 6개 출력 해시를 확인했다. 공통 표본 ICL 조인은 i 21개/i2 53개다.
+모든 새 결과는 `science_measurement=false`다.
