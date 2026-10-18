@@ -236,13 +236,20 @@ CAS 중첩 row count와 추정 전송 크기를 먼저 산출하는 일이다. s
 S19A 분석에서는 shape catalog의 sky-coordinate `e1/e2`, derived weight, per-object
 `m/c1/c2`, ellipticity RMS·measurement uncertainty와 B-mode mask를 보존하고,
 shape를 `object_id`로 좌표 및 full photo-z PDF에 연결한다. raw ellipticity를 이미
-보정된 shear로 간주하지 않는다. HSC estimator의 weighted responsivity와 ensemble
+보정된 shear로 간주하지 않는다. HSC estimator의 weighted responsivity와
 multiplicative/additive 및 selection-bias 보정, photo-z dilution correction을 적용한
 뒤 lens-source pair profile을 만든다. 자세한 catalog columns와 PDF 처리 요구는
 [HSC S19A shape catalog 안내](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)
 와 [HSC 3-year shear catalog 방법론](https://arxiv.org/abs/2107.00136)을 따른다.
-현재 저장소의 일반 `stack_shear_profiles` 및 합성 metacal 시험은 이 서베이 교정의
-대체물이 아니며, S19A 자료가 준비된 뒤 별도 adapter와 null 검증이 필요하다.
+이를 위한 `hsc_debug/s19a_shape_stack.py` adapter를 추가했다. full P(z)를 pair별
+`<D_ls/D_s>`로 적분하고, 빈별 HSC responsivity와 per-object `m/c`를 반영해
+접선·교차 전단 및 weak-shear 근사 `DeltaSigma` 프로필을 계산한다. 선택편향 교정은
+선택 표본별 외부 보정값을 필수 입력으로 요구한다. 합성 주입 회수와 잘못된 ID/PDF/
+mask/보정 입력 거부 시험 5개는 통과했다. 그러나 실제 S19A source 행과 full P(z),
+선택편향 교정값은 아직 없으며, reduced-shear 적합·random-lens 차감·source 중복 및
+하늘 블록 공분산도 구현되지 않았다. 그러므로 이 adapter의 출력도 항상
+`science_measurement=false`이며 일반 `stack_shear_profiles`나 합성 metacal 시험이
+서베이 교정을 대신하지 않는다.
 
 같은 날짜에 800개 렌즈의 각거리와 고유반경 3 Mpc를 사용한 기하학적 사전 계산에서
 렌즈 원뿔 반경은 7.71–11.43 arcmin (10–90 백분위 7.97–10.56 arcmin), 합산 면적

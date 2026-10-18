@@ -153,3 +153,39 @@ python3 analysis/icl_wgl_membership/hsc_debug/submit_wl_shape_counts.py --submit
 중복 원천 은하가 여러 렌즈 원뿔에 들면 여러 lens-source 후보로 세는 기획용 수이며,
 선택 후 실제 source 수나 다운로드 바이트가 아니다. shape source 행의 반출은 별도
 용량 산정과 사용자 승인을 거친다.
+
+## S19A shape pair stack adapter (2026-10-18)
+
+`s19a_shape_stack.py`는 다운로드기가 아니다. 승인된 shape source 행과 별도 full
+photo-z PDF를 받은 뒤 렌즈–source 쌍의 접선·교차 전단 및 약한 전단 근사
+`DeltaSigma` 프로필을 계산하는 함수형 adapter다. `object_id`는 정수 또는 문자열로
+정확히 보존해야 하며 float로 읽으면 거부한다. 같은 source가 여러 렌즈 원뿔에
+들어가는 것은 허용하지만 같은 `(lens_id, object_id)` 쌍의 중복은 거부한다.
+
+입력 `pairs` 열의 매핑은 다음과 같다.
+
+| adapter 열 | HSC/분석 입력 |
+|---|---|
+| `e1`, `e2` | `i_hsmshaperegauss_e1/e2` |
+| `weight` | `i_hsmshaperegauss_derived_weight` |
+| `rms_e` | `i_hsmshaperegauss_derived_rms_e` |
+| `m`, `c1`, `c2` | `i_hsmshaperegauss_derived_shear_bias_m/c1/c2` |
+| `b_mode_pass` | HSC `b_mode_mask`를 문서의 컷으로 해석한 통과 boolean |
+| 좌표·렌즈 적색이동 | 800개 렌즈 목록 및 `meas`의 천구좌표 |
+| source PDF | `object_id`로 붙인 tract별 full photo-z PDF와 공통 `z` grid |
+
+호출 함수는 `pdf_lensing_efficiency`로 각 lens-source 쌍의 PDF 적분
+`<D_ls/D_s>`를 구하고, 각 반경 빈에서
+`R = 1 - sum(w * e_RMS**2) / sum(w)`를 다시 계산한다. per-object `m/c`, 반경별로
+제공한 `m_sel/c_sel`, HSC shape weight를 사용한다. `selection_corrections`는 빈마다
+`m_sel`, `c1_sel`, `c2_sel`을 요구한다. 그 값은 실제 선택 표본의 HSC 선택편향
+교정 산출물과 근거를 caller가 제공해야 하며 임의로 0을 넣어 통과시키면 안 된다.
+
+현재 결과는 weak-shear 근사 프로필과 독립 쌍으로 가정한 shape-noise 오차, cross-shear
+null만 낸다. reduced shear, random-lens 차감, 겹치는 source/하늘 블록 공분산,
+calibration uncertainty는 아직 없다. 따라서 출력은 항상 `science_measurement=false`이고
+최종 질량·과학 결과로 쓰지 않는다. 합성 주입 회수와 잘못된 ID/PDF/mask/selection 입력
+거부 시험은 `test_s19a_shape_stack.py`에 있다. HSC 열과 PDF 연결 규약은
+[공식 S19A 안내](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/),
+응답도·per-object bias·selection correction은
+[HSC 3-year shape catalog 방법론](https://arxiv.org/abs/2107.00136)을 따른다.
