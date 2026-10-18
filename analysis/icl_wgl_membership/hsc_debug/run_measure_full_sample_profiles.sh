@@ -19,7 +19,7 @@ export MKL_NUM_THREADS=1
 
 REPO=/home/kjhan/BACKUP/Astrafek/OGFinder
 SAMPLE=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13
-WORK=$SAMPLE/prestack_flux_profiles_2026-10-18_01
+WORK=$SAMPLE/prestack_flux_profiles_2026-10-18_02
 PYTHON=/home/kjhan/miniconda3/bin/python3
 
 if [[ -e "$WORK" ]]; then

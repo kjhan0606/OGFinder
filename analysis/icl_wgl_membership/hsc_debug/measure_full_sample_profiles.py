@@ -435,7 +435,7 @@ def main():
             "n_matched_filter_pairs": sum(row["filter"] == control_rows[i]["filter"]
                                            for i, row in enumerate(profile_rows)),
             "filter_counts_targets": {band: sum(row["filter"] == band for row in profile_rows) for band in ("i", "i2")},
-            "filter_counts_controls": {band: sum(row["filter"] == band for row in control_records) for band in ("i", "i2")},
+            "filter_counts_controls": {band: sum(row["header_filter"] == band for row in control_records) for band in ("i", "i2")},
             "pixel_calibration": "FLUXMAG0-derived nJy/arcsec2; no Galactic extinction correction or i/i2 response cross-calibration",
             "measurement": "Kron source-mask native-pixel annular means; target minus matched control; equal pair weighting",
             "radial_bins_kpc": EDGES.tolist(), "stack_configurations": CONFIGS,
