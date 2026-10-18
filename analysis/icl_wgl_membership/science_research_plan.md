@@ -488,6 +488,14 @@ ICL 200–300 kpc와 위성 50–75 kpc 고리의 기하학적 중첩을 줄이�
 [기하 중첩 층화 감사](hsc_debug/icl_satellite_geometric_strata_2026-10-18.md)와
 `sample_800_2026-10-13/satellite_icl_geometric_strata_2026-10-18_01/`에 저장했다.
 
+후속 실제 픽셀 감사를 800개 기존 영상에서 공통 지원을 갖는 63개 은하단·162개 위성에
+수행했다. ICL `MASK_K2P5`와 위성 SEP/Kron·분할 마스크를 각각 적용하자 115개 기하
+중첩 중 114개에서 같은 유효 픽셀이 남았다(i 24/30, i2 90/132). 위성 유효 외곽 고리
+픽셀 가운데 공통 픽셀 비율의 중앙값은 i 36.0%, i2 33.4%였다. 이는 두 영상 측정이
+독립 픽셀 표본이 아님을 직접 확인하지만 광량 공분산을 측정하거나 상관을 교정하지는
+않는다. `science_measurement=false`를 유지한다. [실제 픽셀 중첩 보고서](hsc_debug/satellite_icl_pixel_overlap_2026-10-18.md),
+해시 포함 산출물 `sample_800_2026-10-13/satellite_icl_pixel_overlap_2026-10-18_02/`.
+
 ## 7. 실행과 장기 유지
 
 연구 설계·코드는 OGFinder, 카탈로그·FITS·실행 산출물은

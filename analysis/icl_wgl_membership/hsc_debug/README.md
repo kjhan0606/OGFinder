@@ -304,3 +304,12 @@ automatic unique-center and K2.5 central-mask flags, using connected spatial-blo
 bootstrap intervals. The result is filter-dependent and remains exploratory; see
 [`icl_center_quality_sensitivity_2026-10-18.md`](icl_center_quality_sensitivity_2026-10-18.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_center_quality_sensitivity_2026-10-18_02/`.
+
+`audit_satellite_icl_pixel_overlap.py` refines the circular-annulus geometry check by measuring
+the actual shared valid pixels in the saved K2.5 ICL and SEP/Kron satellite masks. It can run on
+one or more matched clusters with `--cluster-id`; the complete supported sample is 63 clusters
+and 162 satellite profiles. It reads existing images only and keeps
+`science_measurement=false`. See
+[`satellite_icl_pixel_overlap_2026-10-18.md`](satellite_icl_pixel_overlap_2026-10-18.md) and
+the hash-recorded output at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_pixel_overlap_2026-10-18_02/`.
