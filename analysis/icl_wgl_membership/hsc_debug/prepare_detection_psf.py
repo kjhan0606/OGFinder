@@ -146,6 +146,7 @@ def psf_candidates(objects,seg,image,variance,base,snr,bcg,members,pixel_scale):
 
 def prepare_frame(frame, cosmology, out):
     info=validate_fits(Path(frame['image']),frame)
+    cohort=str(frame.get('preparation_cohort','full_sample'))
     with fits.open(frame['image'],memmap=False) as h:
         image=np.array(h[info['science_hdu']].data,dtype=np.float32)
         variance=np.array(h[info['variance_hdu']].data,dtype=np.float32)
@@ -206,7 +207,7 @@ def prepare_frame(frame, cosmology, out):
     axes[0,0].plot(center[0]/step,center[1]/step,'r+',ms=12);axes[0,0].set_title(f"Raw display; PSF candidates {len(stars)}")
     for ax,mask,title in zip([axes[0,1],axes[1,0],axes[1,1]],[base,masks[0],masks[-1]],['Original quality + bright mask','Kron 2.5 exclusion','Kron 5.0 exclusion']):
         ax.imshow(mask[::step,::step],origin='lower',vmin=0,vmax=1,cmap='gray');ax.plot(center[0]/step,center[1]/step,'r+',ms=12);ax.set_title(title)
-    fig.suptitle(f"Cluster {frame['id']} / {frame['preparation_cohort']} / engineering review")
+    fig.suptitle(f"Cluster {frame['id']} / {cohort} / engineering review")
     fig.tight_layout();fig.savefig(out/'review.png',dpi=110);plt.close(fig)
     ix,iy=round(center[0]),round(center[1]);x0,x1=max(0,ix-100),min(image.shape[1],ix+101);y0,y1=max(0,iy-100),min(image.shape[0],iy+101)
     fig,axes=plt.subplots(1,2,figsize=(10,5))
@@ -218,7 +219,7 @@ def prepare_frame(frame, cosmology, out):
         ax.plot(objects['x'][close]-x0,objects['y'][close]-y0,'co',ms=5,fillstyle='none')
     axes[0].set_title('BCG catalogue position + detections');axes[1].set_title('Detection segmentation; manual review')
     fig.tight_layout();fig.savefig(out/'bcg_review.png',dpi=110);plt.close(fig)
-    record=dict(id=str(frame['id']),cohort=frame['preparation_cohort'],n_detections=len(objects),n_psf_candidates=len(stars),
+    record=dict(id=str(frame['id']),cohort=cohort,n_detections=len(objects),n_psf_candidates=len(stars),
         psf_status='provisional_inputs' if len(stars)>=4 else 'insufficient_candidates',psf_fwhm_locus_pix=mode,
         bcg_status='unique_positional_candidate' if bcg>=0 else 'missing_or_ambiguous',
         bcg_base_masked=bool(base[round(center[1]),round(center[0])]),n_members=len(members),n_members_in_frame=int(inside.sum()),
@@ -236,7 +237,19 @@ def main():
     p.add_argument('--work',type=Path,required=True);p.add_argument('--limit',type=int)
     a=p.parse_args()
     if not platform.node().lower().startswith('lageunha'): p.error('Run on lageunha CPU')
-    doc=json.loads(a.manifest.read_text());frames=doc['clusters'][:a.limit] if a.limit else doc['clusters']
+    manifest_path=a.manifest.resolve();doc=json.loads(manifest_path.read_text())
+    frames=doc['clusters'][:a.limit] if a.limit else doc['clusters']
+    for frame in frames:
+        image_value=frame.get('image')
+        if not image_value:
+            p.error('Manifest has no image path for cluster '+str(frame.get('id')))
+        image_path=Path(image_value)
+        if not image_path.is_absolute():
+            image_candidate=manifest_path.parent/'images'/image_path
+            if not image_candidate.is_file(): image_candidate=manifest_path.parent/image_path
+            if not image_candidate.is_file():
+                p.error('Image is missing for cluster '+str(frame.get('id'))+': '+str(image_candidate))
+            frame['image']=str(image_candidate.resolve())
     a.work.mkdir(parents=True,exist_ok=False)
     records=[];errors=[];started=time.time();cosmo=Cosmology(H0=doc['h0'],Om=doc['omega_m'])
     for i,frame in enumerate(frames,1):
