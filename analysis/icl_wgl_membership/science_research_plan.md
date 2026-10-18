@@ -397,6 +397,16 @@ pair 정보를 잃으므로 분석 입력으로 쓰지 않는다.
 `science_measurement=false`, `credentials_saved=false`다. 실제 source 행 취득은
 예상 전송량과 필요한 열을 제시한 별도 승인 전까지 시작하지 않는다.
 
+count-only 집계의 표본 의존성도 사후 기록했다. 렌즈별 원시 후보 count와 기하 적색편이의
+Spearman `rho=-0.427`, richness와는 `rho=+0.048`이었다(기술 요약이며 p 값 검정 없음).
+고적색편이 구간 `0.50–0.57`에서 170개 중 55개(32.4%)가 count 0이며 중앙값은
+3,601개였다. 이 값은 3 Mpc 원뿔의 기하·survey footprint/depth·catalog 선택이 섞인
+후보량이므로 최종 렌즈 효율이나 물리적 적색편이 추세가 아니다. 품질·zbin·radial 및
+random-lens 컷 뒤의 유효 source 수를 다시 산출해야 한다. 상세 구간표와 재현 코드는
+[count-only 표본 의존성 감사](hsc_debug/wl_shape_count_selection_audit_2026-10-18.md),
+산출 요약은
+`sample_800_2026-10-13/wl_shape_count_selection_audit_2026-10-18_01/`에 있다.
+
 2026-10-18 source-row 준비: count 결과를 기준으로 동일한 3 Mpc 렌즈 원뿔에서
 22개 필드만 반환하는 32개 SQL batch를 로컬 생성했다. 예상치는 3,069,544
 lens-source pair 행, 약 0.73–1.37 GiB 미압축 CSV이며 실제 전송 전 추정 범위다.
