@@ -143,6 +143,36 @@ coadd pixel covariance, PSF/sky 계통오차가 해결됐다는 뜻은 아니다
 지지 표본 수를 늘렸지만, 자동 중심·마스크와 PSF 날개·sky 전달·소광은 검증되지 않아
 과학 측정으로 승인하지 않았다.
 
+## 마스크 크기·면적 문턱 민감도
+
+전체 800개 대상과 798개 기존 대조장 프로필에서 200–300 kpc annulus만 대상으로 Kron
+인자 2.5/3.5/5.0과 양쪽 coverage floor 25/35/40/50%를 교차했다. 24개 조건 모두
+기존 target/control 배열을 재사용했고, 필터를 분리했으며, 각 조건 안에서 선택된 쌍에
+동일 가중치를 줬다. 아래 구간은 5도 target/control 연결 하늘 블록 bootstrap 95%다.
+
+| Kron 인자 | 면적 문턱 | i 쌍: 평균 [95% 구간] | i2 쌍: 평균 [95% 구간] |
+|---:|---:|---:|---:|
+| 2.5 | 25% | 164: 4.83 [4.00, 5.84] | 318: 3.50 [2.48, 4.42] |
+| 2.5 | 35% | 101: 3.89 [2.96, 5.27] | 200: 3.16 [1.93, 4.23] |
+| 2.5 | 40% | 71: 3.23 [2.14, 4.20] | 153: 3.79 [2.65, 4.86] |
+| 2.5 | 50% | 32: 4.11 [2.74, 5.61] | 72: 2.97 [1.24, 4.50] |
+| 3.5 | 25% | 130: 3.48 [2.80, 4.54] | 252: 2.28 [1.25, 3.30] |
+| 3.5 | 35% | 58: 2.79 [1.76, 4.03] | 125: 2.81 [1.68, 3.92] |
+| 3.5 | 40% | 38: 3.27 [2.16, 4.53] | 86: 2.48 [0.82, 3.79] |
+| 3.5 | 50% | 10: 1.43 [-0.38, 3.24] | 23: 0.72 [-2.97, 4.35] |
+| 5.0 | 25% | 44: 1.34 [0.19, 2.46] | 100: 1.14 [-0.91, 3.01] |
+| 5.0 | 35% | 7: 1.23 [0.13, 3.15] | 22: 1.07 [-3.00, 4.72] |
+| 5.0 | 40% | 1: 2.72 [구간 계산 불가] | 7: -1.45 [-12.81, 7.29] |
+| 5.0 | 50% | 0: 추정 불가 | 1: 4.69 [구간 계산 불가] |
+
+기준 K2.5/40% 결과는 71개 i와 153개 i2 쌍으로 앞선 annulus별 스택의 선택·flux를
+모두 행별 재현했다. K2.5와 K3.5에서는 지지 표본이 비교적 큰 25–40% 조건에서 양의
+평균이 나왔지만, Kron 5.0에서는 평균이 대략 1 nJy/arcsec²까지 작아지고 표본이 크게
+줄며 상당수 구간이 0과 양립하거나 구간 추정이 불가능했다. 면적 문턱을 올릴 때도 표본과
+평균은 단조롭게 바뀌지 않았다. 이는 실제 외곽광, source 마스크 잔류, 잘린 하늘 분포의
+선택 효과를 현재 결과만으로 분리할 수 없음을 뜻한다. 따라서 K2.5/40%를 과학 기준으로
+고르지 않았고, ICL 절대량은 아직 마스크·면적 정의에 충분히 안정적이지 않다.
+
 ## ICL과의 비교
 
 같은 은하단 ID와 필터의 위성 50–75 kpc 차감값을 기존 K2.5/40%, 50–300 kpc
@@ -198,11 +228,13 @@ BCG·별·검출원 마스크를 수동 점검하며, 넓은 PSF 날개와 sky �
   `test_measure_satellite_outer_profiles_per_bin.py`,
   `measure_icl_annulus_support.py`, `validate_icl_annulus_support.py`, `s19a_shape_stack.py`,
   `test_s19a_shape_stack.py`, `analyze_satellite_outer_icl_correlation.py`,
+  `analyze_icl_annulus_sensitivity.py`, `validate_icl_annulus_sensitivity.py`,
   `analyze_satellite_common_support.py`, `validate_satellite_common_support.py`,
   `test_analyze_satellite_common_support.py`
 - 권위 있는 800장 프로필 결과: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_profile_full_2026-10-18_03/`
 - 반경별 지원 stack: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_profile_perbin_full_2026-10-18_01/`
 - ICL 반경별 지원: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annulus_support_2026-10-18_01/`
+- ICL mask/coverage 민감도: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annulus_sensitivity_2026-10-18_02/`
 - annulus별 ICL–위성 상관: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_association_perbin_2026-10-18_03/`
 - 모든 반경 공통 은하단 민감도·상관: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_common_support_2026-10-18_01/`
 - 독립 준비자료 감사: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_detection_psf_2026-10-18_01/`
@@ -219,4 +251,6 @@ BCG·별·검출원 마스크를 수동 점검하며, 넓은 PSF 날개와 sky �
 새 상관 결과는 26개 i/68개 i2 조인을 사용했고 3개 산출물 해시와 양 입력 계보 해시를
 검증했다. 모든 반경 공통 표본은 i 29개/i2 103개 은하단이며, 98개 공분산 원소의 대칭성·
 유한값·양의 정부호 및 6개 출력 해시를 확인했다. 공통 표본 ICL 조인은 i 21개/i2 53개다.
-모든 새 결과는 `science_measurement=false`다.
+ICL 선택 민감도는 24조건·2,015쌍-조건 행으로 완료했고, 기준 K2.5/40% 224쌍의
+선택과 flux를 행별 일치시켰으며 출력 해시 2개를 검증했다. 모든 새 결과는
+`science_measurement=false`다.
