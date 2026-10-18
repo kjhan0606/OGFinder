@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-"""Exploratory satellite-centered outer-light pilot using existing HSC cutouts.
+"""Exploratory satellite-centered outer-light profiles from existing HSC cutouts.
 
-This reuses the 50-frame validation sample and saved SEP segmentation maps. It
-does not download data, infer CAMIRA membership weights, or certify a science
-measurement. Each matched member is measured against source-free positions at
-the same projected cluster-centric radius to estimate the local diffuse-light
-and sky baseline.
+This uses saved SEP segmentation maps and can run on a validation subset or the
+full downloaded cluster sample. It does not download data, infer CAMIRA
+membership weights, or certify a science measurement. Each matched member is
+measured against source-free positions at the same projected cluster-centric
+radius to estimate the local diffuse-light and sky baseline.
 """
 import argparse
 import csv
-import hashlib
 import json
 import math
-import os
 from pathlib import Path
 import platform
 import sys
@@ -65,30 +63,76 @@ def sha256(path):
     return file_sha256(path)
 
 
+def cohort_name(frame):
+    """Keep declared engineering cohorts separate; label untagged data clearly."""
+    return str(frame.get("preparation_cohort") or "full_sample")
+
+
+def resolve_image_paths(frames, manifest_path):
+    """Resolve manifest image paths without changing the source manifest."""
+    resolved = []
+    for original in frames:
+        frame = dict(original)
+        value = frame.get("image")
+        if not value:
+            raise ValueError(f"Manifest has no image path for cluster {frame.get('id')}")
+        image_path = Path(value)
+        if not image_path.is_absolute():
+            candidate = manifest_path.parent / "images" / image_path
+            if not candidate.is_file():
+                candidate = manifest_path.parent / image_path
+            image_path = candidate
+        if not image_path.is_file():
+            raise FileNotFoundError(f"Image missing for cluster {frame.get('id')}: {image_path}")
+        frame["image"] = str(image_path.resolve())
+        resolved.append(frame)
+    return resolved
+
+
 def parse_detections(rows):
-    """Return zero-origin SEP coordinates and the source fields needed for masks."""
+    """Return zero-origin SEP coordinates, tolerating flagged invalid shapes."""
     names = ("NUMBER", "X_IMAGE", "Y_IMAGE", "A_IMAGE", "B_IMAGE", "THETA_RAD",
              "KRON_RADIUS", "KRON_FLAGS")
     parsed = []
     for row in rows:
-        vals = {name: float(row[name]) for name in names if name != "NUMBER"}
+        vals = {name: (float(row[name]) if row.get(name, "").strip() else math.nan)
+                for name in names if name not in ("NUMBER", "KRON_FLAGS")}
+        vals["KRON_FLAGS"] = (int(float(row["KRON_FLAGS"]))
+                              if row.get("KRON_FLAGS", "").strip() else 1)
         vals["NUMBER"] = int(row["NUMBER"])
+        if not math.isfinite(vals["X_IMAGE"]) or not math.isfinite(vals["Y_IMAGE"]):
+            continue
         vals["x"] = vals["X_IMAGE"] - 1.
         vals["y"] = vals["Y_IMAGE"] - 1.
         parsed.append(vals)
     return parsed
 
 
-def detection_arrays(detections):
+def detection_arrays(detections, pixel_scale=0.168):
     arrays = {name: np.asarray([row[key] for row in detections], dtype=dtype)
               for name, key, dtype in (
                   ("number", "NUMBER", np.int32), ("x", "x", np.float64),
                   ("y", "y", np.float64), ("a", "A_IMAGE", np.float64),
                   ("b", "B_IMAGE", np.float64), ("theta", "THETA_RAD", np.float64),
                   ("kron", "KRON_RADIUS", np.float64), ("kron_flags", "KRON_FLAGS", np.int32))}
-    valid_kron = (arrays["kron_flags"] == 0) & np.isfinite(arrays["kron"]) & (arrays["kron"] > 0)
+    valid_axes = (np.isfinite(arrays["a"]) & (arrays["a"] > 0)
+                  & np.isfinite(arrays["b"]) & (arrays["b"] > 0))
+    valid_theta = np.isfinite(arrays["theta"])
+    fatal_kron_flags = sep.APER_TRUNC | sep.APER_ALLMASKED | sep.APER_NONPOSITIVE
+    valid_kron = (((arrays["kron_flags"] & fatal_kron_flags) == 0)
+                  & np.isfinite(arrays["kron"]) & (arrays["kron"] > 0))
+    # APER_HASMASKED is a warning that some, but not all, Kron aperture pixels
+    # were masked. SEP still returns a radius from the available pixels.
+    arrays["shape_valid"] = valid_axes & valid_theta & valid_kron
+    for axis in ("a", "b"):
+        arrays[axis] = np.where(np.isfinite(arrays[axis]) & (arrays[axis] > 0),
+                                arrays[axis], 1.0)
+    arrays["theta"] = np.where(valid_theta, arrays["theta"], 0.0)
     arrays["kron_scale"] = KRON_FACTOR * np.where(valid_kron, arrays["kron"], 1.2)
-    arrays["extent"] = arrays["kron_scale"] * np.maximum(np.maximum(arrays["a"], .5), np.maximum(arrays["b"], .5))
+    ellipse_extent = arrays["kron_scale"] * np.maximum(np.maximum(arrays["a"], .5),
+                                                        np.maximum(arrays["b"], .5))
+    arrays["extent"] = np.where(arrays["shape_valid"], ellipse_extent,
+                                np.maximum(ellipse_extent, 2.0 / pixel_scale))
     arrays["tree"] = cKDTree(np.column_stack([arrays["x"], arrays["y"]])) if len(detections) else None
     return arrays
 
@@ -169,13 +213,20 @@ def make_stamp_mask(base, segmentation, detections, fallback_tree, center_xy,
         near &= detections["number"] != target_number
     selected = np.flatnonzero(near)
     if len(selected):
-        aa = np.maximum(detections["a"][selected], .5)
-        bb = np.maximum(detections["b"][selected], .5)
-        sep.mask_ellipse(mask, xs[selected] - x0, ys[selected] - y0, aa, bb,
-                         detections["theta"][selected],
-                         r=detections["kron_scale"][selected])
+        valid_selected = selected[detections["shape_valid"][selected]]
+        invalid_selected = selected[~detections["shape_valid"][selected]]
+    else:
+        valid_selected = invalid_selected = np.asarray([], dtype=int)
+    if len(valid_selected):
+        aa = np.maximum(detections["a"][valid_selected], .5)
+        bb = np.maximum(detections["b"][valid_selected], .5)
+        sep.mask_ellipse(mask, xs[valid_selected] - x0, ys[valid_selected] - y0, aa, bb,
+                         detections["theta"][valid_selected],
+                         r=detections["kron_scale"][valid_selected])
 
     fallback_radius = max(2. / pixel_scale, 1.5)
+    for index in invalid_selected:
+        add_circle(mask, float(xs[index] - x0), float(ys[index] - y0), fallback_radius)
     if fallback_tree is not None:
         near = fallback_tree.query_ball_point(center_xy, half_size + fallback_radius)
         for index in near:
@@ -296,7 +347,7 @@ def process_frame(frame, prep_dir, cosmo, coverage_floor, min_controls):
     pixel_scale = float(info["pixel_scale_arcsec"])
     kpc_per_pixel = float(cosmo.kpc_proper_per_arcmin(float(frame["z"])).value * pixel_scale / 60.)
     conversion = float(nJy_factor(info))
-    dets = detection_arrays(detections)
+    dets = detection_arrays(detections, pixel_scale)
     selected = []
     for item in matched:
         det = detections[item["detection_index"]]
@@ -311,11 +362,8 @@ def process_frame(frame, prep_dir, cosmo, coverage_floor, min_controls):
     n_min_control_pass = 0
     for item, target_det, r_cluster_kpc in selected:
         target_xy = np.array([target_det["x"], target_det["y"]])
-        target = profile_at(image, variance, base, segmentation, dets, fallback_tree,
-                            target_xy, pixel_scale, kpc_per_pixel, conversion,
-                            target_det["NUMBER"], coverage_floor)
         diag = {"cluster_id": ident, "filter": info["coadd_header_filter"],
-                "cohort": str(frame.get("preparation_cohort", "unspecified")),
+                "cohort": cohort_name(frame),
                 "member_index": item["member_index"],
                 "detection_number": target_det["NUMBER"],
                 "cluster_radius_kpc": r_cluster_kpc,
@@ -323,6 +371,13 @@ def process_frame(frame, prep_dir, cosmo, coverage_floor, min_controls):
                 "target_min_coverage": None, "target_coverage_by_bin": "",
                 "candidate_control_positions": 0, "valid_control_profiles": 0,
                 "valid_controls_by_bin": "", "status": None}
+        if not dets["shape_valid"][item["detection_index"]]:
+            diag["status"] = "invalid_target_shape"
+            diagnostics.append(diag)
+            continue
+        target = profile_at(image, variance, base, segmentation, dets, fallback_tree,
+                            target_xy, pixel_scale, kpc_per_pixel, conversion,
+                            target_det["NUMBER"], coverage_floor)
         if target is None:
             diag["status"] = "target_stamp_unavailable"
             diagnostics.append(diag)
@@ -366,7 +421,7 @@ def process_frame(frame, prep_dir, cosmo, coverage_floor, min_controls):
         rows.append({
             "cluster_id": ident, "filter": info["coadd_header_filter"],
             "redshift": float(frame["z"]), "richness": float(frame["richness"]),
-            "cohort": str(frame.get("preparation_cohort", "unspecified")),
+            "cohort": cohort_name(frame),
             "member_index": member_index, "detection_number": target_det["NUMBER"],
             "member_detection_separation_arcsec": item["match_arcsec"],
             "cluster_radius_kpc": r_cluster_kpc,
@@ -382,7 +437,7 @@ def process_frame(frame, prep_dir, cosmo, coverage_floor, min_controls):
 
     frame_record = {
         "cluster_id": ident, "filter": info["coadd_header_filter"],
-        "redshift": float(frame["z"]), "cohort": str(frame.get("preparation_cohort", "unspecified")),
+        "redshift": float(frame["z"]), "cohort": cohort_name(frame),
         "n_member_positions": len(member_rows), "n_member_positions_in_frame": match_stats["in_frame"],
         "n_unique_positional_matches_le_1arcsec": len(matched),
         "n_ambiguous_matches_rejected": match_stats["ambiguous"],
@@ -462,37 +517,40 @@ def summarize(rows, work, replicas, seed):
 def plot_profiles(filter_summary, work):
     from matplotlib import pyplot as plt
 
-    fig, axes = plt.subplots(2, 2, figsize=(11, 8), sharex=True)
+    cohorts = sorted(filter_summary)
+    fig, axes = plt.subplots(max(1, len(cohorts)), 2,
+                             figsize=(11, max(4, 3.8 * len(cohorts))),
+                             sharex=True, squeeze=False)
     edges = R_EDGES_KPC
     centers = np.sqrt(edges[:-1] * edges[1:])
     xerr = np.vstack([centers - edges[:-1], edges[1:] - centers])
-    for ax, (cohort, band) in zip(axes.flat,
-                                  [(c, b) for c in ("area_qualified", "mask_stress")
-                                   for b in ("i", "i2")]):
-        record = filter_summary.get(cohort, {}).get(band)
-        ax.axhline(0., color="0.4", lw=1, ls="--")
-        ax.set_xscale("log")
-        ax.set_yscale("symlog", linthresh=1.)
-        ax.grid(True, which="both", alpha=.2)
-        ax.set_title(f"{cohort}; {band}")
-        if record:
-            mean = np.asarray(record["mean_delta"], dtype=float)
-            low = np.asarray(record["bootstrap_low"], dtype=float)
-            high = np.asarray(record["bootstrap_high"], dtype=float)
-            yerr = np.vstack([mean - low, high - mean])
-            ax.errorbar(centers, mean, xerr=xerr, yerr=yerr, fmt="o-",
-                        capsize=2, color="#245a87")
-            ax.text(.03, .04,
-                    f"clusters={record['n_clusters']}, satellites={record['n_satellites']}\n"
-                    "95% cluster bootstrap; exploratory",
-                    transform=ax.transAxes, fontsize=8, va="bottom")
-        else:
-            ax.text(.5, .5, "no retained profiles", ha="center", va="center",
-                    transform=ax.transAxes)
-        ax.set_xlabel("Satellite-centric radius (kpc)")
-        ax.set_ylabel(r"Target − control (nJy arcsec$^{-2}$)")
-    fig.suptitle("HSC satellite-centered outer-light pilot\n"
-                 "Validation subset only; not a science measurement")
+    for row_index, cohort in enumerate(cohorts):
+        for col_index, band in enumerate(("i", "i2")):
+            ax = axes[row_index, col_index]
+            record = filter_summary.get(cohort, {}).get(band)
+            ax.axhline(0., color="0.4", lw=1, ls="--")
+            ax.set_xscale("log")
+            ax.set_yscale("symlog", linthresh=1.)
+            ax.grid(True, which="both", alpha=.2)
+            ax.set_title(f"{cohort}; {band}")
+            if record:
+                mean = np.asarray(record["mean_delta"], dtype=float)
+                low = np.asarray(record["bootstrap_low"], dtype=float)
+                high = np.asarray(record["bootstrap_high"], dtype=float)
+                yerr = np.vstack([mean - low, high - mean])
+                ax.errorbar(centers, mean, xerr=xerr, yerr=yerr, fmt="o-",
+                            capsize=2, color="#245a87")
+                ax.text(.03, .04,
+                        f"clusters={record['n_clusters']}, satellites={record['n_satellites']}\n"
+                        "95% cluster bootstrap; exploratory",
+                        transform=ax.transAxes, fontsize=8, va="bottom")
+            else:
+                ax.text(.5, .5, "no retained profiles", ha="center", va="center",
+                        transform=ax.transAxes)
+            ax.set_xlabel("Satellite-centric radius (kpc)")
+            ax.set_ylabel(r"Target − control (nJy arcsec$^{-2}$)")
+    fig.suptitle("HSC satellite-centered outer-light profiles\n"
+                 "Exploratory only; not a science measurement")
     fig.tight_layout()
     fig.savefig(work / "satellite_profile_review.png", dpi=160)
     plt.close(fig)
@@ -501,8 +559,14 @@ def plot_profiles(filter_summary, work):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13"))
+    parser.add_argument("--manifest", type=Path,
+                        help="Input cluster manifest; defaults to the 50-frame validation manifest")
+    parser.add_argument("--prep-dir", type=Path,
+                        help="Directory of saved SEP detections and segmentation masks")
+    parser.add_argument("--artifact-audit", type=Path,
+                        help="Required for samples larger than 50 frames; audited prep artifact JSON")
     parser.add_argument("--work", type=Path, required=True)
-    parser.add_argument("--limit", type=int, help="Engineering subset; omit to use all 50 validation frames")
+    parser.add_argument("--limit", type=int, help="Optional leading subset for engineering runs")
     parser.add_argument("--coverage-floor", type=float, default=.60)
     parser.add_argument("--min-controls", type=int, default=3)
     parser.add_argument("--bootstrap-replicas", type=int, default=2000)
@@ -515,20 +579,41 @@ def main():
     data, work = args.data.resolve(), args.work.resolve()
     if work.exists():
         parser.error(f"Refusing to overwrite existing output: {work}")
-    manifest_path = data / "validation_sample_2026-10-13_01/validation_manifest.json"
-    prep_dir = data / "detection_psf_2026-10-13_01"
+    manifest_path = (args.manifest or
+                     data / "validation_sample_2026-10-13_01/validation_manifest.json").resolve()
+    prep_dir = (args.prep_dir or data / "detection_psf_2026-10-13_01").resolve()
     prep_summary_path = prep_dir / "summary.json"
     if not manifest_path.is_file() or not prep_summary_path.is_file():
-        parser.error("Validation manifest or existing detection/mask summary is missing")
+        parser.error("Input manifest or detection/mask preparation summary is missing")
     manifest = read_json(manifest_path)
     prep_summary = read_json(prep_summary_path)
     if manifest.get("science_measurement") is not False or prep_summary.get("science_measurement") is not False:
         parser.error("Expected explicitly exploratory, non-science inputs")
-    if prep_summary.get("status") != "complete" or prep_summary.get("n_prepared") != 50:
-        parser.error("Expected the complete existing 50-frame preparation set")
-    frames = manifest["clusters"][:args.limit] if args.limit else manifest["clusters"]
+    all_frames = manifest.get("clusters", [])
+    all_ids = [str(frame.get("id")) for frame in all_frames]
+    prep_records = prep_summary.get("records", [])
+    prep_ids = [str(record.get("id")) for record in prep_records]
+    if (not all_frames or len(set(all_ids)) != len(all_ids)
+            or len(set(prep_ids)) != len(prep_ids)
+            or prep_summary.get("status") != "complete"
+            or int(prep_summary.get("n_prepared", -1)) != len(prep_ids)
+            or not set(all_ids).issubset(set(prep_ids))):
+        parser.error("Manifest and prepared cluster IDs do not form a complete, unique sample")
+    frames = all_frames[:args.limit] if args.limit else all_frames
     if not frames:
         parser.error("No frames selected")
+    frames = resolve_image_paths(frames, manifest_path)
+    audit_path = args.artifact_audit.resolve() if args.artifact_audit else prep_dir / "artifact_audit.json"
+    audit = None
+    if len(all_frames) > 50:
+        if not audit_path.is_file():
+            parser.error(f"Full-sample measurement requires an artifact audit: {audit_path}")
+        audit = read_json(audit_path)
+        if (audit.get("passed") is not True or audit.get("science_measurement") is not False
+                or audit.get("n_frames") != len(all_frames)
+                or audit.get("input_manifest_sha256") != sha256(manifest_path)
+                or audit.get("prepare_script_sha256") != prep_summary.get("preparation_script_sha256")):
+            parser.error("Full-sample artifact audit does not match the selected manifest/preparation")
     started = time.time()
     cosmology = FlatLambdaCDM(H0=float(manifest.get("h0", 70.)),
                               Om0=float(manifest.get("omega_m", .3)), Tcmb0=0 * u.K)
@@ -580,16 +665,20 @@ def main():
               ["cluster_id", "filter", "cohort", "member_index", "detection_number", "cluster_radius_kpc",
                "member_detection_separation_arcsec", "target_min_coverage", "target_coverage_by_bin",
                "candidate_control_positions", "valid_control_profiles", "valid_controls_by_bin", "status"])
-    filter_summary = summarize(all_rows, work, args.bootstrap_replicas, args.seed) if all_rows else {}
+    filter_summary = summarize(all_rows, work, args.bootstrap_replicas, args.seed)
     plot_profiles(filter_summary, work)
     script_path = Path(__file__).resolve()
     summary = {
-        "schema": "hsc-satellite-outer-profile-pilot-v1",
+        "schema": "hsc-satellite-outer-profile-v1",
         "status": "complete" if not errors else "partial",
         "science_measurement": False,
+        "sample_scope": "full_manifest" if len(frames) == len(all_frames) else "manifest_subset",
         "n_frames_requested": len(frames), "n_frames_completed": len(frame_records),
         "n_frame_errors": len(errors), "n_satellite_profiles": len(all_rows),
         "filters": filter_summary,
+        "input_manifest": str(manifest_path), "preparation_directory": str(prep_dir),
+        "artifact_audit": str(audit_path) if audit else None,
+        "artifact_audit_sha256": sha256(audit_path) if audit else None,
         "method": {
             "member_selection": "CAMIRA positions matched to a unique saved SEP detection within 1 arcsec; no mass or CAMIRA weight applied",
             "cluster_radius_kpc": [MIN_CLUSTER_RADIUS_KPC, MAX_CLUSTER_RADIUS_KPC],
@@ -602,7 +691,7 @@ def main():
             "uncertainty": "cluster bootstrap interval across the selected validation clusters; nominal pixel variance excludes coadd correlated noise",
         },
         "limitations": [
-            "The 50 validation frames are an area-selected engineering subset, not a representative or science-complete sample.",
+            "Profiles are exploratory; the automatic source masks, BCG centers, PSF wings, sky transfer, and coadd covariance are not certified for science use.",
             "CAMIRA member identities are positional only; exact member-file column semantics, membership weights, stellar mass, color and photometric redshifts are not used.",
             "The same-radius azimuthal controls estimate a local diffuse-light/sky baseline but do not remove asymmetric substructure or prove a satellite/ICL decomposition.",
             "Source masks, HSC coadd correlated noise, PSF wings, sky transfer, extinction, passband response, completeness and member contamination remain unvalidated.",

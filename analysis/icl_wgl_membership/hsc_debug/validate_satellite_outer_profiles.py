@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a saved satellite-centered pilot's provenance and table invariants."""
+"""Verify satellite-centered outer-light profile provenance and table invariants."""
 import argparse
 import csv
 import hashlib
@@ -25,25 +25,44 @@ def read_tsv(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--expected-frames", type=int,
+                        help="Optional frame count required for this validation")
     args = parser.parse_args()
     output = args.output.resolve()
     summary_path = output / "summary.json"
     if not summary_path.is_file():
         parser.error(f"Missing summary: {summary_path}")
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    if summary.get("schema") != "hsc-satellite-outer-profile-pilot-v1":
-        parser.error("Unexpected pilot schema")
+    if summary.get("schema") not in ("hsc-satellite-outer-profile-pilot-v1",
+                                      "hsc-satellite-outer-profile-v1"):
+        parser.error("Unexpected outer-profile schema")
     if summary.get("status") != "complete" or summary.get("science_measurement") is not False:
-        parser.error("Pilot is incomplete or its science gate is not false")
-    if summary.get("n_frames_requested") != 50 or summary.get("n_frames_completed") != 50:
-        parser.error("Expected all 50 validation frames")
-    if summary.get("n_frame_errors") != 0 or summary.get("errors"):
-        parser.error("Pilot reports frame errors")
-    if len(summary.get("frame_records", [])) != 50:
-        parser.error("Frame provenance count differs from 50")
+        parser.error("Outer-profile run is incomplete or its science gate is not false")
+    n_requested = int(summary.get("n_frames_requested", -1))
+    n_completed = int(summary.get("n_frames_completed", -1))
+    frame_records = summary.get("frame_records", [])
+    if (n_requested < 1 or n_completed != n_requested
+            or summary.get("n_frame_errors") != 0 or summary.get("errors")
+            or len(frame_records) != n_requested):
+        parser.error("Run reports incomplete or inconsistent frame provenance")
+    if args.expected_frames is not None and n_requested != args.expected_frames:
+        parser.error(f"Expected {args.expected_frames} frames, found {n_requested}")
+    frame_ids = [str(record.get("cluster_id")) for record in frame_records]
+    if len(set(frame_ids)) != n_requested:
+        parser.error("Frame provenance contains duplicate cluster IDs")
     if any(not record.get("image_sha256") or not record.get("mask_sha256")
-           for record in summary["frame_records"]):
+           for record in frame_records):
         parser.error("At least one frame lacks image/mask checksums")
+
+    audit_sha256 = summary.get("artifact_audit_sha256")
+    audit_path = summary.get("artifact_audit")
+    if audit_sha256:
+        path = Path(audit_path)
+        if not path.is_file() or sha256(path) != audit_sha256:
+            parser.error("Preparation artifact-audit checksum mismatch")
+        audit = json.loads(path.read_text(encoding="utf-8"))
+        if audit.get("passed") is not True or audit.get("science_measurement") is not False:
+            parser.error("Referenced preparation audit is not a passing exploratory audit")
 
     checked_hashes = {}
     for name, expected in summary.get("output_sha256", {}).items():
@@ -107,9 +126,10 @@ def main():
 
     result = {
         "status": "verified", "science_measurement": False,
-        "frames": len(summary["frame_records"]), "satellites": n_satellites,
+        "frames": len(frame_records), "satellites": n_satellites,
         "radial_bins_per_satellite": n_bins, "profile_rows": len(profiles),
         "diagnostic_rows": len(diagnostics), "verified_output_hashes": len(checked_hashes),
+        "artifact_audit_verified": bool(audit_sha256),
         "qualitative_plot": "satellite_profile_review.png",
         "groups": {f"{cohort}/{band}": {"satellites": n, "clusters": cluster_members[(cohort, band)]}
                    for (cohort, band), n in actual_groups.items()},
