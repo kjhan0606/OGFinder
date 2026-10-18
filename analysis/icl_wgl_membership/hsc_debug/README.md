@@ -62,3 +62,57 @@ srun -p a10 -N1 -n1 --cpus-per-task=1 --mem=4G --gres=gpu:1 --time=12:00:00 --pt
 `download_manifest.json`이다. 상위 디렉터리의 이전 제출 상태는 과거 이력이다.
 비밀번호는 기존 프로그램의 메모리에만 둔다. GPU 연산은 없지만 장시간 작업은
 Slurm에서 실행하고 GPU를 요청해야 한다는 서버 규정을 따른다.
+
+## 2026-10-18 CAMIRA 멤버 밀도–ICL 프로파일 예비 비교
+
+`analyze_satellite_association_pilot.py`는 이미 저장된 50개 검증 은하단 프로필과
+대응 대조장 프로필, 800개 표본 manifest의 CAMIRA 멤버 위치를 해시 검사 후
+연결한다. 지원 민감도에서 이미 선택된 K2.5/40%/50–300 kpc 24쌍만 사용하고,
+클러스터와 대조장의 필터가 정확히 일치하는지 다시 확인한다. 결과를 기존 자료에
+덮어쓰지 않도록 새 `--work` 경로를 지정한다.
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/analyze_satellite_association_pilot.py \
+  --data /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13 \
+  --work /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_association_pilot_2026-10-18_02
+```
+
+출력 `cluster_metrics.tsv`는 은하단별 멤버 위치 수밀도와 matched-control 차감
+표면밝기를 기록하고, `summary.json`은 필터별 탐색 상관 및 모든 제한사항을
+기록한다. 멤버 광도·별질량·멤버십 확률은 사용하지 않았고 위성 중심 외곽광은
+측정하지 않았으므로 `science_measurement=false`가 유지된다. 이 분석은 이미
+생성된 작은 프로필 배열을 읽는 진단이며 800개 이미지 전체의 광도 스택을 만들지
+않는다.
+
+## 2026-10-18 전체 800개 대상 영상 프로필
+
+`measure_full_sample_profiles.py`는 다운로드된 800개 영상과
+`prestack_cluster_masks_2026-10-16_01`의 마스크를 읽어 반경별 HSC-I 프로필을
+만들고, 저장된 798개 대조장 프로필과 동일한 필터·유효면적 조건으로 차감 평균과
+5° 공동 하늘 블록 공분산을 계산한다. 전체 이미지 입력이므로 Slurm 작업으로만
+실행하며, 기존 대조장 프로필을 재사용한다. 새 FITS 다운로드는 없다.
+
+```bash
+sbatch analysis/icl_wgl_membership/hsc_debug/run_measure_full_sample_profiles.sh
+```
+
+`prestack_flux_profiles_2026-10-18_01/`에는 대상별 프로필, 지원 절단별 i/i2
+차감 프로필, 공분산, CAMIRA 멤버 위치 수밀도와 탐색 상관이 저장된다. 자동
+마스크·BCG 검토, extinction 및 passband 교정, 상류 sky/PSF 전달은 승인되지 않은
+상태이므로 산출물은 `science_measurement=false`인 탐색 결과다.
+
+## 2026-10-18 약한렌즈 shape-catalog 겹침 사전계산
+
+`prepare_wl_shape_preflight.py`는 800개 은하단의 3 Mpc 원뿔에 대해 HSC S19A
+shape source 개수만 확인할 CAS SQL 배치를 만든다. 실행 시 네트워크 조회나 자료
+다운로드를 하지 않으며, 준비된 쿼리도 아직 제출하지 않았다.
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/prepare_wl_shape_preflight.py \
+  --manifest /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/sample_manifest.json \
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01
+```
+
+32개 SQL 배치와 `preflight_manifest.json`이 생성된다. 렌즈별 source 행 수와 예상
+전송량을 확인한 뒤 자료 전송 여부를 정하고, 사전계산 단계에서는 shape 행을
+가져오지 않는다.
