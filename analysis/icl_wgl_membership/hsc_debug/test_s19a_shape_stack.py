@@ -8,6 +8,7 @@ from s19a_shape_stack import (
     G_MPC,
     C_KMS,
     _to_tangential,
+    hsc_selection_bias,
     pair_geometry,
     pdf_lensing_efficiency,
     stack_s19a_pairs,
@@ -53,6 +54,27 @@ def test_pair_geometry_and_tangential_sign_follow_hsc_sky_axes(cosmo):
     assert np.allclose(gx, 0.0, atol=1e-12)
 
 
+def test_hsc_edge_selection_correction_uses_pair_weights_and_psf_ellipticity():
+    weight = np.ones(4)
+    mag_a10 = np.array([25.49, 25.48, 24.0, 24.5])
+    resolution = np.array([0.305, 0.31, 0.4, 0.5])
+    e1_psf = np.array([0.02, 0.04, 0.06, 0.08])
+    e2_psf = np.array([-0.04, -0.02, 0.02, 0.04])
+    result = hsc_selection_bias(
+        weight, mag_a10, resolution,
+        1.0 + e1_psf, 1.0 - e1_psf, e2_psf,
+    )
+    p_mag = 2.0 / 4.0 / 0.025
+    p_res = 2.0 / 4.0 / 0.01
+    expected_a = 0.0064 * p_mag + 0.0063 * p_res
+    assert result["p_edge_mag"] == pytest.approx(p_mag)
+    assert result["p_edge_resolution"] == pytest.approx(p_res)
+    assert result["m_sel"] == pytest.approx(-0.059 * p_mag + 0.019 * p_res)
+    assert result["a_sel"] == pytest.approx(expected_a)
+    assert result["c1_sel"] == pytest.approx(expected_a * np.mean(e1_psf))
+    assert result["c2_sel"] == pytest.approx(expected_a * np.mean(e2_psf))
+
+
 def _synthetic_catalog(cosmo):
     rng = np.random.default_rng(5931)
     z_lens = 0.3
@@ -75,6 +97,10 @@ def _synthetic_catalog(cosmo):
     m = rng.uniform(-0.03, 0.02, n)
     c1 = rng.normal(0.0, 0.001, n)
     c2 = rng.normal(0.0, 0.001, n)
+    mag_a10 = rng.uniform(24.1, 25.5, n)
+    resolution = rng.uniform(0.3, 0.7, n)
+    psf_e1 = rng.normal(0.015, 0.004, n)
+    psf_e2 = rng.normal(-0.006, 0.004, n)
     bmode = np.ones(n, dtype=bool)
     bmode[250] = False
     lens_z = np.full(n, z_lens)
@@ -96,21 +122,32 @@ def _synthetic_catalog(cosmo):
         "m": m,
         "c1": c1,
         "c2": c2,
+        "mag_a10": mag_a10,
+        "resolution": resolution,
+        "psf_shape11": 1.0 + psf_e1,
+        "psf_shape22": 1.0 - psf_e1,
+        "psf_shape12": psf_e2,
         "b_mode_pass": bmode,
     }
     actual_radius, actual_phi = pair_geometry(pairs, cosmo)
     bin_index = np.searchsorted(radial_edges, actual_radius, side="right") - 1
     bin_index = np.clip(bin_index, 0, len(radial_edges) - 2)
-    selection = [
-        {"m_sel": 0.006 + 0.001 * i, "c1_sel": 0.001 + 0.0002 * i, "c2_sel": -0.0007}
-        for i in range(len(radial_edges) - 1)
-    ]
     beta = pdf_lensing_efficiency(lens_z, source_ids, source_ids, redshift_grid, source_pdf, cosmo)
     sigma_crit_inv = 4.0 * math.pi * G_MPC / C_KMS**2 * d_l * beta
+    selection = []
+    for i in range(len(radial_edges) - 1):
+        selected = (bin_index == i) & bmode
+        selection.append(hsc_selection_bias(
+            weights[selected] * sigma_crit_inv[selected] ** 2,
+            mag_a10[selected], resolution[selected],
+            pairs["psf_shape11"][selected], pairs["psf_shape22"][selected],
+            pairs["psf_shape12"][selected],
+        ))
     responsivity = np.zeros(len(radial_edges) - 1)
     for i in range(len(responsivity)):
         selected = (bin_index == i) & bmode
-        responsivity[i] = 1.0 - np.sum(weights[selected] * rms[selected] ** 2) / np.sum(weights[selected])
+        pair_weight = weights[selected] * sigma_crit_inv[selected] ** 2
+        responsivity[i] = 1.0 - np.sum(pair_weight * rms[selected] ** 2) / np.sum(pair_weight)
     true_delta_sigma = 2.0e14
     gamma_t = true_delta_sigma * sigma_crit_inv
     c_ind_t, c_ind_x = _to_tangential(actual_phi, c1, c2)
@@ -124,14 +161,13 @@ def _synthetic_catalog(cosmo):
     cos2, sin2 = np.cos(2.0 * actual_phi), np.sin(2.0 * actual_phi)
     pairs["e1"] = -observed_t * cos2 + observed_x * sin2
     pairs["e2"] = -observed_t * sin2 - observed_x * cos2
-    return pairs, source_ids, redshift_grid, source_pdf, radial_edges, selection, true_delta_sigma
+    return pairs, source_ids, redshift_grid, source_pdf, radial_edges, true_delta_sigma
 
 
 def test_synthetic_hsc_calibration_and_pdf_beta_recover_injected_delta_sigma(cosmo):
-    pairs, source_ids, z, pdf, edges, selection, injected = _synthetic_catalog(cosmo)
+    pairs, source_ids, z, pdf, edges, injected = _synthetic_catalog(cosmo)
     result = stack_s19a_pairs(
-        pairs, source_ids, z, pdf, edges, cosmo, selection,
-        calibration_reference="synthetic known selection response",
+        pairs, source_ids, z, pdf, edges, cosmo,
     )
     assert result["science_measurement"] is False
     assert result["counts"]["input_pairs"] == 400
@@ -145,24 +181,22 @@ def test_synthetic_hsc_calibration_and_pdf_beta_recover_injected_delta_sigma(cos
 
 
 def test_missing_calibration_pdf_or_decoded_bmode_is_rejected(cosmo):
-    pairs, source_ids, z, pdf, edges, selection, _ = _synthetic_catalog(cosmo)
-    with pytest.raises(ValueError, match="selection-bias calibration"):
-        stack_s19a_pairs(pairs, source_ids, z, pdf, edges, cosmo, selection[:-1], "ref")
+    pairs, source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
     with pytest.raises(ValueError, match="Missing full photo-z PDF"):
-        stack_s19a_pairs(pairs, source_ids[:-1], z, pdf[:-1], edges, cosmo, selection, "ref")
+        stack_s19a_pairs(pairs, source_ids[:-1], z, pdf[:-1], edges, cosmo)
     bad = dict(pairs)
     bad["b_mode_pass"] = np.full(len(source_ids), 2, dtype=int)
     with pytest.raises(ValueError, match="decoded boolean mask"):
-        stack_s19a_pairs(bad, source_ids, z, pdf, edges, cosmo, selection, "ref")
+        stack_s19a_pairs(bad, source_ids, z, pdf, edges, cosmo)
 
 
 def test_duplicate_pair_and_lossy_float_ids_are_rejected(cosmo):
-    pairs, source_ids, z, pdf, edges, selection, _ = _synthetic_catalog(cosmo)
+    pairs, source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
     duplicate = {key: np.append(value, value[0]) for key, value in pairs.items()}
     with pytest.raises(ValueError, match=r"duplicate \(lens_id, object_id\)"):
         stack_s19a_pairs(duplicate, np.append(source_ids, source_ids[0]), z,
-                         np.vstack([pdf, pdf[0]]), edges, cosmo, selection, "ref")
+                         np.vstack([pdf, pdf[0]]), edges, cosmo)
     lossy = dict(pairs)
     lossy["object_id"] = np.arange(len(source_ids), dtype=float)
     with pytest.raises(ValueError, match="floating-point ID"):
-        stack_s19a_pairs(lossy, source_ids, z, pdf, edges, cosmo, selection, "ref")
+        stack_s19a_pairs(lossy, source_ids, z, pdf, edges, cosmo)

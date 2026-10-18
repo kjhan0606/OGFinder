@@ -243,11 +243,18 @@ multiplicative/additive 및 selection-bias 보정, photo-z dilution correction�
 와 [HSC 3-year shear catalog 방법론](https://arxiv.org/abs/2107.00136)을 따른다.
 이를 위한 `hsc_debug/s19a_shape_stack.py` adapter를 추가했다. full P(z)를 pair별
 `<D_ls/D_s>`로 적분하고, 빈별 HSC responsivity와 per-object `m/c`를 반영해
-접선·교차 전단 및 weak-shear 근사 `DeltaSigma` 프로필을 계산한다. 선택편향 교정은
-선택 표본별 외부 보정값을 필수 입력으로 요구한다. 합성 주입 회수와 잘못된 ID/PDF/
-mask/보정 입력 거부 시험 5개는 통과했다. 그러나 실제 S19A source 행과 full P(z),
-선택편향 교정값은 아직 없으며, reduced-shear 적합·random-lens 차감·source 중복 및
-하늘 블록 공분산도 구현되지 않았다. 그러므로 이 adapter의 출력도 항상
+접선·교차 전단 및 weak-shear 근사 `DeltaSigma` 프로필을 계산한다. 선택편향은 HSC
+Y3/S19A edge-density 식으로 반경 빈마다 자동 계산하며, pair 가중치는
+`shape_weight * SigmaCritInv**2`, additive 항은 가중 평균 PSF ellipticity를 쓴다.
+식과 계수는 HSC가 연결한
+[hsc-y3-calib 보정 코드](https://github.com/mr-superonion/hsc-y3-calib)의
+`get_sel_bias`를 따른다. 경계 밀도 식의 수치 검사, 합성 주입 회수, PDF·ID·mask
+입력 검사를 포함한 6개 시험이 통과했다.
+단, full P(z)는 현재 기하학적 `SigmaCritInv` 평균만 계산하며, PDF bias/dilution을
+교정할 COSMOS 기반 또는 동등한 외부 calibration sample/factor는 적용하지 않는다.
+실제 S19A source 행과 full P(z)도 아직 없다. reduced-shear 적합·random-lens 차감·
+source 중복 및 하늘 블록 공분산과 선택 보정 오차 전파도 구현되지 않았다.
+그러므로 이 adapter의 출력도 항상
 `science_measurement=false`이며 일반 `stack_shear_profiles`나 합성 metacal 시험이
 서베이 교정을 대신하지 않는다.
 

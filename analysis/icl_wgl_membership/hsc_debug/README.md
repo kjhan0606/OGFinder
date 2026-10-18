@@ -171,19 +171,28 @@ photo-z PDF를 받은 뒤 렌즈–source 쌍의 접선·교차 전단 및 약�
 | `rms_e` | `i_hsmshaperegauss_derived_rms_e` |
 | `m`, `c1`, `c2` | `i_hsmshaperegauss_derived_shear_bias_m/c1/c2` |
 | `b_mode_pass` | HSC `b_mode_mask`를 문서의 컷으로 해석한 통과 boolean |
+| `mag_a10`, `resolution` | `i_apertureflux_10_mag`, `i_hsmshaperegauss_resolution` |
+| `psf_shape11/22/12` | `i_sdssshape_psf_shape11/22/12` |
 | 좌표·렌즈 적색이동 | 800개 렌즈 목록 및 `meas`의 천구좌표 |
 | source PDF | `object_id`로 붙인 tract별 full photo-z PDF와 공통 `z` grid |
 
 호출 함수는 `pdf_lensing_efficiency`로 각 lens-source 쌍의 PDF 적분
 `<D_ls/D_s>`를 구하고, 각 반경 빈에서
-`R = 1 - sum(w * e_RMS**2) / sum(w)`를 다시 계산한다. per-object `m/c`, 반경별로
-제공한 `m_sel/c_sel`, HSC shape weight를 사용한다. `selection_corrections`는 빈마다
-`m_sel`, `c1_sel`, `c2_sel`을 요구한다. 그 값은 실제 선택 표본의 HSC 선택편향
-교정 산출물과 근거를 caller가 제공해야 하며 임의로 0을 넣어 통과시키면 안 된다.
+`w_pair = shape_weight * SigmaCritInv**2`로
+`R = 1 - sum(w_pair * e_RMS**2) / sum(w_pair)`를 다시 계산한다. per-object `m/c`와
+HSC의 경계 밀도 선택편향 처방을 적용한다. 선택편향에는 반경 빈별
+`shape_weight * SigmaCritInv**2` 가중치, 25.5 mag·`R2=0.3` 경계의 가중 밀도,
+가중 평균 PSF ellipticity를 사용해 `m_sel` 및 `c_sel=a_sel*<e_PSF>`를 계산한다.
+계수와 오차식은 HSC가 연결한
+[hsc-y3-calib 보정 코드](https://github.com/mr-superonion/hsc-y3-calib)의
+`get_sel_bias` 처방을 근거로 구현했으며, 저장소의 코드를 복사하거나 포함하지 않았다.
+입력은 실제 HSC 약한렌즈 선택을 만족한 source 행이어야 한다.
 
 현재 결과는 weak-shear 근사 프로필과 독립 쌍으로 가정한 shape-noise 오차, cross-shear
-null만 낸다. reduced shear, random-lens 차감, 겹치는 source/하늘 블록 공분산,
-calibration uncertainty는 아직 없다. 따라서 출력은 항상 `science_measurement=false`이고
+null만 낸다. full P(z)로 기하학적 `SigmaCritInv`를 적분하지만, photo-z PDF의 bias와
+dilution을 보정할 외부 calibration sample/factor는 아직 적용하지 않는다. reduced shear,
+random-lens 차감, 겹치는 source/하늘 블록 공분산, 선택 보정 계수의 오차 전파도
+최종 공분산에 결합하지 않았다. 따라서 출력은 항상 `science_measurement=false`이고
 최종 질량·과학 결과로 쓰지 않는다. 합성 주입 회수와 잘못된 ID/PDF/mask/selection 입력
 거부 시험은 `test_s19a_shape_stack.py`에 있다. HSC 열과 PDF 연결 규약은
 [공식 S19A 안내](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/),
