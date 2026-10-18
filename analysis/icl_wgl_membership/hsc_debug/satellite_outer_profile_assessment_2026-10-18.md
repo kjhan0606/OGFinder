@@ -201,6 +201,26 @@ matched-control ICL 스택의 raw 200–300 kpc 차감값과 조인했다.
 i2 partial 구간 [0.035, 0.672]도 annulus 단독 ICL 표본에서는 [-0.010, 0.530]으로
 0을 포함한다. 전체적으로 위성 외곽광–ICL 물리적 관계는 아직 입증되지 않았다.
 
+이 관계가 ICL 마스크·면적 선택에 얼마나 의존하는지 확인하기 위해 Kron 2.5/3.5/5.0과
+양쪽 coverage 25/35/40/50%의 12개 조합을 같은 7-bin 공통 위성 표본에 다시 조인했다.
+각 조합은 i와 i2 필터에서 따로 평가해 24개 필터-조건을 만들었다.
+48개 결과군(각 조건의 전체 공통 표본 및 center-eligible 하위표본)에 649개
+조건-은하단 행이 포함됐다. 전체 표본 결과 중 20/24 조건에서 상관을 추정할 수 있었다.
+5도 연결 하늘 블록 부트스트랩 95% 구간이 0을 제외한 비조정 Spearman 결과는 두 개뿐이며,
+둘 다 i2의 50% coverage 조건이다: K2.5에서 n=35, ρ=0.386, 명목 p=0.022,
+구간 [0.098, 0.636]; K3.5에서 n=16, ρ=0.512, p=0.043,
+구간 [0.131, 0.788]. z·richness 조정 partial Pearson 구간은 i2의 네 조건에서
+0을 제외했다: K2.5/35% (n=65, r=0.167, [0.005, 0.360]), K2.5/40%
+(n=53, r=0.234, [0.020, 0.421]), K2.5/50% (n=35, r=0.267,
+[0.059, 0.503]), K3.5/35% (n=49, r=0.227, [0.010, 0.450]).
+
+따라서 조정 신호는 일부 K2.5 설정에서 이어지지만 비조정 관계는 더 엄격한 coverage 컷에서만
+구간이 0을 제외하고, 마스크·면적 설정에 따라 강도와 지원 표본이 달라진다. center-eligible
+결과는 24조건 중 15조건에서만 추정 가능했고, 그 중 4개 Spearman 및 1개 partial 구간이
+0을 제외했으나 선택 표본이 더 작다. 이 24개 비교는 상관된 사후 민감도 분석이며 다중비교
+보정과 독립 표본 재현이 없다. 그러므로 신호 검출로 판단하지 않고, 사전 고정한 i2 후속
+검증의 후보만 제시한다. 이 분석도 `science_measurement=false`를 유지한다.
+
 ## 용도 판정과 다음 검증
 
 현재 산출물은 코드 재현성, 마스크·면적 선택 민감도와 수동 검토 대상을 고르는 데 쓸 수
@@ -230,13 +250,15 @@ BCG·별·검출원 마스크를 수동 점검하며, 넓은 PSF 날개와 sky �
   `test_s19a_shape_stack.py`, `analyze_satellite_outer_icl_correlation.py`,
   `analyze_icl_annulus_sensitivity.py`, `validate_icl_annulus_sensitivity.py`,
   `analyze_satellite_common_support.py`, `validate_satellite_common_support.py`,
-  `test_analyze_satellite_common_support.py`
+  `test_analyze_satellite_common_support.py`, `analyze_icl_satellite_cut_sensitivity.py`,
+  `validate_icl_satellite_cut_sensitivity.py`, `test_analyze_icl_satellite_cut_sensitivity.py`
 - 권위 있는 800장 프로필 결과: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_profile_full_2026-10-18_03/`
 - 반경별 지원 stack: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_profile_perbin_full_2026-10-18_01/`
 - ICL 반경별 지원: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annulus_support_2026-10-18_01/`
 - ICL mask/coverage 민감도: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annulus_sensitivity_2026-10-18_02/`
 - annulus별 ICL–위성 상관: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_association_perbin_2026-10-18_03/`
 - 모든 반경 공통 은하단 민감도·상관: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_common_support_2026-10-18_01/`
+- ICL 마스크·coverage별 위성 외곽광 상관 민감도: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_cut_sensitivity_2026-10-18_01/`
 - 독립 준비자료 감사: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_detection_psf_2026-10-18_01/`
 
 완전 프로필 `_03` 결과는 800/800 프레임, 오류 0, 90개 위성 프로필, 630개 방사 구간 행,
@@ -254,3 +276,6 @@ BCG·별·검출원 마스크를 수동 점검하며, 넓은 PSF 날개와 sky �
 ICL 선택 민감도는 24조건·2,015쌍-조건 행으로 완료했고, 기준 K2.5/40% 224쌍의
 선택과 flux를 행별 일치시켰으며 출력 해시 2개를 검증했다. 모든 새 결과는
 `science_measurement=false`다.
+ICL–위성 상관 컷 민감도는 24조건·48결과군·649개 조건-은하단 행으로 완료했고,
+공통 표본 수(i 29/i2 103), 조인 및 출력 해시 2개를 검증했다. 분석기·검증기·회귀시험도
+저장소에 포함한다. 이 결과 역시 `science_measurement=false`다.

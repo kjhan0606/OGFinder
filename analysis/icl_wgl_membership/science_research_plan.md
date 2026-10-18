@@ -290,6 +290,16 @@ Pearson r은 0.234 [0.024, 0.421]이지만 비조정 상관·중심 민감도·�
 안정적으로 재현되지 않는다. 중심 후보 고유·비가림 i2 표본은 10개뿐이다. 따라서 현재
 자료는 위성 외곽광–ICL 물리적 상관의 증거로 해석할 수 없다.
 
+같은 공통 위성 표본에서 ICL의 Kron 마스크 2.5/3.5/5.0과 target/control coverage
+25/35/40/50%를 교차한 12개 설정을 i와 i2에서 각각 평가해 24개 상관 민감도 조건을 검사했다.
+전체표본 20/24 조건에서 추정
+가능했고, 비조정 Spearman 공간 블록 구간이 0을 제외한 것은 i2의 50% coverage 두 조건뿐이다.
+z·richness 조정 partial 상관은 i2 네 조건에서 구간이 0을 제외했으나, 서로 연관된 사후
+비교이며 선택·마스크 민감도와 독립 재현이 해결되지 않았다. 이는 i2 사전 고정 후속 분석을
+검토할 근거이지 물리적 상관의 검출은 아니다. 산출물은
+`sample_800_2026-10-13/icl_satellite_cut_sensitivity_2026-10-18_01/`이며
+`science_measurement=false`를 유지한다.
+
 정량·정성 평가와 산출물 경로는 [위성 외곽광 전체표본 평가](hsc_debug/satellite_outer_profile_assessment_2026-10-18.md)에
 기록했다. 권위 데이터는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/` 아래
 `satellite_detection_psf_2026-10-18_01/`,
@@ -298,7 +308,8 @@ Pearson r은 0.234 [0.024, 0.421]이지만 비조정 상관·중심 민감도·�
 `satellite_common_support_2026-10-18_01/`,
 `icl_annulus_support_2026-10-18_01/`,
 `icl_annulus_sensitivity_2026-10-18_02/`,
-`satellite_outer_icl_association_perbin_2026-10-18_03/`에 있다. 이전 `_01`·`_02` 완전 프로필과
+`satellite_outer_icl_association_perbin_2026-10-18_03/`,
+`icl_satellite_cut_sensitivity_2026-10-18_01/`에 있다. 이전 `_01`·`_02` 완전 프로필과
 수정 전 `_01` 상관 결과는 사용하지 않는다.
 
 2026-10-18 현재 약한렌즈 shape source 자료는 없다. HSC 공식 문서는 S19A
@@ -361,9 +372,10 @@ source 행의 예상 크기와 overlap별 다운로드량을 정량화할 수 �
 
 다음 세션은 이 문서와 [실행 계획](implementation_plan.md)의 최신 항목을 읽고,
 자료 상태를 확인한 뒤 미완료 단계를 이어간다. 장기 주제 등록은 완료된 관측
-측정이나 백그라운드 자동 실행을 뜻하지 않는다. 다음 우선 작업은 전체 matched
-sample의 마스크/면적 민감도와 추가 측광·PSF 입력 감사다. 문헌·데이터 변경 시
-날짜와 근거를 기록한다.
+측정이나 백그라운드 자동 실행을 뜻하지 않는다. 다음 우선 작업은 사전 고정한 i2 분석의
+독립 표본·null 검정 설계와 위성 외곽광 주입/회수, 잔류 천체 마스크 및 PSF/sky 입력 감사다.
+마스크·반경 정의와 공동 측정 기준을 고정하기 전에는 민감도 표에서 science cut을 선택하지 않는다.
+문헌·데이터 변경 시 날짜와 근거를 기록한다.
 
 ## 8. 초기 문헌과 차별화 검토
 
