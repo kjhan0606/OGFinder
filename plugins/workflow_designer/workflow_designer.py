@@ -7,6 +7,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'tools'))
+from user_tool_checkpoint import definition, capture, recover, remap_inputs
 from ogfkit.science_workflow import checkpoint, recipes, restore, validate_catalog
 
 
@@ -29,11 +31,16 @@ def main():
         request = json.loads(Path(args.request).read_text(encoding='utf-8'))
         state = request['state']
         definitions = {r['id']: r for r in recipes()}
-        state['recipe_definition'] = definitions[state['recipe']]
+        state['recipe_definition'] = definition(definitions[state['recipe']], state.get('personal_steps', []))
+        request['outputs'] = capture(state, request['outputs'])
         manifest = checkpoint(args.destination, state, request['outputs'], request['inputs'])
         answer = dict(manifest=str(manifest))
     else:
         answer = restore(args.manifest, args.work)
+        state = answer['state']
+        state['recipe_definition'] = definition({r['id']: r for r in recipes()}[state['recipe']], state.get('personal_steps', []))
+        recover(state)
+        remap_inputs(answer)
     print(json.dumps(answer, ensure_ascii=False))
 
 

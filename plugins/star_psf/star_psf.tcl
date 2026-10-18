@@ -1141,6 +1141,155 @@ proc CatalogPanelSimPSFTinyTimExec {w} {
     CatalogPanelViewPSF
 }
 
+proc CatalogPanelSimPSFDiffraction {} {
+    global ed
+
+    set w .diffractdlg
+    if {[winfo exists $w]} {
+	raise $w
+	return
+    }
+
+    toplevel $w
+    wm title $w "Diffraction PSF"
+    wm geometry $w 400x340
+
+    set ed(psf,sim-instrument) [::ogf::cat::get psf,param,sim-instrument]
+    set ed(psf,sim-filter) [::ogf::cat::get psf,param,sim-filter]
+    set ed(psf,sim-psf-size) [::ogf::cat::get psf,param,sim-psf-size]
+    set ed(psf,sim-oversample) [::ogf::cat::get psf,param,sim-oversample]
+    set ed(psf,sim-jitter-sigma) [::ogf::cat::get psf,param,sim-jitter-sigma]
+
+    set f [ttk::frame $w.content]
+    pack $f -fill both -expand true -padx 8 -pady 8
+
+    set r 0
+
+    ttk::label $f.status -text "Circular pupil: in-tree" -foreground green
+    grid $f.status -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {4 8}
+    incr r
+
+    ttk::label $f.linst -text "Instrument:"
+    ttk::combobox $f.cinst -textvariable ed(psf,sim-instrument) -width 14 \
+	-values {NIRCAM MIRI NIRISS FGS ACS_WFC ACS_HRC WFC3_UVIS WFC3_IR} \
+	-state readonly
+    grid $f.linst -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.cinst -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.lfilt -text "Filter:"
+    ttk::combobox $f.cfilt -textvariable ed(psf,sim-filter) -width 14
+    grid $f.lfilt -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.cfilt -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    bind $f.cinst <<ComboboxSelected>> [list CatalogPanelSimPSFUpdateFilters $f.cfilt ogfmeas]
+    CatalogPanelSimPSFUpdateFilters $f.cfilt ogfmeas
+
+    ttk::label $f.lsz -text "PSF size:"
+    ttk::entry $f.esz -textvariable ed(psf,sim-psf-size) -width 8
+    ttk::label $f.lpx -text "px"
+    grid $f.lsz -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.esz -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.lpx -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.lover -text "Oversample:"
+    ttk::entry $f.eover -textvariable ed(psf,sim-oversample) -width 8
+    grid $f.lover -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.eover -row $r -column 1 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::label $f.ljit -text "Jitter sigma:"
+    ttk::entry $f.ejit -textvariable ed(psf,sim-jitter-sigma) -width 8
+    ttk::label $f.ljitas -text "arcsec"
+    grid $f.ljit   -row $r -column 0 -sticky w -padx 8 -pady 2
+    grid $f.ejit   -row $r -column 1 -sticky w -padx 2 -pady 2
+    grid $f.ljitas -row $r -column 2 -sticky w -padx 2 -pady 2
+    incr r
+
+    ttk::button $f.autodet -text "Auto-detect from FITS" \
+	-command [list CatalogPanelSimPSFAutoDetect $f.cinst $f.cfilt ogfmeas]
+    grid $f.autodet -row $r -column 0 -columnspan 2 -sticky w -padx 8 -pady {8 2}
+
+    set bf [ttk::frame $w.buttons]
+    pack $bf -fill x -padx 8 -pady 8
+
+    ttk::button $bf.gen -text "Generate" \
+	-command [list CatalogPanelSimPSFDiffractionExec $w]
+    ttk::button $bf.close -text "Close" -command [list destroy $w]
+    pack $bf.close -side right -padx 4
+    pack $bf.gen -side right -padx 4
+}
+
+proc CatalogPanelSimPSFDiffractionExec {w} {
+    global ed
+
+    foreach pname {sim-instrument sim-filter sim-psf-size sim-oversample \
+		   sim-jitter-sigma} {
+	::ogf::cat::set psf,param,$pname $ed(psf,$pname)
+    }
+    ::ogf::cat::set psf,param,sim-telescope ogfmeas
+    CatalogPanelPSFParamSave
+
+    set fn [CatalogPanelPSFGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	::ogf::cat::set status "No FITS image loaded"
+	return
+    }
+
+    set script [CatalogPanelPSFGetScript]
+    if {![file exists $script]} {
+	::ogf::cat::set status "ERROR: ds9_psf_deconv.py not found"
+	return
+    }
+
+    set paramargs {}
+    lappend paramargs "--mode" "sim_psf"
+    lappend paramargs "--sim-telescope" "ogfmeas"
+    lappend paramargs "--sim-instrument" [::ogf::cat::get psf,param,sim-instrument]
+    lappend paramargs "--sim-filter" [::ogf::cat::get psf,param,sim-filter]
+    lappend paramargs "--sim-psf-size" [::ogf::cat::get psf,param,sim-psf-size]
+    lappend paramargs "--sim-oversample" [::ogf::cat::get psf,param,sim-oversample]
+    lappend paramargs "--sim-jitter-sigma" [::ogf::cat::get psf,param,sim-jitter-sigma]
+    lappend paramargs "--psf-output" [::ogf::cat::get psf,file]
+
+    ::ogf::cat::set status "Generating diffraction PSF ([::ogf::cat::get psf,param,sim-instrument] / [::ogf::cat::get psf,param,sim-filter]) ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 psf_stderr.txt]
+    OGFSessLog psf.diffraction auto [list [OGFPython] $script $fn {*}$paramargs] -title {Diffraction PSF} -post [dict create kind psfbuilt]
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    ::ogf::cat::set status "Diffraction PSF error: $last_err"
+	    puts "Diffraction PSF stderr:\n$stderr_msg"
+	} else {
+	    ::ogf::cat::set status "Diffraction PSF error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+
+    ::ogf::cat::set psf,has_psf 1
+
+    foreach line [split $data \n] {
+	if {[string match "#PSF_SIM*" $line]} {
+	    ::ogf::cat::set status "Sim PSF: [string range $line 9 end]"
+	    break
+	}
+    }
+
+    CatalogPanelViewPSF
+}
+
 proc CatalogPanelSimPSFUpdateFilters {cfilt telescope} {
     global ed
 
@@ -1166,6 +1315,10 @@ proc CatalogPanelSimPSFUpdateFilters {cfilt telescope} {
     if {$telescope eq "jwst" && [info exists jwst_filters($inst)]} {
 	$cfilt configure -values $jwst_filters($inst)
     } elseif {$telescope eq "hst" && [info exists hst_filters($inst)]} {
+	$cfilt configure -values $hst_filters($inst)
+    } elseif {$telescope eq "ogfmeas" && [info exists jwst_filters($inst)]} {
+	$cfilt configure -values $jwst_filters($inst)
+    } elseif {$telescope eq "ogfmeas" && [info exists hst_filters($inst)]} {
 	$cfilt configure -values $hst_filters($inst)
     } else {
 	$cfilt configure -values {}

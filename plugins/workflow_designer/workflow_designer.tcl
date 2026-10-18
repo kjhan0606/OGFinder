@@ -73,7 +73,8 @@ proc OGFWorkflowOpen {} {
     ttk::button $w.body.right.open -text "선택 단계 도구 열기" -command ::ogf::workflow::launch
     ttk::button $w.body.right.review -text "검토 완료 표시 → 다음" -command ::ogf::workflow::review
     ttk::button $w.body.right.attach -text "산출물 파일 추가…" -command ::ogf::workflow::attach
-    foreach child {detail nl note open review attach} {pack $w.body.right.$child -fill x -padx 8 -pady 5}
+    ttk::button $w.body.right.settings -text "선택 단계 입력·매개변수" -command ::ogf::workflow::settings
+    foreach child {detail nl note settings open review attach} {pack $w.body.right.$child -fill x -padx 8 -pady 5}
     $w.body add $w.body.left -weight 1
     $w.body add $w.body.right -weight 1
     pack $w.body -fill both -expand 1 -padx 10
@@ -231,6 +232,10 @@ proc ::ogf::workflow::launch {} {
             OGFParamDialog [lindex $a 1]
         } else {
             set spec [step]
+            if {[dict exists $spec personal_digest]} {
+                set pm [::ogf::reg::get [lindex $a 0]]
+                if {[dict get $pm personal_digest] ne [dict get $spec personal_digest]} {error "등록 버전이 변경되었습니다. 저장한 세션을 복원하거나 새 버전을 다시 편입하세요."}
+            }
             if {[dict exists $spec desktop_input_param]} {
                 set source [input_artifact [dict get $spec input_of] [dict get $spec input_artifact]]
                 ::ogf::params::put [lindex $a 0] [dict get $spec desktop_input_param] $source
@@ -400,7 +405,7 @@ proc ::ogf::workflow::save {} {
         dict for {sid value} $progress {if {$value in {reviewed succeeded}} {dict set progress $sid needs_review}}
     }
     set ::ogf::workflow::previous_parameters $params
-    set state [dict create recipe [dict get $recipe id] selected $selected progress_json [OGFJDict $progress] \
+    set state [dict create personal_steps_json [personal_json] recipe [dict get $recipe id] selected $selected progress_json [OGFJDict $progress] \
         notes_json [OGFJDict $notes] parameters_json [OGFJDict $params] records_json "\[[join $records ,]\]" \
         catalog_source $catalog running_at_save $active input_policy external_references bindings_json [OGFJDict $::ogf::workflow::bindings]]
     set request [OGFJDict [dict create state_json [OGFJDict $state] outputs_list [lsort -unique $out] inputs_list $inputs]]
@@ -468,6 +473,7 @@ proc ::ogf::workflow::apply_restore {data} {
     variable busy; variable recipe; variable progress; variable selected; variable inputs; variable outputs; variable notes
     variable first_record; variable saved_records; variable saved_parameters
     set st [dict get $data state]
+    if {[dict exists $st personal_steps] && [llength [dict get $st personal_steps]]} {OGFUIUserToolReload}
     set recipe [dict get $st recipe_definition]
     set progress [dict get $st progress]; set selected [dict get $st selected]; set notes [dict get $st notes]
     set ::ogf::workflow::bindings {}
@@ -509,4 +515,36 @@ proc ::ogf::workflow::apply_restore {data} {
         set ::ogf::workflow::message "진행·설정·표·산출물을 복원했습니다. 원본 영상은 자료 불러오기에서 연결하세요. 실행 중이던 계산은 재시작해야 합니다."
     }
     draw
+}
+
+proc ::ogf::workflow::attach_personal {pid} {
+    variable recipe; variable selected; variable progress; variable busy
+    if {$busy || [::ogf::job::busy]} return
+    if {$recipe eq {}} {set ::ogf::workflow::message "먼저 분석 목적을 선택하세요."; return}
+    set m [::ogf::reg::get $pid]
+    set sid personal_[clock clicks]
+    set node [dict create id $sid title "$pid · 사용자 단계" detail [dict get $m description] action [list $pid run] optional 0 personal_digest [dict get $m personal_digest]]
+    set steps [dict get $recipe steps]; set index 0
+    foreach s $steps {incr index; if {[dict get $s id] eq $selected} break}
+    dict set recipe steps [linsert $steps $index $node]
+    set selected $sid;dict set progress $sid pending
+    draw
+}
+proc ::ogf::workflow::personal_json {} {
+    variable recipe
+    set rows {};set previous {}
+    foreach s [dict get $recipe steps] {
+        if {[dict exists $s personal_digest]} {
+            lappend rows [OGFJDict [dict create id [dict get $s id] after $previous tool [lindex [dict get $s action] 0] digest [dict get $s personal_digest]]]
+        }
+        set previous [dict get $s id]
+    }
+    return "\[[join $rows ,]\]"
+}
+
+proc ::ogf::workflow::settings {} {
+    set a [dict get [step] action]
+    if {[llength $a] != 2} return
+    set pid [expr {[lindex $a 0] eq "settings" ? [lindex $a 1] : [lindex $a 0]}]
+    OGFParamDialog $pid
 }

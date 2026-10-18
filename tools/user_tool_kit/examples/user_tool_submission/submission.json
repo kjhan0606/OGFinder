@@ -1,0 +1,42 @@
+{
+  "schema": "astrafex-user-tool/1",
+  "id": "user_mean_example",
+  "version": "0.1.0",
+  "target": "browser",
+  "entrypoint": "adapter.py:run",
+  "purpose": "제출 형식 예제: 유한 JSON 숫자들의 평균. 과학 분석 아님.",
+  "provenance": "Astrafex용 신규 작성 AI 보조 예제. 제3자 코드 없음. 배포 사용권은 저장소 LICENSE를 따름.",
+  "inputs": {
+    "values": {
+      "format": "json",
+      "required": true,
+      "unit": "dimensionless",
+      "description": "Nonempty list of finite numbers; no booleans or missing values"
+    }
+  },
+  "parameters": {},
+  "outputs": {
+    "result.json": {
+      "format": "json",
+      "description": "count integer and mean finite number; unit same as input"
+    }
+  },
+  "dependencies": [],
+  "permissions": {
+    "network": false,
+    "subprocess": false,
+    "read_outside_inputs": false,
+    "write_outside_output": false
+  },
+  "limits": {
+    "seconds": 10,
+    "memory_mib": 128,
+    "output_mib": 1
+  },
+  "test_plan": "TEST_PLAN.md",
+  "files": {
+    "AI_INSTRUCTIONS.md": "fd563fabff8c7ac7c74e6f19a2ee3329f0cc451ef0c538fffc88e94404d68567",
+    "adapter.py": "92c24888791d879b04b8b9d566ce0090b48ff0c9de878dd2e87a92e3fa191890",
+    "TEST_PLAN.md": "2d6b7b64f73ef493f7afe052b1799a4e0dbbba674e80bbd94f2dcb19c598c3d8"
+  }
+}

@@ -1,17 +1,27 @@
 """Names for JWST and HST simulation PSFs.
 
-WebbPSF is imported only when a JWST simulation PSF is requested and the
-user-installed package imports. TinyTim is a separate program: tiny1, tiny2,
-and tiny3 are used only when they are already on PATH. This module does not
-ship those programs and does not label another model with their names.
+The in-tree model is a circular aperture with a central obscuration, drawn
+at one wavelength and smoothed by a Gaussian jitter. Its header method is
+``ogfmeas``. WebbPSF is imported only when a JWST simulation PSF is requested
+and the user-installed package imports. TinyTim is a separate program:
+tiny1, tiny2, and tiny3 are used only when they are already on PATH. This
+module does not ship those programs and does not label the circular pupil
+with their names.
 """
 
 import os
+import re
 import shutil
 import sys
 import tempfile
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
+from scipy.special import j1
+
+# arcsec per radian
+_ARCSEC_PER_RAD = 180.0 * 3600.0 / np.pi
+_FILTER_RE = re.compile(r"^F(\d+)([A-Z]+)?$")
 
 
 # ---- Availability checks ----
@@ -347,6 +357,168 @@ def generate_tinytim(instrument, filter_name, psf_size=201,
         return psf
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+# ---- Circular diffraction pupil ----
+#
+# JWST entries use a filled annulus: primary diameter 6.5 m and secondary
+# diameter 0.74 m (linear obscuration 0.74/6.5). The real JWST pupil is
+# segmented and is not what this draws. HST entries use a 2.4 m aperture
+# and linear obscuration 0.33. Filter digits are microns times 100 for the
+# JWST names (F150W -> 1.50 um) and nanometres for the HST names
+# (F814W -> 814 nm).
+
+_JWST_PUPIL = {"diameter_m": 6.5, "obscuration": 0.114, "wave": "um100", "telescope": "JWST"}
+_HST_PUPIL = {"diameter_m": 2.4, "obscuration": 0.33, "wave": "nm", "telescope": "HST"}
+
+PUPILS = {
+    "NIRCAM": dict(_JWST_PUPIL, pixel_scale="nircam"),
+    "MIRI": dict(_JWST_PUPIL, pixel_scale=0.11),
+    "NIRISS": dict(_JWST_PUPIL, pixel_scale=0.065),
+    "FGS": dict(_JWST_PUPIL, pixel_scale=0.069, wavelength_um=0.65),
+    "ACS_WFC": dict(_HST_PUPIL, pixel_scale=0.05),
+    "ACS_HRC": dict(_HST_PUPIL, pixel_scale=0.025),
+    "WFC3_UVIS": dict(_HST_PUPIL, pixel_scale=0.04),
+    "WFC3_IR": dict(_HST_PUPIL, pixel_scale=0.13),
+}
+
+
+def _jinc(x):
+    x = np.asarray(x, dtype=np.float64)
+    out = np.ones(x.shape, dtype=np.float64)
+    mask = np.abs(x) >= 1e-8
+    out[mask] = 2.0 * j1(x[mask]) / x[mask]
+    return out
+
+
+def _annulus_intensity(rho, obscuration):
+    """Intensity of a circular pupil with linear obscuration. The centre is 1."""
+    eps = float(obscuration)
+    amp = (_jinc(rho) - eps * eps * _jinc(eps * rho)) / (1.0 - eps * eps)
+    return amp * amp
+
+
+def filter_wavelength_um(filter_name, scheme):
+    """Approximate wavelength in microns from a filter name such as F814W."""
+    match = _FILTER_RE.match(str(filter_name).strip().upper())
+    if match is None:
+        raise ValueError("wavelength was not set")
+    number = int(match.group(1))
+    kind = "cutoff" if (match.group(2) or "").upper() == "LP" else "pivot"
+    if scheme == "um100":
+        return number / 100.0, kind
+    if scheme == "nm":
+        return number / 1000.0, kind
+    raise ValueError("wavelength was not set")
+
+
+def resolve_diffraction(instrument=None, filter_name=None, diameter_m=None,
+                        obscuration=None, wavelength_um=None, pixel_scale=None):
+    """Fill missing pupil numbers from a known instrument. Explicit numbers win."""
+    inst = None
+    if instrument and str(instrument).lower() not in ("auto", "unknown", ""):
+        inst = normalize_instrument_name(instrument)
+    spec = PUPILS.get(inst, {}) if inst else {}
+    if diameter_m is None:
+        diameter_m = spec.get("diameter_m")
+    if obscuration is None:
+        obscuration = spec.get("obscuration", 0.0)
+    wavekind = "given"
+    filt = None if filter_name is None else str(filter_name).strip()
+    filt_missing = filt is None or filt.lower() in ("auto", "unknown", "")
+    if wavelength_um is None:
+        if "wavelength_um" in spec and (filt_missing or filt.upper() == "FGS"):
+            wavelength_um = spec["wavelength_um"]
+            wavekind = "pivot"
+        elif not filt_missing and spec.get("wave"):
+            wavelength_um, wavekind = filter_wavelength_um(filt, spec["wave"])
+        else:
+            raise ValueError("wavelength was not set")
+    if pixel_scale is None:
+        scale = spec.get("pixel_scale")
+        if scale == "nircam":
+            pixel_scale = 0.031 if float(wavelength_um) < 2.4 else 0.063
+        else:
+            pixel_scale = scale
+    if diameter_m is None:
+        raise ValueError("diameter was not set")
+    if pixel_scale is None:
+        raise ValueError("pixel scale was not set")
+    diameter_m = float(diameter_m)
+    obscuration = float(obscuration)
+    wavelength_um = float(wavelength_um)
+    pixel_scale = float(pixel_scale)
+    if diameter_m <= 0 or wavelength_um <= 0 or pixel_scale <= 0:
+        raise ValueError("diameter, wavelength, and pixel scale must be positive")
+    if not (0.0 <= obscuration < 1.0):
+        raise ValueError("obscuration must be in [0, 1)")
+    return {
+        "instrument": inst,
+        "filter": None if filt_missing else filt.upper(),
+        "telescope": spec.get("telescope"),
+        "diameter_m": diameter_m,
+        "obscuration": obscuration,
+        "wavelength_um": wavelength_um,
+        "wavekind": wavekind,
+        "pixel_scale": pixel_scale,
+    }
+
+
+def generate_diffraction(psf_size=201, oversample=1, jitter_sigma=0.0,
+                         diameter_m=None, obscuration=None, wavelength_um=None,
+                         pixel_scale=None, instrument=None, filter_name=None,
+                         output=None):
+    """Circular-aperture PSF. The result is summed to 1 and labeled ogfmeas.
+
+    ``jitter_sigma`` is a Gaussian sigma in arcsec. ``oversample`` draws on
+    a finer grid and bins back to ``psf_size``. A missing diameter,
+    wavelength, or pixel scale raises before any file is written.
+    """
+    spec = resolve_diffraction(
+        instrument, filter_name, diameter_m, obscuration, wavelength_um, pixel_scale)
+    psf_size = int(psf_size)
+    oversample = int(oversample)
+    if psf_size < 3 or oversample < 1:
+        raise ValueError("psf_size must be at least 3 and oversample at least 1")
+    fine_n = psf_size * oversample
+    fine_scale = spec["pixel_scale"] / oversample
+    axis = np.arange(fine_n, dtype=np.float64) - (fine_n - 1) / 2.0
+    yy, xx = np.meshgrid(axis, axis, indexing="ij")
+    theta_rad = np.hypot(xx, yy) * fine_scale / _ARCSEC_PER_RAD
+    rho = np.pi * spec["diameter_m"] / (spec["wavelength_um"] * 1e-6) * theta_rad
+    image = _annulus_intensity(rho, spec["obscuration"])
+    if float(jitter_sigma) > 0:
+        sigma = float(jitter_sigma) / fine_scale
+        if sigma >= 0.05:
+            image = gaussian_filter(image, sigma=sigma, mode="constant", cval=0.0)
+    if oversample > 1:
+        image = image.reshape(psf_size, oversample, psf_size, oversample).sum(axis=(1, 3))
+    total = float(image.sum())
+    if total <= 0 or not np.isfinite(total):
+        raise RuntimeError("diffraction PSF is zero")
+    image = image / total
+    if output:
+        from astropy.io import fits
+        hdu = fits.PrimaryHDU(image.astype(np.float32))
+        hdu.header["PSFMETH"] = "ogfmeas"
+        hdu.header["PUPIL"] = "circular"
+        if spec["telescope"]:
+            hdu.header["TELESCOP"] = spec["telescope"]
+        if spec["instrument"]:
+            hdu.header["INSTRUME"] = spec["instrument"]
+        if spec["filter"]:
+            hdu.header["FILTER"] = spec["filter"]
+        hdu.header["DIAM_M"] = spec["diameter_m"]
+        hdu.header["OBSCFRAC"] = spec["obscuration"]
+        hdu.header["WAVE_UM"] = spec["wavelength_um"]
+        hdu.header["WAVEKIND"] = spec["wavekind"]
+        hdu.header["PIXSCALE"] = spec["pixel_scale"]
+        hdu.header["JITTER"] = float(jitter_sigma)
+        hdu.header["PSFSIZE"] = psf_size
+        hdu.header["OVERSAMP"] = oversample
+        hdu.writeto(output, overwrite=True)
+        print(f"Saved diffraction PSF: {output}", file=sys.stderr)
+    return image
 
 
 # ---- Instrument name normalization ----

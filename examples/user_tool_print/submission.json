@@ -1,0 +1,30 @@
+{
+  "schema": "astrafex-user-tool/1",
+  "id": "user_print_smoke",
+  "version": "0.1.0",
+  "target": "both",
+  "entrypoint": "adapter.py:run",
+  "purpose": "Test user-script registration and automatic execution connection using one print statement.",
+  "provenance": "Original single print statement and first-party AI wrapper for this acceptance test.",
+  "inputs": {},
+  "parameters": {},
+  "outputs": {},
+  "dependencies": [],
+  "permissions": {
+    "network": false,
+    "subprocess": false,
+    "read_outside_inputs": false,
+    "write_outside_output": false
+  },
+  "limits": {
+    "seconds": 10,
+    "memory_mib": 128,
+    "output_mib": 1
+  },
+  "test_plan": "TEST_PLAN.md",
+  "files": {
+    "original.py": "0c1d0a7119588c02d25e769ad7a613a798f3b30154cf9a2708a78e4ddcf751ac",
+    "adapter.py": "e1c2b75158c9b627e627c0bb7c9d15d16b168aa454a9a35add605664f3f89a65",
+    "TEST_PLAN.md": "2f480762022998a6a1202bef3b82cc395532bd84ea0b822631798f3a1519d854"
+  }
+}

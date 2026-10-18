@@ -1,0 +1,440 @@
+{
+  "schema": 1,
+  "version": "0.27.7",
+  "python": "3.12.7",
+  "numpy": "2.0.2",
+  "scipy": "1.14.1",
+  "openblas": "0.3.26",
+  "files": [
+    {
+      "name": "pyodide.mjs",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.mjs",
+      "sha256": "04c052c815abb0bf2981fa38c2dfa58e3120ee5288c956df2b2a15e301782c5f",
+      "bytes": 13931
+    },
+    {
+      "name": "pyodide.asm.js",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.asm.js",
+      "sha256": "6b4c90de5b7172873f04f21884d0e9d2274e305fe32116558fe3e4fbe3618d51",
+      "bytes": 1255688
+    },
+    {
+      "name": "pyodide.asm.wasm",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.asm.wasm",
+      "sha256": "a50dd1843f805a0b7c45b61037ee0d7b26dfe85efe0e18ef95a34ad24e401f5f",
+      "bytes": 10105545
+    },
+    {
+      "name": "python_stdlib.zip",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/python_stdlib.zip",
+      "sha256": "16611534726e5d8ac2bd8f926410b2dcb8d6f49aa24913463533b457a2115c16",
+      "bytes": 2360737
+    },
+    {
+      "name": "pyodide-lock.json",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide-lock.json",
+      "sha256": "9c45b916001a750f4102fc287494f3eab215909c7535c626a20db80fd6333e2c",
+      "bytes": 112205
+    },
+    {
+      "name": "numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "sha256": "ebb61241d962b98b21597d7ce43b67668a6d5bab3acec4fbe958657320d7cd08",
+      "bytes": 3061133
+    },
+    {
+      "name": "numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl.numpy__core_include_numpy_random_LICENSE.txt",
+      "url": "archive:numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl/numpy/_core/include/numpy/random/LICENSE.txt",
+      "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec",
+      "bytes": 1018
+    },
+    {
+      "name": "numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl.numpy_ma_LICENSE",
+      "url": "archive:numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl/numpy/ma/LICENSE",
+      "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6",
+      "bytes": 1593
+    },
+    {
+      "name": "numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl.numpy-2.0.2.dist-info_LICENSE.txt",
+      "url": "archive:numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl/numpy-2.0.2.dist-info/LICENSE.txt",
+      "sha256": "01fb016849aa427edb1bbbbd55f91c26ca6cadb32a5b20e7f000655dd05b0760",
+      "bytes": 1543
+    },
+    {
+      "name": "scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl",
+      "sha256": "997c50a61564a8ce6a56ea98a42e7f4427e5eb98475a73233e83df6a184f415c",
+      "bytes": 13477451
+    },
+    {
+      "name": "scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl.scipy__lib__uarray_LICENSE",
+      "url": "archive:scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl/scipy/_lib/_uarray/LICENSE",
+      "sha256": "c80c39b5fce06ba4897e14e0b0a88b54458334d951eb1361402ffad2cfb863b4",
+      "bytes": 1514
+    },
+    {
+      "name": "scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl.scipy_sparse_linalg__eigen_arpack_COPYING",
+      "url": "archive:scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl/scipy/sparse/linalg/_eigen/arpack/COPYING",
+      "sha256": "0926566f9f406178d1214f8cc796e166b1213dd7c05e0c5b461a8b8ac9e50bbe",
+      "bytes": 1892
+    },
+    {
+      "name": "scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl.scipy_spatial_qhull_src_COPYING.txt",
+      "url": "archive:scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl/scipy/spatial/qhull_src/COPYING.txt",
+      "sha256": "34db0c0c4f931861d720555c9cd7a2e228d1290ba29af0f2ee80c41bb2038afb",
+      "bytes": 1635
+    },
+    {
+      "name": "scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl.scipy-1.14.1.dist-info_LICENSE.txt",
+      "url": "archive:scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl/scipy-1.14.1.dist-info/LICENSE.txt",
+      "sha256": "c29fb8e5936f33237a8b15256b4c6e93037f05bbf58c3d7b5755aede4c200173",
+      "bytes": 1536
+    },
+    {
+      "name": "openblas-0.3.26.zip",
+      "url": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/openblas-0.3.26.zip",
+      "sha256": "787ea9a8a5cd160204388d03324b3b7ce5c9aea14b5680cec987f837e76c5198",
+      "bytes": 6117592
+    },
+    {
+      "name": "PYODIDE_LICENSE",
+      "url": "https://raw.githubusercontent.com/pyodide/pyodide/0.27.7/LICENSE",
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+      "bytes": 16725
+    },
+    {
+      "name": "NOTICE_numpy_random_LICENSE.md",
+      "url": "archive:numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl/numpy/random/LICENSE.md",
+      "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f",
+      "bytes": 3511
+    },
+    {
+      "name": "NOTICE_scipy_fft__pocketfft_LICENSE.md",
+      "url": "archive:scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl/scipy/fft/_pocketfft/LICENSE.md",
+      "sha256": "c254b2b5fd30ae3c89d36ba061730563b9760fca04f1b746a1b2c3157da2c789",
+      "bytes": 1498
+    },
+    {
+      "name": "CPYTHON_LICENSE",
+      "url": "https://raw.githubusercontent.com/python/cpython/v3.12.7/LICENSE",
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "bytes": 13936
+    },
+    {
+      "name": "OPENBLAS_LICENSE",
+      "url": "https://raw.githubusercontent.com/OpenMathLib/OpenBLAS/v0.3.26/LICENSE",
+      "sha256": "190b5a9c8d9723fe958ad33916bd7346d96fab3c5ea90832bb02d854f620fcff",
+      "bytes": 1548
+    },
+    {
+      "name": "EMSCRIPTEN_LICENSE",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.58/LICENSE",
+      "sha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+      "bytes": 5093
+    },
+    {
+      "name": "MUSL_COPYRIGHT",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.58/system/lib/libc/musl/COPYRIGHT",
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+      "bytes": 6204
+    },
+    {
+      "name": "LIBCXX_LICENSE",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.58/system/lib/libcxx/LICENSE.TXT",
+      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+      "bytes": 16703
+    },
+    {
+      "name": "LIBCXXABI_LICENSE",
+      "url": "https://raw.githubusercontent.com/emscripten-core/emscripten/3.1.58/system/lib/libcxxabi/LICENSE.TXT",
+      "sha256": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c",
+      "bytes": 16706
+    },
+    {
+      "name": "LIBFFI_LICENSE",
+      "url": "https://raw.githubusercontent.com/libffi/libffi/f08493d249d2067c8b3207ba46693dd858f95db3/LICENSE",
+      "sha256": "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388",
+      "bytes": 1132
+    },
+    {
+      "name": "HIWIRE_LICENSE",
+      "url": "https://raw.githubusercontent.com/hoodmane/hiwire/6a1e67280a15d929ebeceee54a6358c9c8d5f697/LICENSE",
+      "sha256": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
+      "bytes": 16725
+    },
+    {
+      "name": "ZLIB_LICENSE",
+      "url": "https://raw.githubusercontent.com/madler/zlib/v1.2.13/LICENSE",
+      "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243",
+      "bytes": 1002
+    },
+    {
+      "name": "BZIP2_LICENSE",
+      "url": "https://raw.githubusercontent.com/libarchive/bzip2/bzip2-1.0.8/LICENSE",
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+      "bytes": 1896
+    },
+    {
+      "name": "EXPAT_LICENSE",
+      "url": "https://raw.githubusercontent.com/python/cpython/v3.12.7/Modules/expat/COPYING",
+      "sha256": "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534",
+      "bytes": 1144
+    },
+    {
+      "name": "LAPACK_LICENSE",
+      "url": "https://raw.githubusercontent.com/OpenMathLib/OpenBLAS/v0.3.26/lapack-netlib/LICENSE",
+      "sha256": "978539245c405775bf347b1256c36df4daf8b69a64b099e94b1d53742201621e",
+      "bytes": 2266
+    },
+    {
+      "name": "CPYTHON_THIRD_PARTY_NOTICES",
+      "url": "https://raw.githubusercontent.com/python/cpython/v3.12.7/Doc/license.rst",
+      "sha256": "bad93f2d7f71f6729b12cf0080951ace371acaf5e3fd6835118d53cd4bfd9120",
+      "bytes": 53905
+    },
+    {
+      "name": "F2C_NOTICE",
+      "url": "https://raw.githubusercontent.com/hoodmane/f2c/caa9abcaddd19154a5e6d77faa78b6289547bef5/LICENSE.txt",
+      "sha256": "e973c7027fccb8d5a5dde78b26d3529cedd74339b1e7f1e7fa8e9dd4f1b6cdc6",
+      "bytes": 2678
+    },
+    {
+      "name": "HACL_LICENSE",
+      "url": "https://raw.githubusercontent.com/python/cpython/v3.12.7/Modules/_hacl/Hacl_Hash_SHA2.c",
+      "extract": "first-comment",
+      "source_sha256": "30638efb75c8b185bb09c3df6977e3f3c5d21a1e696218cf7ade6bc4d5201b31",
+      "sha256": "912ad428ca5f4b181100446204776c71c53552a265e13413d769ef6671204993",
+      "bytes": 1206
+    },
+    {
+      "name": "SCIPY_BUNDLED_LICENSE_LIST",
+      "url": "https://raw.githubusercontent.com/scipy/scipy/v1.14.1/LICENSES_bundled.txt",
+      "sha256": "2ef7ab02d0a5f17837658d11761ef9892c38276714bed3338ed145bd2cf9865b",
+      "bytes": 12426
+    },
+    {
+      "name": "BOOST_LICENSE",
+      "url": "https://raw.githubusercontent.com/boostorg/boost/boost-1.85.0/LICENSE_1_0.txt",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__build_utils_tempita_LICENSE.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_build_utils/tempita/LICENSE.txt",
+      "sha256": "743b0f4a0087fe3607167113fffab6f2ca069c8da321763697ab5d0d8411634a",
+      "bytes": 1072
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib__uarray_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/_uarray/LICENSE",
+      "sha256": "c80c39b5fce06ba4897e14e0b0a88b54458334d951eb1361402ffad2cfb863b4",
+      "bytes": 1514
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_array_api_compat_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/array_api_compat/LICENSE",
+      "sha256": "4ffd978e3fa18d058d98c66771cfea7ed634aaf7023cf9612b8b55eee9a8f0fe",
+      "bytes": 1097
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_boost_math_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/boost_math/LICENSE",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_cobyqa_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/cobyqa/LICENSE",
+      "sha256": "24c0f8f2ba06c8200c8748cbb49c6c4402ff0d7da6c1e69da3f88c3acb0bf3bd",
+      "bytes": 1525
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_highs_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/highs/LICENSE",
+      "sha256": "6dab9737857b3ed0188a37e1cf0e52cc4227a2525adca87d3e9ae3e389e02d2c",
+      "bytes": 1164
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_highs_extern_filereaderlp_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/highs/extern/filereaderlp/LICENSE",
+      "sha256": "4374bb8064e5302f5ac6b82fd3e153a36670f04d0a6ee1bc55b3dc3faee923cc",
+      "bytes": 1061
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_highs_extern_pdqsort_license.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/highs/extern/pdqsort/license.txt",
+      "sha256": "323fc18e35fcf058d69d684022ef844f206cb8fefb2bac1298fa1767e0b9ae38",
+      "bytes": 874
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_pocketfft_LICENSE.md",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/pocketfft/LICENSE.md",
+      "sha256": "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056",
+      "bytes": 1498
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy__lib_unuran_license.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/_lib/unuran/license.txt",
+      "sha256": "8d62d5c8e1752ee5c3d3a0f8fd0dd0b45865c243fa282cf5e63f00288a01c5ee",
+      "bytes": 14404
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_fft__pocketfft_LICENSE.md",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/fft/_pocketfft/LICENSE.md",
+      "sha256": "c254b2b5fd30ae3c89d36ba061730563b9760fca04f1b746a1b2c3157da2c789",
+      "bytes": 1498
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_io__fast_matrix_market_LICENSE.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/io/_fast_matrix_market/LICENSE.txt",
+      "sha256": "4421977664ada9a02087ab1b031b50335f02b500e2cb58a1757074f31b4a89f5",
+      "bytes": 1275
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_io__fast_matrix_market_fast_matrix_market_dependencies_fast_float_LICENSE-MIT",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/io/_fast_matrix_market/fast_matrix_market/dependencies/fast_float/LICENSE-MIT",
+      "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+      "bytes": 1079
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_io__fast_matrix_market_fast_matrix_market_dependencies_ryu_LICENSE-Boost",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/io/_fast_matrix_market/fast_matrix_market/dependencies/ryu/LICENSE-Boost",
+      "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+      "bytes": 1338
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_ndimage_LICENSE.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/ndimage/LICENSE.txt",
+      "sha256": "606209a000716c5f66e33e180ce08434b96ed17db4975ab9723c6b5fbcc89609",
+      "bytes": 1389
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_optimize__direct_COPYING",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/optimize/_direct/COPYING",
+      "sha256": "a7669da81aac1b0539f161cf93d6a94956d24ff476537e0b0579925997eec3f0",
+      "bytes": 1543
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_optimize_tnc_LICENSE",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/optimize/tnc/LICENSE",
+      "sha256": "3df9207af2fdb861af0ae3b22026f163b9bcfab4e525dc4943afe2ffa3f77624",
+      "bytes": 1085
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_sparse_linalg__dsolve_SuperLU_License.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/sparse/linalg/_dsolve/SuperLU/License.txt",
+      "sha256": "f0cedf52503b2d42b83411a0a16e6fefac346dfad8fddc66f50050150123470c",
+      "bytes": 1681
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_sparse_linalg__eigen_arpack_ARPACK_COPYING",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/sparse/linalg/_eigen/arpack/ARPACK/COPYING",
+      "sha256": "0926566f9f406178d1214f8cc796e166b1213dd7c05e0c5b461a8b8ac9e50bbe",
+      "bytes": 1892
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_sparse_linalg__propack_PROPACK_license.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/sparse/linalg/_propack/PROPACK/license.txt",
+      "sha256": "06e688f0ce45483c0671f8d887588e5452a993aecd557d2aee3b3b98e399ba67",
+      "bytes": 1993
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_spatial_qhull_src_COPYING.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/spatial/qhull_src/COPYING.txt",
+      "sha256": "34db0c0c4f931861d720555c9cd7a2e228d1290ba29af0f2ee80c41bb2038afb",
+      "bytes": 1635
+    },
+    {
+      "name": "NOTICE_SOURCE_scipy-1.14.1_scipy_stats_biasedurn_license.txt",
+      "url": "archive-tar:scipy/scipy-1.14.1/scipy/stats/biasedurn/license.txt",
+      "sha256": "c2bf3b1e5a5cde539b9f8e38b5c870f49db0b5f01c7f9cdd1d1291bafc81d22f",
+      "bytes": 1217
+    }
+  ],
+  "components": [
+    {
+      "name": "Pyodide",
+      "version": "0.27.7",
+      "license": "MPL-2.0",
+      "source": "https://github.com/pyodide/pyodide/tree/0.27.7"
+    },
+    {
+      "name": "CPython",
+      "version": "3.12.7",
+      "license": "PSF-2.0",
+      "source": "https://github.com/python/cpython/tree/v3.12.7"
+    },
+    {
+      "name": "NumPy",
+      "version": "2.0.2",
+      "license": "BSD-3-Clause AND MIT AND BSD-2-Clause AND Zlib",
+      "source": "https://github.com/numpy/numpy/tree/v2.0.2"
+    },
+    {
+      "name": "SciPy",
+      "version": "1.14.1",
+      "license": "BSD-3-Clause AND MIT AND BSD-2-Clause",
+      "source": "https://github.com/scipy/scipy/tree/v1.14.1"
+    },
+    {
+      "name": "OpenBLAS/LAPACK/f2c",
+      "version": "0.3.26",
+      "license": "BSD-3-Clause AND HPND",
+      "source": "https://github.com/pyodide/pyodide/blob/0.27.7/packages/openblas/meta.yaml"
+    },
+    {
+      "name": "Emscripten/musl",
+      "version": "3.1.58",
+      "license": "MIT AND BSD-2-Clause AND BSD-3-Clause",
+      "source": "https://github.com/emscripten-core/emscripten/tree/3.1.58"
+    },
+    {
+      "name": "libc++/libc++abi/hiwire",
+      "version": "emscripten-3.1.58",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "source": "https://github.com/pyodide/pyodide/blob/0.27.7/cpython/Makefile"
+    },
+    {
+      "name": "libffi",
+      "version": "f08493d",
+      "license": "MIT",
+      "source": "https://github.com/libffi/libffi/tree/f08493d249d2067c8b3207ba46693dd858f95db3"
+    },
+    {
+      "name": "zlib",
+      "version": "1.2.13",
+      "license": "Zlib",
+      "source": "https://github.com/madler/zlib/tree/v1.2.13"
+    },
+    {
+      "name": "bzip2",
+      "version": "1.0.8",
+      "license": "bzip2-1.0.6",
+      "source": "https://github.com/libarchive/bzip2/tree/bzip2-1.0.8"
+    },
+    {
+      "name": "CPython bundled Expat/mpdecimal/HACL",
+      "version": "3.12.7",
+      "license": "MIT AND BSD-2-Clause",
+      "source": "https://github.com/python/cpython/tree/v3.12.7/Modules"
+    },
+    {
+      "name": "Boost headers in SciPy",
+      "version": "Pyodide 0.27.7 build",
+      "license": "BSL-1.0",
+      "source": "https://github.com/pyodide/pyodide/blob/0.27.7/packages/boost-cpp/meta.yaml"
+    },
+    {
+      "name": "Qhull in SciPy",
+      "version": "SciPy 1.14.1 bundle",
+      "license": "Qhull",
+      "source": "https://github.com/scipy/scipy/blob/v1.14.1/scipy/spatial/qhull_src/COPYING.txt"
+    }
+  ],
+  "notice_sources": {
+    "scipy": {
+      "url": "https://files.pythonhosted.org/packages/62/11/4d44a1f274e002784e4dbdb81e0ea96d2de2d1045b2132d5af62cc31fd28/scipy-1.14.1.tar.gz",
+      "sha256": "5a275584e726026a5699459aa72f828a610821006228e841b94275c4a7c08417"
+    }
+  }
+}

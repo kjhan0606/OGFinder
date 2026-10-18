@@ -268,6 +268,12 @@ proc OGFUIBuildMainMenus {} {
 	}
     }
     set tm $mb.tools.m
+    $tm add command -label "User tool: AI submission kit..." -command OGFUIUserToolKit
+    $tm add command -label "User tool: local Import review..." -command OGFUIUserToolReview
+    $tm add command -label "User tool: register native Python..." -command OGFUIUserToolRegister
+    menu $tm.personal -tearoff 0 -postcommand [list OGFUIUserToolMenu $tm.personal]
+    $tm add cascade -label "User tool: add to selected pipeline" -menu $tm.personal
+    $tm add separator
     $tm add checkbutton -label "Detach Catalog Panel" -variable [::ogf::cat::bind_var detached] -command CatalogPanelToggleDetach
     $tm add separator
     $tm add checkbutton -label "Tile all frames" -variable ogfui(tile) -command OGFUITileToggle
@@ -415,6 +421,31 @@ proc OGFUIShowLog {} {
     OGFTextWindow "OGFinder plugin log" [join $::ogf::logbuf \n]
 }
 
+# Trusted static validator only; never source/import a submitted script.
+proc OGFUIUserToolKit {} {
+    set dest [tk_getSaveFile -title "Save AI submission kit (new file)" -defaultextension .zip -initialfile user-tool-ai-kit.zip]
+    if {$dest eq {}} {return}
+    if {[catch {exec [OGFPython] [file join [OGFSessRoot] tools user_tool_import.py] --kit $dest} result]} {
+        OGFTextWindow "AI kit: could not save" $result
+    } else {OGFTextWindow "AI submission kit" "Saved: $result\nRead examples/user_tool_submission/AI_INSTRUCTIONS.md inside the ZIP."}
+}
+
+proc OGFUIUserToolReview {} {
+    set folder [tk_chooseDirectory -title "Select folder containing submission.json"]
+    if {$folder eq {}} {return}
+    if {[catch {exec [OGFPython] [file join [OGFSessRoot] tools user_tool_import.py] --review $folder --report-only} result]} {
+        OGFTextWindow "Import review failed" $result
+        return
+    }
+    OGFTextWindow "Local Import preflight: execution approval is separate" $result
+    set dest [tk_getSaveFile -title "Save preflight report" -defaultextension .json -initialfile user-tool-review.json]
+    if {$dest ne {}} {
+        if {[catch {set f [open $dest {WRONLY CREAT EXCL}]; fconfigure $f -encoding utf-8; puts $f $result; close $f} error]} {
+            OGFTextWindow "Report: could not save" $error
+        }
+    }
+}
+
 proc OGFUIPluginManager {} {
     global ogfui
     set w .ogfplugins
@@ -461,4 +492,26 @@ proc OGFCoreStart {} {
 # called at the end of CreateCatalogPanel: plugin init hooks, parameters
 proc OGFCoreReady {} {
     ::ogf::reg::init_all
+}
+
+proc OGFUIUserToolReload {} {
+    set data [exec [OGFPython] [file join [OGFSessRoot] tools user_tool_import.py] --list]
+    foreach m [::ogf::json::parse $data] {::ogf::reg::register $m}
+}
+proc OGFUIUserToolRegister {} {
+    set folder [tk_chooseDirectory -title "Register personal native Python (local user privileges)"]
+    if {$folder eq {}} return
+    if {[catch {
+        set result [exec [OGFPython] [file join [OGFSessRoot] tools user_tool_import.py] --register $folder]
+        OGFUIUserToolReload
+    } err]} {OGFTextWindow "Registration failed" $err; return}
+    OGFTextWindow "Personal tool registered" "$result\nTools > User tool: add to selected pipeline. Configure inputs-json / params-json before running."
+}
+proc OGFUIUserToolMenu {m} {
+    $m delete 0 end
+    catch {OGFUIUserToolReload}
+    foreach pid [::ogf::reg::ids] {
+        if {![dict exists [::ogf::reg::get $pid] personal_digest]} continue
+        $m add command -label $pid -command [list ::ogf::workflow::attach_personal $pid]
+    }
 }

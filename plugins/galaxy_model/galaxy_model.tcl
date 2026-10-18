@@ -1,6 +1,36 @@
 # galaxy_model/galaxy_model.tcl -- moved from ds9/library/layout.tcl (procs unchanged; see docs/architecture.md section 6).
 # Loaded through the "tcl" field of plugins/galaxy_model/plugin.json.
 
+proc CatalogPanelGalaxyScript {} {
+    set script ""
+    if {![catch {set d [::ogf::step::plugin_dir galaxy_model]}]} {
+	set script [file join $d galaxy_fit.py]
+    }
+    if {![file exists $script]} {
+	set bindir [file dirname [info nameofexecutable]]
+	set script [file join [file dirname $bindir] plugins galaxy_model galaxy_fit.py]
+    }
+    return $script
+}
+
+proc CatalogPanelGalaxyGetFITS {} {
+    global current
+
+    set fn {}
+    if {$current(frame) != {}} {
+	catch {set fn [$current(frame) get fits file name full]}
+    }
+    set fn [string trim $fn "{}"]
+    regsub {\[.*\]$} $fn {} fn
+    return $fn
+}
+
+proc CatalogPanelGalaxyResultFile {} {
+    set d [file join [OGFSessWorkDir] galaxy_model]
+    file mkdir $d
+    return [file join $d galaxy_fit.tsv]
+}
+
 proc CatalogPanelGalaxyFit {model} {
     global current
 
@@ -10,8 +40,86 @@ proc CatalogPanelGalaxyFit {model} {
 	::ogf::cat::set status "No sources — run Extract first"
 	return
     }
+    if {$model ne "elliptical" && $model ne "spiral"} {
+	::ogf::cat::set status "Galaxy fit: model must be elliptical or spiral"
+	return
+    }
 
-    ::ogf::cat::set status "Galaxy $model fitting — not yet implemented"
+    set fn [CatalogPanelGalaxyGetFITS]
+    if {$fn eq {} || ![file exists $fn]} {
+	::ogf::cat::set status "No FITS image loaded"
+	return
+    }
+    set script [CatalogPanelGalaxyScript]
+    if {![file exists $script]} {
+	::ogf::cat::set status "ERROR: galaxy_fit.py not found"
+	return
+    }
+
+    set catfile [file join [file normalize ~] .ds9 galaxy_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd [::ogf::cat::tsv]
+	close $fd
+    } err]} {
+	::ogf::cat::set status "Galaxy fit error: cannot write catalog: $err"
+	return
+    }
+
+    set zp 25.0
+    if {![catch {set z [::ogf::params::get extract mag-zeropoint]}] && $z ne {}} {
+	set zp $z
+    }
+    set outfile [CatalogPanelGalaxyResultFile]
+    set paramargs [list --catalog $catfile --model $model --output $outfile --mag-zeropoint $zp --max-objects 100]
+    set psffile ""
+    catch {set psffile [::ogf::cat::get psf,file {}]}
+    if {$psffile ne {} && [file exists $psffile]} {
+	lappend paramargs --psf $psffile
+    }
+
+    if {$model eq "elliptical"} {
+	set label "de Vaucouleurs n=4"
+    } else {
+	set label "exponential disc n=1"
+    }
+    ::ogf::cat::set status "Galaxy $model fit ($label) ..."
+    update idletasks
+
+    set errfile [file join [file normalize ~] .ds9 galaxy_fit_stderr.txt]
+    OGFSessLog galaxy.fit auto [list [OGFPython] $script $fn {*}$paramargs] -title "Galaxy $model fit" -post [dict create kind galaxyfit]
+    if {[catch {set data [exec [OGFPython] $script $fn {*}$paramargs 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set stderr_lines [split [string trim $stderr_msg] \n]
+	    set last_err [lindex $stderr_lines end]
+	    ::ogf::cat::set status "Galaxy fit error: $last_err"
+	} else {
+	    ::ogf::cat::set status "Galaxy fit error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    set nfit ""
+    foreach line [split $data \n] {
+	if {[string match "#GALAXY_FIT*" $line]} {
+	    foreach field [split $line "\t"] {
+		if {[string match "N_FIT=*" $field]} {
+		    set nfit [string range $field 6 end]
+		}
+	    }
+	}
+    }
+    ::ogf::cat::set status "Galaxy $model fit ($label): $nfit source(s). Extract Parameters writes the catalog columns."
 }
 
 proc CatalogPanelGalaxyParams {} {
@@ -24,7 +132,51 @@ proc CatalogPanelGalaxyParams {} {
 	return
     }
 
-    ::ogf::cat::set status "Galaxy parameter extraction — not yet implemented"
+    set results [CatalogPanelGalaxyResultFile]
+    if {![file exists $results]} {
+	::ogf::cat::set status "Galaxy parameters: run a fit first"
+	return
+    }
+    set script [CatalogPanelGalaxyScript]
+    if {![file exists $script]} {
+	::ogf::cat::set status "ERROR: galaxy_fit.py not found"
+	return
+    }
+
+    set catfile [file join [file normalize ~] .ds9 galaxy_catalog.tsv]
+    catch {file mkdir [file dirname $catfile]}
+    if {[catch {
+	set fd [open $catfile w]
+	puts $fd [::ogf::cat::tsv]
+	close $fd
+    } err]} {
+	::ogf::cat::set status "Galaxy parameters error: cannot write catalog: $err"
+	return
+    }
+
+    set errfile [file join [file normalize ~] .ds9 galaxy_fit_stderr.txt]
+    if {[catch {set data [exec [OGFPython] $script --apply-catalog $catfile --results $results 2>$errfile]} err]} {
+	set stderr_msg ""
+	catch {
+	    set fd [open $errfile r]
+	    set stderr_msg [read $fd]
+	    close $fd
+	}
+	catch {file delete $catfile}
+	if {$stderr_msg ne ""} {
+	    set last_err [lindex [split [string trim $stderr_msg] \n] end]
+	    ::ogf::cat::set status "Galaxy parameters error: $last_err"
+	} else {
+	    ::ogf::cat::set status "Galaxy parameters error: $err"
+	}
+	return
+    }
+    catch {file delete $errfile}
+    catch {file delete $catfile}
+
+    ::ogf::cat::set alldata $data
+    CatalogPanelLoadTSV $data "galaxy model"
+    ::ogf::cat::set status "Galaxy parameters: magnitude, radius, index, axis ratio, and position angle written"
 }
 
 proc CatalogPanelGalaxyMorphology {} {

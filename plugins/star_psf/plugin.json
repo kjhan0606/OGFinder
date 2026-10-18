@@ -168,6 +168,19 @@
    ]
   },
   {
+   "id": "diffraction",
+   "label": "Diffraction PSF...",
+   "proc": "CatalogPanelSimPSFDiffraction",
+   "legacy": [
+    "Star(PSF) > Build PSF > Diffraction PSF..."
+   ],
+   "session": "AUTO",
+   "stage": "classify",
+   "records": [
+    "psf.diffraction"
+   ]
+  },
+  {
    "id": "view_psf",
    "label": "View PSF",
    "proc": "CatalogPanelViewPSF",
@@ -353,9 +366,10 @@
    "type": "choice",
    "default": "auto",
    "group": "Simulation",
-   "help": "Telescope for the simulated PSF (auto = from the header).",
+   "help": "auto reads the header. ogfmeas draws the in-tree circular pupil. jwst and hst call an external program when it is present.",
    "choices": [
     "auto",
+    "ogfmeas",
     "jwst",
     "hst"
    ]

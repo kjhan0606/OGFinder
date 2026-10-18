@@ -811,6 +811,9 @@ proc ::ogf::reg::search_dirs {} {
     if {[info exists ::env(OGFINDER_PLUGIN_PATH)]} {
 	foreach d [split $::env(OGFINDER_PLUGIN_PATH) :] {if {$d ne {}} {lappend dirs $d}}
     }
+    if {[info exists ::env(ASTRAFEX_USER_TOOLS)]} {
+        lappend dirs $::env(ASTRAFEX_USER_TOOLS)
+    } else {lappend dirs [file join [file normalize ~] .local share astrafex user-tools]}
     return $dirs
 }
 
@@ -1064,6 +1067,11 @@ proc ::ogf::step::run {id sid {mode gui}} {
     if {$catname eq {} && [lsearch -glob [::ogf::json::get $step cli] *\{catalog\}*] >= 0} {set catname $sid}
     if {[catch {
 	set ctx [context $id $catname]
+        if {[dict exists $m personal_digest]} {
+            set personalWork [file join [dict get $ctx work] personal-$id-[clock clicks]]
+            file mkdir $personalWork
+            dict set ctx work $personalWork
+        }
 	set argv [build_argv $id $step $ctx]
     } err]} {
 	::ogf::status "[dict get $step label]: $err"

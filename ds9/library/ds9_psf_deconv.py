@@ -388,10 +388,14 @@ def mode_build_psf_extended(args):
 
 
 def mode_sim_psf(args):
-    """Generate simulation PSF (WebbPSF or TinyTim)."""
+    """Generate a simulation PSF.
+
+    ``ogfmeas`` draws the in-tree circular pupil. ``jwst`` and ``hst`` call
+    WebbPSF and TinyTim only when that program is present.
+    """
     from psf_deconv.psf.sim_psf import (
         detect_telescope_instrument, normalize_instrument_name,
-        generate_webbpsf, generate_tinytim,
+        generate_webbpsf, generate_tinytim, generate_diffraction,
         check_webbpsf_available, check_tinytim_available,
         WEBBPSF_INSTRUMENTS, TINYTIM_INSTRUMENTS)
 
@@ -457,9 +461,31 @@ def mode_sim_psf(args):
         print(f"#PSF_SIM\tTELESCOPE=HST\tINSTRUMENT={instrument}\t"
               f"FILTER={filter_name}\tSIZE={args.sim_psf_size}\tOUTPUT={output}")
 
+    elif telescope == 'ogfmeas':
+        if abs(args.sim_focus_offset) > 0:
+            print("ERROR: focus offset is not part of the circular diffraction model.",
+                  file=sys.stderr)
+            sys.exit(1)
+        try:
+            generate_diffraction(
+                psf_size=args.sim_psf_size,
+                oversample=args.sim_oversample,
+                jitter_sigma=args.sim_jitter_sigma,
+                diameter_m=args.sim_diameter,
+                obscuration=args.sim_obscuration,
+                wavelength_um=args.sim_wavelength,
+                pixel_scale=args.sim_pixel_scale,
+                instrument=None if instrument == 'auto' else instrument,
+                filter_name=None if filter_name == 'auto' else filter_name,
+                output=output)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"#PSF_SIM\tMODEL=ogfmeas\tSIZE={args.sim_psf_size}\tOUTPUT={output}")
+
     else:
         print(f"ERROR: Unsupported telescope: {telescope}. "
-              f"Use 'jwst' or 'hst'.", file=sys.stderr)
+              f"Use 'jwst', 'hst', or 'ogfmeas'.", file=sys.stderr)
         sys.exit(1)
 
 
@@ -470,7 +496,8 @@ def mode_check_sim(args):
     webbpsf_ok = 1 if check_webbpsf_available() else 0
     tinytim_ok = 1 if check_tinytim_available() else 0
 
-    print(f"#SIM_STATUS\tWEBBPSF={webbpsf_ok}\tTINYTIM={tinytim_ok}")
+    print(f"#SIM_STATUS\tWEBBPSF={webbpsf_ok}\tTINYTIM={tinytim_ok}\tDIFFRACT=1")
+    print("Diffraction: available", file=sys.stderr)
     if webbpsf_ok:
         print("WebbPSF: Available", file=sys.stderr)
     else:
@@ -520,7 +547,15 @@ def main():
 
     # Simulation PSF
     parser.add_argument('--sim-telescope', default='auto',
-                        help='Telescope: auto, jwst, hst')
+                        help='Telescope: auto, jwst, hst, ogfmeas')
+    parser.add_argument('--sim-diameter', type=float, default=None,
+                        help='Circular aperture diameter in meters')
+    parser.add_argument('--sim-obscuration', type=float, default=None,
+                        help='Linear obscuration, secondary over primary')
+    parser.add_argument('--sim-wavelength', type=float, default=None,
+                        help='Wavelength in microns')
+    parser.add_argument('--sim-pixel-scale', type=float, default=None,
+                        help='Pixel scale in arcsec')
     parser.add_argument('--sim-instrument', default='auto',
                         help='Instrument: auto, nircam, miri, acs_wfc, ...')
     parser.add_argument('--sim-filter', default='auto',

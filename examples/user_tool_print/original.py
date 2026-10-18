@@ -1,0 +1,1 @@
+print("ASTRAFEX_USER_PRINT_OK")
