@@ -630,9 +630,19 @@ raw 0을 masked로 보면 2,153,004 pair/609 lens, raw 1을 masked로 보면 76,
 
 HSC PDR3 안내에서 random points가 공개 데이터베이스에 있다고 확인했다
 ([HSC PDR3 available data](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/)).
-다음은 그 table schema와 800 렌즈 표본에 맞는 footprint/depth/PSF 조건을 확인하는
-count-only 질의 초안을 준비하는 단계다. random position row 조회·반출은 기존 다운로드
-승인 원칙에 따라 별도 승인을 얻기 전에는 실행하지 않는다.
+공식 random-points 설명에서 `pdr3_wide.random`, 점밀도 100/arcmin²,
+`adjust_density`, patch/tract interior 및 HSC-I mask/depth/PSF 열을 확인했다
+([HSC random-points 설명](https://hsc-release.mtk.nao.ac.jp/doc/index.php/random-points__pdr3/)).
+Astrafek 스크립트 `hsc_debug/prepare_wl_random_control_counts.py`는 승인된 800 렌즈
+preflight에서만 32개 count-only SQL batch를 생성한다. 렌즈별 3 Mpc 렌즈 지름보다
+떨어진 local annulus (2×각 aperture–30′)의 `adjust_density<0.01`, primary, patch/tract
+interior, i-band non-edge/non-bright-object-center random 수만 집계한다. 출력 열은
+`lens_id,n_random_candidates`뿐이며 좌표·shape/photo-z 행을 선택하지 않는다.
+계획은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`
+`wl_random_point_count_plan_2026-10-19_01/`에 있으며 `prepared_not_submitted`다.
+이는 후보 수 가용성 검사일 뿐 random center 선정이 아니다. 아직 CAS 질의를 제출하지
+않았다. 질의 결과가 승인되더라도 좌표 반출은 별도 승인을 받아야 하고, 이후 전체
+CAMIRA 중심 제외·완전 aperture footprint·HSC-I depth/PSF·중복/공간 공분산을 검증한다.
 
 ### 2026-10-19 반경별 ICL–위성 공간 블록 불확실도
 

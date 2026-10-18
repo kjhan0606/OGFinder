@@ -458,3 +458,25 @@ interpretation are recorded in
 [`wl_bmode_polarity_sensitivity_2026-10-19.md`](wl_bmode_polarity_sensitivity_2026-10-19.md).
 The two scenarios are sensitivity bounds only; neither is a decoded catalog
 convention or a science measurement.
+
+### Random-control availability query (prepared, not submitted)
+
+HSC documents `pdr3_wide.random` as the public random-point table, with a
+nominal density of 100 points/arcmin², an `adjust_density` thinning column,
+non-overlap flags, and local i-band mask/coverage fields. The Astrafek planner
+[`prepare_wl_random_control_counts.py`](prepare_wl_random_control_counts.py)
+uses only the verified 800-lens preflight and emits 32 SQL batches. Each batch
+returns one `lens_id` and one integer candidate count per lens. The query
+counts thinned (`adjust_density < 0.01`) random points in the local 30′ annulus
+outside twice the lens's angular 3 Mpc aperture, requiring primary, patch/tract
+interior, and unmasked i-band points. It returns no coordinates, shape rows, or
+photo-z values. HSC specifies the table, random density, and mask fields in
+its [random-points documentation](https://hsc-release.mtk.nao.ac.jp/doc/index.php/random-points__pdr3/).
+
+The plan is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_01/`.
+It is marked `prepared_not_submitted`; no CAS request was made. A sufficient
+candidate count would only establish availability. After any coordinate
+export, random centers still need all-CAMIRA exclusion, full-aperture footprint
+checks, HSC-I depth/PSF matching, uniqueness and overlap checks, and spatial
+covariance validation before they can serve as random lenses.
