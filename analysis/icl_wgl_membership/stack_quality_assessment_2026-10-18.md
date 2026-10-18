@@ -61,3 +61,5 @@ ICL 200–300 kpc와 위성 프로필 50–75 kpc의 공통 지원을 모두 가
 이 값은 해당 고정 마스크·프로필·선택 표본에서의 주입 단위 대비 응답이다. 위성 위치 주입이 ICL 빈에 크게 나타나는 것은 두 분석 반경이 영상에서 겹칠 수 있다는 기하학적 결과와 일치한다. 따라서 ICL과 위성 외곽광 측정은 독립으로 취급할 수 없고, 향후 공동 측정에서 이 응답 행렬을 보정 후보로 써야 한다. 현재 검사는 PSF convolution, sky 추정/제거 과정, source 재검출, Poisson 잡음, 마스크 변화를 포함하지 않으므로 물리적 ICL–위성 상관 검출이나 최종 보정값으로 사용할 수 없다. 이에 따라 `observational_validation_passed=false`, `flux_covariance_available=false`, `science_measurement=false`를 유지한다.
 
 배치 결과와 공간 감사는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/joint_icl_satellite_batch_2026-10-18_01/results/`에 있으며, 감사 JSON은 `spatial_audit.json`이다. 5,000회 공간 블록 부트스트랩은 35개 5도 하늘 블록(i 10, i2 26)에 기반한다. 이 부트스트랩 구간은 응답 전달의 공간 변동을 표현하며 천체물리 신호의 신뢰구간이 아니다.
+
+프레임별 2×2 교차 전달행렬의 조건수 감사에서는 63쌍 중 15쌍의 행렬식이 음수였고, i2 한 쌍의 조건수는 5,283이었다. 기존 연관 표본 74쌍 중 52쌍만 이 주입 표본과 겹친다. 따라서 이 고정 마스크 응답으로 ICL–위성 연관성을 역행렬 보정하지 않는다. 세부 수치와 입력 해시는 [joint_transfer_matrix_conditioning_2026-10-18.md](hsc_debug/joint_transfer_matrix_conditioning_2026-10-18.md)에 기록했다.

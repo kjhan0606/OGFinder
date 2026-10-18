@@ -138,7 +138,7 @@ R과 r을 혼용하지 않는다. 분석 가능한 반경은 PSF와 주입/회�
 | A. 자료·선행연구 | 표본 계보, 입력/교정 목록, 선행연구 비교표 | 누락 입력 및 연구 차별점 명시 | 일부 자료·초기 문헌 확인 |
 | B1. ICL 예비 측정 | matched-control 차감 프로파일·위성 위치 밀도 | 고정 반경·대역별로 재현 가능하고 BCG/sky/PSF 게이트 통과 | 반경별 지원 224쌍(137 strict쌍과 행별 일치); Kron/면적 24조건 민감도에서 큰 마스크는 지지가 급감하고 flux도 이동. 과학 게이트 미통과 |
 | B2. 위성 외곽 예비 측정 | HSC 다중대역 위성 측광·위성 중심 스택 | 멤버 완전도·질량/색 맞춤·광량 누출 실험 통과 | 전체 800장 탐색 스택 5,832행(1,768개 위성); 7-bin 공통 은하단 i 29개/i2 103개. 외곽 평균은 0과 양립; 공통 표본 ICL 조인 21/53개, 상관 미확정·과학 게이트 미통과 |
-| B3. 약한렌즈 예비 측정 | S19A shape source 겹침표·전단 profile | 유효 source 수, P(z), 응답 보정 및 null 시험 통과 | adapter 합성주입 시험 6/6 통과; 800개 렌즈·32개 count-only SQL 계획 로컬 검증, CAS 미제출·shape 행 없음 |
+| B3. 약한렌즈 예비 측정 | S19A shape source 겹침표·전단 profile | 유효 source 수, 보정 n(z), 응답 보정 및 null 시험 통과 | adapter PDF/tomographic n(z)/SACC/HSC selection/random-jackknife 시험 15/15 통과; count-only 800행 검증 완료, shape 행 없음 |
 | C. 공동 검증 | 주입/회수, null, 공분산·감도 보고서 | 무상관 주입의 가짜 관계와 알려진 신호 회수 오차가 사전 오차 예산 내 | 확산광 코애드 주입·대조장 공분산 실행; joint satellite–ICL 및 lensing null 미완료 |
 | D. 분석 정의 고정 | 표본/반경/단위/가중/모형/판정 기준 버전 | 본 분석 전 숫자 기준과 주·보조 가설 고정 | 미실행 |
 | E. 전체 표본 | 두 스택, 공동 관계, 상한·민감도 | 효과와 체계오차, 참여 표본 및 선택함수 함께 보고 | 미실행 |
@@ -194,16 +194,18 @@ CAMIRA 위치 count뿐이다. 별도로 보존된 `camira_s20a_wide_sm_member.da
 현재 800개 표본에 대조하니 manifest에 기록된 SHA-256과 일치했고 800/800 은하단의
 좌표·적색이동·richness가 맞았으며 멤버 행 36,513개가 연결됐다. 문헌의 CAMIRA 멤버
 카탈로그는 별질량 `M_*`와 멤버 가중치 `w`를 제공한다. 로컬 파일은 머리글이 없고
-열 7 값 범위(9.986–12.320)는 log 별질량과, 열 8 값(0.001–1)은 멤버 가중치와
-부합하지만, 열 정의를 이 파일의 원본 메타데이터로 확인하기 전에는 그렇게 해석하지
-않는다. 특히 CAMIRA 가중치는 질량·공간 필터를 포함하므로 단순한 비편향 위성 밀도로
+기존 `06_fetch_members.py`와 그 해시 일치 실행 요약 `logs/member_summary.json`은
+열 8을 `weight`, 열 7을 미정 `field7`로 기록한다. 분석은 이 원본 기록과 카탈로그
+SHA를 확인하고 열 8을 CAMIRA 가중치로 사용한다. 열 7 값 범위(9.986–12.320)는 log
+별질량과 부합하지만, 파일 제작 기록에 정의가 없어 질량 후보로만 남긴다. 특히 CAMIRA
+가중치는 질량·공간 필터를 포함하므로 단순한 비편향 위성 밀도로
 쓸 수 없다. 이 파일에는 위성별 보정 측광이 없고 현 분석도 위성 광도를 사용하지
 않는다. 따라서 이 결과는 위성 외곽광–ICL 관계의 측정이 아니다. 산출물은
 `sample_800_2026-10-13/satellite_association_pilot_2026-10-18_02/`에 있다.
 
 전체 800개 대조에서도 CAMIRA 멤버 행이 800/800 클러스터에 연결됐고, 위치·z·richness
 검사가 통과했다. 다만 위성별 cmodel/다중대역 측광이나 실제 영상 유래 외곽광은 없다.
-후속 단계는 해당 무헤더 파일의 열 정의와 CAMIRA 가중 규약을 확인하고, 위성 질량
+후속 단계는 해당 무헤더 파일의 열 7 정의를 확인하고 CAMIRA 가중 규약을 고려해, 위성 질량
 구간별 표본 및 HSC 영상에서 측정한 위성 중심 잔광 프로필을 구성하는 것이다.
 CAMIRA 멤버의 `M_*`, `w` 제공과 필터 의미는
 [Oguri et al.의 CAMIRA member catalog 설명](https://doi.org/10.3847/1538-4357/ad76ad),
@@ -300,6 +302,17 @@ z·richness 조정 partial 상관은 i2 네 조건에서 구간이 0을 제외�
 `sample_800_2026-10-13/icl_satellite_cut_sensitivity_2026-10-18_01/`이며
 `science_measurement=false`를 유지한다.
 
+같은 48개 컷·필터·중심선택 설정에 대해 5도 연결 하늘 블록 wild-cluster bootstrap을
+10,000회 수행하고, 공통 block weight로 단일 단계 max-T와 Holm 보정을 계산했다.
+48개 설정을 모두 보존했으며, 은하단 5개·공간 블록 6개 이상인 30개만 추론 지원
+기준을 통과했다. 30개 중 원시 p<0.05는 6개였지만 Holm 또는 max-T 보정 후 p<0.05는
+없었다. 기준 i2/Kron 2.5/40% 설정도 raw p=0.0334, Holm p=0.969, max-T p=0.621이었다.
+이는 다중비교 아래 독립적으로 재현된 연관성을 보이지 않는다. max-T는 완전 귀무
+가설의 탐색 진단이며 strong familywise 보장은 주장하지 않는다. 블록은 픽셀/공분산,
+PSF 날개, sky 전달, 소광 및 멤버 완전도를 포함하지 않는다. 상세 방법·수치는
+[공간 블록 다중비교 검증](hsc_debug/icl_satellite_familywise_2026-10-18.md)과
+`icl_satellite_familywise_2026-10-18_02/`에 있고, 과학 측정 플래그는 계속 거짓이다.
+
 정량·정성 평가와 산출물 경로는 [위성 외곽광 전체표본 평가](hsc_debug/satellite_outer_profile_assessment_2026-10-18.md)에
 기록했다. 권위 데이터는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/` 아래
 `satellite_detection_psf_2026-10-18_01/`,
@@ -321,26 +334,41 @@ CAS 중첩 row count와 추정 전송 크기를 먼저 산출하는 일이다. s
 받은 뒤 진행한다. shape stack·질량 측정은 아직 하지 않았다.
 
 S19A 분석에서는 shape catalog의 sky-coordinate `e1/e2`, derived weight, per-object
-`m/c1/c2`, ellipticity RMS·measurement uncertainty와 B-mode mask를 보존하고,
-shape를 `object_id`로 좌표 및 full photo-z PDF에 연결한다. raw ellipticity를 이미
-보정된 shear로 간주하지 않는다. HSC estimator의 weighted responsivity와
+`m/c1/c2`, ellipticity RMS·measurement uncertainty, B-mode mask와 `hsc_y3_zbin`을
+보존한다. 기본 자료 경로는 HSC Y3 네 tomographic source-bin에 해당하는 SACC의 fiducial
+`n(z)` 곡선을 사용하며, shape 행마다 full photo-z PDF를 받을 필요가 없다. 이 fiducial
+곡선은 posterior 표본 자체가 아니므로 posterior/systematic 불확실성은 별도로 전파한다. HSC 문서에서 zbin 0은
+다중봉우리 P(z) 때문에 배제된 source이고 1–4가 네 tomographic bin이다. raw
+ellipticity를 이미 보정된 shear로 간주하지 않는다. HSC estimator의 weighted responsivity와
 multiplicative/additive 및 selection-bias 보정, photo-z dilution correction을 적용한
 뒤 lens-source pair profile을 만든다. 자세한 catalog columns와 PDF 처리 요구는
 [HSC S19A shape catalog 안내](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)
 와 [HSC 3-year shear catalog 방법론](https://arxiv.org/abs/2107.00136)을 따른다.
-이를 위한 `hsc_debug/s19a_shape_stack.py` adapter를 추가했다. full P(z)를 pair별
-`<D_ls/D_s>`로 적분하고, 빈별 HSC responsivity와 per-object `m/c`를 반영해
+이를 위한 `hsc_debug/s19a_shape_stack.py` adapter를 추가했다. 현재 full P(z) 입력과
+HSC Y3 tomographic `n(z)` 입력을 모두 지원한다. 후자는 계획된 source-row의 `source_zbin`을
+사용해 pair별 `<D_ls/D_s>`를 계산하므로 134.4 GiB full-PDF tar가 필요하지 않다.
+빈별 HSC responsivity와 per-object `m/c`를 반영해
 접선·교차 전단 및 weak-shear 근사 `DeltaSigma` 프로필을 계산한다. 선택편향은 HSC
 Y3/S19A edge-density 식으로 반경 빈마다 자동 계산하며, pair 가중치는
 `shape_weight * SigmaCritInv**2`, additive 항은 가중 평균 PSF ellipticity를 쓴다.
 식과 계수는 HSC가 연결한
 [hsc-y3-calib 보정 코드](https://github.com/mr-superonion/hsc-y3-calib)의
-`get_sel_bias`를 따른다. 경계 밀도 식의 수치 검사, 합성 주입 회수, PDF·ID·mask
-입력 검사를 포함한 6개 시험이 통과했다.
-단, full P(z)는 현재 기하학적 `SigmaCritInv` 평균만 계산하며, PDF bias/dilution을
-교정할 COSMOS 기반 또는 동등한 외부 calibration sample/factor는 적용하지 않는다.
-실제 S19A source 행과 full P(z)도 아직 없다. reduced-shear 적합·random-lens 차감·
-source 중복 및 하늘 블록 공분산과 선택 보정 오차 전파도 구현되지 않았다.
+`get_sel_bias`를 따른다. 경계 밀도 식의 수치 검사, 합성 주입 회수, PDF·tomographic
+`n(z)`·SACC 입력·ID·mask·선택컷 검사를 포함한 15개 시험이 통과했다.
+`load_hsc_y3_nz_sacc`는 로컬 SACC 파일의 `wl_0`–`wl_3` tracer 격자와 분포를
+검사한다. 공식 SACC 보정 파일은 아직 확보되지 않았고, 이 함수만으로 n(z) 불확실성이
+전파되는 것은 아니다.
+HSC 안내에서 B-mode 영역 마스크는 분석별 선택 사항으로 설명되므로 adapter는 기본
+적용과 명시적 미적용 민감도 실행을 모두 지원한다. 실자료 비교 때 두 결과의 source 수,
+shear profile, null 진단을 함께 기록하며 마스크 정책을 결과를 본 뒤 선택하지 않는다.
+고정 `n(z)` 적용은 HSC Y3 사진·clustering-redshift 기반 보정 경로지만,
+fiducial `n(z)` 보정 및 posterior/systematic 불확실성을 현재 stack에서 전파하지 않는다. 실제 S19A
+source 행과 보정 `n(z)` 입력도 아직 없다.
+`subtract_random_lens_profile`은 cluster−random 점 추정량을 계산하고 독립 shape-noise
+오차를 임의로 합치지 않는다. `paired_jackknife_covariance`는 같은 하늘 블록을
+cluster/random 양쪽에서 제거한 replicate의 차이로 공분산을 계산한다. 아직 실제 random
+pair 행이나 공통 하늘-block replicate는 없다. reduced-shear 적합, 실제 random-lens
+차감, source 중복 및 하늘 블록 공분산 추정, 선택 보정 오차 전파는 미완료다.
 그러므로 이 adapter의 출력도 항상
 `science_measurement=false`이며 일반 `stack_shear_profiles`나 합성 metacal 시험이
 서베이 교정을 대신하지 않는다.
@@ -355,13 +383,88 @@ profile에 기여하는 현상을 허용하되 최종 공분산은 하늘 블록
 반영해야 한다. 전부 합쳐 source를 한 번만 남기는 union query는 lens-source
 pair 정보를 잃으므로 분석 입력으로 쓰지 않는다.
 렌즈별 원뿔의 shape 행 수만 세는 CAS SQL 32개 배치는
-`sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01/`에 준비되어 있으나
-아직 제출하지 않았다. `hsc_debug/submit_wl_shape_counts.py --plan`은 SQL 해시와
-렌즈 ID 800개를 로컬 검증했고 네트워크를 사용하지 않았다. `--submit`은 lageunha
-대화형 터미널에서 800개 aggregate count만 요청하도록 준비했다. 현재 세션에는 HSC
-환경변수가 없고 대화형 인증도 연결되어 있지 않아 CAS count query는 아직 실행되지 않았다.
-count 결과가 나와야
-source 행의 예상 크기와 overlap별 다운로드량을 정량화할 수 있다.
+`sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01/`에 준비했다. 최초 문서화
+시점에는 인증된 CAS 제출이 아직 이뤄지지 않았으나, 이후 승인된 count-only 조회를
+`lageunha`에서 완료했다. `hsc_debug/submit_wl_shape_counts.py --plan`은 SQL 해시와
+렌즈 ID 800개를 로컬 검증하고, `--submit`은 렌즈별 정수 집계만 요청한다.
+
+2026-10-18 후속: 사용자가 승인한 범위는 **렌즈별 정수 count만**이다. `lageunha`에서
+32개 CAS 배치가 모두 완료됐고 각 결과의 SHA-256·25행·요청 렌즈 ID를 검증했다.
+합계 800행·고유 렌즈 800개·음수 count 0개이며, 렌즈별 count 합은 3,069,544,
+0개인 렌즈는 168개, 중앙값 4,438, 최댓값 9,767이다. 이 합계는 렌즈 원뿔마다
+계산한 count라 중복 source와 source 품질/적색편이 컷 적용 전의 lens-source 후보량이며,
+고유 source 수가 아니다. 체크포인트와 요약 모두 `source_rows_downloaded=false`,
+`science_measurement=false`, `credentials_saved=false`다. 실제 source 행 취득은
+예상 전송량과 필요한 열을 제시한 별도 승인 전까지 시작하지 않는다.
+
+2026-10-18 source-row 준비: count 결과를 기준으로 동일한 3 Mpc 렌즈 원뿔에서
+22개 필드만 반환하는 32개 SQL batch를 로컬 생성했다. 예상치는 3,069,544
+lens-source pair 행, 약 0.73–1.37 GiB 미압축 CSV이며 실제 전송 전 추정 범위다.
+HSC Y3 `hsc_y3_zbin`과 별도 보정 `n(z)`를 이용한다. adapter의
+`stack_s19a_tomographic_pairs`가 해당 입력을 처리하며 bin 0을 제외한다. HSC shape
+안내에 따라 bin 0은 다중봉우리 P(z)로 제외되고 1–4는 Y3 cosmic-shear tomographic
+bin이다. fiducial `n(z)` calibration/posterior systematic 오차 전파는 후속 분석으로 남는다. 전체 DNNz-Wide PDF
+tar는 144,312,176,640 byte(134.4 GiB)이므로 포함하지 않는다. 준비 쿼리는
+네트워크 실행하지 않았고 원자료 행은 아직 없다. 열·용량·검증·잔여 과학 게이트는
+[shape-row export 검토서](hsc_debug/wl_shape_row_export_review_2026-10-18.md)에 있다.
+
+### 2026-10-18 CAMIRA 후보 질량·가중 민감도
+
+기존 800개 영상의 위성 반경별 프로필 5,832행을 무헤더 CAMIRA S20A 멤버 자료와
+위치로 연결해 질량 구간 및 CAMIRA `w` 가중/비가중 평균을 비교했다. 800/800 클러스터의
+좌표·richness·CAMIRA `z_cl` 및 멤버 좌표 집합이 맞았고, 프로필이 있는 543개
+클러스터의 멤버 인덱스는 저장 좌표를 거쳐 연결했다. 파일 수집 코드와 SHA-일치
+`member_summary.json`에서 열 8은 `weight`로 확인돼 CAMIRA `w`로 사용한다. 열 7은
+`field7`로만 기록되며 `log10(M*/M_sun)` 해석은 값 범위에 근거한 후보 질량 민감도다.
+CAMIRA 가중치는 질량·공간 필터를 포함하므로 비편향 위성 평균으로 취급하지 않는다.
+
+비가중 결과 14개 필터×반경 값은 기존 스택 요약을 최대 `3.9e-8 nJy/arcsec²` 이내에서
+재현했다. 50–75 kpc에서 후보 질량 11.0–11.5 구간의 평균은 i `4.63` (21 위성/19개
+은하단), i2 `4.88` (62/49) nJy/arcsec²였고, i2 최고 질량 구간은 7/7로 지지가 너무
+작다. 이 값들은 마스크·선택·PSF/sky·공분산 미교정 탐색 결과이며 물리적 질량 추세나
+ICL 연관성 검출이 아니다. 세부 감사·제한사항은
+[CAMIRA 멤버 가중 프로필 감사](hsc_debug/member_weighted_profile_audit_2026-10-18.md),
+수치 산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_member_weight_sensitivity_2026-10-18_04/`에
+있다. 계산기와 회귀시험은 `hsc_debug/analyze_member_weighted_satellite_profiles.py`와
+`hsc_debug/test_analyze_member_weighted_satellite_profiles.py`다.
+
+확인된 CAMIRA `weight`를 사용해 50–75 kpc 위성 외곽광과 200–300 kpc ICL의
+부분상관도 비가중·가중으로 비교했다. K2.5/40% 탐색 분기에서 조정 변수를 z와
+richness로 고정하고 연결된 5도 하늘 블록을 10,000회 함께 재표집했다. i의 상관은
+0.120에서 가중 후 0.090으로, i2는 0.234에서 0.174로 낮아졌다. 가중−비가중 차이의
+95% 구간은 i `[-0.285, 0.093]`, i2 `[-0.187, 0.100]`으로 모두 0을 포함한다.
+이는 사후 민감도 분석이며 다중비교 보정이나 확정 검출이 아니다. 상세 표와 한계는
+[CAMIRA 가중 위성광–ICL 민감도](hsc_debug/camira_weighted_icl_association_2026-10-18.md),
+입력·코드·결과 해시는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/weighted_satellite_icl_association_2026-10-18_02/summary.json`에 있다.
+
+다음에는 이 정확한 S20A 무헤더 파일의 7열 배포 스키마를 확인하고, CAMIRA 후보
+질량을 실제 다중대역 위성 측광과 완전도·오염 보정으로 검증한다. 그 뒤에만 질량별
+공동 위성–ICL 주입/회수 및 사전 고정 표본 상관을 진행한다.
+
+2026-10-18에는 필터별 부모 은하단과 ICL 반경 지원 표본을 대조했다. K2.5/40%의
+네 구간 모두를 지원하는 strict 표본은 137개(i 44, i2 93), 200–300 kpc 단일
+annulus 표본은 224개(i 71, i2 153)다. 각 대역의 부모와 비교한 z SMD는 각각
+strict i/i2 `+0.216/+0.132`, annulus i/i2 `+0.089/+0.103`; richness SMD는
+strict `−0.194/−0.218`, annulus `−0.108/−0.153`이다. 선택 표본 모두 부모보다
+평균 z가 높고 richness가 낮다. strict에서도 중심 마스크 가림이 i 63.6%, i2
+66.7%이고, annulus 표본은 i 69.0%, i2 77.8%다. 따라서 반경별 지원 표본을 같은
+모집단으로 간주하거나 두 대역을 무보정 결합하지 않는다. 이 기술 감사는 selection
+correction이 아니며 `science_measurement=false`를 유지한다. 해시·전체 결과는
+[ICL 반경 표본 선택 감사](hsc_debug/icl_sample_selection_audit_2026-10-18.md)와
+`sample_800_2026-10-13/icl_sample_selection_audit_2026-10-18_02/`에 있다.
+
+같은 외곽 annulus 224쌍을 자동 유일 중심 후보이면서 K2.5 중심 픽셀이 가려지지 않은
+은하단과 나머지로 나눠, 대상·대조장 연결 5도 공간 블록 10,000회 부트스트랩으로
+민감도를 확인했다. i 중심 적격 표본은 22개에서 4.53 [2.31, 6.60], 나머지 49개는
+2.64 [1.17, 4.00] nJy/arcsec²였다. i2는 적격 34개에서 1.99 [−0.85, 5.03], 나머지
+119개에서 4.30 [2.89, 5.58]였다. 연결 블록을 하나씩 제외한 평균 범위는 모든 그룹에서
+양수였지만, i2 중심 적격 구간은 bootstrap 구간이 0을 포함한다. 필터마다 중심 적격
+분할 결과가 달라 자동 중심 품질에 대한 단일 보정 방향을 정할 수 없다. 사후
+부분집합 분석이며 `science_measurement=false`다.
+[중심 품질 민감도 보고서](hsc_debug/icl_center_quality_sensitivity_2026-10-18.md)와
+해시 포함 산출물 `sample_800_2026-10-13/icl_center_quality_sensitivity_2026-10-18_02/`을
+참조한다.
 
 ## 7. 실행과 장기 유지
 
@@ -372,8 +475,10 @@ source 행의 예상 크기와 overlap별 다운로드량을 정량화할 수 �
 
 다음 세션은 이 문서와 [실행 계획](implementation_plan.md)의 최신 항목을 읽고,
 자료 상태를 확인한 뒤 미완료 단계를 이어간다. 장기 주제 등록은 완료된 관측
-측정이나 백그라운드 자동 실행을 뜻하지 않는다. 다음 우선 작업은 사전 고정한 i2 분석의
-독립 표본·null 검정 설계와 위성 외곽광 주입/회수, 잔류 천체 마스크 및 PSF/sky 입력 감사다.
+측정이나 백그라운드 자동 실행을 뜻하지 않는다. 2026-10-18 familywise null 검정은
+같은 영상을 재사용했으므로 독립 재현을 대신하지 않는다. 다음 우선 작업은 사전 고정한
+i2 독립 표본/null 검정, 위성 외곽광–ICL 공동 주입/회수, 잔류 천체 마스크와 PSF/sky
+전달 감사다.
 마스크·반경 정의와 공동 측정 기준을 고정하기 전에는 민감도 표에서 science cut을 선택하지 않는다.
 문헌·데이터 변경 시 날짜와 근거를 기록한다.
 

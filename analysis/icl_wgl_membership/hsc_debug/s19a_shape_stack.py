@@ -1,15 +1,16 @@
 """Calibrated pair stack for the HSC S19A re-Gaussianization shape catalog.
 
-This is an analysis adapter, not a data downloader.  It expects exact object IDs,
-the S19A shape columns, and the full photo-z PDF table matched by object_id.
-Selection-bias corrections follow the HSC Y3/S19A edge-density prescription and
-are computed per radial bin from that selected source sample. The returned
-DeltaSigma uses the weak-shear approximation; it is not a reduced-shear mass fit
-or a final science measurement.
+This is an analysis adapter, not a data downloader. It expects exact object IDs,
+the S19A shape columns, and either full photo-z PDFs matched by object_id or
+HSC Y3 tomographic source-bin assignments with calibrated n(z). Selection-bias
+corrections follow the HSC Y3/S19A edge-density prescription and are computed
+per radial bin. The returned DeltaSigma uses the weak-shear approximation; it is
+not a reduced-shear mass fit or a final science measurement.
 """
 from __future__ import annotations
 
 import math
+from pathlib import Path
 import numpy as np
 
 
@@ -94,6 +95,114 @@ def pdf_lensing_efficiency(lens_redshift, pair_object_ids, photoz_object_ids,
         efficiency = np.clip(efficiency, 0.0, 1.0)
         beta[start:stop] = _trapz(pdf[pdf_rows[start:stop]] * efficiency, z, axis=1)
     return beta
+
+
+def tomographic_nz_lensing_efficiency(lens_redshift, source_redshift_bin,
+                                     nz_redshift, nz_by_bin, cosmology):
+    """Return pair-wise ``<D_ls/D_s>`` from calibrated tomographic ``n(z)``.
+
+    ``source_redshift_bin`` uses HSC ``hsc_y3_zbin`` convention: 0 is not in
+    the four Y3 source bins; bins 1..K map to rows of ``nz_by_bin``. Each row
+    of ``nz_by_bin`` is a calibrated source-redshift distribution on the common
+    ``nz_redshift`` grid. Bin 0 receives zero lensing efficiency and is
+    reported separately by the caller.
+    """
+    zl = np.asarray(lens_redshift, dtype=float)
+    raw_bins = np.asarray(source_redshift_bin)
+    z = np.asarray(nz_redshift, dtype=float)
+    nz = np.asarray(nz_by_bin, dtype=float)
+    if zl.ndim != 1 or not np.all(np.isfinite(zl)) or np.any(zl < 0):
+        raise ValueError("lens_redshift must be a finite non-negative vector")
+    if raw_bins.ndim != 1 or len(raw_bins) != len(zl):
+        raise ValueError("source_redshift_bin must have one value per lens-source pair")
+    try:
+        numeric_bins = raw_bins.astype(float)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("source_redshift_bin must contain integer HSC Y3 bins") from None
+    if not np.all(np.isfinite(numeric_bins)):
+        raise ValueError("source_redshift_bin must contain finite integer HSC Y3 bins")
+    bins = numeric_bins.astype(int)
+    if not np.array_equal(numeric_bins, bins) or np.any(bins < 0):
+        raise ValueError("source_redshift_bin must contain non-negative integer bins")
+    if z.ndim != 1 or len(z) < 2 or not np.all(np.isfinite(z)) or np.any(z < 0) or np.any(np.diff(z) <= 0):
+        raise ValueError("nz_redshift must be a strictly increasing, non-negative grid")
+    if nz.ndim != 2 or nz.shape[1] != len(z) or nz.shape[0] < 1:
+        raise ValueError("nz_by_bin must have shape [tomographic bin, redshift]")
+    if not np.all(np.isfinite(nz)) or np.any(nz < 0):
+        raise ValueError("nz_by_bin must be finite and non-negative")
+    if np.any(bins > nz.shape[0]):
+        raise ValueError("source_redshift_bin exceeds the supplied n(z) bins")
+    norms = _trapz(nz, z, axis=1)
+    if not np.all(np.isfinite(norms)) or np.any(norms <= 0):
+        raise ValueError("every calibrated n(z) must have positive finite integral")
+    normalized = nz / norms[:, None]
+    chi_grid = np.asarray(cosmology.comoving(z), dtype=float)
+    chi_l = np.asarray(cosmology.comoving(zl), dtype=float)
+    if not np.all(np.isfinite(chi_grid)) or not np.all(np.isfinite(chi_l)):
+        raise ValueError("cosmology does not cover the lens and n(z) redshift ranges")
+    beta = np.zeros(len(zl), dtype=float)
+    chunk_size = 65536
+    for start in range(0, len(zl), chunk_size):
+        stop = min(start + chunk_size, len(zl))
+        z_l = zl[start:stop, None]
+        chi_l_chunk = chi_l[start:stop, None]
+        for bin_index in range(1, nz.shape[0] + 1):
+            selected = bins[start:stop] == bin_index
+            if not np.any(selected):
+                continue
+            efficiency = np.divide(
+                chi_grid[None, :] - chi_l_chunk[selected], chi_grid[None, :],
+                out=np.zeros((int(np.count_nonzero(selected)), len(z)), dtype=float),
+                where=(z[None, :] > z_l[selected]) & (chi_grid[None, :] > 0),
+            )
+            beta[start:stop][selected] = _trapz(
+                normalized[bin_index - 1][None, :] * np.clip(efficiency, 0.0, 1.0),
+                z, axis=1,
+            )
+    return beta
+
+
+def load_hsc_y3_nz_sacc(path):
+    """Load the four released HSC Y3 ``wl_0``..``wl_3`` n(z) tracers.
+
+    The SACC file is an explicit local input; this function performs no network
+    access. It returns the shared redshift grid and an ``[4, z]`` n(z) array in
+    SACC tracer order. HSC ``hsc_y3_zbin`` values 1..4 map to these rows 0..3;
+    bin 0 remains excluded by :func:`tomographic_nz_lensing_efficiency`.
+    The tracer n(z) curves are fiducial distributions, not posterior samples,
+    so their uncertainty still has to be propagated separately.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"HSC Y3 n(z) SACC file does not exist: {path}")
+    try:
+        import sacc
+    except ImportError as error:
+        raise RuntimeError("reading HSC Y3 n(z) SACC files requires the optional 'sacc' package") from error
+    dataset = sacc.Sacc.load_fits(str(path))
+    redshift = None
+    distributions = []
+    for index in range(4):
+        name = f"wl_{index}"
+        try:
+            tracer = dataset.tracers[name]
+            z = np.asarray(tracer.z, dtype=float)
+            nz = np.asarray(tracer.nz, dtype=float)
+        except (KeyError, AttributeError, TypeError) as error:
+            raise ValueError(f"SACC file is missing a valid n(z) tracer {name}") from error
+        if z.ndim != 1 or len(z) < 2 or not np.all(np.isfinite(z)) or np.any(z < 0) or np.any(np.diff(z) <= 0):
+            raise ValueError(f"SACC tracer {name} has an invalid redshift grid")
+        if nz.shape != z.shape or not np.all(np.isfinite(nz)) or np.any(nz < 0):
+            raise ValueError(f"SACC tracer {name} has an invalid n(z) distribution")
+        norm = float(_trapz(nz, z))
+        if not np.isfinite(norm) or norm <= 0:
+            raise ValueError(f"SACC tracer {name} has zero-integral n(z)")
+        if redshift is None:
+            redshift = z.copy()
+        elif not np.array_equal(z, redshift):
+            raise ValueError("HSC Y3 SACC n(z) tracers must share one redshift grid")
+        distributions.append(nz.copy())
+    return redshift, np.vstack(distributions)
 
 
 def pair_geometry(pairs, cosmology):
@@ -181,6 +290,29 @@ def hsc_selection_bias(weight, mag_a10, resolution,
     }
 
 
+def decode_hsc_b_mode_mask(raw_mask, *, masked_value):
+    """Decode a binary HSC ``b_mode_mask`` only with an explicit polarity.
+
+    The HSC PDR3 page says this column identifies the region to remove, but does
+    not document whether stored 1 or 0 denotes that region. Callers must verify
+    the schema/data convention and pass that value as ``masked_value``; this
+    function intentionally does not guess. Values outside {0, 1} are rejected.
+    The returned boolean is ``True`` for rows to retain in the lensing stack.
+    """
+    values = np.asarray(raw_mask)
+    if values.ndim != 1:
+        raise ValueError("raw b_mode_mask must be a one-dimensional vector")
+    if masked_value not in (0, 1, False, True):
+        raise ValueError("masked_value must be the verified binary value 0 or 1")
+    try:
+        numeric = values.astype(float)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("raw b_mode_mask must contain binary numeric values") from None
+    if not np.all(np.isfinite(numeric)) or np.any((numeric != 0) & (numeric != 1)):
+        raise ValueError("raw b_mode_mask is not binary; verify its catalog definition")
+    return numeric != int(masked_value)
+
+
 def _check_columns(pairs):
     missing = [key for key in REQUIRED_PAIR_COLUMNS if key not in pairs]
     if missing:
@@ -219,13 +351,16 @@ def _check_columns(pairs):
 
 
 def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
-                     radial_edges_mpc, cosmology):
+                     radial_edges_mpc, cosmology, *, apply_b_mode_mask=True,
+                     _pair_lensing_efficiency=None):
     """Make HSC-calibrated tangential/cross and weak-approximation DeltaSigma bins.
 
     ``pairs`` contains lens-source rows. A source may appear with multiple lenses,
     but a (lens_id, object_id) pair must be unique. ``b_mode_pass`` is a decoded
     boolean indicating that the source passes the documented HSC B-mode region
-    mask. The edge-selection correction is computed per radial bin using the
+    mask. ``apply_b_mode_mask=False`` is an explicit sensitivity mode: it keeps
+    mask-failing rows while retaining their rejection count in the diagnostics.
+    The edge-selection correction is computed per radial bin using the
     weighted number density near the HSC R2 and aperture-magnitude cuts, with
     pair weights ``shape_weight * Sigma_crit^{-2}``. The HSC weighted
     responsivity is recomputed in each radial bin.
@@ -240,18 +375,28 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
     if edges.ndim != 1 or len(edges) < 2 or not np.all(np.isfinite(edges)) or np.any(edges <= 0) or np.any(np.diff(edges) <= 0):
         raise ValueError("radial_edges_mpc must be finite, positive, and strictly increasing")
 
-    beta = pdf_lensing_efficiency(arr["lens_z"], arr["object_id"], photoz_object_ids,
-                                  photoz_redshift, photoz_pdf, cosmology)
+    if _pair_lensing_efficiency is None:
+        beta = pdf_lensing_efficiency(arr["lens_z"], arr["object_id"], photoz_object_ids,
+                                      photoz_redshift, photoz_pdf, cosmology)
+    else:
+        beta = np.asarray(_pair_lensing_efficiency, dtype=float)
+        if beta.shape != (n_input,) or not np.all(np.isfinite(beta)) or np.any((beta < 0) | (beta > 1)):
+            raise ValueError("precomputed pair lensing efficiencies must be finite [0, 1] values")
     radius, phi = pair_geometry(arr, cosmology)
     bmode = arr["b_mode_pass"]
+    source_selection = (arr["mag_a10"] < 25.5) & (arr["resolution"] > 0.3)
+    mask_selection = bmode if apply_b_mode_mask else np.ones(len(bmode), dtype=bool)
     behind = beta > 0
     in_range = (radius >= edges[0]) & (radius <= edges[-1])
-    usable = bmode & behind & in_range
+    usable = mask_selection & source_selection & behind & in_range
     counts = {
         "input_pairs": int(n_input),
+        "hsc_source_selection_rejected": int(np.count_nonzero(~source_selection)),
+        "b_mode_mask_applied": bool(apply_b_mode_mask),
+        "b_mode_mask_rejected": int(np.count_nonzero(~bmode)),
         "b_mode_rejected": int(np.count_nonzero(~bmode)),
-        "foreground_or_zero_efficiency": int(np.count_nonzero(bmode & ~behind)),
-        "outside_radial_range": int(np.count_nonzero(bmode & behind & ~in_range)),
+        "foreground_or_zero_efficiency": int(np.count_nonzero(mask_selection & source_selection & ~behind)),
+        "outside_radial_range": int(np.count_nonzero(mask_selection & source_selection & behind & ~in_range)),
         "used_pairs": int(np.count_nonzero(usable)),
         "unique_used_lenses": int(len(set(arr["lens_id"][usable].tolist()))),
         "unique_used_sources": int(len(set(arr["object_id"][usable].tolist()))),
@@ -342,11 +487,131 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
             "responsivity": "per-radial-bin HSC responsivity from derived_rms_e weighted by shape_weight*SigmaCritInv^2",
             "per_object_bias": "derived_shear_bias_m/c1/c2",
             "selection_bias_method": "HSC edge-density prescription for R2>0.3 and magA10<25.5; weights=shape_weight*SigmaCritInv^2",
+            "source_selection": "magA10<25.5 and R2>0.3 applied before stacking",
             "photoz_geometry": "full P(z) integrated to mean SigmaCritInv for each lens-source pair",
             "photoz_bias_calibration": "not applied; PDF bias/dilution factor needs external calibration sample",
-            "b_mode_mask": "input b_mode_pass must be decoded from the HSC b_mode_mask field",
+            "b_mode_mask": "input b_mode_pass must be decoded with verified stored-value polarity; decode_hsc_b_mode_mask requires masked_value",
             "delta_sigma": "weak-shear approximation; reduced shear is not modeled",
             "uncertainty": "independent-pair shape noise only; not a field covariance",
             "null_tests": "random-lens subtraction and spatial block covariance not included",
         },
+    }
+
+
+def stack_s19a_tomographic_pairs(pairs, nz_redshift, nz_by_bin,
+                                  radial_edges_mpc, cosmology,
+                                  *, apply_b_mode_mask=True):
+    """Stack using HSC Y3 calibrated tomographic ``n(z)`` distributions.
+
+    This path consumes ``source_zbin`` from the minimal shape-row export and
+    does not require per-object full-PDF rows. The calibrated ``n(z)`` must
+    match the HSC Y3 shape-source selection. HSC zbin 0 is excluded; bins 1..K
+    use corresponding rows in ``nz_by_bin``. Redshift-distribution uncertainty
+    still needs propagation before a science result.
+    """
+    if "source_zbin" not in pairs:
+        raise ValueError("tomographic n(z) stacking requires source_zbin")
+    arr, n_input = _check_columns(pairs)
+    raw_bins = np.asarray(pairs["source_zbin"])
+    try:
+        numeric_bins = raw_bins.astype(float)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("source_zbin must contain integer HSC Y3 bins") from None
+    if not np.all(np.isfinite(numeric_bins)):
+        raise ValueError("source_zbin must contain finite integer HSC Y3 bins")
+    source_bins = numeric_bins.astype(int)
+    if not np.array_equal(numeric_bins, source_bins):
+        raise ValueError("source_zbin must contain integer HSC Y3 bins")
+    source_bin_by_id = {}
+    for object_id, source_bin in zip(arr["object_id"], source_bins):
+        previous = source_bin_by_id.setdefault(str(object_id), int(source_bin))
+        if previous != int(source_bin):
+            raise ValueError("a repeated object_id has inconsistent source_zbin assignments")
+    beta = tomographic_nz_lensing_efficiency(
+        arr["lens_z"], source_bins, nz_redshift, nz_by_bin, cosmology,
+    )
+    result = stack_s19a_pairs(
+        pairs, None, None, None, radial_edges_mpc, cosmology,
+        apply_b_mode_mask=apply_b_mode_mask,
+        _pair_lensing_efficiency=beta,
+    )
+    result["counts"]["unassigned_source_zbin"] = int(np.count_nonzero(source_bins == 0))
+    result["calibration"]["photoz_geometry"] = (
+        "HSC Y3 tomographic n(z) integrated to pair-wise mean SigmaCritInv"
+    )
+    result["calibration"]["photoz_bias_calibration"] = (
+        "calibrated n(z) applied; posterior/systematic uncertainty not propagated"
+    )
+    result["calibration"]["photoz_source_bins"] = (
+        "hsc_y3_zbin 0 excluded; 1..K mapped to the supplied calibrated n(z) rows"
+    )
+    return result
+
+
+def subtract_random_lens_profile(lens_result, random_result):
+    """Subtract a matched random-lens profile from the cluster-lens profile.
+
+    This returns point estimates only. It intentionally does not combine the
+    two independent-pair shape-noise errors: overlapping sources and common
+    survey modes require a paired spatial jackknife or equivalent covariance.
+    """
+    for name, result in (("lens_result", lens_result), ("random_result", random_result)):
+        if result.get("schema") != "hsc-s19a-shape-stack-v1":
+            raise ValueError(f"{name} has an unexpected S19A stack schema")
+        if result.get("science_measurement") is not False:
+            raise ValueError(f"{name} has an unexpected science gate")
+    lens_profile, random_profile = lens_result.get("profile"), random_result.get("profile")
+    if not isinstance(lens_profile, list) or not isinstance(random_profile, list):
+        raise ValueError("both inputs must contain radial profile lists")
+    if len(lens_profile) != len(random_profile):
+        raise ValueError("lens and random profiles have different radial-bin counts")
+    combined = []
+    for lens_row, random_row in zip(lens_profile, random_profile):
+        for key in ("bin", "r_min_mpc", "r_max_mpc"):
+            if lens_row.get(key) != random_row.get(key):
+                raise ValueError("lens and random radial-bin definitions differ")
+        row = {key: lens_row[key] for key in ("bin", "r_min_mpc", "r_max_mpc")}
+        for signal, output in (("delta_sigma_weak_msun_mpc2", "delta_sigma_random_subtracted_msun_mpc2"),
+                               ("cross_delta_sigma_weak_msun_mpc2", "cross_delta_sigma_random_subtracted_msun_mpc2")):
+            lens_value, random_value = lens_row.get(signal), random_row.get(signal)
+            row[output] = (float(lens_value) - float(random_value)
+                           if lens_value is not None and random_value is not None else None)
+        row["n_lens_pairs"] = int(lens_row.get("n_pairs", 0))
+        row["n_random_pairs"] = int(random_row.get("n_pairs", 0))
+        row["covariance_status"] = "not_estimated; paired spatial jackknife required"
+        combined.append(row)
+    return {
+        "schema": "hsc-s19a-random-subtracted-profile-v1",
+        "status": "exploratory",
+        "science_measurement": False,
+        "method": "cluster-lens minus matched-random-lens DeltaSigma and cross profile",
+        "photoz_dilution_correction_applied": False,
+        "covariance": "not estimated; requires matched spatial-block jackknife including source overlap",
+        "profile": combined,
+    }
+
+
+def paired_jackknife_covariance(lens_leave_one_block, random_leave_one_block):
+    """Covariance of random-subtracted profiles from matched delete-one blocks.
+
+    Inputs are ``[block, radial_bin]`` arrays produced by rerunning the full
+    calibrated estimator after deleting the same sky block from the cluster and
+    random pair samples. Shared source IDs must be assigned to the same sky
+    block in both samples before these arrays are produced.
+    """
+    lens = np.asarray(lens_leave_one_block, dtype=float)
+    random = np.asarray(random_leave_one_block, dtype=float)
+    if lens.ndim != 2 or random.shape != lens.shape or lens.shape[0] < 3 or lens.shape[1] < 1:
+        raise ValueError("matched lens/random jackknife arrays must share shape [>=3 blocks, >=1 bins]")
+    if not np.all(np.isfinite(lens)) or not np.all(np.isfinite(random)):
+        raise ValueError("jackknife profile values must be finite")
+    delta = lens - random
+    mean = np.mean(delta, axis=0)
+    centered = delta - mean
+    covariance = (lens.shape[0] - 1.0) / lens.shape[0] * centered.T @ centered
+    return {
+        "n_blocks": int(lens.shape[0]),
+        "mean_random_subtracted": mean,
+        "covariance": covariance,
+        "standard_error": np.sqrt(np.diag(covariance)),
     }

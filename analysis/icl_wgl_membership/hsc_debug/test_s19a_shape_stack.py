@@ -1,4 +1,5 @@
 import math
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -8,10 +9,16 @@ from s19a_shape_stack import (
     G_MPC,
     C_KMS,
     _to_tangential,
+    decode_hsc_b_mode_mask,
     hsc_selection_bias,
+    load_hsc_y3_nz_sacc,
     pair_geometry,
     pdf_lensing_efficiency,
     stack_s19a_pairs,
+    stack_s19a_tomographic_pairs,
+    paired_jackknife_covariance,
+    subtract_random_lens_profile,
+    tomographic_nz_lensing_efficiency,
 )
 
 
@@ -73,6 +80,16 @@ def test_hsc_edge_selection_correction_uses_pair_weights_and_psf_ellipticity():
     assert result["a_sel"] == pytest.approx(expected_a)
     assert result["c1_sel"] == pytest.approx(expected_a * np.mean(e1_psf))
     assert result["c2_sel"] == pytest.approx(expected_a * np.mean(e2_psf))
+
+
+def test_b_mode_mask_decoder_requires_explicit_catalog_polarity():
+    raw = np.array([0, 1, 0, 1])
+    assert decode_hsc_b_mode_mask(raw, masked_value=1).tolist() == [True, False, True, False]
+    assert decode_hsc_b_mode_mask(raw, masked_value=0).tolist() == [False, True, False, True]
+    with pytest.raises(ValueError, match="not binary"):
+        decode_hsc_b_mode_mask([0, 2], masked_value=1)
+    with pytest.raises(ValueError, match="verified binary value"):
+        decode_hsc_b_mode_mask([0, 1], masked_value=2)
 
 
 def _synthetic_catalog(cosmo):
@@ -172,12 +189,35 @@ def test_synthetic_hsc_calibration_and_pdf_beta_recover_injected_delta_sigma(cos
     assert result["science_measurement"] is False
     assert result["counts"]["input_pairs"] == 400
     assert result["counts"]["b_mode_rejected"] == 1
+    assert result["counts"]["b_mode_mask_applied"] is True
+    assert result["counts"]["b_mode_mask_rejected"] == 1
     assert len(result["profile"]) == 4
     for row in result["profile"]:
         assert row["n_pairs"] > 90
         assert row["delta_sigma_weak_msun_mpc2"] == pytest.approx(injected, rel=2e-10)
         assert row["mean_gx"] == pytest.approx(0.0, abs=2e-12)
         assert row["delta_sigma_shape_noise_msun_mpc2"] > 0
+
+
+def test_stack_applies_hsc_resolution_and_aperture_magnitude_cuts(cosmo):
+    pairs, source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
+    pairs["mag_a10"][0] = 25.5
+    pairs["resolution"][1] = 0.3
+    result = stack_s19a_pairs(pairs, source_ids, z, pdf, edges, cosmo)
+    assert result["counts"]["hsc_source_selection_rejected"] == 2
+    assert result["counts"]["used_pairs"] == 397  # two source cuts plus one B-mode row
+    assert result["calibration"]["source_selection"] == "magA10<25.5 and R2>0.3 applied before stacking"
+
+
+def test_bmode_mask_can_be_disabled_for_explicit_sensitivity(cosmo):
+    pairs, source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
+    result = stack_s19a_pairs(
+        pairs, source_ids, z, pdf, edges, cosmo, apply_b_mode_mask=False,
+    )
+    assert result["counts"]["b_mode_mask_applied"] is False
+    assert result["counts"]["b_mode_mask_rejected"] == 1
+    assert result["counts"]["used_pairs"] == 400
+    assert all(row["n_pairs"] > 90 for row in result["profile"])
 
 
 def test_missing_calibration_pdf_or_decoded_bmode_is_rejected(cosmo):
@@ -200,3 +240,121 @@ def test_duplicate_pair_and_lossy_float_ids_are_rejected(cosmo):
     lossy["object_id"] = np.arange(len(source_ids), dtype=float)
     with pytest.raises(ValueError, match="floating-point ID"):
         stack_s19a_pairs(lossy, source_ids, z, pdf, edges, cosmo)
+
+
+def test_tomographic_nz_efficiency_matches_pdf_and_excludes_bin_zero(cosmo):
+    z = np.linspace(0.0, 2.0, 401)
+    nz = np.exp(-0.5 * ((z - 1.0) / 0.16) ** 2)
+    bins = np.array([1, 2, 3, 4, 0])
+    zl = np.full(len(bins), 0.3)
+    beta = tomographic_nz_lensing_efficiency(
+        zl, bins, z, np.tile(nz, (4, 1)), cosmo,
+    )
+    one_pdf_beta = pdf_lensing_efficiency(
+        np.full(4, 0.3), ["s1", "s2", "s3", "s4"],
+        ["s1", "s2", "s3", "s4"], z, np.tile(nz, (4, 1)), cosmo,
+    )
+    assert beta[:4] == pytest.approx(one_pdf_beta)
+    assert beta[4] == 0.0
+    with pytest.raises(ValueError, match="exceeds the supplied n\\(z\\) bins"):
+        tomographic_nz_lensing_efficiency([0.3], [5], z, np.tile(nz, (4, 1)), cosmo)
+
+
+def test_load_hsc_y3_nz_sacc_returns_four_ordered_tracers(tmp_path, monkeypatch):
+    z = np.array([0.0, 0.5, 1.0])
+    tracers = {
+        f"wl_{index}": SimpleNamespace(z=z, nz=np.array([0.0, index + 1.0, 0.0]))
+        for index in range(4)
+    }
+    fake_sacc = SimpleNamespace(Sacc=SimpleNamespace(
+        load_fits=lambda filename: SimpleNamespace(tracers=tracers),
+    ))
+    monkeypatch.setitem(__import__("sys").modules, "sacc", fake_sacc)
+    path = tmp_path / "hsc_y3.sacc"
+    path.write_bytes(b"fixture")
+
+    loaded_z, loaded_nz = load_hsc_y3_nz_sacc(path)
+
+    assert np.array_equal(loaded_z, z)
+    assert loaded_nz.shape == (4, 3)
+    assert loaded_nz[:, 1] == pytest.approx([1.0, 2.0, 3.0, 4.0])
+
+
+def test_load_hsc_y3_nz_sacc_rejects_missing_or_misaligned_tracer(tmp_path, monkeypatch):
+    path = tmp_path / "hsc_y3.sacc"
+    path.write_bytes(b"fixture")
+    good_z = np.array([0.0, 0.5, 1.0])
+
+    missing = {f"wl_{index}": SimpleNamespace(z=good_z, nz=np.ones(3)) for index in range(3)}
+    monkeypatch.setitem(__import__("sys").modules, "sacc", SimpleNamespace(
+        Sacc=SimpleNamespace(load_fits=lambda _filename: SimpleNamespace(tracers=missing)),
+    ))
+    with pytest.raises(ValueError, match=r"missing a valid n\(z\) tracer wl_3"):
+        load_hsc_y3_nz_sacc(path)
+
+    shifted = dict(missing)
+    shifted["wl_3"] = SimpleNamespace(z=np.array([0.0, 0.6, 1.0]), nz=np.ones(3))
+    monkeypatch.setitem(__import__("sys").modules, "sacc", SimpleNamespace(
+        Sacc=SimpleNamespace(load_fits=lambda _filename: SimpleNamespace(tracers=shifted)),
+    ))
+    with pytest.raises(ValueError, match="share one redshift grid"):
+        load_hsc_y3_nz_sacc(path)
+
+
+def test_tomographic_stack_uses_exported_source_zbin_and_recovers_signal(cosmo):
+    pairs, source_ids, z, pdf, edges, injected = _synthetic_catalog(cosmo)
+    # CSV catalogues commonly arrive as strings, so accept exact integer text.
+    pairs["source_zbin"] = np.ones(len(source_ids), dtype=str)
+    # HSC zbin 0 is already the one B-mode-rejected row in this fixture.
+    pairs["source_zbin"][250] = 0
+    nz_by_bin = np.tile(pdf[0], (4, 1))
+    result = stack_s19a_tomographic_pairs(pairs, z, nz_by_bin, edges, cosmo)
+    assert result["science_measurement"] is False
+    assert result["counts"]["unassigned_source_zbin"] == 1
+    assert result["counts"]["used_pairs"] == 399
+    for row in result["profile"]:
+        assert row["delta_sigma_weak_msun_mpc2"] == pytest.approx(injected, rel=2e-10)
+    assert result["calibration"]["photoz_geometry"] == (
+        "HSC Y3 tomographic n(z) integrated to pair-wise mean SigmaCritInv"
+    )
+
+
+def test_tomographic_stack_rejects_inconsistent_source_bin(cosmo):
+    pairs, _source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
+    pairs["source_zbin"] = np.ones(len(pairs["object_id"]), dtype=int)
+    pairs["lens_id"][1] = "lens-2"
+    pairs["object_id"][1] = pairs["object_id"][0]
+    pairs["source_zbin"][1] = 2
+    with pytest.raises(ValueError, match="inconsistent source_zbin"):
+        stack_s19a_tomographic_pairs(pairs, z, np.tile(pdf[0], (4, 1)), edges, cosmo)
+
+
+def test_random_lens_profile_subtracts_signal_but_does_not_fake_errors():
+    def result(ds, cross):
+        return {
+            "schema": "hsc-s19a-shape-stack-v1", "science_measurement": False,
+            "profile": [{
+                "bin": 0, "r_min_mpc": 0.4, "r_max_mpc": 0.7,
+                "n_pairs": 100, "delta_sigma_weak_msun_mpc2": ds,
+                "cross_delta_sigma_weak_msun_mpc2": cross,
+                "delta_sigma_shape_noise_msun_mpc2": 0.2,
+            }],
+        }
+    subtracted = subtract_random_lens_profile(result(15.0, 2.0), result(3.0, 1.0))
+    row = subtracted["profile"][0]
+    assert row["delta_sigma_random_subtracted_msun_mpc2"] == pytest.approx(12.0)
+    assert row["cross_delta_sigma_random_subtracted_msun_mpc2"] == pytest.approx(1.0)
+    assert "not_estimated" in row["covariance_status"]
+    assert not any("error" in key for key in row)
+
+
+def test_paired_jackknife_covariance_uses_subtracted_replicas():
+    lens = np.array([[10.0], [12.0], [8.0]])
+    random = np.array([[2.0], [1.0], [3.0]])
+    result = paired_jackknife_covariance(lens, random)
+    assert result["n_blocks"] == 3
+    assert result["mean_random_subtracted"] == pytest.approx([8.0])
+    assert np.allclose(result["covariance"], [[12.0]])
+    assert result["standard_error"] == pytest.approx([math.sqrt(12.0)])
+    with pytest.raises(ValueError, match="share shape"):
+        paired_jackknife_covariance(lens, random[:2])

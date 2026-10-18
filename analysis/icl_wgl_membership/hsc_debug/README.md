@@ -154,11 +154,22 @@ python3 analysis/icl_wgl_membership/hsc_debug/submit_wl_shape_counts.py --submit
 선택 후 실제 source 수나 다운로드 바이트가 아니다. shape source 행의 반출은 별도
 용량 산정과 사용자 승인을 거친다.
 
+2026-10-18에 사용자 승인으로 count-only 사전 조회를 수행했다. 32개 배치에서
+렌즈별 count 800행을 받아 고유 렌즈 ID, 행 수, 배치 SHA-256을 검증했다. 렌즈별
+count 합은 3,069,544이고 0개 count 렌즈는 168개다. 이 합은 겹치는 원천 은하를
+렌즈마다 중복 집계한 값이며, source 품질·photo-z 선택 전 후보량이다. 저장 위치는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01/cas_counts/`.
+shape·좌표·photo-z 원자료는 다운로드하지 않았으며 다음 원자료 조회에는 별도 승인과
+전송량 산정이 필요하다.
+
 ## S19A shape pair stack adapter (2026-10-18)
 
-`s19a_shape_stack.py`는 다운로드기가 아니다. 승인된 shape source 행과 별도 full
-photo-z PDF를 받은 뒤 렌즈–source 쌍의 접선·교차 전단 및 약한 전단 근사
-`DeltaSigma` 프로필을 계산하는 함수형 adapter다. `object_id`는 정수 또는 문자열로
+`s19a_shape_stack.py`는 다운로드기가 아니다. 승인된 shape source 행과 보정 redshift
+입력을 받은 뒤 렌즈–source 쌍의 접선·교차 전단 및 약한 전단 근사 `DeltaSigma`
+프로필을 계산하는 함수형 adapter다. full per-object photo-z PDF 방식과 HSC Y3
+tomographic `n(z)` 방식(`stack_s19a_tomographic_pairs`)을 모두 지원한다. 후자는
+계획된 shape-row의 `source_zbin`을 직접 사용하고 full-PDF 대용량 tar를 요구하지 않는다.
+`hsc_y3_zbin==0`은 제외하고 1..4를 보정 `n(z)` 행에 연결한다. `object_id`는 정수 또는 문자열로
 정확히 보존해야 하며 float로 읽으면 거부한다. 같은 source가 여러 렌즈 원뿔에
 들어가는 것은 허용하지만 같은 `(lens_id, object_id)` 쌍의 중복은 거부한다.
 
@@ -170,11 +181,11 @@ photo-z PDF를 받은 뒤 렌즈–source 쌍의 접선·교차 전단 및 약�
 | `weight` | `i_hsmshaperegauss_derived_weight` |
 | `rms_e` | `i_hsmshaperegauss_derived_rms_e` |
 | `m`, `c1`, `c2` | `i_hsmshaperegauss_derived_shear_bias_m/c1/c2` |
-| `b_mode_pass` | HSC `b_mode_mask`를 문서의 컷으로 해석한 통과 boolean |
+| `b_mode_pass` | HSC `b_mode_mask`를 검증된 값 방향으로 decode한 통과 boolean |
 | `mag_a10`, `resolution` | `i_apertureflux_10_mag`, `i_hsmshaperegauss_resolution` |
 | `psf_shape11/22/12` | `i_sdssshape_psf_shape11/22/12` |
 | 좌표·렌즈 적색이동 | 800개 렌즈 목록 및 `meas`의 천구좌표 |
-| source PDF | `object_id`로 붙인 tract별 full photo-z PDF와 공통 `z` grid |
+| source redshift | 기본: `source_zbin` 1..4를 HSC Y3 SACC의 fiducial `n(z)` 곡선에 대응; 대체: `object_id`별 tract full PDF |
 
 호출 함수는 `pdf_lensing_efficiency`로 각 lens-source 쌍의 PDF 적분
 `<D_ls/D_s>`를 구하고, 각 반경 빈에서
@@ -186,15 +197,110 @@ HSC의 경계 밀도 선택편향 처방을 적용한다. 선택편향에는 반
 계수와 오차식은 HSC가 연결한
 [hsc-y3-calib 보정 코드](https://github.com/mr-superonion/hsc-y3-calib)의
 `get_sel_bias` 처방을 근거로 구현했으며, 저장소의 코드를 복사하거나 포함하지 않았다.
-입력은 실제 HSC 약한렌즈 선택을 만족한 source 행이어야 한다.
+입력은 HSC shape catalog 행이어야 한다. adapter는 `mag_a10 < 25.5`와
+`resolution > 0.3`을 스택 전에 적용하고 탈락 건수를 기록한다. B-mode mask도 기본
+적용하며, 명시적 민감도 실행에서만 끌 수 있다.
+
+HSC PDR3 문서는 `b_mode_mask`가 큰 B-mode 영역을 제거하는 데 쓰인다고 설명하지만,
+저장값의 0/1 극성은 명시하지 않는다. `decode_hsc_b_mode_mask(raw, masked_value=...)`는
+검증된 masked 값을 필수로 받아 자동 추측을 막는다. 행 export 결과의 값 범위와 해당 릴리스의
+스키마/설명을 대조하기 전에는 실제 stack 입력의 `b_mode_pass`를 만들지 않는다.
+
+공식 HSC Y3 SACC 보정 파일을 로컬에 받은 뒤 `load_hsc_y3_nz_sacc(path)`로
+`wl_0`–`wl_3` tracer를 읽어 공통 `z` 격자와 네 개 `n(z)` 배열을 만들 수 있다.
+이 함수는 로컬 파일만 읽고 네트워크에 접속하지 않는다. tracer 곡선은 fiducial
+`n(z)` 입력이며 posterior 표본이나 그 불확실성 전파를 대신하지 않는다. 실제 파일이
+확보되면 다음처럼 adapter에 전달한다.
+
+```python
+from s19a_shape_stack import load_hsc_y3_nz_sacc, stack_s19a_tomographic_pairs
+
+z_nz, nz_by_bin = load_hsc_y3_nz_sacc("/path/to/hsc_y3_fourier_space_data_vector.sacc")
+result = stack_s19a_tomographic_pairs(pairs, z_nz, nz_by_bin, radial_edges_mpc, cosmology)
+```
 
 현재 결과는 weak-shear 근사 프로필과 독립 쌍으로 가정한 shape-noise 오차, cross-shear
-null만 낸다. full P(z)로 기하학적 `SigmaCritInv`를 적분하지만, photo-z PDF의 bias와
-dilution을 보정할 외부 calibration sample/factor는 아직 적용하지 않는다. reduced shear,
+null만 낸다. full P(z) 방식은 PDF와 기하 효율을 적분하고, tomographic 방식은 HSC Y3
+보정 `n(z)`를 적분한다. `load_hsc_y3_nz_sacc`가 공식 SACC의 네 `wl_0`–`wl_3` tracer를
+검증해 연결하며, 이 경로는 계획된 source-row export와 호환된다. fiducial `n(z)`에 대한
+posterior/systematic 불확실성 전파는 아직 없으며, 개별 source PDF 방식은 HSC가 요구하는 photo-z bias/dilution
+보정도 추가해야 한다. reduced shear,
 random-lens 차감, 겹치는 source/하늘 블록 공분산, 선택 보정 계수의 오차 전파도
 최종 공분산에 결합하지 않았다. 따라서 출력은 항상 `science_measurement=false`이고
 최종 질량·과학 결과로 쓰지 않는다. 합성 주입 회수와 잘못된 ID/PDF/mask/selection 입력
-거부 시험은 `test_s19a_shape_stack.py`에 있다. HSC 열과 PDF 연결 규약은
+거부 시험은 `test_s19a_shape_stack.py`에 있다. HSC 열·tomographic-bin·PDF 연결 규약은
 [공식 S19A 안내](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/),
 응답도·per-object bias·selection correction은
 [HSC 3-year shape catalog 방법론](https://arxiv.org/abs/2107.00136)을 따른다.
+
+실제 row export와 SACC `n(z)` 파일이 준비되면 `run_wl_shape_stack.py`가 이 adapter를
+연결한다. 후처리기는 네트워크를 쓰지 않으며 32개 row-batch 해시, 렌즈별 행 수,
+800개 렌즈, count-only 계획 연결을 다시 검증한다. HSC `b_mode_mask`에서 제외할 저장값을
+`--b-mode-masked-value`로 명시해야 하며, 이 값은 해당 릴리스 스키마나 검증된 자료에서
+확인하기 전에는 정하지 않는다. 예시:
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/run_wl_shape_stack.py \
+  --rows /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_01 \
+  --nz-sacc /path/to/hsc_y3_fourier_space_data_vector.sacc \
+  --b-mode-masked-value VERIFIED_0_OR_1 \
+  --radial-edges-mpc 0.1 0.2 0.4 0.7 1.0 1.5 2.0 3.0 \
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_cluster_stack_01.json
+```
+
+예시는 입력 경로와 마스크 극성을 검증한 뒤에만 실행한다. 산출물은 cluster-only 탐색
+프로필이며 random-lens 차감, `n(z)` 오차 전파, paired spatial jackknife 공분산이 빠진
+상태로 기록된다. source-row export 자체는 별도 명시 승인이 있을 때만 실행한다.
+
+별도 후처리 `subtract_random_lens_profile`은 cluster와 random stack의 접선·교차
+`DeltaSigma` 점 추정량을 bin별로 차감한다. `paired_jackknife_covariance`는 양쪽에
+동일하게 적용한 spatial delete-one-block replicate의 차이에서 공분산을 계산한다.
+이들은 실제 random source 쌍을 만들거나 각 jackknife replicate를 실행하지 않는다.
+공통 sky block 및 source overlap을 반영한 실제 공분산이 없으면 두 stack의 개별
+shape-noise 오차를 독립으로 합치지 않는다. 테스트에는 신호 회수·n(z) bin 처리·SACC
+로딩/검증·선택 컷·무작위 차감 및 공분산 산식이 포함되며 현재 15개가 통과한다.
+
+## CAMIRA member-mass and weight sensitivity (2026-10-18)
+
+`analyze_member_weighted_satellite_profiles.py` joins existing per-annulus satellite
+profiles to the 800-cluster CAMIRA member file using saved member coordinates. It
+verifies all 800 cluster identities and 36,513 member-position sets, then audits
+5,832 profile rows in 543 clusters. It compares equal-cluster unweighted profiles,
+CAMIRA-weighted profiles, and candidate stellar-mass bins. The source file is
+headerless. The hash-matched acquisition summary identifies column 8 as
+`weight`; column 7 is the undocumented `field7`, whose values are only treated
+as candidate `log10(M*/Msun)`. The output therefore remains descriptive and
+keeps `science_measurement=false`.
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/analyze_member_weighted_satellite_profiles.py \
+  --work /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_member_weight_sensitivity_2026-10-18_04
+```
+
+See [`member_weighted_profile_audit_2026-10-18.md`](member_weighted_profile_audit_2026-10-18.md)
+for results and limitations. Regression tests are in
+`test_analyze_member_weighted_satellite_profiles.py`.
+
+`analyze_weighted_satellite_icl_association.py` then compares the saved
+50–75 kpc satellite profiles with the K2.5/40% 200–300 kpc ICL sample, using
+equal-satellite versus CAMIRA-weighted means and a paired spatial-block
+bootstrap. It is a post hoc sensitivity analysis and keeps
+`science_measurement=false`. See
+[`camira_weighted_icl_association_2026-10-18.md`](camira_weighted_icl_association_2026-10-18.md).
+
+## ICL annulus sample-selection audit (2026-10-18)
+
+`audit_icl_sample_selection.py` compares the 137-cluster K2.5/40% all-annulus sample
+and the 224-cluster 200–300 kpc annulus-only sample with the 800-cluster parent,
+within each filter. It reports descriptive z/richness shifts, central masking,
+center-candidate fractions, and 5-degree footprint occupancy. It does not correct
+selection or authorize a science measurement. See
+[`icl_sample_selection_audit_2026-10-18.md`](icl_sample_selection_audit_2026-10-18.md)
+and the hash-recorded output at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_sample_selection_audit_2026-10-18_02/`.
+
+`audit_icl_center_quality.py` then separates the 224 outer-annulus pairs by the
+automatic unique-center and K2.5 central-mask flags, using connected spatial-block
+bootstrap intervals. The result is filter-dependent and remains exploratory; see
+[`icl_center_quality_sensitivity_2026-10-18.md`](icl_center_quality_sensitivity_2026-10-18.md)
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_center_quality_sensitivity_2026-10-18_02/`.
