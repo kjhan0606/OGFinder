@@ -138,7 +138,7 @@ R과 r을 혼용하지 않는다. 분석 가능한 반경은 PSF와 주입/회�
 | A. 자료·선행연구 | 표본 계보, 입력/교정 목록, 선행연구 비교표 | 누락 입력 및 연구 차별점 명시 | 일부 자료·초기 문헌 확인 |
 | B1. ICL 예비 측정 | matched-control 차감 프로파일·위성 위치 밀도 | 고정 반경·대역별로 재현 가능하고 BCG/sky/PSF 게이트 통과 | 반경별 지원 224쌍(137 strict쌍과 행별 일치); Kron/면적 24조건 민감도에서 큰 마스크는 지지가 급감하고 flux도 이동. 과학 게이트 미통과 |
 | B2. 위성 외곽 예비 측정 | HSC 다중대역 위성 측광·위성 중심 스택 | 멤버 완전도·질량/색 맞춤·광량 누출 실험 통과 | 전체 800장 탐색 스택 5,832행(1,768개 위성); 7-bin 공통 은하단 i 29개/i2 103개. 외곽 평균은 0과 양립; 공통 표본 ICL 조인 21/53개, 상관 미확정·과학 게이트 미통과 |
-| B3. 약한렌즈 예비 측정 | S19A shape source 겹침표·전단 profile | 유효 source 수, 보정 n(z), 응답 보정 및 null 시험 통과 | adapter PDF/tomographic n(z)/SACC/HSC selection/random-jackknife 시험 15/15 통과; count-only 800행 검증 완료, shape 행 없음 |
+| B3. 약한렌즈 예비 측정 | S19A shape source 겹침표·전단 profile | 유효 source 수, 보정 n(z), 응답 보정 및 null 시험 통과 | 800 렌즈·3,069,544 shape 행 검증 완료; 2,234,510개 컷 통과 쌍의 raw `e_t/e_x` 진단도 완료. 보정 n(z), B-mode polarity, random/null·공분산 미완료; science gate 미통과 |
 | C. 공동 검증 | 주입/회수, null, 공분산·감도 보고서 | 무상관 주입의 가짜 관계와 알려진 신호 회수 오차가 사전 오차 예산 내 | 확산광 코애드 주입·대조장 공분산 실행; joint satellite–ICL 및 lensing null 미완료 |
 | D. 분석 정의 고정 | 표본/반경/단위/가중/모형/판정 기준 버전 | 본 분석 전 숫자 기준과 주·보조 가설 고정 | 미실행 |
 | E. 전체 표본 | 두 스택, 공동 관계, 상한·민감도 | 효과와 체계오차, 참여 표본 및 선택함수 함께 보고 | 미실행 |
@@ -537,3 +537,95 @@ i2 독립 표본/null 검정, 위성 외곽광–ICL 공동 주입/회수, 잔�
 위 목록은 초기 검토이며 완전한 문헌 조사나 독창성 확정이 아니다. 후보 차별점은
 같은 관측 표본에서 ICL과 위성 외곽을 공동 측정하고 광량 분배·완전도·공분산을
 검증하는 데 있다.
+
+### 2026-10-19 weak-lensing source-row QA 보완
+
+승인된 800 렌즈·3,069,544 lens-source 행을 `lageunha`에서 스트리밍 감사했다.
+원 논문의 shape-selection 조건 `|e|<2`, `0<=sigma_e<=0.4`, `R2>=0.3`,
+`mag_A<=25.5`에 맞춰 어댑터를 수정했다. 기존 구현은 `|e|>=1`을 오류로 막아
+88,460개의 정상 범위 후보를 포함한 전체 스택을 중단시킬 수 있었다. 수정 뒤
+어댑터 단위·합성 회수 시험 17개가 통과했다. 실제 행 기준 네 shape cut과
+tomographic bin 1–4를 통과한 pair는 2,234,510개이며, B-mode와 radial 선택 전
+기술 지원량이다. 원자료 해시, counts, 선택 세부값은
+[shape-row quality 보고서](hsc_debug/wl_shape_row_quality_assessment_2026-10-19.md)에
+있다. `b_mode_mask` 0/1 방향은 여전히 미확정이고 보정 SACC `n(z)`, random-lens
+차감, source overlap을 반영한 하늘 블록 공분산도 필요하다. 따라서 보정 전단·질량
+결과는 아직 계산하지 않았으며 `science_measurement=false`를 유지한다.
+
+### 2026-10-19 raw tangential ellipticity 진단
+
+`audit_wl_raw_shape_profiles.py`가 이미 반출된 3,069,544 lens-source 행에 HSC
+Y3 shape cuts와 tomographic bin 1–4 선택을 적용하고, proper radius 0.1–3 Mpc의
+raw shape-weighted `e_t`와 cross `e_x` 프로필을 계산했다. 2,234,510개 쌍이
+shape·bin 선택을 통과했다. 무마스크 기술 진단에서 `e_t`는 0.1–0.2 Mpc의
+0.03434에서 2–3 Mpc의 0.005649로 감소했고, cross 성분은 두 구간에서 −0.000757,
++0.000075였다. 두 가능한 `b_mode_mask` 극성의 제외 결과도 나란히 만들었으며,
+반대 극성의 pair count가 무마스크 count를 정확히 분할함을 검사했다. raw profile은
+양의 접선 정렬 패턴과 양립하지만 shape response·선택편향·source `n(z)`와 전경
+희석, random-lens 차감, source 중복/공간 공분산을 보정하지 않았으므로 렌즈 신호나
+질량 검출로 해석하지 않는다. 결과는
+[raw shape profile 평가](hsc_debug/wl_raw_shape_profile_assessment_2026-10-19.md)와
+`sample_800_2026-10-13/wl_raw_shape_profiles_2026-10-19_02/`에 저장했다.
+`science_measurement=false`를 유지한다.
+
+### 2026-10-19 ICL 하늘 추정기 짝비교
+
+Astrafek 도구 `hsc_debug/audit_icl_sky_estimator_delta.py`로 저장된 74개
+matched pair의 pixel-SFD와 plane-first ICL 상관을 같은 공간 블록 재표집에서
+비교했다. 사전 지정한 i2 표본 53쌍에서 z·richness 조정 partial r은 0.239에서
+0.124로 바뀌었고, 짝지은 차이(plane-first−pixel-SFD)의 95% 구간은 −0.329–0.063으로
+0을 포함한다. 따라서 estimator 민감도는 관찰되지만, estimator 간 차이나 물리적
+ICL–위성 연관을 확정하지 않는다. 입력 행과 필터 배정은 바꾸지 않았고 i 필터 21쌍은
+보조 기술 결과로만 계산했다. 재현 스크립트, 검사, 결과 기록은
+[sky-estimator 보고서](hsc_debug/icl_sky_estimator_delta_assessment_2026-10-19.md)와
+`sample_800_2026-10-13/icl_sky_estimator_delta_2026-10-19_01/summary.json`에 있다.
+다음 과학 게이트는 실제 확산광 주입·회수, 대응 random field, PSF wing 및 mask 누출을
+포함한 하늘 추정 비교와 완전 공분산 검증이다. `science_measurement=false`를 유지한다.
+
+### 2026-10-19 matched random-field plane 전달 주입
+
+Astrafek 도구 `hsc_debug/audit_icl_plane_injection.py`와
+`hsc_debug/run_icl_plane_injection.sh`가 74개 target/control matched pair의
+coadd/bg 영상에 네 가지 확산광 모형을 주입하고, 200–300 kpc 고리의 raw 및
+600–900 kpc tile-plane 보정 회수율을 계산하도록 구성됐다. K2.5 마스크와 고정된
+대상·대조장 선택을 사용하며, 5,000회 공간 블록 재표집으로 target-control 회수 차이를
+평가한다. 이는 전달받은 coadd/bg 위에서 Astrafek의 후단 plane 추정기만 검사하므로
+HSC upstream sky 처리, PSF 날개, mask growth와 상관잡음 검증을 대신하지 않는다.
+첫 Slurm job 427839는 74쌍 측정 후 요약 그룹의 행 수 검사 오류로 종료됐다.
+Astrafek에 shape별 고정 pair 수 regression test를 추가하고 job 427845로 재실행해
+완료했다. i2 53쌍에서 plane 보정 평균 회수율은 100 kpc 원형/타원 모형에 99.1%/99.5%,
+250 kpc 모형에 86.0%/90.8%였다. target−random-field 회수 차이의 95% 공간 블록 구간은
+네 모형 모두 0을 포함했다. 따라서 downstream plane 제거는 확산광 크기에 따라
+약 0.5–14%를 흡수하지만, 이 matched sample과 모형에서 target-control 차등 전송은
+검출되지 않았다. 이는 관측 보정값이 아니며 HSC upstream sky subtraction, PSF 날개,
+mask growth, photon noise 및 전체 공분산을 검증하지 않는다. 원자료는 변경하지 않았고
+`science_measurement=false`를 유지한다. 결과·해시는
+[plane 주입 보고서](hsc_debug/icl_plane_injection_assessment_2026-10-19.md)와
+`sample_800_2026-10-13/icl_plane_injection_2026-10-19_02/`에 저장했다.
+
+### Weak-lensing 교정 입력
+
+약한 중력렌즈 stack의 calibrated 단계는 아직 완료되지 않았다. HSC S19A shape 문서는
+4개 source tomographic bin의 `n(z)`를 포함하는 공식 자료
+`hsc_y3_fourier_space_data_vector.sacc`를 안내하고, point/photo-z 기반 추정에는
+dilution 및 selection-bias 교정이 필요하다고 명시한다
+([HSC S19A shape-catalog 문서](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)).
+현재 OGFinder 분석과 sample data 경로에서는 해당 SACC 파일을 찾지 못했다. 이 자료는
+추가 HSC data download이므로 사용자의 별도 명시 승인을 기다린다. 승인 후에도 먼저
+공식 bin 경계와 현재 3,069,544 lens–source 행의 `source_zbin` 정의를 대조하고,
+SACC tracer의 `z,n(z)`를 기존 `run_wl_shape_stack.py` 검증기에 넣어 정합성을 통과한
+뒤에만 보정 stack을 계산한다. 추가 영상·원자료 shape row·개별 photo-z PDF 반출은
+이 단계에 포함하지 않는다.
+
+### 2026-10-19 반경별 ICL–위성 공간 블록 불확실도
+
+기존 94개 반경별 matched cluster/filter 행에 ICL 대상 좌표와 검증된 대조장 추출 좌표를
+복구해 connected target/control 5도 공간 블록 재표집을 적용했다. Astrafek 도구
+`hsc_debug/audit_satellite_icl_spatial_blocks.py`는 5,000회 일반 pair 재표집과 공간 블록
+재표집을 같은 고정 표본에서 비교한다. 주 i2 68쌍/33블록의 redshift·richness 조정 partial
+Pearson r은 0.293, 공간 블록 95% 구간은 [0.042, 0.497]이지만, 일반 pair 구간과 보조
+Spearman 공간 구간은 0을 포함한다. 작은 중심 적격·i 표본도 구간이 넓다. 선택 표본의
+사후 탐색 결과이므로 검출로 해석하지 않고 `science_measurement=false`를 유지한다.
+좌표 결합 94/94, 입력 및 결과 해시, 테스트 3개를 확인했다. 세부 결과와 한계는
+[공간 블록 평가](hsc_debug/satellite_icl_spatial_block_assessment_2026-10-19.md) 및
+`sample_800_2026-10-13/satellite_icl_spatial_blocks_2026-10-20_02/`에 기록했다.

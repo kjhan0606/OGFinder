@@ -178,6 +178,7 @@ tomographic `n(z)` 방식(`stack_s19a_tomographic_pairs`)을 모두 지원한다
 | adapter 열 | HSC/분석 입력 |
 |---|---|
 | `e1`, `e2` | `i_hsmshaperegauss_e1/e2` |
+| `sigma_e` | `i_hsmshaperegauss_derived_sigma_e` |
 | `weight` | `i_hsmshaperegauss_derived_weight` |
 | `rms_e` | `i_hsmshaperegauss_derived_rms_e` |
 | `m`, `c1`, `c2` | `i_hsmshaperegauss_derived_shear_bias_m/c1/c2` |
@@ -197,9 +198,11 @@ HSC의 경계 밀도 선택편향 처방을 적용한다. 선택편향에는 반
 계수와 오차식은 HSC가 연결한
 [hsc-y3-calib 보정 코드](https://github.com/mr-superonion/hsc-y3-calib)의
 `get_sel_bias` 처방을 근거로 구현했으며, 저장소의 코드를 복사하거나 포함하지 않았다.
-입력은 HSC shape catalog 행이어야 한다. adapter는 `mag_a10 < 25.5`와
-`resolution > 0.3`을 스택 전에 적용하고 탈락 건수를 기록한다. B-mode mask도 기본
-적용하며, 명시적 민감도 실행에서만 끌 수 있다.
+입력은 HSC shape catalog 행이어야 한다. adapter는 HSC Y3 논문의 선택 조건
+`|e|<2`, `0<=sigma_e<=0.4`, `resolution>=0.3`, `mag_a10<=25.5`를 스택 전에
+적용하고 각 shape/측광 선택 탈락 건수를 기록한다. 이전 어댑터는 수학적 ellipticity
+상한 1을 강제했지만, HSC 논문이 실제 catalog 선택으로 정한 상한은 2다. B-mode mask도
+기본 적용하며, 명시적 민감도 실행에서만 끌 수 있다.
 
 HSC PDR3 문서는 `b_mode_mask`가 큰 B-mode 영역을 제거하는 데 쓰인다고 설명하지만,
 저장값의 0/1 극성은 명시하지 않는다. `decode_hsc_b_mode_mask(raw, masked_value=...)`는
@@ -321,3 +324,118 @@ support counts and reports only a nominal independent-pixel noise covariance; co
 noise and the ICL random-control term remain absent. It does not correct the measured relation.
 See [`satellite_icl_shared_pixel_covariance_2026-10-18.md`](satellite_icl_shared_pixel_covariance_2026-10-18.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_shared_pixel_covariance_2026-10-18_01/`.
+
+`audit_satellite_icl_leave_block_out.py` recalculates the redshift/richness-adjusted partial
+correlation after omitting each connected 5-degree target/control sky block in turn. This
+measures block influence only; it does not make a significance claim or change the science gate.
+See [`satellite_icl_lobo_assessment_2026-10-19.md`](satellite_icl_lobo_assessment_2026-10-19.md)
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_lobo_2026-10-19_03/`.
+The deterministic leave-block-out table was rerun with the same input and verified byte-for-byte
+at `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_lobo_2026-10-19_04/`.
+
+`audit_satellite_icl_spatial_blocks.py` restores target/control coordinates for the 94 rows in the
+per-annulus association using the hash-verified ICL profile and matched-control extraction records.
+It compares 5,000 ordinary pair-bootstrap draws with 5,000 connected 5-degree target/control block
+draws. For the primary i2 all-supported subset (68 pairs, 33 blocks), the adjusted partial-Pearson
+estimate is 0.293 with spatial-block 95% interval [0.042, 0.497]; the ordinary-pair interval
+includes zero, and the unadjusted Spearman spatial interval also includes zero. This remains a
+selected-sample exploratory result, not a detection. See
+[`satellite_icl_spatial_block_assessment_2026-10-19.md`](satellite_icl_spatial_block_assessment_2026-10-19.md)
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_spatial_blocks_2026-10-20_02/`.
+
+`analyze_extinction_sensitivity_icl_satellite.py` applies center-based SFD extinction corrections
+separately to the saved ICL targets and matched controls, and compares them with a target-only
+HSC PDR3 forced-source `a_i` sensitivity. It verifies the existing profile/catalogue hashes and
+uses 5,000 connected 5-degree block-bootstrap draws for the 200–300 kpc ICL means and the
+200–300 kpc ICL / 50–75 kpc satellite association. Results are exploratory because extinction is
+not corrected per pixel and other sky/PSF/mask/injection gates remain open. See
+[`icl_extinction_sensitivity_2026-10-19.md`](icl_extinction_sensitivity_2026-10-19.md) and
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_extinction_sensitivity_2026-10-19_03/`.
+
+`measure_pixel_extinction_profiles.py` checks the center-based correction against separate
+pixel-level SFD corrections for target and matched-control images; local sky-plane subtraction is
+reported only as a sensitivity test. The completed 224-pair profile and 74-pair
+satellite-association audit remains exploratory. See
+[`icl_pixel_extinction_assessment_2026-10-19.md`](icl_pixel_extinction_assessment_2026-10-19.md)
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_pixel_extinction_2026-10-19_03/`.
+
+The approved HSC weak-lensing source-row export is complete for 800 lenses and 3,069,544
+lens–source rows. It contains 22 columns, excludes full photo-z PDF rows, and remains
+`science_measurement=false` pending calibrated n(z), B-mode mask polarity, and the remaining
+selection and covariance gates. Its row summary is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_03/row_summary.json`.
+The streaming quality audit finds 88,460 rows with `1<|e|<2` and none with `|e|>=2`,
+so the adapter was corrected to follow the published `|e|<2` and `sigma_e<=0.4`
+selection instead of rejecting the whole input at `|e|>=1`. The four published shape
+cuts plus tomographic assignment leave 2,234,510 candidate pairs before B-mode and
+radial selection. The stored B-mode bit remains undecoded. See
+[`wl_shape_row_quality_assessment_2026-10-19.md`](wl_shape_row_quality_assessment_2026-10-19.md)
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_row_quality_2026-10-19_03/`.
+
+## Raw tangential-shape diagnostic (2026-10-19)
+
+`audit_wl_raw_shape_profiles.py` calculates shape-weighted mean raw `e_t` and
+cross `e_x` from the approved row export after the published HSC Y3 cuts and
+tomographic bins 1–4. It uses 0.1–3 Mpc proper-radius bins and reports three
+mask cases: no B-mode exclusion, exclude raw zero, and exclude raw one. The
+last two are sensitivity cases only; the stored `b_mode_mask` polarity remains
+undecoded. The loader validates the raw bit without assigning a polarity.
+
+The run is descriptive only: it has no shear response/bias calibration, source
+`n(z)` dilution correction, random-lens subtraction, or source-overlap/spatial
+covariance. It reports neither calibrated shear nor `DeltaSigma`, and keeps
+`science_measurement=false`. See
+[`wl_raw_shape_profile_assessment_2026-10-19.md`](wl_raw_shape_profile_assessment_2026-10-19.md)
+and the hash-recorded output at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_raw_shape_profiles_2026-10-19_02/`.
+
+Reproduce on `lageunha` without network access:
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/audit_wl_raw_shape_profiles.py \
+  --rows /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_03 \
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_raw_shape_profiles_NEW
+```
+
+## Paired ICL sky-estimator contrast (2026-10-19)
+
+`audit_icl_sky_estimator_delta.py` compares pixel-SFD and plane-first ICL
+estimators on the same 74 matched pairs. It keeps each filter separate,
+pre-registers `i2` as primary, residualizes on redshift and richness, and
+uses identical connected target/control 5-degree block draws for both
+estimators. In `i2`, the partial-correlation point estimate changes from
+0.239 to 0.124; the paired 95% block-bootstrap interval for the difference
+is −0.329 to 0.063 and includes zero. This is an exploratory sensitivity
+result; the ICL science gate remains closed. Reproduction code, tests, and
+interpretation are in
+[`icl_sky_estimator_delta_assessment_2026-10-19.md`](icl_sky_estimator_delta_assessment_2026-10-19.md)
+and [`test_audit_icl_sky_estimator_delta.py`](test_audit_icl_sky_estimator_delta.py).
+The hash-recorded run is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_sky_estimator_delta_2026-10-19_01/`.
+
+## Paired-field plane-estimator injection (2026-10-19)
+
+`audit_icl_plane_injection.py` injects four diffuse-light profiles into the
+existing 74 matched target/control fields and reruns the downstream local
+plane estimator on each image. This evaluates plane-subtraction transfer on
+delivered coadd/bg data; it does not test HSC's upstream sky subtraction. The
+run and limits are recorded in
+[`icl_plane_injection_assessment_2026-10-19.md`](icl_plane_injection_assessment_2026-10-19.md).
+The corrected Slurm run completed on 74 pairs with four shapes and 5,000
+connected-block resamples. The 100 kpc profiles recovered 99.1–99.5% after
+plane subtraction; the 250 kpc profiles recovered 86.0–90.8%. Cluster-control
+recovery differences were consistent with zero for all shapes. The first
+attempt's aggregation failure remains preserved in `_01`; the regression
+test now checks the fixed pair count per shape. Verified results are at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_plane_injection_2026-10-19_02/`.
+
+## Weak-lensing calibration input gate
+
+The approved shape-row export is present, but no HSC Y3 SACC `n(z)` file is
+stored in the project data paths. The HSC S19A shape-catalog page identifies
+`hsc_y3_fourier_space_data_vector.sacc` as a source of four tomographic-bin
+`n(z)` tracers and specifies additional dilution and selection-bias corrections.
+Retrieval of that additional HSC calibration file awaits separate explicit
+user approval. After approval, validate its bin definitions against the
+exported `source_zbin` values through `run_wl_shape_stack.py` before making any
+calibrated weak-lensing claim.

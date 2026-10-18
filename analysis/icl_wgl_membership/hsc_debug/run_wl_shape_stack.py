@@ -37,7 +37,7 @@ from ogfkit.wlcluster import Cosmology
 
 PAIR_FIELDS = (
     "lens_id", "object_id", "lens_ra_deg", "lens_dec_deg", "lens_z",
-    "source_ra_deg", "source_dec_deg", "e1", "e2", "weight", "rms_e",
+    "source_ra_deg", "source_dec_deg", "e1", "e2", "sigma_e", "weight", "rms_e",
     "m", "c1", "c2", "mag_a10", "resolution", "psf_shape11",
     "psf_shape22", "psf_shape12",
 )
@@ -73,9 +73,14 @@ def _arrays_from_csv(reader, masked_value, lens_counts):
     if not np.all(np.isfinite(bins)) or not np.array_equal(bins, bins.astype(int)):
         raise ValueError("source_zbin must contain finite integer values")
     arrays["source_zbin"] = bins.astype(int)
-    arrays["b_mode_pass"] = decode_hsc_b_mode_mask(
-        columns["b_mode_mask_raw"], masked_value=masked_value,
-    )
+    raw_mask = np.asarray(columns["b_mode_mask_raw"], dtype=float)
+    if not np.all(np.isfinite(raw_mask)) or np.any((raw_mask != 0) & (raw_mask != 1)):
+        raise ValueError("raw b_mode_mask is not binary; verify its catalog definition")
+    arrays["b_mode_mask_raw"] = raw_mask.astype(np.int8)
+    if masked_value is not None:
+        arrays["b_mode_pass"] = decode_hsc_b_mode_mask(
+            raw_mask, masked_value=masked_value,
+        )
     return arrays, observed_lenses, n_rows
 
 
@@ -89,6 +94,7 @@ def _join_arrays(parts):
 
 
 def verify_and_load_pairs(rows_dir, preflight, plan_dir, masked_value):
+    """Verify the export and load rows; ``None`` validates but does not decode b-mode."""
     rows_dir = Path(rows_dir).resolve()
     preflight = Path(preflight).resolve()
     plan_dir = Path(plan_dir).resolve()
@@ -156,7 +162,7 @@ def verify_and_load_pairs(rows_dir, preflight, plan_dir, masked_value):
         "n_lenses": 800,
         "count_query_plan_sha256": count_summary["query_plan_sha256"],
         "count_summary_sha256": sha(preflight / "cas_counts" / "count_summary.json"),
-        "masked_value": int(masked_value),
+        "masked_value": None if masked_value is None else int(masked_value),
     }
 
 

@@ -34,6 +34,16 @@ def test_csv_adapter_preserves_ids_bins_and_explicit_mask_polarity():
     assert arrays["b_mode_pass"].tolist() == [False, True]
 
 
+def test_csv_adapter_can_validate_raw_mask_without_decoding_polarity():
+    arrays, observed, n_rows = _arrays_from_csv(
+        _csv_reader(), masked_value=None, lens_counts={"lens-1": 2},
+    )
+    assert observed == {"lens-1": 2}
+    assert n_rows == 2
+    assert arrays["b_mode_mask_raw"].tolist() == [1, 0]
+    assert "b_mode_pass" not in arrays
+
+
 def test_csv_adapter_rejects_nonbinary_hsc_mask_values():
     with pytest.raises(ValueError, match="not binary"):
         _arrays_from_csv(_csv_reader(raw_masks=(0, 2)), masked_value=1,

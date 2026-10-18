@@ -134,6 +134,7 @@ def _synthetic_catalog(cosmo):
         "source_dec_deg": dec_source,
         "e1": np.zeros(n),
         "e2": np.zeros(n),
+        "sigma_e": rng.uniform(0.02, 0.30, n),
         "weight": weights,
         "rms_e": rms,
         "m": m,
@@ -201,12 +202,26 @@ def test_synthetic_hsc_calibration_and_pdf_beta_recover_injected_delta_sigma(cos
 
 def test_stack_applies_hsc_resolution_and_aperture_magnitude_cuts(cosmo):
     pairs, source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
-    pairs["mag_a10"][0] = 25.5
-    pairs["resolution"][1] = 0.3
+    pairs["mag_a10"][0] = 25.5001
+    pairs["resolution"][1] = 0.2999
     result = stack_s19a_pairs(pairs, source_ids, z, pdf, edges, cosmo)
     assert result["counts"]["hsc_source_selection_rejected"] == 2
     assert result["counts"]["used_pairs"] == 397  # two source cuts plus one B-mode row
-    assert result["calibration"]["source_selection"] == "magA10<25.5 and R2>0.3 applied before stacking"
+    assert result["calibration"]["source_selection"] == (
+        "HSC Y3 cuts |e|<2, 0<=sigma_e<=0.4, R2>=0.3, and magA10<=25.5 applied before stacking"
+    )
+
+
+def test_hsc_shape_quality_uses_published_ellipticity_and_sigma_cuts(cosmo):
+    pairs, source_ids, z, pdf, edges, _ = _synthetic_catalog(cosmo)
+    pairs["e1"][0] = 1.2  # HSC catalog |e| may exceed one; published cut is |e|<2.
+    pairs["e1"][1] = 2.0
+    pairs["sigma_e"][2] = 0.4001
+    result = stack_s19a_pairs(pairs, source_ids, z, pdf, edges, cosmo)
+    assert result["counts"]["ellipticity_amplitude_ge_2_rejected"] == 1
+    assert result["counts"]["sigma_e_outside_0_0p4_rejected"] == 1
+    assert result["counts"]["hsc_shape_quality_rejected"] == 2
+    assert result["counts"]["used_pairs"] == 397  # two shape cuts plus one B-mode row
 
 
 def test_bmode_mask_can_be_disabled_for_explicit_sensitivity(cosmo):

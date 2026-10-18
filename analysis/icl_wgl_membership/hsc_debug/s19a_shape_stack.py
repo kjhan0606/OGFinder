@@ -18,7 +18,7 @@ C_KMS = 299792.458
 G_MPC = 4.30091e-9  # Mpc (km/s)^2 / Msun
 REQUIRED_PAIR_COLUMNS = (
     "lens_id", "object_id", "lens_ra_deg", "lens_dec_deg", "lens_z",
-    "source_ra_deg", "source_dec_deg", "e1", "e2", "weight", "rms_e",
+    "source_ra_deg", "source_dec_deg", "e1", "e2", "sigma_e", "weight", "rms_e",
     "m", "c1", "c2", "mag_a10", "resolution", "psf_shape11",
     "psf_shape22", "psf_shape12", "b_mode_pass",
 )
@@ -339,8 +339,6 @@ def _check_columns(pairs):
         raise ValueError("RA must be in [0, 360) degrees")
     if np.any(arrays["weight"] <= 0) or np.any(arrays["rms_e"] < 0) or np.any(arrays["rms_e"] >= 1):
         raise ValueError("S19A weight must be positive and rms_e must be in [0, 1)")
-    if np.any(arrays["e1"] ** 2 + arrays["e2"] ** 2 >= 1.0 + 1e-10):
-        raise ValueError("ellipticity magnitude must be smaller than one")
     if np.any(arrays["m"] <= -1):
         raise ValueError("per-source multiplicative bias must be greater than -1")
     flag = np.asarray(arrays["b_mode_pass"])
@@ -384,7 +382,11 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
             raise ValueError("precomputed pair lensing efficiencies must be finite [0, 1] values")
     radius, phi = pair_geometry(arr, cosmology)
     bmode = arr["b_mode_pass"]
-    source_selection = (arr["mag_a10"] < 25.5) & (arr["resolution"] > 0.3)
+    ellipticity_amplitude = np.hypot(arr["e1"], arr["e2"])
+    shape_selection = ((arr["sigma_e"] >= 0.0) & (arr["sigma_e"] <= 0.4)
+                       & (ellipticity_amplitude < 2.0))
+    source_selection = (shape_selection & (arr["mag_a10"] <= 25.5)
+                        & (arr["resolution"] >= 0.3))
     mask_selection = bmode if apply_b_mode_mask else np.ones(len(bmode), dtype=bool)
     behind = beta > 0
     in_range = (radius >= edges[0]) & (radius <= edges[-1])
@@ -392,6 +394,12 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
     counts = {
         "input_pairs": int(n_input),
         "hsc_source_selection_rejected": int(np.count_nonzero(~source_selection)),
+        "hsc_shape_quality_rejected": int(np.count_nonzero(~shape_selection)),
+        "ellipticity_amplitude_ge_2_rejected": int(np.count_nonzero(ellipticity_amplitude >= 2.0)),
+        "sigma_e_outside_0_0p4_rejected": int(np.count_nonzero(
+            (arr["sigma_e"] < 0.0) | (arr["sigma_e"] > 0.4))),
+        "aperture_magnitude_over_25p5_rejected": int(np.count_nonzero(arr["mag_a10"] > 25.5)),
+        "resolution_below_0p3_rejected": int(np.count_nonzero(arr["resolution"] < 0.3)),
         "b_mode_mask_applied": bool(apply_b_mode_mask),
         "b_mode_mask_rejected": int(np.count_nonzero(~bmode)),
         "b_mode_rejected": int(np.count_nonzero(~bmode)),
@@ -487,7 +495,7 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
             "responsivity": "per-radial-bin HSC responsivity from derived_rms_e weighted by shape_weight*SigmaCritInv^2",
             "per_object_bias": "derived_shear_bias_m/c1/c2",
             "selection_bias_method": "HSC edge-density prescription for R2>0.3 and magA10<25.5; weights=shape_weight*SigmaCritInv^2",
-            "source_selection": "magA10<25.5 and R2>0.3 applied before stacking",
+            "source_selection": "HSC Y3 cuts |e|<2, 0<=sigma_e<=0.4, R2>=0.3, and magA10<=25.5 applied before stacking",
             "photoz_geometry": "full P(z) integrated to mean SigmaCritInv for each lens-source pair",
             "photoz_bias_calibration": "not applied; PDF bias/dilution factor needs external calibration sample",
             "b_mode_mask": "input b_mode_pass must be decoded with verified stored-value polarity; decode_hsc_b_mode_mask requires masked_value",
