@@ -24,8 +24,8 @@ def test_random_count_sql_returns_only_aggregate_and_excludes_overlapping_apertu
     assert "AND NOT coneSearch(r.coord, 130.001, -1, 1300.5)" in sql
     assert "r.adjust_density < 0.01" in sql
     assert "r.isprimary IS TRUE" in sql
-    assert "r.patch_inner IS TRUE" in sql
-    assert "r.tract_inner IS TRUE" in sql
+    assert "r.patch_inner" not in sql
+    assert "r.tract_inner" not in sql
     assert "r.i_pixelflags_edge IS FALSE" in sql
     assert "r.i_pixelflags_bright_objectcenter IS FALSE" in sql
     assert "ra," not in sql.lower()

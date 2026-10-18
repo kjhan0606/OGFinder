@@ -459,7 +459,7 @@ interpretation are recorded in
 The two scenarios are sensitivity bounds only; neither is a decoded catalog
 convention or a science measurement.
 
-### Random-control availability query (prepared, not submitted)
+### Random-control availability query (CAS execution in progress)
 
 HSC documents `pdr3_wide.random` as the public random-point table, with a
 nominal density of 100 points/arcmin², an `adjust_density` thinning column,
@@ -468,15 +468,21 @@ non-overlap flags, and local i-band mask/coverage fields. The Astrafek planner
 uses only the verified 800-lens preflight and emits 32 SQL batches. Each batch
 returns one `lens_id` and one integer candidate count per lens. The query
 counts thinned (`adjust_density < 0.01`) random points in the local 30′ annulus
-outside twice the lens's angular 3 Mpc aperture, requiring primary, patch/tract
-interior, and unmasked i-band points. It returns no coordinates, shape rows, or
-photo-z values. HSC specifies the table, random density, and mask fields in
-its [random-points documentation](https://hsc-release.mtk.nao.ac.jp/doc/index.php/random-points__pdr3/).
+outside twice the lens's angular 3 Mpc aperture, requiring primary points and
+unmasked i-band pixels. HSC defines `isprimary=True` as objects in the inner
+patch and inner tract with no children in its [PDR3 FAQ](https://hsc-release.mtk.nao.ac.jp/doc/index.php/faq__pdr3/).
+The query returns no coordinates, shape rows, or photo-z values. HSC specifies
+the random table, density, and mask fields in its [random-points documentation](https://hsc-release.mtk.nao.ac.jp/doc/index.php/random-points__pdr3/).
 
-The plan is at
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_01/`.
-It is marked `prepared_not_submitted`; no CAS request was made. A sufficient
-candidate count would only establish availability. After any coordinate
-export, random centers still need all-CAMIRA exclusion, full-aperture footprint
-checks, HSC-I depth/PSF matching, uniqueness and overlap checks, and spatial
-covariance validation before they can serve as random lenses.
+The first prepared plan at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_01/`
+was rejected by CAS before a job was created because `patch_inner` is not a
+column in the PDR3 random table. The corrected plan is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_02/`;
+it uses the documented `isprimary` selection for the same non-overlap intent.
+As of 2026-10-19, seven of 32 CAS batches (175 lens counts) are complete and
+validated; the remaining batches are running sequentially. A sufficient
+candidate count would only establish availability. Any later coordinate
+export still needs all-CAMIRA exclusion, full-aperture footprint checks, HSC-I
+depth/PSF matching, uniqueness and overlap checks, and spatial covariance
+validation before random centers can serve as random lenses.

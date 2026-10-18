@@ -27,7 +27,7 @@ DEFAULT_PREFLIGHT = Path(
 )
 DEFAULT_OUTPUT = Path(
     "/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/"
-    "wl_random_point_count_plan_2026-10-19_01"
+    "wl_random_point_count_plan_2026-10-19_02"
 )
 BATCH_SIZE = 25
 OUTER_RADIUS_ARCSEC = 1800.0
@@ -73,8 +73,6 @@ def random_count_query(lens):
         f"  AND NOT coneSearch(r.coord, {ra}, {dec}, {inner_text})\n"
         f"  AND r.adjust_density < {density_text}\n"
         "  AND r.isprimary IS TRUE\n"
-        "  AND r.patch_inner IS TRUE\n"
-        "  AND r.tract_inner IS TRUE\n"
         "  AND r.i_pixelflags_edge IS FALSE\n"
         "  AND r.i_pixelflags_bright_objectcenter IS FALSE"
     )
@@ -125,7 +123,7 @@ def prepare(preflight, output):
             "inner_radius": "twice each lens's angular 3 Mpc aperture",
             "random_density_thinning": "adjust_density < 0.01 (nominally 1 point/arcmin^2 from the documented 100/arcmin^2)",
             "quality_filters": [
-                "isprimary IS TRUE", "patch_inner IS TRUE", "tract_inner IS TRUE",
+                "isprimary IS TRUE (the documented primary selection for inner patch and tract regions, without children)",
                 "i_pixelflags_edge IS FALSE", "i_pixelflags_bright_objectcenter IS FALSE",
             ],
             "candidate_target_per_lens": TARGET_CANDIDATES_PER_LENS,
