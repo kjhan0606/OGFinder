@@ -177,9 +177,45 @@ def load_hsc_y3_nz_sacc(path):
         raise FileNotFoundError(f"HSC Y3 n(z) SACC file does not exist: {path}")
     try:
         import sacc
-    except ImportError as error:
-        raise RuntimeError("reading HSC Y3 n(z) SACC files requires the optional 'sacc' package") from error
-    dataset = sacc.Sacc.load_fits(str(path))
+    except ImportError:
+        # Astropy is already needed by the HSC image pipeline. The official
+        # HSC release is a FITS SACC file, so read only its NZ tracer tables if
+        # the higher-level SACC package is unavailable on the analysis host.
+        try:
+            from astropy.io import fits
+        except ImportError as error:
+            raise RuntimeError(
+                "reading HSC Y3 n(z) requires either 'sacc' or 'astropy'") from error
+        tracer_tables = {}
+        with fits.open(path, memmap=True) as hdus:
+            for hdu in hdus:
+                header = hdu.header
+                if (header.get("SACCTYPE") != "tracer"
+                        or header.get("SACCCLSS") != "NZ"):
+                    continue
+                name = header.get("SACCNAME")
+                if not name or hdu.data is None:
+                    continue
+                columns = {str(column).lower() for column in (hdu.data.names or [])}
+                if not {"z", "nz"}.issubset(columns):
+                    continue
+                z = np.asarray(hdu.data["z"], dtype=float).copy()
+                nz = np.asarray(hdu.data["nz"], dtype=float).copy()
+                if name in tracer_tables:
+                    old_z, old_nz = tracer_tables[name]
+                    if not (np.array_equal(z, old_z) and np.array_equal(nz, old_nz)):
+                        raise ValueError(f"SACC contains conflicting duplicate n(z) tracer {name}")
+                else:
+                    tracer_tables[name] = (z, nz)
+
+        class FitsTracerView:
+            def __getitem__(self, name):
+                z, nz = tracer_tables[name]
+                return type("NZTracer", (), {"z": z, "nz": nz})()
+
+        dataset = type("SaccFitsView", (), {"tracers": FitsTracerView()})()
+    else:
+        dataset = sacc.Sacc.load_fits(str(path))
     redshift = None
     distributions = []
     for index in range(4):

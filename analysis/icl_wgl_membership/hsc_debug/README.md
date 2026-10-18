@@ -431,11 +431,12 @@ test now checks the fixed pair count per shape. Verified results are at
 
 ## Weak-lensing calibration input gate
 
-The approved shape-row export is present, but no HSC Y3 SACC `n(z)` file is
-stored in the project data paths. The HSC S19A shape-catalog page identifies
-`hsc_y3_fourier_space_data_vector.sacc` as a source of four tomographic-bin
-`n(z)` tracers and specifies additional dilution and selection-bias corrections.
-Retrieval of that additional HSC calibration file awaits separate explicit
-user approval. After approval, validate its bin definitions against the
-exported `source_zbin` values through `run_wl_shape_stack.py` before making any
-calibrated weak-lensing claim.
+The approved shape-row export and the official HSC Y3 four-bin SACC file are
+available. The SACC retrieval, checksum, duplicated tracer tables, and
+`source_zbin` count comparison are documented in
+[`hsc_y3_nz_sacc_validation_2026-10-19.md`](hsc_y3_nz_sacc_validation_2026-10-19.md).
+The official HSC page describes the four `wl_0`–`wl_3` n(z) tracers and calls
+for dilution and selection-bias corrections. This input gate now passes, but
+the calibrated stack is not yet a science measurement: B-mode mask polarity,
+random-lens subtraction, n(z) uncertainty, source overlap, and spatial
+covariance still need resolution.

@@ -355,9 +355,11 @@ Y3/S19A edge-density 식으로 반경 빈마다 자동 계산하며, pair 가중
 [hsc-y3-calib 보정 코드](https://github.com/mr-superonion/hsc-y3-calib)의
 `get_sel_bias`를 따른다. 경계 밀도 식의 수치 검사, 합성 주입 회수, PDF·tomographic
 `n(z)`·SACC 입력·ID·mask·선택컷 검사를 포함한 15개 시험이 통과했다.
-`load_hsc_y3_nz_sacc`는 로컬 SACC 파일의 `wl_0`–`wl_3` tracer 격자와 분포를
-검사한다. 공식 SACC 보정 파일은 아직 확보되지 않았고, 이 함수만으로 n(z) 불확실성이
-전파되는 것은 아니다.
+`load_hsc_y3_nz_sacc`는 공식 SACC의 `wl_0`–`wl_3` tracer 격자와 분포를
+검사한다. 승인된 파일을 내려받아 실제 파일 로딩과 중복 테이블 검사를 통과했고,
+현재 `source_zbin` 1–4 분포와 shape 선택 후 빈별 행 수를 대조했다
+([검증 보고서](hsc_debug/hsc_y3_nz_sacc_validation_2026-10-19.md)). 이 함수와
+fiducial 분포만으로 n(z) 불확실성이 전파되는 것은 아니다.
 HSC 안내에서 B-mode 영역 마스크는 분석별 선택 사항으로 설명되므로 adapter는 기본
 적용과 명시적 미적용 민감도 실행을 모두 지원한다. 실자료 비교 때 두 결과의 source 수,
 shear profile, null 진단을 함께 기록하며 마스크 정책을 결과를 본 뒤 선택하지 않는다.
@@ -610,12 +612,11 @@ mask growth, photon noise 및 전체 공분산을 검증하지 않는다. 원자
 `hsc_y3_fourier_space_data_vector.sacc`를 안내하고, point/photo-z 기반 추정에는
 dilution 및 selection-bias 교정이 필요하다고 명시한다
 ([HSC S19A shape-catalog 문서](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)).
-현재 OGFinder 분석과 sample data 경로에서는 해당 SACC 파일을 찾지 못했다. 이 자료는
-추가 HSC data download이므로 사용자의 별도 명시 승인을 기다린다. 승인 후에도 먼저
-공식 bin 경계와 현재 3,069,544 lens–source 행의 `source_zbin` 정의를 대조하고,
-SACC tracer의 `z,n(z)`를 기존 `run_wl_shape_stack.py` 검증기에 넣어 정합성을 통과한
-뒤에만 보정 stack을 계산한다. 추가 영상·원자료 shape row·개별 photo-z PDF 반출은
-이 단계에 포함하지 않는다.
+사용자의 명시 승인에 따라 이 SACC 파일만 다운로드했다. 파일은 승인된 shape-row
+export와 동일한 sample data 경로에 보존했고, 실제 tracer와 `source_zbin`의 빈 수를
+대조했다. 추가 영상·원자료 shape row·개별 photo-z PDF 반출은 이 단계에 포함하지
+않았다. 보정 stack 계산은 B-mode mask 극성, random-lens/null 처리, n(z) 불확실도,
+source 중복 및 공간 공분산 관문이 해결될 때까지 과학 측정으로 해석하지 않는다.
 
 ### 2026-10-19 반경별 ICL–위성 공간 블록 불확실도
 

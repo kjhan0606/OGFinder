@@ -316,6 +316,58 @@ def test_load_hsc_y3_nz_sacc_rejects_missing_or_misaligned_tracer(tmp_path, monk
         load_hsc_y3_nz_sacc(path)
 
 
+def test_load_hsc_y3_nz_sacc_astropy_fallback_deduplicates_exact_tables(tmp_path, monkeypatch):
+    fits = pytest.importorskip("astropy.io.fits")
+    monkeypatch.delitem(__import__("sys").modules, "sacc", raising=False)
+    z = np.array([0.0, 0.5, 1.0])
+    hdus = [fits.PrimaryHDU()]
+    for index in range(4):
+        nz = np.array([0.0, float(index + 1), 0.0])
+        for _ in range(2):  # Official HSC file repeats each n(z) tracer exactly.
+            table = fits.BinTableHDU.from_columns([
+                fits.Column(name="z", format="D", array=z),
+                fits.Column(name="nz", format="D", array=nz),
+            ])
+            table.header["SACCTYPE"] = "tracer"
+            table.header["SACCCLSS"] = "NZ"
+            table.header["SACCNAME"] = f"wl_{index}"
+            hdus.append(table)
+    path = tmp_path / "hsc_y3.sacc"
+    fits.HDUList(hdus).writeto(path)
+
+    loaded_z, loaded_nz = load_hsc_y3_nz_sacc(path)
+
+    assert np.array_equal(loaded_z, z)
+    assert loaded_nz[:, 1] == pytest.approx([1.0, 2.0, 3.0, 4.0])
+
+
+def test_load_hsc_y3_nz_sacc_astropy_fallback_rejects_conflicting_duplicates(tmp_path, monkeypatch):
+    fits = pytest.importorskip("astropy.io.fits")
+    monkeypatch.delitem(__import__("sys").modules, "sacc", raising=False)
+    z = np.array([0.0, 0.5, 1.0])
+    hdus = [fits.PrimaryHDU()]
+    for index in range(4):
+        values = [0.0, float(index + 1), 0.0]
+        if index == 2:
+            duplicate_values = [0.0, 99.0, 0.0]
+        else:
+            duplicate_values = values
+        for nz in (values, duplicate_values):
+            table = fits.BinTableHDU.from_columns([
+                fits.Column(name="z", format="D", array=z),
+                fits.Column(name="nz", format="D", array=nz),
+            ])
+            table.header["SACCTYPE"] = "tracer"
+            table.header["SACCCLSS"] = "NZ"
+            table.header["SACCNAME"] = f"wl_{index}"
+            hdus.append(table)
+    path = tmp_path / "hsc_y3_conflict.sacc"
+    fits.HDUList(hdus).writeto(path)
+
+    with pytest.raises(ValueError, match=r"conflicting duplicate n\(z\) tracer wl_2"):
+        load_hsc_y3_nz_sacc(path)
+
+
 def test_tomographic_stack_uses_exported_source_zbin_and_recovers_signal(cosmo):
     pairs, source_ids, z, pdf, edges, injected = _synthetic_catalog(cosmo)
     # CSV catalogues commonly arrive as strings, so accept exact integer text.
