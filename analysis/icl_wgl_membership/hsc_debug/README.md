@@ -106,6 +106,23 @@ sbatch analysis/icl_wgl_membership/hsc_debug/run_measure_full_sample_profiles.sh
 열 이름 오류로 실패했다. 해당 부분 산출물은 실패 기록으로 보존하며 분석에
 사용하지 않는다. 수정된 재실행은 새 `_02` 경로를 사용한다.
 
+## 2026-10-18 위성 위치 밀도 상관의 공간 블록 재표본화
+
+`analyze_full_sample_satellite_association.py`는 전체 프로필의 기존 137개 지원쌍을
+필터별로 나누고, 대상·대조장 중 어느 쪽이든 5도 하늘 셀을 공유하는 쌍을 같은
+블록으로 묶어 5,000회 재표본화한다. 반경별 CAMIRA 멤버 위치 밀도와 차감광의
+Spearman 상관 및 richness·적색편이를 제거한 Pearson 상관의 95% 구간을 기록한다.
+양의 재표본 비율은 상관의 공간 안정도 요약이지 영가설 검정 p 값이 아니다.
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/analyze_full_sample_satellite_association.py \
+  --work /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_association_full_2026-10-18_01
+```
+
+출력은 `block_bootstrap_metrics.tsv`와 `summary.json`이다. 입력 스택과 지원쌍의
+기록 해시를 확인하며, 멤버 광도·질량·확률 및 위성 중심 외곽광은 이 단계에도
+없으므로 `science_measurement=false`를 유지한다.
+
 ## 2026-10-18 약한렌즈 shape-catalog 겹침 사전계산
 
 `prepare_wl_shape_preflight.py`는 800개 은하단의 3 Mpc 원뿔에 대해 HSC S19A
@@ -115,7 +132,7 @@ shape source 개수만 확인할 CAS SQL 배치를 만든다. 실행 시 네트�
 ```bash
 python3 analysis/icl_wgl_membership/hsc_debug/prepare_wl_shape_preflight.py \
   --manifest /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/sample_manifest.json \
-  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01
+  --work /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01
 ```
 
 32개 SQL 배치와 `preflight_manifest.json`이 생성된다. 렌즈별 source 행 수와 예상

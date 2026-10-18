@@ -215,6 +215,16 @@ PSF·sky·마스크 체계오차를 포함하지 않는다.
 표·공분산·해시 기록은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/prestack_flux_profiles_2026-10-18_02/`
 에 있다.
 
+같은 137쌍에 대해 5,000회 공동 5도 하늘 블록 부트스트랩으로 멤버 위치 밀도–차감광
+상관의 공간 민감도를 확인했다. i 대역의 네 Spearman 95% 구간은 모두 0을 포함했다.
+i2의 Spearman 구간은 50–100, 100–150, 150–200, 200–300 kpc에서 각각
+[0.080, 0.588], [0.105, 0.456], [0.054, 0.392], [0.154, 0.496]으로 양수였지만,
+richness·z를 함께 선형 제거한 Pearson 구간은 100–150 kpc의 [0.058, 0.365]만
+0을 제외했다. i 대역도 100–150 kpc에서 부분상관 구간 [0.125, 0.573]이 양수였으나
+44쌍의 네 구간 탐색 중 하나다. 이 구간은 다중비교·마스크/sky/PSF 체계오차를
+교정하지 않은 공간 안정성 진단이며 위성 외곽 별빛–ICL 검출이 아니다. 재현 산출물은
+`sample_800_2026-10-13/satellite_association_full_2026-10-18_01/`이다.
+
 2026-10-18 현재 약한렌즈 shape source 자료는 없다. HSC 공식 문서는 S19A
 re-Gaussianization shape catalog를 PDR3 incremental product로 설명하며,
 `s19a_wide.weaklensing_hsm_regauss`를 `meas2`·`meas`와 `object_id`로 연결하고
@@ -222,6 +232,17 @@ photo-z PDF를 별도 이용하도록 안내한다. 이에 따라 다음은 800�
 CAS 중첩 row count와 추정 전송 크기를 먼저 산출하는 일이다. source 자료 취득은
 기존 HSC 다운로드 승인 원칙에 따라 크기·열·행을 제시하고 별도 사용자 승인을
 받은 뒤 진행한다. shape stack·질량 측정은 아직 하지 않았다.
+
+S19A 분석에서는 shape catalog의 sky-coordinate `e1/e2`, derived weight, per-object
+`m/c1/c2`, ellipticity RMS·measurement uncertainty와 B-mode mask를 보존하고,
+shape를 `object_id`로 좌표 및 full photo-z PDF에 연결한다. raw ellipticity를 이미
+보정된 shear로 간주하지 않는다. HSC estimator의 weighted responsivity와 ensemble
+multiplicative/additive 및 selection-bias 보정, photo-z dilution correction을 적용한
+뒤 lens-source pair profile을 만든다. 자세한 catalog columns와 PDF 처리 요구는
+[HSC S19A shape catalog 안내](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)
+와 [HSC 3-year shear catalog 방법론](https://arxiv.org/abs/2107.00136)을 따른다.
+현재 저장소의 일반 `stack_shear_profiles` 및 합성 metacal 시험은 이 서베이 교정의
+대체물이 아니며, S19A 자료가 준비된 뒤 별도 adapter와 null 검증이 필요하다.
 
 같은 날짜에 800개 렌즈의 각거리와 고유반경 3 Mpc를 사용한 기하학적 사전 계산에서
 렌즈 원뿔 반경은 7.71–11.43 arcmin (10–90 백분위 7.97–10.56 arcmin), 합산 면적
