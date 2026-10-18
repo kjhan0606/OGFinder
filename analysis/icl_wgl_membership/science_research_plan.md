@@ -496,6 +496,15 @@ ICL 200–300 kpc와 위성 50–75 kpc 고리의 기하학적 중첩을 줄이�
 않는다. `science_measurement=false`를 유지한다. [실제 픽셀 중첩 보고서](hsc_debug/satellite_icl_pixel_overlap_2026-10-18.md),
 해시 포함 산출물 `sample_800_2026-10-13/satellite_icl_pixel_overlap_2026-10-18_02/`.
 
+방위각 대조 고리의 음의 가중치를 포함한 명목 잡음 공분산도 같은 63개 쌍/162개 위성에서
+계산했다. HSC 분산맵을 독립 픽셀로 가정할 때 i 명목 픽셀 잡음 상관 중앙값은 −0.0112
+([16,84백분위] −0.0209,+0.0080), i2는 −0.0023 (−0.0243,+0.0058)였다. 63쌍 중
+36쌍에서 공분산 부호가 음수였다. 이는 위성 control 고리가 단순 target 중첩의 양의
+기여를 상쇄할 수 있음을 보이나, HSC coadd 상관잡음과 ICL random-control 항이 빠진
+명목값이다. 실제 total covariance가 작거나 음수라고 단정하지 않으며 `science_measurement=false`를
+유지한다. [공통 픽셀 공분산 보고서](hsc_debug/satellite_icl_shared_pixel_covariance_2026-10-18.md),
+해시 산출물 `sample_800_2026-10-13/satellite_icl_shared_pixel_covariance_2026-10-18_01/`.
+
 ## 7. 실행과 장기 유지
 
 연구 설계·코드는 OGFinder, 카탈로그·FITS·실행 산출물은
