@@ -90,6 +90,8 @@ PSF 반응 상세·SHA-256은
 재현 명령은 [`run_joint_icl_satellite_psf_redetection.sbatch`](run_joint_icl_satellite_psf_redetection.sbatch),
 감사기는 [`audit_joint_icl_satellite_psf_redetection.py`](audit_joint_icl_satellite_psf_redetection.py)에 있다.
 
+744개 승인 배치와 시험 PSF 1개의 중심부 크기 분포를 해시 재검증한 뒤 요약했다. 전체 745개 중 양수 성분 2차 모멘트의 가우스 등가 장축 FWHM 중앙값은 1.084 arcsec이고, 5–95백분위는 0.965–1.198 arcsec다. 프레임 중심 57개와 위성 위치 688개의 중앙값은 각각 1.087, 1.084 arcsec다. 이들은 7 arcsec 안팎 모델 코어의 설명 지표이며 target-specific 확장 PSF 날개나 seeing 보정값이 아니다. 음수 보간 픽셀을 보존하고 `science_measurement=false`를 유지한다. 재현 코드·테스트·해시는 [PSF 코어 분포 평가](psf_core_variation_assessment_2026-10-20.md)에 있다.
+
 `estimate_hsc_coadd_noise_correlation.py` compares short-range pixel residual
 covariance in those 57 target coadds with their 57 already-downloaded matched
 control coadds. It applies the saved K2.5 target source masks and regenerates
