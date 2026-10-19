@@ -20,13 +20,15 @@ import zlib
 import numpy as np
 from astropy.io import fits
 
+import prepare_detection_psf as detection_masks
+
 
 ROOT = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
 DEFAULT_METADATA = ROOT / "icl_coadd_noise_metadata_2026-10-19_01/summary.json"
 DEFAULT_PREP = ROOT / "satellite_detection_psf_2026-10-18_01"
 DEFAULT_CONTROL_MANIFEST = ROOT / "control_download_01/download_manifest.json"
 DEFAULT_CONTROL_STATUS = ROOT / "control_download_01/download_status.json"
-DEFAULT_OUTPUT = ROOT / "icl_coadd_noise_correlation_2026-10-19_03"
+DEFAULT_OUTPUT = ROOT / "icl_coadd_noise_correlation_2026-10-19_04"
 
 
 def sha256(path: Path) -> str:
@@ -112,6 +114,26 @@ def _sample_patch_origins(valid: np.ndarray, *, patch_size: int, max_patches: in
     return [candidates[int(i)] for i in sorted(chosen)]
 
 
+def _matched_control_source_mask(image: np.ndarray, variance: np.ndarray,
+                                 image_mask: np.ndarray, pixel_scale: float) -> np.ndarray:
+    """Build the same 2.5-Kron source mask used on target frames."""
+    from download_pilot import BAD_BIT_POSITIONS, BRIGHT_OBJECT_BIT
+
+    bad = (image_mask.astype(np.int64, copy=False)
+           & sum(1 << bit for bit in BAD_BIT_POSITIONS)) != 0
+    bad |= ~np.isfinite(image) | ~np.isfinite(variance) | (variance <= 0)
+    base = bad | ((image_mask.astype(np.int64, copy=False) & BRIGHT_OBJECT_BIT) != 0)
+    center = ((image.shape[1] - 1) / 2, (image.shape[0] - 1) / 2)
+    empty_members = np.empty((0, 2), dtype=float)
+    objects, segmentation, kron, kron_flags, _, _, _ = detection_masks.detect(
+        image, variance, bad, center, empty_members, pixel_scale,
+    )
+    masks, _ = detection_masks.source_masks(
+        objects, segmentation, kron, kron_flags, base, -1, empty_members, pixel_scale,
+    )
+    return np.asarray(masks[0], dtype=bool) | (segmentation > 0)
+
+
 def frame_correlations(record: dict, prep_dir: Path, *, patch_size: int,
                        max_patches: int, max_lag: int,
                        min_valid_fraction: float) -> tuple[dict, list[dict]]:
@@ -130,16 +152,12 @@ def frame_correlations(record: dict, prep_dir: Path, *, patch_size: int,
         if not prep_path.is_file():
             raise FileNotFoundError(prep_path)
         with fits.open(prep_path, memmap=True, checksum=True) as hdus:
-            excluded = np.asarray(hdus["BASE_MASK"].data, dtype=bool)
+            excluded = (np.asarray(hdus["MASK_K2P5"].data, dtype=bool)
+                        | (np.asarray(hdus["SEGMENTATION"].data) > 0))
     elif role == "matched_control":
-        exclude_bits = [int(value) for value in record["mask_exclude_bits"]]
-        bitmask = 0
-        for value in exclude_bits:
-            bitmask |= value
-        # HSC source-detection footprints are also excluded; the archived
-        # control mask list intentionally contains only instrumental flags.
-        bitmask |= (1 << 5) | (1 << 6)
-        excluded = (image_mask & bitmask) != 0
+        excluded = _matched_control_source_mask(
+            image, variance, image_mask, float(record["pixel_scale_arcsec"]),
+        )
     else:
         raise ValueError(f"unknown image role: {role}")
     if image.shape != variance.shape or image.shape != excluded.shape:
@@ -177,7 +195,7 @@ def frame_correlations(record: dict, prep_dir: Path, *, patch_size: int,
         "cluster_id": ident, "role": role, "filter": band,
         "image_id": str(record.get("image_id", ident)),
         "image_sha256": record["source_image_sha256"],
-        "mask_path": str(prep_path) if prep_path else "HSC mask plane; instrumental exclusions plus DETECTED/DETECTED_NEGATIVE",
+        "mask_path": str(prep_path) if prep_path else "SEP/Kron 2.5 mask derived with prepare_detection_psf.py",
         "mask_sha256": sha256(prep_path) if prep_path else None,
         "image_shape": list(image.shape), "usable_pixels_fraction": float(valid.mean()),
         "patch_size": patch_size, "n_patches": len(origins),
@@ -220,6 +238,7 @@ def load_matched_controls(metadata: dict, control_manifest_path: Path,
             "filter": str(target["filter"]), "role": "matched_control",
             "image_id": str(control["id"]), "path": str(image_path),
             "source_image_sha256": str(saved["sha256"]),
+            "pixel_scale_arcsec": float(saved["review"]["pixel_scale_arcsec"]),
             "mask_exclude_bits": list(control["bad_mask"]["exclude_bits"])
                 + list(control["bright_star_mask"]["exclude_bits"]),
         })
@@ -300,17 +319,19 @@ def run(metadata_path: Path, prep_dir: Path, control_manifest_path: Path,
         "n_frames": len(details), "patch_size_pixels": patch_size,
         "max_patches_per_frame": max_patches, "max_lag_pixels": max_lag,
         "minimum_valid_fraction_per_patch": min_valid_fraction,
-        "method": "paired target and control images; non-overlapping 64-pixel patches; apply saved target BASE_MASK or control HSC instrumental/source-detection masks; fit a local affine plane with 4-sigma clipping; normalize residuals by sqrt(delivered variance); estimate median lag covariance across patches",
+        "method": "paired target and control images; non-overlapping 64-pixel patches; apply saved target SEP/Kron-2.5 mask and regenerate the same SEP/Kron-2.5 source mask for matched controls; fit a local affine plane with 4-sigma clipping; normalize residuals by sqrt(delivered variance); estimate median lag covariance across patches",
         "by_role_filter": by_filter, "paired_target_minus_control": paired,
         "input_sha256": {str(path): sha256(path) for path in
-                         (metadata_path, control_manifest_path, control_status_path)},
+                         (metadata_path, control_manifest_path, control_status_path,
+                          Path(detection_masks.__file__).resolve())},
         "analysis_script_sha256": sha256(Path(__file__).resolve()),
         "frame_results_sha256": sha256(frame_path), "lag_results_sha256": sha256(lag_path),
         "limitations": [
-            "patch-scale target residuals can include real diffuse structure; matched controls reduce but do not remove residual-object contamination",
+            "patch-scale residuals can include unresolved sources and real diffuse structure even after matched SEP/Kron masking",
             "the square-lag-window top-hat variance factor is an approximate residual-covariance diagnostic, not the exact covariance of the ICL or satellite estimators",
             "the normalized kernel uses delivered variance and does not identify source-photon noise or an effective gain",
             "these 57 target frames do not establish the covariance for all 800 cluster or matched-control frames",
+            "the saved target mask can preserve a unique central BCG while matched controls have no BCG; segmentation cores are masked in both",
             "no upstream sky-transfer or PSF-wing uncertainty is measured",
         ],
         "science_measurement": False,

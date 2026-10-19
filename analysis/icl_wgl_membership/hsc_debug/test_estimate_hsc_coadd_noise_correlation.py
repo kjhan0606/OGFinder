@@ -1,6 +1,10 @@
 import numpy as np
 
-from estimate_hsc_coadd_noise_correlation import lag_correlations, load_matched_controls
+from estimate_hsc_coadd_noise_correlation import (
+    _matched_control_source_mask,
+    lag_correlations,
+    load_matched_controls,
+)
 
 
 def test_lag_correlation_recovers_correlated_noise_and_unit_diagonal():
@@ -46,7 +50,8 @@ def test_matched_controls_follow_target_id_and_filter(tmp_path):
             "bad_mask": {"exclude_bits": [1, 2]},
             "bright_star_mask": {"exclude_bits": [512]},
         })
-        completed.append({"id": f"control-{ident}", "file": image_name, "sha256": digest})
+        completed.append({"id": f"control-{ident}", "file": image_name, "sha256": digest,
+                          "review": {"pixel_scale_arcsec": 0.168}})
         targets.append({"cluster_id": ident, "filter": filt})
     manifest_path = tmp_path / "download_manifest.json"
     status_path = tmp_path / "download_status.json"
@@ -61,4 +66,19 @@ def test_matched_controls_follow_target_id_and_filter(tmp_path):
     assert rows[0]["role"] == "matched_control"
     assert rows[0]["filter"] == "i2"
     assert rows[0]["mask_exclude_bits"] == [1, 2, 512]
+
+
+def test_control_source_mask_uses_same_kron_mask_builder():
+    rng = np.random.default_rng(5)
+    image = rng.normal(0.0, 0.5, size=(128, 128)).astype(np.float32)
+    yy, xx = np.indices(image.shape)
+    image += (20.0 * np.exp(-((xx - 63.2) ** 2 + (yy - 65.1) ** 2) / 8.0)).astype(np.float32)
+    variance = np.ones_like(image)
+    image_mask = np.zeros_like(image, dtype=np.int64)
+
+    mask = _matched_control_source_mask(image, variance, image_mask, 0.168)
+
+    assert mask.shape == image.shape
+    assert mask[65, 63]
+    assert not mask[8, 8]
 

@@ -59,11 +59,12 @@ PSF 반응 상세·SHA-256은
 
 `estimate_hsc_coadd_noise_correlation.py` compares short-range pixel residual
 covariance in those 57 target coadds with their 57 already-downloaded matched
-control coadds. It samples masked 64×64 patches, removes a clipped local plane,
-normalizes by the delivered variance, and records the lag covariance plus an
-approximate large-top-hat variance factor. It makes no data request and does
-not supply a source-photon-noise model; unresolved objects and residual
-diffuse structure can still contribute, especially in target frames. Run it through
+control coadds. It applies the saved K2.5 target source masks and regenerates
+the same SEP/Kron-2.5 masks for matched controls. It samples masked 64×64
+patches, removes a clipped local plane, normalizes by the delivered variance,
+and records lag covariance plus an approximate large-top-hat variance factor.
+It makes no data request and does not supply a source-photon-noise model;
+unresolved sources and residual diffuse structure can still contribute. Run it through
 [`run_icl_coadd_noise_correlation.sbatch`](run_icl_coadd_noise_correlation.sbatch).
 This technical factor cannot replace the exact ICL/satellite estimator
 covariance or total science error.
