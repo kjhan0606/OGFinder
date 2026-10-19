@@ -69,6 +69,16 @@ def assess(power: dict, expansion: dict) -> dict:
         "cas_query_submitted": False,
         "coordinates_exported": False,
         "images_downloaded": False,
+        "external_references": [
+            {
+                "url": "https://hsc-release.mtk.nao.ac.jp/doc/index.php/camira-cluster-catalog__pdr3/",
+                "claim": "PDR3 CAMIRA catalogs cover Wide and Deep/UD and were constructed from the PDR3 (S20A) dataset.",
+            },
+            {
+                "url": "https://hsc-release.mtk.nao.ac.jp/doc/index.php/survey__pdr3/",
+                "claim": "Nominal HSC Wide, Deep, and UltraDeep areas are approximately 1200, 27, and 3.5 square degrees.",
+            },
+        ],
         "observed_independent_blocks": observed,
         "exploratory_effect_r_scenario": 0.293,
         "power_target": 0.8,
@@ -105,13 +115,13 @@ def render_report(result: dict, power_path: Path, expansion_path: Path,
 
 현재 CAMIRA 선택을 그대로 적용하면 최소 6 arcmin 분리 후 후보가 {result['current_selection_additional_candidates']}개 더 있지만 새 5도 셀은 {result['current_selection_new_5deg_cells']}개다. 적색이동을 0.20–0.70으로 넓히고 BCG 분광 일치 조건까지 제거한 가장 큰 오프라인 후보 시나리오는 {result['broadest_pool_additional_candidates']}개 후보를 더하고 새 target 5도 셀 {result['broadest_pool_new_target_5deg_cells']}개, 총 {result['broadest_pool_total_5deg_cells']}개를 차지한다. 현재 pair-block 정의에서는 target 5도 셀을 공유하는 행들을 반드시 같은 연결요소로 합치므로, 각 target 셀이 서로 다른 블록을 만든다고 가정한 상한도 {result['broadest_pool_target_cell_upper_bound_on_connected_blocks']}개다. 이는 180개 계획치보다 최소 {result['minimum_block_gap_even_at_target_cell_upper_bound']}개 적다. matched-control 위치와 영상 지원을 적용하면 블록이 더 합쳐지거나 표본이 제외될 수 있어 실제 유효 블록 수는 상한 이하이며, 이 계산은 독립성 자체를 증명하지 않는다.
 
-따라서 현재 S20A CAMIRA 목록에서 표본 수만 늘리는 것으로는 기존 검정력 계획을 충족할 수 없다. 확장 연구는 더 넓은 독립 HSC 하늘영역의 사전 정의된 군집 표본을 찾아야 한다. PDR3 Wide의 명목 설계 면적은 약 1,200 deg²이고 PDR3 공개자료 페이지는 명목 깊이의 다중대역 자료가 600 deg²를 넘는다고 안내한다. 이 면적 설명은 후보별 영상/필터 지원을 증명하지 않으며, 실제 쿼리나 자료 반출도 하지 않았다.
+따라서 현재 S20A CAMIRA 목록에서 표본 수만 늘리는 것으로는 기존 검정력 계획을 충족할 수 없다. 공식 PDR3 CAMIRA 릴리스는 Wide와 Deep/UD 목록을 제공하며, 둘 다 PDR3 (S20A) 데이터에서 구성됐다. 현재 Astrafek의 표본 입력은 이미 CAMIRA S20A Wide 별마스크 목록이므로 Wide 목록을 다시 가져오는 것은 새로운 독립 릴리스가 아니다. Deep/UD는 별도 보조표본 가능성이 있지만 명목 면적이 Deep 27 deg², UltraDeep 3.5 deg²로 작아 주 분석의 독립 공간 블록 부족을 해소할 수 없다. 확장 연구는 더 넓은 독립 HSC 하늘영역의 사전 정의된 군집 표본을 찾아야 한다. 이 면적은 설계 개요일 뿐 후보별 영상/필터 지원을 증명하지 않으며, 실제 쿼리나 자료 반출도 하지 않았다.
 
 ## 방법과 한계
 
 Astrafek 스크립트가 두 기존 JSON 산출물의 스키마·상태·과학 게이트를 확인한다. pair-block 구현은 같은 target 5도 셀을 공유하는 모든 행을 연결하므로 target 셀 개수가 연결 블록 수의 상한이다. power 계획은 이론적 Fisher-z 근사이며 `r=0.293`은 사후 탐색값이다. 이 상한은 독립성을 뜻하지 않는다. 새 표본의 redshift, HSC 영상 지원, target/control footprint, PSF, 깊이, sky, 위성 완전도와 공분산은 전부 미검증이다. 모든 결과는 `science_measurement=false`다.
 
-PDR3 공식 설명: [PDR3 survey area](https://hsc-release.mtk.nao.ac.jp/doc/index.php/survey__pdr3/), [PDR3 available data](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/).
+PDR3 공식 설명: [CAMIRA cluster catalog](https://hsc-release.mtk.nao.ac.jp/doc/index.php/camira-cluster-catalog__pdr3/), [survey area](https://hsc-release.mtk.nao.ac.jp/doc/index.php/survey__pdr3/), [available data](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/).
 
 ## 재현성
 
