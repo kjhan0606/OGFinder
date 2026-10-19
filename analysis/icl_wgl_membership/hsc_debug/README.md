@@ -1058,6 +1058,17 @@ The target-WCS-verified geometry audit is saved as
 `finite_lag_separation_target_wcs_audit.json` beside the covariance table
 (SHA-256 `79937c8aca5e90e3cc9cdc99ad64b5b18668e67f1683c1a0650649a081a183eb`).
 
+## ICL–위성 외곽광 연관성의 외곽 기준 민감도 (2026-10-20)
+
+기존 동일 cluster/filter/control 쌍에서 50–75 kpc 위성 외곽광과 ICL 200–300 kpc
+측정의 관계를, 쌍별 400–500 kpc 외곽 고리를 빼기 전후로 비교했다. 연결된 5도
+target/control 블록 5,000회 재표집 후 i 77쌍, i2 183쌍에서 raw 및 corrected 관계와
+그 변화 구간이 모두 0을 포함했다. outer annulus의 공통 면적 중앙값은 약 17%이며
+20% 미만인 쌍은 i 47/77, i2 111/183이다. 따라서 차감 결과는 sky 보정 또는 검출로
+볼 수 없다. 코드는 [`analyze_satellite_outer_icl_baseline_association.py`](analyze_satellite_outer_icl_baseline_association.py),
+입력·출력 해시와 정량 해석은 [민감도 평가](satellite_outer_icl_baseline_association_assessment_2026-10-20.md)에
+있다. 결과는 `science_measurement=false`다.
+
 `propagate_satellite_icl_measurement_noise.py`는 공분산이 있는 동일 57쌍(i 13,
 i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각각 전파한다.
 이는 공간 블록 재표본화와 합치지 않는 조건부 잡음 민감도다. i2의 44쌍 부분표본은
