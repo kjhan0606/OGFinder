@@ -886,6 +886,18 @@ code loaded and does not persist successful CAS status polls, so its current
 status is unknown. Keep the live submitter and do not resubmit batch 002. Any
 later HSC shape-row or image export needs its own explicit user approval.
 
+The Astrafek audit [`audit_wl_random_coordinate_checkpoint.py`](audit_wl_random_coordinate_checkpoint.py)
+now verifies every completed coordinate CSV against the immutable count plan,
+per-lens candidate totals, row schema, and checkpoint SHA-256 without contacting
+CAS or inferring process liveness. Its 2026-10-20 run independently verified
+2/32 batches (33,514/780,191 coordinate rows); both saved files matched their
+recorded byte lengths and hashes, and the remaining 30 batches were still
+incomplete. The report is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-20_02/`.
+The remote process was separately confirmed alive as PID 1049265 during this
+check. No CAS request was made, and the output retains
+`science_measurement=false`.
+
 On 2026-10-20, the offline tests for coordinate submission, completed-batch
 screening, full geometry screening, random-center selection, and count-plan
 preparation passed together (33 tests). They exercise planning and
