@@ -655,6 +655,17 @@ edge-selection coefficients were also checked against the HSC Y3 paper and its
 linked calibration utility. The source-level formula review is recorded in
 [`wl_s19a_shape_calibration_formula_review_2026-10-20.md`](wl_s19a_shape_calibration_formula_review_2026-10-20.md).
 
+To test whether the inner source-bin disagreement is concentrated in one lens-
+redshift range, `audit_wl_tomographic_lens_redshift.py` splits the 800 unique
+lenses into equal-count lower/upper halves sorted only by `(lens_z, lens_id)`.
+It recalculates all four source-bin stacks in one shared spatial jackknife and
+Holm-adjusts the 14 radial consistency tests. The script and its focused tests
+are in Astrafek. Slurm job 428849 was submitted on 2026-10-20 using only the
+already approved shape rows and local SACC input; its output directory is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_01/`.
+It remains a cluster-only diagnostic with no random-lens subtraction and
+`science_measurement=false`.
+
 ### B-mode polarity sensitivity stack
 
 The earlier two-hypothesis calibrated stack used only the previously approved row export
