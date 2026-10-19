@@ -18,6 +18,17 @@ def test_coordinate_query_preserves_candidate_filters_without_catalog_rows():
     assert "SELECT *" not in upper
 
 
+def test_coordinate_query_matches_custom_count_annulus():
+    lens = {"lens_id": "camira-01", "ra_deg": 150.0, "dec_deg": 2.0, "radius_arcsec": 600.0}
+    sql = coordinate_query(lens, inner_radius_arcsec=1800, outer_radius_arcsec=3600)
+    upper = sql.upper()
+
+    assert "CONESEARCH(R.COORD, 150, 2, 3600)" in upper
+    assert "NOT CONESEARCH(R.COORD, 150, 2, 1800)" in upper
+    assert "COUNT(" not in upper
+    assert "R.RA AS RA_DEG" in upper and "R.DEC AS DEC_DEG" in upper
+
+
 def test_read_coordinates_checks_exact_per_lens_counts_and_coordinates(tmp_path):
     path = tmp_path / "coordinates.csv"
     with path.open("w", newline="", encoding="utf-8") as stream:

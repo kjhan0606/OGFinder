@@ -49,22 +49,28 @@ def _sql_number(value):
     return format(number, ".12g")
 
 
-def random_count_query(lens):
-    """Count sparse eligible randoms in the non-overlapping local annulus."""
+def random_count_query(lens, *, inner_radius_arcsec=None,
+                       outer_radius_arcsec=OUTER_RADIUS_ARCSEC):
+    """Count eligible randoms in an explicitly bounded angular annulus."""
     lens_id = _sql_string(lens["lens_id"])
     ra = _sql_number(lens["ra_deg"])
     dec = _sql_number(lens["dec_deg"])
     aperture_radius = float(lens["radius_arcsec"])
     if not math.isfinite(aperture_radius) or aperture_radius <= 0:
         raise ValueError("lens aperture radius must be finite and positive")
-    # Two equal 3 Mpc apertures do not overlap if their centers are at least
-    # twice the lens aperture radius apart. The 30 arcmin outer limit matches
-    # the existing control-candidate planning radius.
-    inner = 2.0 * aperture_radius
-    if inner >= OUTER_RADIUS_ARCSEC:
+    outer = float(outer_radius_arcsec)
+    if not math.isfinite(outer) or outer <= 0:
+        raise ValueError("outer radius must be finite and positive")
+    # The default excludes the target aperture and an equal-sized random
+    # aperture. A fixed inner radius also supports supplemental, disjoint
+    # annuli such as the 30--60 arcmin expansion pool.
+    inner = 2.0 * aperture_radius if inner_radius_arcsec is None else float(inner_radius_arcsec)
+    if not math.isfinite(inner) or inner <= 0:
+        raise ValueError("inner radius must be finite and positive")
+    if inner >= outer:
         raise ValueError("non-overlapping control annulus is empty for a lens")
     inner_text = _sql_number(inner)
-    outer_text = _sql_number(OUTER_RADIUS_ARCSEC)
+    outer_text = _sql_number(outer)
     density_text = _sql_number(ADJUST_DENSITY_MAX)
     return (
         "SELECT " + lens_id + " AS lens_id, COUNT(*) AS n_random_candidates\n"
@@ -78,7 +84,8 @@ def random_count_query(lens):
     )
 
 
-def prepare(preflight, output):
+def prepare(preflight, output, *, inner_radius_arcsec=None,
+            outer_radius_arcsec=OUTER_RADIUS_ARCSEC):
     preflight = Path(preflight).resolve()
     output = Path(output).resolve()
     if output.exists():
@@ -91,7 +98,10 @@ def prepare(preflight, output):
         raise ValueError("lens centers must have unique IDs")
     chunks = [lenses[start:start + BATCH_SIZE]
               for start in range(0, len(lenses), BATCH_SIZE)]
-    queries = ["\nUNION ALL\n".join(random_count_query(lens) for lens in chunk) + "\n"
+    queries = ["\nUNION ALL\n".join(
+        random_count_query(lens, inner_radius_arcsec=inner_radius_arcsec,
+                           outer_radius_arcsec=outer_radius_arcsec)
+        for lens in chunk) + "\n"
                for chunk in chunks]
     output.mkdir(parents=True, exist_ok=False)
     batches = []
@@ -119,8 +129,11 @@ def prepare(preflight, output):
         "n_query_batches": len(batches),
         "batch_size": BATCH_SIZE,
         "candidate_query": {
-            "outer_radius_arcsec": OUTER_RADIUS_ARCSEC,
-            "inner_radius": "twice each lens's angular 3 Mpc aperture",
+            "outer_radius_arcsec": float(outer_radius_arcsec),
+            "inner_radius_arcsec": (None if inner_radius_arcsec is None
+                                    else float(inner_radius_arcsec)),
+            "inner_radius_policy": ("twice each lens's angular 3 Mpc aperture"
+                                    if inner_radius_arcsec is None else "fixed angular boundary"),
             "random_density_thinning": "adjust_density < 0.01 (nominally 1 point/arcmin^2 from the documented 100/arcmin^2)",
             "quality_filters": [
                 "isprimary IS TRUE (the documented primary selection for inner patch and tract regions, without children)",
@@ -154,14 +167,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--preflight", type=Path, default=DEFAULT_PREFLIGHT)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--inner-radius-arcsec", type=float,
+                        help="fixed inner edge for a supplemental annulus; default is twice 3 Mpc")
+    parser.add_argument("--outer-radius-arcsec", type=float, default=OUTER_RADIUS_ARCSEC)
     args = parser.parse_args()
-    manifest = prepare(args.preflight, args.output)
+    manifest = prepare(args.preflight, args.output,
+                       inner_radius_arcsec=args.inner_radius_arcsec,
+                       outer_radius_arcsec=args.outer_radius_arcsec)
     print(json.dumps({
         "status": manifest["status"],
         "network_used": False,
         "query_submitted": False,
         "lenses": manifest["n_lenses"],
         "batches": manifest["n_query_batches"],
+        "candidate_query": manifest["candidate_query"],
         "output_columns": manifest["output_columns"],
         "output": str(Path(args.output).resolve()),
     }, ensure_ascii=False))

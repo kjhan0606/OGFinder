@@ -39,8 +39,12 @@ DEFAULT_PLAN = Path(
 )
 
 
-def coordinate_query(lens):
-    count_sql = random_count_query(lens)
+def coordinate_query(lens, *, inner_radius_arcsec=None,
+                     outer_radius_arcsec=1800.0):
+    count_sql = random_count_query(
+        lens, inner_radius_arcsec=inner_radius_arcsec,
+        outer_radius_arcsec=outer_radius_arcsec,
+    )
     from_at = count_sql.index("FROM pdr3_wide.random AS r")
     where_at = count_sql.index("\nWHERE ", from_at)
     where_sql = count_sql[where_at:]
@@ -97,7 +101,15 @@ def prepare(count_plan: Path, output: Path):
     batches = []
     for index, start in enumerate(range(0, len(lenses), batch_size)):
         chunk = lenses[start:start + batch_size]
-        sql = "\nUNION ALL\n".join(coordinate_query(lens) for lens in chunk) + "\n"
+        candidate_query = count_manifest.get("candidate_query", {})
+        sql = "\nUNION ALL\n".join(
+            coordinate_query(
+                lens,
+                inner_radius_arcsec=candidate_query.get("inner_radius_arcsec"),
+                outer_radius_arcsec=candidate_query.get("outer_radius_arcsec", 1800.0),
+            )
+            for lens in chunk
+        ) + "\n"
         path = output / f"random_coordinates_{index:03d}.sql"
         path.write_text(sql, encoding="utf-8")
         batches.append({

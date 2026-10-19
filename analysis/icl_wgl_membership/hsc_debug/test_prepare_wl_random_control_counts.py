@@ -43,6 +43,21 @@ def test_random_count_sql_rejects_empty_annulus_and_unsafe_lens_id():
         planner.random_count_query(unsafe)
 
 
+def test_random_count_sql_supports_a_disjoint_supplemental_annulus():
+    sql = planner.random_count_query(
+        _lens(1, radius=650.25), inner_radius_arcsec=1800,
+        outer_radius_arcsec=3600,
+    )
+
+    assert "coneSearch(r.coord, 130.001, -1, 3600)" in sql
+    assert "AND NOT coneSearch(r.coord, 130.001, -1, 1800)" in sql
+
+    with pytest.raises(ValueError, match="annulus is empty"):
+        planner.random_count_query(
+            _lens(1), inner_radius_arcsec=3600, outer_radius_arcsec=3600,
+        )
+
+
 def test_plan_writes_32_local_only_count_queries(tmp_path, monkeypatch):
     preflight = tmp_path / "preflight"
     preflight.mkdir()
@@ -68,3 +83,26 @@ def test_plan_writes_32_local_only_count_queries(tmp_path, monkeypatch):
     assert stored["execution_requires_explicit_user_approval"] is True
     with pytest.raises(FileExistsError, match="refusing to overwrite"):
         planner.prepare(preflight, output)
+
+
+def test_supplemental_plan_records_exact_annulus_without_network(tmp_path, monkeypatch):
+    preflight = tmp_path / "preflight"
+    preflight.mkdir()
+    (preflight / "preflight_manifest.json").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(planner, "load_plan", lambda _path: {
+        "lenses": [_lens(i) for i in range(800)],
+    })
+    output = tmp_path / "expanded-count-plan"
+
+    manifest = planner.prepare(
+        preflight, output, inner_radius_arcsec=1800,
+        outer_radius_arcsec=3600,
+    )
+
+    assert manifest["candidate_query"]["inner_radius_arcsec"] == 1800
+    assert manifest["candidate_query"]["outer_radius_arcsec"] == 3600
+    assert manifest["network_used"] is False
+    assert manifest["query_submitted"] is False
+    sql = (output / "random_counts_000.sql").read_text(encoding="utf-8")
+    assert sql.count(", -1, 3600)") == 25
+    assert sql.count(", -1, 1800)") == 25
