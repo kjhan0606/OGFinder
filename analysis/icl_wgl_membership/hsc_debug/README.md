@@ -557,6 +557,12 @@ science measurement. The coordinate export was active when recorded; the
 offline screen has not been run. Any later HSC shape-row or image export needs
 its own explicit user approval.
 
+The 780k-coordinate geometry screen is available as the Slurm job
+`run_wl_random_coordinate_geometry.sbatch`; its analysis code is CPU-only.
+Submit it only after the approved
+coordinate export has a terminal `complete` checkpoint; the runner checks that
+state and refuses a partial result. It makes no HSC query.
+
 `prepare_wl_random_centers.py` is the local step after the geometry screen. It
 verifies the coordinate plan/checkpoint hashes, the geometry output hashes and
 the per-lens counts, then selects up to an explicitly supplied number of

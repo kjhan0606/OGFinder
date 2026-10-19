@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 import csv
 import json
 import math
+import os
 from pathlib import Path
 import platform
 import sys
@@ -165,8 +166,9 @@ def main():
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--chunk-size", type=int, default=10000)
     args = parser.parse_args()
-    if not platform.node().lower().startswith("lageunha"):
-        parser.error("Run the 780k-row geometry screen on lageunha CPU")
+    if (not platform.node().lower().startswith("lageunha")
+            and not os.environ.get("SLURM_JOB_ID")):
+        parser.error("Run the 780k-row geometry screen on lageunha or in a Slurm job")
     if args.work.exists():
         parser.error(f"Refusing to overwrite existing output: {args.work}")
     if args.chunk_size < 1:
