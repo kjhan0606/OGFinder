@@ -14,6 +14,13 @@ uses the Astrafek `icl.wgl.warp_metric` resampler and keeps the native `i` and
 - A pair is stacked only if target and control have the same primary `FILTER`
   (`i` or `i2`). Filter evidence is checked against both the download status
   and FITS headers. Mismatches are listed as exclusions in `summary.json`.
+- The `i` and `i2` stacks remain separate. HSC PDR3 describes their response
+  curves as similar but not identical and provides object-specific effective-
+  response photometric corrections; the uncorrected offset averages about 1%
+  and can be larger for very red sources. A diffuse ICL pixel has no available
+  per-pixel color for that correction, so the stack does not pool filters
+  ([processing](https://hsc-release.mtk.nao.ac.jp/doc/index.php/processing__pdr3/),
+  [filter-fraction note](https://hsc-release.mtk.nao.ac.jp/doc/index.php/filterfrac-2/)).
 - Control K=2.5 masks are regenerated from the existing science, variance, and
   HSC mask planes with the same SEP/Kron mask utility used by control QA.
 

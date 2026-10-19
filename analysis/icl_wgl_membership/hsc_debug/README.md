@@ -431,6 +431,16 @@ or ICL–satellite association significance. See
 [`icl_2d_target_control_stack_README.md`](icl_2d_target_control_stack_README.md)
 and [`icl_2d_independent_support_assessment_2026-10-19.md`](icl_2d_independent_support_assessment_2026-10-19.md).
 
+Keep the `i` and `i2` stacks separate. HSC PDR3 documents those as similar but
+non-identical response curves; the combined coadds use object-specific
+effective-response corrections, and the uncorrected photometric difference is
+about 1% on average but can be larger for very red objects. Since diffuse ICL
+has no per-pixel color information for that correction, pooling the two stacks
+would add an uncontrolled color term. The current pipeline verifies identical
+filter labels within every target/control pair and reports each filter apart
+([HSC PDR3 processing](https://hsc-release.mtk.nao.ac.jp/doc/index.php/processing__pdr3/),
+[filter-fraction note](https://hsc-release.mtk.nao.ac.jp/doc/index.php/filterfrac-2/)).
+
 On 2026-10-20, `verify_icl_target_control_2d_stack.py` independently rechecked
 the common-support K=2.5 stack and K=3.5/K=5.0 stacks: all three retain 783
 same-filter pairs, 40 radial rows, and 201×201 maps whose target-minus-control
