@@ -62,6 +62,27 @@ include a reduced-shear fit. Consequently these profiles are exploratory, not
 a mass measurement or detection, and `science_measurement=false` remains in
 the output.
 
+## Spatial polarity diagnostic prepared
+
+The HSC release documentation describes `b_mode_mask` as the cut for the
+large-B-mode region, but does not define whether raw zero or one is the
+excluded value. Astrafek now has
+[`audit_wl_bmode_spatial_distribution.py`](audit_wl_bmode_spatial_distribution.py),
+which verifies the 32 approved row-batch hashes, reapplies the published
+shape/tomographic cuts, deduplicates repeated sources by `object_id`, and
+counts both raw values on a one-degree sky grid. It deliberately does not use
+the measured shear profile to select a polarity. The Slurm runner is
+[`run_wl_bmode_spatial_distribution.sbatch`](run_wl_bmode_spatial_distribution.sbatch).
+
+The calculation has not run: on 2026-10-19, `sbatch --test-only` on `lageunha`
+failed before submission because the Slurm client could not resolve its DNS
+SRV configuration (`resolve_ctls_from_dns_srv: Unknown host`). No output was
+created, and the source-row data were not read for this diagnostic. Once
+scheduler configuration is available, the spatial result can test whether a
+stored value tracks the published problematic footprint; that correspondence
+would be useful validation but must still be distinguished from an explicit
+catalog-schema definition.
+
 The HSC PDR3 documentation says public random points are available in its
 database, but our current worktree has no approved random-lens export. The next
 data step is to inspect that product's schema and propose a count-only matched
