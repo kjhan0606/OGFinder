@@ -19,7 +19,7 @@ exec /home/kjhan/miniconda3/bin/python3 \
   analysis/icl_wgl_membership/hsc_debug/run_wl_cluster_spatial_jackknife.py \
   --rows /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_03 \
   --preflight /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01 \
-  --plan-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_plan_2026-10-18_02 \
+  --plan-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_plan_2026-10-18_04 \
   --nz-sacc /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_y3_nz_sacc_2026-10-19_01/hsc_y3_fourier_space_data_vector.sacc \
   --masked-value 0 \
   --cell-width-deg 5 \
