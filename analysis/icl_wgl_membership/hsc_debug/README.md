@@ -280,7 +280,9 @@ distinct shape objects within that target's proper 3 Mpc aperture. The result
 contains no source shape rows and no images. Its SQL/count plan must be reviewed
 for a separate explicit approval before execution; the eventual source-row
 export will require another approval after observed counts and transfer size
-are known.
+are known. `submit_wl_random_shape_counts.py --check` verifies the manifest and
+all exact SQL text without network access. Its `--submit` mode also requires
+`--approved-random-shape-count-query`; this guarded submitter has not been run.
 
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 
