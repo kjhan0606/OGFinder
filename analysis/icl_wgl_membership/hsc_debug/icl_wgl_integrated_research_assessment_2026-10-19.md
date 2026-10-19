@@ -54,6 +54,8 @@ redshift·richness 조정 순위 부분상관도 함께 확인했다. 전체 지
 
 현재 CAMIRA 후보를 더 넓히는 오프라인 검토에서는 기존 선택 아래 새로 분리되는 후보가 57개뿐이고 새 5도 하늘 셀은 없었다. 적색이동 범위를 넓혀도 분광 확인을 유지하면 새 5도 셀은 2개였다. 따라서 같은 발자국에서 영상 수만 늘리는 것으로 독립 하늘 영역의 부족을 해결하기 어렵다.
 
+2026-10-20에 기존 CAMIRA 후보 풀과 power 근사를 기계적으로 연결했다. 탐색적 `r=0.293`, 30개 비교 보정의 80% 검정력 계획은 독립 연결 블록 180개를 요구하며 현재 값은 33개다. 가장 넓은 기존 목록 후보 시나리오는 2,596개를 추가하지만 새 target 5도 셀은 6개, 전체 84개다. 현재 pair-block 알고리즘은 target 셀을 공유하는 행을 연결하므로, 84개는 해당 후보 표본이 만들 수 있는 연결 블록 수의 상한이며 계획치보다 최소 96개 적다. 실제 영상 지원·매칭 대조장·공분산을 적용한 유효 블록 수는 이보다 낮을 수 있다. 이 판단은 사후 탐색효과를 사용한 Gaussian Fisher-z 설계 근사와 현재 카탈로그에 한정된다. PDR3 Wide의 공식 명목 설계는 약 1,200 deg²이고 공개 다중대역 명목깊이 자료는 600 deg²를 넘지만, 이는 현재 표본의 실제 유효 면적·독립 공분산 블록을 뜻하지 않는다 ([HSC survey](https://hsc-release.mtk.nao.ac.jp/doc/index.php/survey__pdr3/), [PDR3 data coverage](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/)). 재현 스크립트와 해시 연결 산출물은 `assess_icl_catalog_expansion_feasibility.py` 및 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_catalog_expansion_feasibility_2026-10-20_03/`에 있다. 신규 HSC 질의·좌표 반출·영상 다운로드는 없으며, `science_measurement=false`다.
+
 **해석:** 양의 ICL–위성 관계는 흥미로운 가설이지만 검출로 보고할 수 없다. 다음 ICL 관문은 반경·필터·마스크·통계량을 분석 전에 고정하고, 실제 검출·마스크 재생성을 포함하는 diffuse+위성 공동 주입으로 sky·PSF 날개·마스크 누출 전달함수를 평가하는 것이다. 독립 통계력을 높이려면 단순히 기존 CAMIRA 선택을 완화하기보다 새 독립 하늘 영역과 완전도·렌즈 보정을 함께 설계해야 한다.
 
 ## 배경은하 약한렌즈

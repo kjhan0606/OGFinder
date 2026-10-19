@@ -1035,3 +1035,7 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 면적지원 불균형의 영향을 점검하기 위해 동일 94행에서 공통지원률 또는 표적·대조 지원률을 추가 공변량으로 둔 부분상관도 계산했다. i2 기준 `r=0.293`은 각각 `0.320`, `0.305`였고, 같은 5° 연결 공간블록의 짝지은 조정 전후 차이 분포는 모두 0을 포함했다. i는 26쌍뿐이며 기준 `0.079`가 `0.086`, `0.129`로 변했지만 차이 범위가 넓다. 이는 선택 편향 교정이나 검출이 아닌 지원 민감도다. 재현 코드·시험·원자료 해시는 [면적지원 조정 민감도](satellite_icl_coverage_adjustment_assessment_2026-10-20.md)에 기록했다.
 
 2026-10-20 전체 `hsc_debug` 테스트 스위트는 282개 테스트와 6개 하위 테스트를 모두 통과했다. 이는 재현 도구의 코드 검증이며 ICL·렌즈 신호의 과학 승인이나 랜덤 차감 관문을 대신하지 않는다.
+
+## ICL–위성 독립 하늘표본 확장 가능성 (2026-10-20)
+
+`assess_icl_catalog_expansion_feasibility.py`는 기존 공간블록 power 계획과 CAMIRA 오프라인 후보 풀을 연결한다. 탐색 효과 시나리오 `r=0.293`, 30개 비교 보정 아래 80% 검정력에는 독립 연결 블록 180개가 필요하지만 현재는 33개다. 기존 S20A 카탈로그의 가장 넓은 후보 시나리오는 2,596개를 더할 수 있으나 새 target 5도 셀은 6개, 전체는 84개다. 현재 pair-block 구현은 target 셀을 공유하는 행을 연결하므로 84개는 연결 블록 수의 상한이고, 계획치보다 최소 96개 적다. 이 상한은 usable 또는 독립 블록을 보장하지 않는다. 최신 실행 기록은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_catalog_expansion_feasibility_2026-10-20_03/`에 있다. 재현 방법과 공식 HSC 면적 출처는 [`assess_icl_catalog_expansion_feasibility.py`](assess_icl_catalog_expansion_feasibility.py) 및 산출물 `assessment.md`에 기록했다. 모든 결과는 `science_measurement=false`다.
