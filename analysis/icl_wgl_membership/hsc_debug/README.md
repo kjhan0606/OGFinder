@@ -1009,3 +1009,5 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 각 필터의 cluster 단위 leave-one-out에서 전체 지원표본 i2 `r`은 68회 삭제 모두 양수(`0.151–0.338`), i는 26회 중 한 번 부호가 바뀌었다. 더 엄격한 중심 적격 표본은 i2 15쌍(`0.254–0.433`), i 8쌍(`−0.787`–`−0.182`)이지만, 기존 공간 블록 구간은 각각 `[-0.059, 0.812]`, `[-1, 1]`로 넓고 0을 포함한다. 이는 선택별 영향도 민감도이지 검출이 아니다. 결과와 요약 해시는 [`satellite_icl_cluster_influence_assessment_2026-10-20.md`](satellite_icl_cluster_influence_assessment_2026-10-20.md)에 기록했다.
 
 동일한 영향도 계산에 redshift·richness 조정 순위상관을 추가했다. 전체 지원 i2 순위 부분상관은 `0.139`(Pearson `0.293`), i는 `0.248`(Pearson `0.079`)다. i 전체 지원 Pearson은 한 은하단 제외 시 부호가 바뀌지만 순위 부분상관은 유지됐다. 이 차이는 관계의 크기·형태가 상관 정의에 민감함을 보여주는 기술적 민감도일 뿐 검출 검정은 아니다.
+
+94개 결합 행이 같은 필터의 200–300 kpc ICL 지원 parent 224개와 어떻게 다른지도 비교했다. 결합률은 i 26/71(36.6%), i2 68/153(44.4%)였고, 선택 행의 표적 면적지원은 비선택 행보다 i에서 `0.60 SD`, i2에서 `1.05 SD` 높았다. i2에서는 redshift `+0.32 SD`, richness `−0.33 SD` 차이도 나타났다. 하늘영역별 결합률도 달라 현재 상관을 전체 800개 모집단에 일반화할 수 없다. 이 기술적 선택 감사는 [`icl_satellite_association_selection_assessment_2026-10-20.md`](icl_satellite_association_selection_assessment_2026-10-20.md)에 기록했으며, 선택 가중치 보정이나 검출을 주장하지 않는다.
