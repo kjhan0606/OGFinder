@@ -8,6 +8,9 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
+from scipy.stats import rankdata
+
 from audit_satellite_icl_region_fixed_effects import (
     DEFAULT_ASSOC, DEFAULT_BASELINE, DEFAULT_EXTRACTION, DEFAULT_ICL,
     partial_correlation,
@@ -23,24 +26,51 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def partial_spearman(rows):
+    """Correlate ranked estimator residuals after ranked nuisance adjustment."""
+    rows = list(rows)
+    if len(rows) < 6:
+        raise ValueError("partial Spearman requires at least six rows")
+    ranks = {
+        key: rankdata([float(row[key]) for row in rows], method="average")
+        for key in ("icl_delta_200_300", "satellite_delta_50_75", "redshift", "richness")
+    }
+    design = np.column_stack((np.ones(len(rows)), ranks["redshift"], ranks["richness"]))
+    if np.linalg.matrix_rank(design) != design.shape[1]:
+        raise ValueError("ranked nuisance design is rank deficient")
+    rx = ranks["icl_delta_200_300"] - design @ np.linalg.lstsq(
+        design, ranks["icl_delta_200_300"], rcond=None)[0]
+    ry = ranks["satellite_delta_50_75"] - design @ np.linalg.lstsq(
+        design, ranks["satellite_delta_50_75"], rcond=None)[0]
+    denominator = float(np.linalg.norm(rx) * np.linalg.norm(ry))
+    if not math.isfinite(denominator) or denominator <= 0:
+        raise ValueError("partial Spearman is undefined")
+    return float(rx @ ry / denominator)
+
+
 def leave_one_cluster_out(rows):
     rows = list(rows)
     ids = [str(row["cluster_id"]) for row in rows]
     if len(rows) < 6 or len(ids) != len(set(ids)):
         raise ValueError("need at least six rows with unique cluster IDs")
     base = partial_correlation(rows)["partial_r"]
+    rank_base = partial_spearman(rows)
     records = []
     for removed_id in ids:
         retained = [row for row in rows if str(row["cluster_id"]) != removed_id]
         result = partial_correlation(retained)
+        rank_r = partial_spearman(retained)
         records.append({
             "removed_cluster_id": removed_id,
             "partial_r": result["partial_r"],
             "delta_r_from_full": result["partial_r"] - base,
             "n_remaining": result["n_rows"],
             "residual_degrees_of_freedom": result["residual_degrees_of_freedom"],
+            "partial_spearman_r": rank_r,
+            "partial_spearman_delta_from_full": rank_r - rank_base,
         })
     values = [item["partial_r"] for item in records]
+    rank_values = [item["partial_spearman_r"] for item in records]
     return {
         "n_clusters": len(rows),
         "full_sample_partial_r": base,
@@ -49,6 +79,10 @@ def leave_one_cluster_out(rows):
         "leave_one_out_median_r": sorted(values)[len(values) // 2],
         "n_sign_changes": sum(value * base < 0 for value in values),
         "largest_absolute_change": max(records, key=lambda item: abs(item["delta_r_from_full"])),
+        "full_sample_partial_spearman_r": rank_base,
+        "leave_one_out_partial_spearman_min_r": min(rank_values),
+        "leave_one_out_partial_spearman_max_r": max(rank_values),
+        "partial_spearman_n_sign_changes": sum(value * rank_base < 0 for value in rank_values),
         "records": records,
     }
 
@@ -100,7 +134,10 @@ def analyze(association: Path, icl: Path, extraction: Path,
         "covariance_estimated": False,
         "method": {
             "sample": "fixed validated all-supported and stricter center-eligible subsets; one cluster row removed at a time within each filter",
-            "statistic": "partial Pearson correlation of 200-300 kpc ICL and 50-75 kpc satellite light, controlling redshift and richness",
+            "statistics": [
+                "partial Pearson correlation of 200-300 kpc ICL and 50-75 kpc satellite light, controlling redshift and richness",
+                "partial Spearman correlation after ranking the estimators and nuisance covariates, then residualizing on ranked redshift and richness",
+            ],
             "interpretation": "single-cluster influence diagnostic, not a confidence interval or detection test",
         },
         "results": results,
@@ -135,7 +172,9 @@ def main() -> None:
                      args.baseline, args.output)
     print(json.dumps({key: [{k: item[k] for k in (
         "selection", "filter", "n_clusters", "full_sample_partial_r", "leave_one_out_min_r",
-        "leave_one_out_max_r", "n_sign_changes", "largest_absolute_change")}
+        "leave_one_out_max_r", "n_sign_changes", "largest_absolute_change",
+        "full_sample_partial_spearman_r", "leave_one_out_partial_spearman_min_r",
+        "leave_one_out_partial_spearman_max_r", "partial_spearman_n_sign_changes")}
         for item in result["results"]] if key == "results" else result[key]
         for key in ("status", "science_measurement", "results")},
         ensure_ascii=False, indent=2))

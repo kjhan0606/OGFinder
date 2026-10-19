@@ -1002,3 +1002,5 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 같은 94쌍에서 redshift·richness를 보정한 뒤 표적/대조 HSC 연결영역 지시변수를 추가했다. i2 부분상관은 `r=0.29264`에서 `0.29105`로 거의 유지됐고, i는 `0.07898`에서 `0.13860`으로 변했으나 26쌍뿐이다. 표본의 target/control endpoint가 모두 같은 근사 영역에 배정되어 두 영역 효과 열은 중복되므로 하나만 적합했다. 이는 영역 간 평균 오프셋에 대한 민감도이며 검출이나 공분산 추정이 아니다. 방법과 한계는 [`satellite_icl_region_fixed_effects_assessment_2026-10-20.md`](satellite_icl_region_fixed_effects_assessment_2026-10-20.md)에 있다.
 
 각 필터의 cluster 단위 leave-one-out에서 전체 지원표본 i2 `r`은 68회 삭제 모두 양수(`0.151–0.338`), i는 26회 중 한 번 부호가 바뀌었다. 더 엄격한 중심 적격 표본은 i2 15쌍(`0.254–0.433`), i 8쌍(`−0.787`–`−0.182`)이지만, 기존 공간 블록 구간은 각각 `[-0.059, 0.812]`, `[-1, 1]`로 넓고 0을 포함한다. 이는 선택별 영향도 민감도이지 검출이 아니다. 결과와 요약 해시는 [`satellite_icl_cluster_influence_assessment_2026-10-20.md`](satellite_icl_cluster_influence_assessment_2026-10-20.md)에 기록했다.
+
+동일한 영향도 계산에 redshift·richness 조정 순위상관을 추가했다. 전체 지원 i2 순위 부분상관은 `0.139`(Pearson `0.293`), i는 `0.248`(Pearson `0.079`)다. i 전체 지원 Pearson은 한 은하단 제외 시 부호가 바뀌지만 순위 부분상관은 유지됐다. 이 차이는 관계의 크기·형태가 상관 정의에 민감함을 보여주는 기술적 민감도일 뿐 검출 검정은 아니다.

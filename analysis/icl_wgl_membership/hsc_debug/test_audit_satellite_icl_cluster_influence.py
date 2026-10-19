@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import unittest
 
-from audit_satellite_icl_cluster_influence import leave_one_cluster_out
+from audit_satellite_icl_cluster_influence import leave_one_cluster_out, partial_spearman
 
 
 def make_rows(n=12):
@@ -32,6 +32,17 @@ class ClusterInfluenceTests(unittest.TestCase):
     def test_too_few_rows_are_rejected(self):
         with self.assertRaises(ValueError):
             leave_one_cluster_out(make_rows(5))
+
+    def test_partial_spearman_is_invariant_to_monotone_rescaling(self):
+        rows = make_rows()
+        original = partial_spearman(rows)
+        transformed = [{**row,
+                        "icl_delta_200_300": row["icl_delta_200_300"] ** 3,
+                        "satellite_delta_50_75": row["satellite_delta_50_75"] ** 3,
+                        "redshift": row["redshift"] ** 3,
+                        "richness": row["richness"] ** 3}
+                       for row in rows]
+        self.assertAlmostEqual(original, partial_spearman(transformed), places=14)
 
 
 if __name__ == "__main__":
