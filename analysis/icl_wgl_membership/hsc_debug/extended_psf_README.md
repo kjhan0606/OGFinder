@@ -125,6 +125,24 @@ epoch를 다루려면 기여 visit와 가중치에 대한 별도 근거가 필�
 `download_01/images/` 기준으로 해석하도록 수정하고 회귀검사를 추가한 `_02`가
 최종 결과다. 이전 폴더는 보존했다.
 
+### 800개 target coadd의 PSF-core 후보 커버리지
+
+2026-10-18의 source-mask/segmentation 준비에는 800개 target coadd에서
+형태학적으로 compact한 후보 8,078개가 저장되어 있다. 새 요약기
+`summarize_psf_candidate_coverage.py`가 독립 artifact audit의 표 해시를 다시
+확인하고, 800개 후보 표를 모두 검증했다. 731개 프레임은 compact 후보가 4개
+이상이고, 2개 프레임은 후보가 없다. i 필터는 309개 중 274개가 4개 이상,
+i2 필터는 491개 중 457개가 4개 이상이다. 후보 테이블은 모두
+`provisional_compact_candidate`로 표시된다. 프레임별 moment-FWHM 중앙값의
+중앙값은 i 5.26픽셀, i2 5.63픽셀이지만, 이는 PSF 적합이나 seeing 승인값이 아니다.
+
+이 후보는 target/coadd 영상 내부의 morphology 컷으로 선택됐으며 compact galaxy
+혼입 가능성이 있다. 101×101픽셀 우표의 유효 최대 반경은 50픽셀뿐이어서 ICL
+외곽에 중요한 extended wing을 검증하지 않는다. 따라서 800개 core 후보의 존재는
+국소 stellar PSF 모델 또는 PSF 보정 승인을 뜻하지 않는다. 해시 검증을 포함한
+요약은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_candidate_coverage_2026-10-19_01/summary.json`에
+있으며 `science_measurement=false`, `psf_approved=false`를 유지한다.
+
 ## 산출물과 다음 조건
 
 상위 경로: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13`.
