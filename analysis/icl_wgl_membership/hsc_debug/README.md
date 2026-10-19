@@ -685,6 +685,14 @@ Slurm runner writes a new `_02` result directory and preserves `_01`. After the
 run completes, [`validate_wl_published_nz_shift_grid.py`](validate_wl_published_nz_shift_grid.py)
 checks all five shift inputs, the saved SACC and baseline hashes, each 56×56
 covariance's rank and symmetry, and the recomputed radial significance envelope.
+The 2026-10-20 grid completed and passed that independent validator: every
+scenario retained 52 jackknife cells and a rank-51 covariance. The source-bin
+consistency discrepancy persisted in all five cases at 0.1–0.7 Mpc; the
+seven-radius Holm-adjusted p-value envelope is 7.6×10⁻⁵–1.04×10⁻³ there.
+This supports prioritizing the published calibrated distributions, but the
+constant translations are not a posterior propagation and the cluster-only
+profiles still omit random subtraction. The run and validation checksums are
+recorded in [`wl_published_nz_shift_grid_assessment_2026-10-20.md`](wl_published_nz_shift_grid_assessment_2026-10-20.md).
 
 The current S19A responsivity, object-level shear corrections, and HSC
 edge-selection coefficients were also checked against the HSC Y3 paper and its
