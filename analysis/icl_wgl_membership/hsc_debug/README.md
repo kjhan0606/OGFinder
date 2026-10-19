@@ -680,6 +680,17 @@ attempt's aggregation failure remains preserved in `_01`; the regression
 test now checks the fixed pair count per shape. Verified results are at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_plane_injection_2026-10-19_02/`.
 
+The 2026-10-20 extension adds 500 kpc exponential stress profiles while
+retaining the 100/250 kpc cases. After plane subtraction, the 500 kpc circular
+profiles retain about 63% of injected signal and q=0.65 profiles retain
+70–71%, similarly in target and matched controls; all paired differences
+include zero. This quantifies downstream attenuation for these assumed
+profiles, not a correction to observed ICL. Job 428956 completed on all 74
+pairs. The full table, output hashes, and limitations are recorded in
+[`icl_plane_injection_extended_assessment_2026-10-20.md`](icl_plane_injection_extended_assessment_2026-10-20.md);
+the result is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_plane_injection_extended_2026-10-20_01/`.
+
 ## Weak-lensing calibration input gate
 
 The approved shape-row export and the official HSC Y3 four-bin SACC file are
