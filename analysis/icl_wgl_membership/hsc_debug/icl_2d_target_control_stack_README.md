@@ -46,6 +46,13 @@ definitions, and limitations. After independent verification,
 and per-filter map/radial diagnostic figures. The FITS primary header records
 the mask factor, and all outputs remain separate by filter and mask choice.
 
+`bootstrap_icl_2d_spatial_blocks.py` adds pair and connected target/control
+sky-block bootstrap intervals for the 50–500 kpc profile. It checks four cell
+widths (2.5°, 5°, 10°, 15°), verifies the source stack headers and manifests,
+and retains the per-annulus covariance matrices and diagnostic figures outside
+Git. See `icl_2d_spatial_block_bootstrap_assessment_2026-10-19.md` for the
+interpretation; these intervals remain exploratory.
+
 ## Interpretation limits
 
 The output is marked `science_measurement=false`. It does not apply extinction,
