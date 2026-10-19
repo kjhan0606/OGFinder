@@ -375,6 +375,14 @@ or ICL–satellite association significance. See
 [`icl_2d_target_control_stack_README.md`](icl_2d_target_control_stack_README.md)
 and [`icl_2d_independent_support_assessment_2026-10-19.md`](icl_2d_independent_support_assessment_2026-10-19.md).
 
+The fixed 94-row ICL–satellite association sample has also been compared under
+three independent-support mask factors using paired connected-sky-block
+resampling. The full supported-pair i2 estimate remains near partial r=0.29,
+while i remains near zero; the paired intervals for the estimator changes
+include zero. This is a fixed-sample estimator sensitivity, not a population
+reanalysis or a science measurement. Details and limitations are in
+[`satellite_icl_independent_support_association_2026-10-20.md`](satellite_icl_independent_support_association_2026-10-20.md).
+
 ## ICL annulus sample-selection audit (2026-10-18)
 
 `audit_icl_sample_selection.py` compares the 137-cluster K2.5/40% all-annulus sample
