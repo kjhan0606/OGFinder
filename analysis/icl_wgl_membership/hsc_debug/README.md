@@ -4,6 +4,13 @@
 
 두 연구 갈래의 현재 표본, ICL–위성 연관성 검증, 표적 전용 weak-lensing 결과와 남은 과학 관문은 [통합 연구 평가](icl_wgl_integrated_research_assessment_2026-10-19.md)를 참조한다.
 
+2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
+영향도 진단을 추가했다. 재현 명령은
+[`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),
+결과와 해시는 [tract-region 평가](wl_hsc_tract_region_influence_assessment_2026-10-20.md)에
+있다. 세 연결 영역만으로 공분산을 추정하지 않으며, 무작위 중심 차감도
+대신하지 않는다.
+
 작업 디렉터리는 `/gpfs/kjhan/Astrafek/data` 이다. 다른 경로를 쓰려면 `ASTRAFEK_DATA` 를 둔다. OGFinder 위치는 `ASTRAFEX_OGF_ROOT` 이다.
 
 ```bash
