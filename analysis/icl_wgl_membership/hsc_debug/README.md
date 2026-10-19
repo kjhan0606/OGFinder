@@ -683,3 +683,18 @@ checking its 5° result against the archived bootstrap. The i2 partial r is
 at 2.5° to [0.042, 0.497] at 5° and [0.057, 0.491] at 10°. This remains an
 exploratory, width-sensitive interval, not a detection; the report is
 [`icl_satellite_perbin_block_scale_assessment_2026-10-19.md`](icl_satellite_perbin_block_scale_assessment_2026-10-19.md).
+
+## Finite-lag ICL–satellite pixel covariance (2026-10-19)
+
+`audit_satellite_icl_shared_pixel_covariance.py --lag-covariance-dir ...`
+contracts the actual signed ICL 200–300 kpc and satellite 50–75 kpc estimator
+weights with a matched 9×9 empirical lag kernel. Across 57 supported frames
+(13 i, 44 i2), this increases each estimator's median target-side noise sigma
+by about 25% relative to the independent-pixel diagonal calculation; the
+normalized ICL–satellite pixel-noise correlation remains close to zero and
+close to its diagonal estimate. This is a noise sensitivity, not a correction
+to the observed association or final science error: the ICL random-control
+term, full position-dependent covariance, source Poisson noise, PSF, and sky
+transfer remain outside this calculation. The row-level output, hashes, and
+interpretation are in
+[`satellite_icl_lag_covariance_assessment_2026-10-19.md`](satellite_icl_lag_covariance_assessment_2026-10-19.md).
