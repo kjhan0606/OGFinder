@@ -468,6 +468,15 @@ corrected ICL profile or a detection. Reproduce with
 [`audit_icl_outer_annulus_baseline.py`](audit_icl_outer_annulus_baseline.py);
 the 5,000-replicate output and paired rows are in
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_outer_annulus_baseline_2026-10-20_02/`.
+An offline regional influence audit found that deleting any one of the three
+approximate occupied tract-center regions leaves the `i` outer baseline
+positive (1.08–2.20 nJy/arcsec² across the inner annuli); `i2` remains near zero
+overall and its leave-one-region-out values cross zero. Region labels use target
+coordinates only. This sensitivity check does not separate residual sky from
+real outer ICL and does not estimate covariance. Details, row counts, and the
+verified result hash are in
+[`icl_outer_baseline_region_influence_assessment_2026-10-20.md`](icl_outer_baseline_region_influence_assessment_2026-10-20.md),
+reproduced with [`audit_icl_outer_baseline_regions.py`](audit_icl_outer_baseline_regions.py).
 
 Keep the `i` and `i2` stacks separate. HSC PDR3 documents those as similar but
 non-identical response curves; the combined coadds use object-specific
