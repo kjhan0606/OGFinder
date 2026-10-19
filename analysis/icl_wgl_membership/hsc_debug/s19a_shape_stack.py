@@ -635,6 +635,127 @@ def subtract_random_lens_profile(lens_result, random_result):
     }
 
 
+def equal_area_source_blocks(source_ra_deg, source_dec_deg, *, n_ra=4, n_sin_dec=4):
+    """Assign source positions to deterministic equal-area lon/sin(lat) cells.
+
+    This is a reproducible fallback when survey-region labels are unavailable.
+    It is not a substitute for validated contiguous survey jackknife regions.
+    Identical sky positions always receive the same block, including across
+    cluster-lens and random-lens pair tables.
+    """
+    ra = np.asarray(source_ra_deg, dtype=float)
+    dec = np.asarray(source_dec_deg, dtype=float)
+    if (ra.ndim != 1 or dec.shape != ra.shape or not np.all(np.isfinite(ra))
+            or not np.all(np.isfinite(dec)) or np.any((ra < 0) | (ra >= 360))
+            or np.any(np.abs(dec) > 90)):
+        raise ValueError("source positions must be finite RA/Dec vectors in degrees")
+    if n_ra < 1 or n_sin_dec < 1:
+        raise ValueError("equal-area grid dimensions must be positive")
+    ra_bin = np.minimum((ra / 360.0 * n_ra).astype(int), n_ra - 1)
+    sin_dec = np.sin(np.deg2rad(dec))
+    dec_bin = np.minimum(((sin_dec + 1.0) * 0.5 * n_sin_dec).astype(int), n_sin_dec - 1)
+    return dec_bin * n_ra + ra_bin
+
+
+def paired_tomographic_spatial_jackknife(
+        lens_pairs, random_pairs, nz_redshift, nz_by_bin, radial_edges_mpc,
+        cosmology, *, n_ra_blocks=4, n_sin_dec_blocks=4, apply_b_mode_mask=True):
+    """Recompute both stacks after deleting the same source-sky block.
+
+    Blocks are defined by equal-area RA/sin(Dec) cells. Every leave-one-block
+    replicate reruns the full tomographic estimator, including radial-bin
+    responsivity and edge-selection calibration, before random subtraction.
+    The returned covariance covers both DeltaSigma and its cross component.
+    """
+    lens, n_lens = _check_columns(lens_pairs)
+    random, n_random = _check_columns(random_pairs)
+    if n_lens == 0 or n_random == 0:
+        raise ValueError("lens and random pair tables must both be non-empty")
+    lens_blocks = equal_area_source_blocks(
+        lens["source_ra_deg"], lens["source_dec_deg"],
+        n_ra=n_ra_blocks, n_sin_dec=n_sin_dec_blocks,
+    )
+    random_blocks = equal_area_source_blocks(
+        random["source_ra_deg"], random["source_dec_deg"],
+        n_ra=n_ra_blocks, n_sin_dec=n_sin_dec_blocks,
+    )
+    block_ids = np.unique(np.concatenate((lens_blocks, random_blocks)))
+    if len(block_ids) < 3:
+        raise ValueError("paired spatial jackknife requires at least three occupied sky blocks")
+
+    def subset(pairs, keep):
+        return {key: np.asarray(value)[keep] for key, value in pairs.items()}
+
+    def profile_vector(pairs):
+        result = stack_s19a_tomographic_pairs(
+            pairs, nz_redshift, nz_by_bin, radial_edges_mpc, cosmology,
+            apply_b_mode_mask=apply_b_mode_mask,
+        )
+        values = []
+        for row in result["profile"]:
+            ds = row["delta_sigma_weak_msun_mpc2"]
+            cross = row["cross_delta_sigma_weak_msun_mpc2"]
+            if ds is None or cross is None or not np.isfinite(ds) or not np.isfinite(cross):
+                raise ValueError("every radial bin must remain populated in every jackknife replicate")
+            values.extend((float(ds), float(cross)))
+        return result, np.asarray(values, dtype=float)
+
+    lens_full_result, lens_full = profile_vector(lens)
+    random_full_result, random_full = profile_vector(random)
+    lens_replicas = []
+    random_replicas = []
+    block_counts = []
+    for block in block_ids:
+        keep_lens = lens_blocks != block
+        keep_random = random_blocks != block
+        _, lens_replica = profile_vector(subset(lens, keep_lens))
+        _, random_replica = profile_vector(subset(random, keep_random))
+        lens_replicas.append(lens_replica)
+        random_replicas.append(random_replica)
+        block_counts.append({
+            "block_id": int(block),
+            "lens_pairs_deleted": int(np.count_nonzero(~keep_lens)),
+            "random_pairs_deleted": int(np.count_nonzero(~keep_random)),
+        })
+    covariance = paired_jackknife_covariance(
+        np.asarray(lens_replicas), np.asarray(random_replicas),
+    )
+    full_delta = lens_full - random_full
+    errors = covariance["standard_error"]
+    profile = []
+    for index, (lens_row, random_row) in enumerate(zip(
+            lens_full_result["profile"], random_full_result["profile"])):
+        profile.append({
+            "bin": index,
+            "r_min_mpc": lens_row["r_min_mpc"],
+            "r_max_mpc": lens_row["r_max_mpc"],
+            "delta_sigma_random_subtracted_msun_mpc2": float(full_delta[2 * index]),
+            "cross_delta_sigma_random_subtracted_msun_mpc2": float(full_delta[2 * index + 1]),
+            "delta_sigma_jackknife_error_msun_mpc2": float(errors[2 * index]),
+            "cross_jackknife_error_msun_mpc2": float(errors[2 * index + 1]),
+            "n_lens_pairs": lens_row["n_pairs"],
+            "n_random_pairs": random_row["n_pairs"],
+        })
+    return {
+        "schema": "hsc-s19a-paired-spatial-jackknife-v1",
+        "status": "exploratory",
+        "science_measurement": False,
+        "block_method": "equal-area RA/sin(Dec) grid assigned from source coordinates",
+        "block_grid": {"n_ra": int(n_ra_blocks), "n_sin_dec": int(n_sin_dec_blocks)},
+        "n_occupied_blocks": int(len(block_ids)),
+        "block_deletions": block_counts,
+        "profile_order": "[DeltaSigma bin 0, cross bin 0, DeltaSigma bin 1, cross bin 1, ...]",
+        "profile": profile,
+        "covariance": covariance["covariance"].tolist(),
+        "jackknife_mean_diagnostic": covariance["mean_random_subtracted"].tolist(),
+        "limitations": [
+            "equal-area grid cells are a fallback and may combine disconnected survey regions",
+            "survey-region jackknife, photo-z calibration uncertainty, B-mode polarity, and reduced shear remain independent gates",
+            "this covariance does not by itself authorize a science detection",
+        ],
+    }
+
+
 def paired_jackknife_covariance(lens_leave_one_block, random_leave_one_block):
     """Covariance of random-subtracted profiles from matched delete-one blocks.
 

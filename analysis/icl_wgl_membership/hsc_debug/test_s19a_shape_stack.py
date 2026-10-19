@@ -17,6 +17,8 @@ from s19a_shape_stack import (
     stack_s19a_pairs,
     stack_s19a_tomographic_pairs,
     paired_jackknife_covariance,
+    equal_area_source_blocks,
+    paired_tomographic_spatial_jackknife,
     subtract_random_lens_profile,
     tomographic_nz_lensing_efficiency,
 )
@@ -447,3 +449,34 @@ def test_paired_jackknife_covariance_uses_subtracted_replicas():
     assert result["standard_error"] == pytest.approx([math.sqrt(12.0)])
     with pytest.raises(ValueError, match="share shape"):
         paired_jackknife_covariance(lens, random[:2])
+
+
+def test_equal_area_source_blocks_are_deterministic_across_ra_wrap():
+    blocks = equal_area_source_blocks(
+        [359.9, 0.1, 180.1], [0.0, 0.0, 0.0], n_ra=4, n_sin_dec=2,
+    )
+    assert blocks.tolist() == [7, 4, 6]
+    assert equal_area_source_blocks([0.1], [0.0], n_ra=4, n_sin_dec=2)[0] == blocks[1]
+
+
+def test_paired_tomographic_jackknife_recomputes_both_stacks(cosmo):
+    pairs, source_ids, z, pdf, edges, _injected = _synthetic_catalog(cosmo)
+    lens_pairs = {key: value.copy() for key, value in pairs.items()}
+    random_pairs = {key: value.copy() for key, value in pairs.items()}
+    lens_pairs["source_zbin"] = np.ones(len(source_ids), dtype=int)
+    random_pairs["source_zbin"] = np.ones(len(source_ids), dtype=int)
+    random_pairs["lens_id"][:] = "random-lens-1"
+    nz_by_bin = np.tile(pdf[0], (4, 1))
+
+    result = paired_tomographic_spatial_jackknife(
+        lens_pairs, random_pairs, z, nz_by_bin, edges, cosmo,
+        n_ra_blocks=7200, n_sin_dec_blocks=7200,
+    )
+
+    assert result["science_measurement"] is False
+    assert result["n_occupied_blocks"] >= 3
+    assert len(result["profile"]) == len(edges) - 1
+    assert np.asarray(result["covariance"]).shape == (2 * (len(edges) - 1),) * 2
+    assert all(row["delta_sigma_random_subtracted_msun_mpc2"] == pytest.approx(0.0, abs=1e-8)
+               for row in result["profile"])
+    assert all(row["delta_sigma_jackknife_error_msun_mpc2"] >= 0 for row in result["profile"])

@@ -261,7 +261,16 @@ python3 analysis/icl_wgl_membership/hsc_debug/run_wl_shape_stack.py \
 이들은 실제 random source 쌍을 만들거나 각 jackknife replicate를 실행하지 않는다.
 공통 sky block 및 source overlap을 반영한 실제 공분산이 없으면 두 stack의 개별
 shape-noise 오차를 독립으로 합치지 않는다. 테스트에는 신호 회수·n(z) bin 처리·SACC
-로딩/검증·선택 컷·무작위 차감 및 공분산 산식이 포함되며 현재 15개가 통과한다.
+로딩/검증·선택 컷·무작위 차감 및 공분산 산식이 포함되며 현재 22개가 통과한다.
+
+`paired_tomographic_spatial_jackknife` now runs that missing pair-level step: it
+assigns source RA/Dec to the same equal-area RA/sin(Dec) cells in lens and random
+pair tables, deletes each cell from both, and recomputes responsivity and edge
+selection calibration for every replicate. It returns the full-sample
+random-subtracted profile plus the joint tangential/cross covariance. This
+calculation is not yet run because the random-source pairs have not been
+exported. Its grid is an exploratory fallback and does not guarantee contiguous
+independent HSC regions; region-based jackknife remains a science gate.
 
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 
