@@ -335,6 +335,18 @@ absent, and the grid is not a contiguous HSC-region partition. See
 [`wl_cluster_spatial_jackknife_assessment_2026-10-19.md`](wl_cluster_spatial_jackknife_assessment_2026-10-19.md)
 and its recorded machine-readable output hash.
 
+`audit_wl_tomographic_consistency.py` extends that cluster-only audit by
+stacking HSC Y3 source bins 1–4 separately and using the same delete-one 5°
+sky-cell replicates across bins and radial ranges. It stores a joint
+tomographic/radial tangential-cross covariance and tests, per radial bin,
+whether calibrated `DeltaSigma` agrees across source bins using that covariance.
+This is a calibration consistency diagnostic, not a mass detection; it still
+needs random-lens subtraction, HSC `n(z)` uncertainty and contiguous-region
+covariance. The Slurm wrapper is
+[`run_wl_tomographic_consistency.sbatch`](run_wl_tomographic_consistency.sbatch).
+It reads only the already approved cluster lens-source rows and local SACC
+`n(z)` input; no new HSC request or export is involved.
+
 `prepare_wl_random_shape_count_plan.py` prepares (without submitting) a count-only
 S19A support query for a finalized `astrafek-wl-random-centers-v1` manifest. It
 retains the association between each unique random-center ID and its matched
