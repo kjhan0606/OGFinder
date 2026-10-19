@@ -416,6 +416,21 @@ are known. `submit_wl_random_shape_counts.py --check` verifies the manifest and
 all exact SQL text without network access. Its `--submit` mode also requires
 `--approved-random-shape-count-query`; this guarded submitter has not been run.
 
+After a completed count-only export, `prepare_wl_random_shape_rows.py` builds an
+offline, hash-bound source-row plan with the exact observed per-center row
+totals. Its 23 explicit columns contain calibrated shape, source coordinates,
+tomographic-bin and B-mode fields; it requests neither images nor full photo-z
+PDFs. `submit_wl_random_shape_rows.py --check --plan-dir ...` audits the plan
+and count evidence without network access. Submission requires a distinct
+`--approved-random-shape-row-export` flag and remains a separate approval from
+the count-only query. `run_wl_random_shape_stack.py` accepts only complete,
+hash-matched row exports, checks each center-to-lens association and count, and
+runs the random-center S19A stack. Optional cluster-profile subtraction is a
+point estimate only; spatial-block covariance and photo-z uncertainty remain
+unpropagated, so the output keeps `science_measurement=false`. None of these
+shape-row requests or stacks has been run. Focused offline tests cover count
+binding, SQL scope, submission gates, mapping checks and existing stack math.
+
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 
 `analyze_member_weighted_satellite_profiles.py` joins existing per-annulus satellite
