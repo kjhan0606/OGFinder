@@ -64,31 +64,42 @@ def analyze(association: Path, icl: Path, extraction: Path,
         raise ValueError("unexpected exploratory baseline")
     rows, provenance = load_verified_rows(association, icl, extraction)
     baseline_r = {
-        item["filter"]: float(item["partial_spatial_block_bootstrap"]["partial_r_point"])
-        for item in baseline.get("results", []) if item.get("selection") == "all_supported_pairs"
+        (item["selection"], item["filter"]): float(
+            item["partial_spatial_block_bootstrap"]["partial_r_point"])
+        for item in baseline.get("results", [])
     }
     for key, value in provenance.items():
         if baseline.get("provenance", {}).get(key) != value:
             raise ValueError(f"baseline provenance mismatch for {key}")
     results = []
-    for band, expected_count in (("i2", 68), ("i", 26)):
-        selected = [row for row in rows if row["filter"] == band]
-        if len(selected) != expected_count:
-            raise ValueError(f"fixed {band} sample count changed")
-        result = leave_one_cluster_out(selected)
-        if not math.isclose(result["full_sample_partial_r"], baseline_r[band],
-                            rel_tol=0, abs_tol=1e-12):
-            raise ValueError(f"baseline partial correlation mismatch for {band}")
-        result["filter"] = band
-        result["baseline_reproduction"] = "exact_match_within_1e-12"
-        results.append(result)
+    sample_definitions = (
+        ("all_supported_pairs", 68, 26,
+         lambda row: True),
+        ("center_eligible", 15, 8,
+         lambda row: str(row["center_eligible"]).lower() == "true"),
+    )
+    for selection, expected_i2, expected_i, keep in sample_definitions:
+        for band, expected_count in (("i2", expected_i2), ("i", expected_i)):
+            selected = [row for row in rows
+                        if row["filter"] == band and keep(row)]
+            if len(selected) != expected_count:
+                raise ValueError(f"fixed {selection}/{band} sample count changed")
+            result = leave_one_cluster_out(selected)
+            if not math.isclose(result["full_sample_partial_r"],
+                                baseline_r[(selection, band)],
+                                rel_tol=0, abs_tol=1e-12):
+                raise ValueError(f"baseline partial correlation mismatch for {selection}/{band}")
+            result["filter"] = band
+            result["selection"] = selection
+            result["baseline_reproduction"] = "exact_match_within_1e-12"
+            results.append(result)
     output = {
         "schema": "astrafek-satellite-icl-cluster-influence-v1",
         "status": "complete_exploratory_influence_audit",
         "science_measurement": False,
         "covariance_estimated": False,
         "method": {
-            "sample": "fixed validated 94 cluster/filter rows; one row removed at a time within each filter",
+            "sample": "fixed validated all-supported and stricter center-eligible subsets; one cluster row removed at a time within each filter",
             "statistic": "partial Pearson correlation of 200-300 kpc ICL and 50-75 kpc satellite light, controlling redshift and richness",
             "interpretation": "single-cluster influence diagnostic, not a confidence interval or detection test",
         },
@@ -123,7 +134,7 @@ def main() -> None:
     result = analyze(args.association, args.icl, args.extraction_summary,
                      args.baseline, args.output)
     print(json.dumps({key: [{k: item[k] for k in (
-        "filter", "n_clusters", "full_sample_partial_r", "leave_one_out_min_r",
+        "selection", "filter", "n_clusters", "full_sample_partial_r", "leave_one_out_min_r",
         "leave_one_out_max_r", "n_sign_changes", "largest_absolute_change")}
         for item in result["results"]] if key == "results" else result[key]
         for key in ("status", "science_measurement", "results")},
