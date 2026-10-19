@@ -183,6 +183,30 @@ coadd 유효 epoch 차이, 변광·포화·고립도, 확장 PSF 날개는 여�
 `b5b2309a8cc3bc205b7e998076863e373909f3d94f4db138e83d921701540ac3`다.
 `science_measurement=false`, `psf_approved=false`를 유지한다.
 
+같은 승인 후보를 기존 HSC morphology 표와 연결한 후속 지원 평가에서, 항성 근거
+480개는 288개 영상에 분포했다. Gaia G 중앙값은 20.03(q16–q84 19.46–20.55)이고,
+G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355개였으며,
+후보 모멘트 FWHM/프레임 별 locus 비율 중앙값은 1.103(q16–q84 1.001–1.176)이다.
+480개 모두 Gaia `phot_variable_flag=NOT_AVAILABLE`이므로 비변광을 확인한 표본은
+없다. 이 값은 영상 측정 전의 표본 요약이고 PSF 적합이나 별 확정은 아니다.
+우선순위 표와 요약은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_gaia_candidate_support_2026-10-20_02/`
+에 있으며 요약 SHA-256은 `84c4d033c46d988f7c926e9b33ee1b6082984188cab93260efc312039c328bcc`다.
+
+확장 후보 중 가장 밝은 Gaia G≤19 표본 26개를 원본 HSC에서 401×401픽셀로
+시험 추출했다(23개 프레임, FITS 우표 12개). 104개 mask/background 방법 조합 중
+56개는 우표가 영상 경계를 넘고, 33개는 바깥 배경 면적·방향 조건을 통과하지 못했으며,
+2개는 중심 마스크 기준에서 막혔다. 13개 조합만 진단 프로필을 냈고, 그중 5개 별은
+한 조합 이상, 1개 별만 네 조합 전부를 통과했다. 64–96픽셀 고리(10.75–16.13초각)는
+4개 별의 11개 반복 방법 기록에서 9개 양수·2개 비양수였다. 이 반복 측정은 독립
+표본이 아니며 확장 날개 검출로 해석하지 않는다. 요약은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_bright_pilot_2026-10-20_02/summary.json`
+에 있고 SHA-256은 `df4ea713a4beec6cd8d0cd4be61cc4bf96b7b7cfced3936263786e4607e1a71c`다.
+전체 480개 별의 영상 진단은 아직 실행하지 않았다. 재현 명령은
+[`diagnose_empirical_psf.py`](diagnose_empirical_psf.py), Slurm 자원 설명은
+[`run_empirical_psf_gaia_full_sample.sbatch`](run_empirical_psf_gaia_full_sample.sbatch)에
+있다. 현재 `science_measurement=false`, `psf_approved=false`다.
+
 ## 산출물과 다음 조건
 
 상위 경로: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13`.

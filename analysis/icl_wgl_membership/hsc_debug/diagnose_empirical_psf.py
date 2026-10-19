@@ -88,12 +88,22 @@ def objects_from_rows(rows, x0, y0):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     for name in ('sample','work'):p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--gaia-work',type=Path,
+        help='use a completed Gaia evidence run (defaults to the original 569-position review)')
+    p.add_argument('--detection-dir',type=Path,
+        help='HSC detection/mask directory (defaults to detection_psf_2026-10-13_01)')
+    p.add_argument('--max-candidates',type=int,
+        help='diagnostic subset limit; omit to process every Gaia-supported candidate')
+    p.add_argument('--brightest-first',action='store_true',
+        help='order Gaia-supported candidates by Gaia G magnitude for a short prioritized pilot')
     a=p.parse_args()
     if not platform.node().lower().startswith('lageunha'):p.error('Run on lageunha CPU')
+    if a.max_candidates is not None and a.max_candidates < 1:p.error('--max-candidates must be positive')
     a.work.mkdir(parents=True,exist_ok=False); started=time.time();hashes={}
     def record(path):
         path=Path(path);hashes[str(path)]=sha(path);return path
-    evidence_dir=a.sample/'psf_cds_2026-10-13_01/evidence'
+    evidence_dir=(a.gaia_work if a.gaia_work is not None
+                  else a.sample/'psf_cds_2026-10-13_01/evidence')
     evidence=json.loads(record(evidence_dir/'evidence_summary.json').read_text())
     requests=json.loads(record(evidence_dir/'candidates.json').read_text())
     gs=json.loads(record(evidence_dir/'status.json').read_text())
@@ -101,17 +111,21 @@ def main():
     if hashes[str(gp)]!=gs['response_sha256']:raise ValueError('Gaia response changed')
     with gp.open() as f: gaia={int(r['candidate_id']):r for r in csv.DictReader(f)}
     selected=[r for r in evidence['records'] if r['status']=='stellar_evidence_requires_epoch_and_psf_review']
-    manifest=json.loads(record(a.sample/'validation_sample_2026-10-13_01/validation_manifest.json').read_text())
-    frames={str(r['id']):r for r in manifest['clusters']}
+    evidence_candidate_count=len(selected)
+    if a.brightest_first:
+        selected.sort(key=lambda r:float(gaia[int(r['candidate_id'])]['phot_g_mean_mag']))
+    if a.max_candidates is not None:selected=selected[:a.max_candidates]
+    detection_dir=(a.detection_dir if a.detection_dir is not None
+                   else a.sample/'detection_psf_2026-10-13_01')
     ds=json.loads(record(a.sample/'download_01/download_status.json').read_text())
     download={str(r['id']):r for r in ds['completed']}
     groups=defaultdict(list)
     for star in selected:groups[str(star['cluster_id'])].append(star)
     measures=[];profiles=[];star_records=[]
     for cid,stars in groups.items():
-        frame=frames[cid];raw=record(frame['image']);review=download[cid]['review']
+        frame=download[cid];raw=record(a.sample/'download_01/images'/frame['file']);review=frame['review']
         if hashes[str(raw)]!=download[cid]['sha256']:raise ValueError('Original image hash changed')
-        source=a.sample/'detection_psf_2026-10-13_01'/('cluster_'+cid)
+        source=detection_dir/('cluster_'+cid)
         detections=read_table(record(source/'detections.tsv'));mp=record(source/'masks.fits.gz')
         with fits.open(raw,memmap=False) as h,fits.open(mp,memmap=False) as mh:
             image=np.asarray(h[review['science_hdu']].data,dtype=float)
@@ -171,7 +185,10 @@ def main():
                 fractional_core_change=second['core_flux']/first['core_flux']-1))
     if sensitivity:prep.table(a.work/'background_sensitivity.tsv',sensitivity,list(sensitivity[0]))
     outer=[r for r in profiles if r['r_min_pix']==64 and r['radial_coverage_pass']]
-    prep.write_json(a.work/'summary.json',dict(status='complete',n_candidates=len(selected),n_frames=len(groups),
+    prep.write_json(a.work/'summary.json',dict(status='complete',n_candidates=len(selected),
+        n_evidence_candidates=evidence_candidate_count,subset_limited=a.max_candidates is not None,
+        candidate_order='ascending Gaia G magnitude' if a.brightest_first else 'candidate ID',
+        gaia_work=str(evidence_dir.resolve()),detection_dir=str(detection_dir.resolve()),n_frames=len(groups),
         n_stamps=sum(r['stamp'] is not None for r in star_records),n_method_rows=len(measures),n_profile_rows=len(profiles),
         method_status_counts=dict(Counter(r['status'] for r in measures)),n_stars_any_valid=len(good),n_stars_all_four_valid=len(all_four),
         n_outer_bins_coverage_pass=len(outer),n_outer_bins_nonpositive=sum(r['sky_subtracted_mean']<=0 for r in outer),
