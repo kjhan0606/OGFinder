@@ -807,6 +807,13 @@ HSC 진단은 288개 프레임, 333개 401×401 우표, 1,920개 방법 조합�
 영상별 포화·고립도 및 프레임 전달 검증이 남아 `science_measurement=false`,
 `psf_approved=false`다.
 
+Gaia DR3 `ref_epoch=2016.0` proper motion을 구면 접평면에서 ±10년까지 전파하는
+민감도 분석도 수행했다. HSC 후보 좌표를 고정한 시나리오에서 480개 모두 기존
+2″ 연결반경 안에 남았고 최대 분리는 1.572″였다. HSC coadd의 실제 epoch를
+대입하지 않은 시나리오이므로 실제 전파나 천체/PSF 검증이 아니다. 결과와
+재현기는 `empirical_psf_gaia_epoch_sensitivity_2026-10-20_01/` 및
+`summarize_psf_gaia_epoch_sensitivity.py`다.
+
 재현 스크립트와 수치는 `analysis/icl_wgl_membership/hsc_debug/`의
 `diagnose_empirical_psf.py`, `query_psf_gaia_variability.py`,
 `summarize_empirical_psf_star_level.py`, `extended_psf_README.md`, 통합 연구평가에

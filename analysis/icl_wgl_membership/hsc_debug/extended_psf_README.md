@@ -231,6 +231,21 @@ G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355
 `d087d8135b32fe3e826a0164d8b01971bc05445a0d14b0dbe6f4f9d50af96421`과
 `1278a150b7a10531d437b64e966cd5a065010a0eae59c3f1f4ea511b615166dc`다.
 
+실제 HSC coadd epoch는 입력 자료에 연결되지 않았으므로 별도 추정하지 않았다.
+대신 Gaia DR3의 `ref_epoch=2016.0`, `pmra=μα cosδ`, `pmdec=μδ`를 사용해
+각 별의 고유운동을 구면 접평면 벡터로 적용하고, HSC 후보 좌표는 고정한 채
+Δt=−10…+10년 시나리오의 재대응 간격을 계산했다. 480개 모두 일곱 시나리오에서
+2 arcsec 연결 반경 안에 남았고, 최대 간격은 −10년 1.536 arcsec, +10년
+1.572 arcsec였다. 따라서 고유운동만으로 기존 2 arcsec 연결이 깨지는 후보는
+없지만, 이는 실제 coadd epoch 보정·변광·별 확정·PSF 승인과 다르다. 계산은
+시차, 관점 가속, 쌍성 운동, HSC 중심 오차를 모델링하지 않았다. 원자료/후보
+표와 결과 해시는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_epoch_sensitivity_2026-10-20_01/`
+의 `candidate_epoch_sensitivity.tsv` (`a1e937694a42b030eddbd29e63fd5cad4338ca3a5928331419565a9fba9fc983`)와
+`summary.json` (`c278e6e233be8869e99a09e8f196e46ed91dd621a0175eba91b9f7a40aa4ed2f`)에
+있다. 재현기는 [`summarize_psf_gaia_epoch_sensitivity.py`](summarize_psf_gaia_epoch_sensitivity.py)다.
+Gaia proper-motion 열 정의는 [공식 DR3 데이터 모델](https://gea.esac.esa.int/archive/documentation/GDR3/Gaia_archive/chap_datamodel/sec_dm_main_source_catalogue/ssec_dm_gaia_source.html)에 따른다.
+
 결과는
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_full_sample_2026-10-20_02/`
 에 있다. `summary.json` SHA-256은
@@ -241,7 +256,8 @@ G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355
 `1864144dfbd835e5c145e6a474cf38c3cace87909adc17cb87a2db67d1f9ebfb`다. 재현기는
 [`diagnose_empirical_psf.py`](diagnose_empirical_psf.py)와
 [`query_psf_gaia_variability.py`](query_psf_gaia_variability.py),
-[`summarize_empirical_psf_star_level.py`](summarize_empirical_psf_star_level.py), Slurm 자원 설명은
+[`summarize_empirical_psf_star_level.py`](summarize_empirical_psf_star_level.py),
+[`summarize_psf_gaia_epoch_sensitivity.py`](summarize_psf_gaia_epoch_sensitivity.py), Slurm 자원 설명은
 [`run_empirical_psf_gaia_full_sample.sbatch`](run_empirical_psf_gaia_full_sample.sbatch)에
 있다. Gaia 2016 위치의 HSC epoch 전파, 포화·고립도 판정, 영상 기반 wing 비교와
 프레임별 전달함수 검증은 여전히 남아 있다. 현재 `science_measurement=false`,
