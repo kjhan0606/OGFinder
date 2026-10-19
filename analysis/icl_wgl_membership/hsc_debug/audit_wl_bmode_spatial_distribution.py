@@ -30,6 +30,14 @@ EXPECTED_COLUMNS = [
 QUALITY_COLUMNS = ("e1", "e2", "sigma_e", "resolution", "mag_a10", "source_zbin")
 
 
+def normalize_shape_header(fieldnames: list[str] | None) -> list[str] | None:
+    """Remove the comment marker used on the export's first CSV header field."""
+    if fieldnames and fieldnames[0].startswith("# "):
+        fieldnames = list(fieldnames)
+        fieldnames[0] = fieldnames[0][2:]
+    return fieldnames
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with Path(path).open("rb") as stream:
@@ -105,6 +113,7 @@ def audit(rows_dir: Path, preflight: Path, plan_dir: Path, grid_width_deg: float
         batch_hashes[name] = digest
         with path.open(encoding="utf-8-sig", newline="") as stream:
             reader = csv.DictReader(stream)
+            reader.fieldnames = normalize_shape_header(reader.fieldnames)
             if reader.fieldnames != EXPECTED_COLUMNS:
                 raise ValueError(f"unexpected shape-row columns in {name}")
             for row in reader:

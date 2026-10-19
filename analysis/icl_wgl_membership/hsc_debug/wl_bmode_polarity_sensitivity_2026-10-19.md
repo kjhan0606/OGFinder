@@ -74,14 +74,26 @@ counts both raw values on a one-degree sky grid. It deliberately does not use
 the measured shear profile to select a polarity. The Slurm runner is
 [`run_wl_bmode_spatial_distribution.sbatch`](run_wl_bmode_spatial_distribution.sbatch).
 
-The calculation has not run: on 2026-10-19, `sbatch --test-only` on `lageunha`
-failed before submission because the Slurm client could not resolve its DNS
-SRV configuration (`resolve_ctls_from_dns_srv: Unknown host`). No output was
-created, and the source-row data were not read for this diagnostic. Once
-scheduler configuration is available, the spatial result can test whether a
-stored value tracks the published problematic footprint; that correspondence
-would be useful validation but must still be distinguished from an explicit
-catalog-schema definition.
+The first submitted job (Slurm 428534) failed before producing an output
+because the approved CSV export prefixes its first header field with `# `.
+The parser now strips that marker only from the first field and retains the
+exact expected-column check. The successful rerun was Slurm 428536; its output
+is `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_bmode_spatial_diagnostic_2026-10-19_02/summary.json`
+(SHA-256 `8260ad1cba3b926af322a5407751762b1741cbe7f75a5cd9c7c08fa16fa90448`).
+All 3,069,544 exported lens-source rows were read. After the published cuts,
+2,234,510 pair rows remained, representing 2,131,860 unique sources. Raw value
+0 accounts for 77,021 pairs (3.45%) and 75,684 unique sources; raw value 1
+accounts for 2,157,489 pairs and 2,056,176 unique sources.
+
+At the one-degree coordinate-grid resolution, raw value 0 appears in 26 of
+495 occupied cells, spanning RA 132–140 degrees and Dec 1–5 degrees. Nineteen
+cells contain only raw 0 and seven contain both values; all other occupied
+cells contain only raw 1. This is strong spatial localization in the approved
+800-lens export and is consistent with one value tracing a survey footprint or
+mask. The grid is not an area-corrected density map, and this correspondence
+does not establish which bit the catalog excludes. The output explicitly
+retains `b_mode_polarity_decoded=false`, `raw_value_meaning_inferred_from_shear=false`,
+and `science_measurement=false`.
 
 The HSC PDR3 documentation says public random points are available in its
 database, but our current worktree has no approved random-lens export. The next

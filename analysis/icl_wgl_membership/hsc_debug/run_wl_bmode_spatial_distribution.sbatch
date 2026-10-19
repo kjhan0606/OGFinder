@@ -21,4 +21,4 @@ exec /home/kjhan/miniconda3/bin/python3 \
   --preflight /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_preflight_2026-10-18_01 \
   --plan-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_plan_2026-10-18_04 \
   --grid-width-deg 1.0 \
-  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_bmode_spatial_diagnostic_2026-10-19_01/summary.json
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_bmode_spatial_diagnostic_2026-10-19_02/summary.json

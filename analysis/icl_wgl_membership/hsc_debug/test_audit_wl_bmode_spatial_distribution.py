@@ -1,6 +1,17 @@
 import pytest
 
-from audit_wl_bmode_spatial_distribution import grid_cell, passes_published_source_cuts
+from audit_wl_bmode_spatial_distribution import (
+    EXPECTED_COLUMNS, grid_cell, normalize_shape_header, passes_published_source_cuts,
+)
+
+
+def test_normalize_shape_header_accepts_export_comment_prefix():
+    assert normalize_shape_header(["# " + EXPECTED_COLUMNS[0], *EXPECTED_COLUMNS[1:]]) == EXPECTED_COLUMNS
+
+
+def test_normalize_shape_header_leaves_unmarked_or_other_fields_unchanged():
+    assert normalize_shape_header(EXPECTED_COLUMNS) == EXPECTED_COLUMNS
+    assert normalize_shape_header(["#other", *EXPECTED_COLUMNS[1:]])[0] == "#other"
 
 
 def test_grid_cell_handles_ra_wrap_domain_and_dec_edges():

@@ -509,6 +509,19 @@ interpretation are recorded in
 The two scenarios are sensitivity bounds only; neither is a decoded catalog
 convention or a science measurement.
 
+The companion B-mode footprint diagnostic counts the two raw mask values by
+one-degree sky cell after the published source cuts and repeated-object
+deduplication. It does not infer mask polarity from shear. Its first Slurm
+attempt stopped on the export's comment-prefixed first CSV header field; the
+parser regression is fixed and the rerun completed successfully. Raw value 0
+is 3.45% of post-cut lens-source pairs and occurs only in 26 one-degree cells
+spanning RA 132–140°, Dec 1–5°. This is spatial localization, not a decoded
+catalog polarity or science measurement. The result is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_bmode_spatial_diagnostic_2026-10-19_02/`.
+See
+[`wl_bmode_polarity_sensitivity_2026-10-19.md`](wl_bmode_polarity_sensitivity_2026-10-19.md)
+for the run record.
+
 ### Random-control availability query (CAS count-only query complete)
 
 HSC documents `pdr3_wide.random` as the public random-point table, with a
