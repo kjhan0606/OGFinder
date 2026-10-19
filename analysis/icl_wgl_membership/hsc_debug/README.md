@@ -601,3 +601,16 @@ outside Git at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_center_scale_2026-10-19_01/scale_plan.json`.
 Exact random centers and count-only SQL will be prepared after the coordinate
 geometry screen; no query has been submitted for this sample-size plan.
+
+## ICL–satellite spatial-block scale sensitivity (2026-10-19)
+
+`audit_satellite_icl_block_scale_sensitivity.py` reruns the same verified
+geometric-strata sample with 2.5°, 5°, and 10° connected target/control RA/Dec
+cells. The 5° output exactly reproduces the archived 5,000-draw bootstrap in 60
+numeric comparisons. For i2, the full-sample partial r remains 0.234, but the
+95% spatial-block interval crosses zero at 2.5° and not at 5° or 10°. Thus the
+interval depends on the assumed correlation scale; this remains exploratory,
+has no multiplicity correction, and is not a detection. Details and hashes are
+in [`icl_satellite_block_scale_assessment_2026-10-19.md`](icl_satellite_block_scale_assessment_2026-10-19.md).
+The output is outside Git at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_block_scale_sensitivity_2026-10-19_04/`.
