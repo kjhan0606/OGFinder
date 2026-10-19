@@ -32,11 +32,12 @@ def test_matched_controls_follow_target_id_and_filter(tmp_path):
     import json
 
     clusters, completed, targets = [], [], []
+    (tmp_path / "images").mkdir()
     for index in range(57):
         ident = str(1000 + index)
         filt = "i" if index % 2 else "i2"
         image_name = f"control_{ident}.fits"
-        image_path = tmp_path / image_name
+        image_path = tmp_path / "images" / image_name
         image_path.write_bytes(f"image-{ident}".encode())
         digest = hashlib.sha256(image_path.read_bytes()).hexdigest()
         clusters.append({

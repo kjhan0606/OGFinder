@@ -26,7 +26,7 @@ DEFAULT_METADATA = ROOT / "icl_coadd_noise_metadata_2026-10-19_01/summary.json"
 DEFAULT_PREP = ROOT / "satellite_detection_psf_2026-10-18_01"
 DEFAULT_CONTROL_MANIFEST = ROOT / "control_download_01/download_manifest.json"
 DEFAULT_CONTROL_STATUS = ROOT / "control_download_01/download_status.json"
-DEFAULT_OUTPUT = ROOT / "icl_coadd_noise_correlation_2026-10-19_02"
+DEFAULT_OUTPUT = ROOT / "icl_coadd_noise_correlation_2026-10-19_03"
 
 
 def sha256(path: Path) -> str:
@@ -212,7 +212,7 @@ def load_matched_controls(metadata: dict, control_manifest_path: Path,
         saved = downloaded.get(str(control["id"]))
         if saved is None or saved.get("file") != control.get("image"):
             raise ValueError(f"control image missing from completed checkpoint: {control['id']}")
-        image_path = control_manifest_path.parent / str(control["image"])
+        image_path = control_manifest_path.parent / "images" / str(control["image"])
         if not image_path.is_file() or sha256(image_path) != saved.get("sha256"):
             raise ValueError(f"control image file missing or changed: {image_path}")
         matched.append({
