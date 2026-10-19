@@ -94,6 +94,8 @@ PSF 반응 상세·SHA-256은
 
 같은 57개 주입 프레임에서 ICL 200–300 kpc target-minus-control 신호와 중심 PSF 코어 폭의 양의 공변동을 점검했다. redshift·richness·저장 mask common coverage를 조정한 부분상관은 i `r=0.500`(13개), i2 `r=0.247`(44개)였다. 블록 재표집은 i에서 매우 넓고 i2에서 0 부근을 포함해 검출로 해석하지 않는다. 저장 annulus 마스크와 재검출 마스크의 지원률 차이도 기록했다. 상세 방법과 SHA-256은 [ICL–PSF 코어 공변동 평가](icl_psf_core_dependence_assessment_2026-10-20.md)에 있다.
 
+2026-10-20에는 동일한 57개 프레임에서 100 kpc와 500 kpc 확산 성분을 각각 위치별 모델 PSF로 합성하고 SEP/K2.5 마스크를 시나리오별로 재생성했다. 평면 보정/원시 ICL 응답비의 중앙값은 i에서 `1.002 → 0.644`, i2에서 `0.997 → 0.633`으로 내려갔다. 이 q16–q84는 프레임 간 산포이며 신뢰구간이 아니다. 500 kpc i2 한 프레임은 `icl_only`에서 위성 측정 지원을 잃었지만 ICL 응답은 보존했다. 요약·감사·제한은 [PSF 마스크 재검출 규모 비교](icl_psf_redetection_scale_comparison_assessment_2026-10-20.md), 재현 집계 코드는 [`summarize_joint_icl_satellite_psf_scale_comparison.py`](summarize_joint_icl_satellite_psf_scale_comparison.py)에 있다. 결과는 주입 전달 민감도이며 `science_measurement=false`다.
+
 `estimate_hsc_coadd_noise_correlation.py` compares short-range pixel residual
 covariance in those 57 target coadds with their 57 already-downloaded matched
 control coadds. It applies the saved K2.5 target source masks and regenerates
