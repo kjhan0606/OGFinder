@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import pytest
 
-from audit_icl_satellite_association_selection import summarize_groups
+from audit_icl_satellite_association_selection import summarize_groups, summarize_support_overlap
 
 
 def row(cluster_id, filt, z, richness, eligible):
@@ -32,3 +32,16 @@ def test_selection_audit_rejects_duplicate_and_unmatched_ids():
         summarize_groups(parent, [parent[0], parent[0]])
     with pytest.raises(ValueError, match="match"):
         summarize_groups(parent, [row(99, "i", 0.4, 100, True)])
+
+
+def test_support_overlap_decomposes_the_two_independent_gates():
+    icl = {(str(i), "i") for i in range(5)} | {(str(i), "i2") for i in range(4)}
+    satellite = {(str(i), "i") for i in range(2, 7)} | {(str(i), "i2") for i in range(2, 5)}
+    overlap = icl & satellite
+    result = summarize_support_overlap(icl, satellite, overlap)
+    assert result["i"]["icl_supported_without_satellite_profile"] == 2
+    assert result["i"]["satellite_profile_without_icl_support"] == 2
+    assert result["i"]["both_supported"] == 3
+    assert result["i2"]["both_supported"] == 2
+    with pytest.raises(ValueError, match="exact"):
+        summarize_support_overlap(icl, satellite, set())

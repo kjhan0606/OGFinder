@@ -7,8 +7,10 @@
 | i | 26 / 71 | 36.6% | +0.054 | −0.262 | +0.604 | +0.444 | −0.407 |
 | i2 | 68 / 153 | 44.4% | +0.318 | −0.325 | +1.055 | +0.713 | +0.047 |
 
+두 입력지원 관문이 표본 교집합을 설명한다. 독립 반경별 위성 프로파일은 i 42개, i2 140개 cluster/filter 행에 있고, 50–75 kpc ICL 지원은 i 71개, i2 153개 행에 있다. 정확한 교집합이 연관표본 94개이며, i에서는 ICL 전용 45개·위성 전용 16개, i2에서는 각각 85개·72개다. association join 단계에서 이 입력지원 외에 추가 행 필터링은 하지 않는다.
+
 연관표본은 두 필터 모두에서 ICL 면적지원이 더 높다. i2에서는 선택된 행의 평균 redshift가 더 높고 평균 richness가 더 낮으며, 표적 지원률 SMD가 1.05다. 두 필터 모두 center-eligible 비율(자동 유일 후보이며 K=2.5 중심 마스크 없음)은 선택/비선택에서 거의 같아, 이 변수 하나가 표본 축소를 설명하지는 않는다. 선택률도 근사 HSC 영역에 따라 달랐다. i에서 영역 1은 36개 중 18개(50%)가 결합됐지만 영역 0은 33개 중 8개(24%)였다. i2에서는 각각 51개 중 29개(57%), 93개 중 34개(37%)였다. 두 픽셀 중심으로 인한 영역 구분은 근사값이며 영역 2의 parent는 i 2개, i2 9개뿐이다.
 
 따라서 기존 `r`은 800개 CAMIRA 은하단 모집단 전체의 ICL–위성 관계 추정값이 아니다. 면적지원과 redshift/richness, 하늘영역에 따른 선택 차이를 고려해야 한다. 현재 표본 크기와 지원 조건만으로 가중치를 안정적으로 추정하거나 선택효과를 제거했다고 주장할 수 없다. 이 결과는 표본 대표성 감사이며 천체물리 검출이나 보정 결과가 아니다. `science_measurement=false`를 유지한다.
 
-재현기는 [`audit_icl_satellite_association_selection.py`](audit_icl_satellite_association_selection.py)이고, 두 단위검사를 통과했다. 산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_association_selection_2026-10-20_02/summary.json` (SHA-256 `eb4c46caf26354fa61af6d58763eb11576d705b7d87c90c4ad4eb723390bf044`)에 있다. 원영상 재측정이나 신규 HSC 자료 조회·반출은 하지 않았다.
+재현기는 [`audit_icl_satellite_association_selection.py`](audit_icl_satellite_association_selection.py)이고, 세 단위검사를 통과했다. 산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_association_selection_2026-10-20_03/summary.json` (SHA-256 `c3c552aa1a4ca1d47f52cef2c90120d52f96250ed21419ad278eca03aa016fc7`)에 있다. 원영상 재측정이나 신규 HSC 자료 조회·반출은 하지 않았다.

@@ -20,6 +20,7 @@ from run_wl_hsc_tract_region_influence import (
 
 ROOT = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
 DEFAULT_PATCH_QA = ROOT / "catalogues_2026-10-13_01/patch_qa.csv"
+DEFAULT_SATELLITE = ROOT / "satellite_outer_profile_perbin_full_2026-10-18_01"
 NUMERIC_FIELDS = (
     "z", "richness", "delta_sb_njy_arcsec2", "target_coverage",
     "control_coverage", "common_coverage", "n_member_positions", "member_density_mpc2",
@@ -115,16 +116,56 @@ def summarize_groups(parent, selected):
     return output
 
 
+def summarize_support_overlap(icl_keys, satellite_keys, association_keys):
+    icl_keys, satellite_keys, association_keys = map(set,
+        (icl_keys, satellite_keys, association_keys))
+    overlap = icl_keys & satellite_keys
+    if association_keys != overlap:
+        raise ValueError("association rows are not the exact ICL/satellite support intersection")
+    result = {}
+    for band in ("i", "i2"):
+        i_keys = {key for key in icl_keys if key[1] == band}
+        s_keys = {key for key in satellite_keys if key[1] == band}
+        common = i_keys & s_keys
+        result[band] = {
+            "icl_supported": len(i_keys),
+            "satellite_profile_supported": len(s_keys),
+            "both_supported": len(common),
+            "icl_supported_without_satellite_profile": len(i_keys - s_keys),
+            "satellite_profile_without_icl_support": len(s_keys - i_keys),
+            "association_rows": sum(key[1] == band for key in association_keys),
+            "association_fraction_of_icl_support": len(common) / len(i_keys) if i_keys else None,
+            "association_fraction_of_satellite_support": len(common) / len(s_keys) if s_keys else None,
+        }
+    return result
+
+
 def analyze(association_dir: Path, icl_dir: Path, extraction_summary: Path,
-            patch_qa: Path, output_path: Path) -> dict:
+            satellite_dir: Path, patch_qa: Path, output_path: Path) -> dict:
     output_path = Path(output_path).resolve()
     if output_path.exists():
         raise FileExistsError(f"refusing to overwrite existing output: {output_path}")
     selected, provenance = load_verified_rows(association_dir, icl_dir, extraction_summary)
     icl_dir = Path(icl_dir).resolve()
+    satellite_dir = Path(satellite_dir).resolve()
     annulus_path = icl_dir / "annulus_pair_profiles.tsv"
     parent = [row for row in read_tsv(annulus_path)
               if row["radial_bin_kpc"] == "200-300"]
+    satellite_summary_path = satellite_dir / "summary.json"
+    satellite_table_path = satellite_dir / "cluster_profiles.tsv"
+    satellite_summary = json.loads(satellite_summary_path.read_text(encoding="utf-8"))
+    if (satellite_summary.get("schema") != "hsc-satellite-outer-profile-per-annulus-v1"
+            or satellite_summary.get("status") != "complete"
+            or satellite_summary.get("science_measurement") is not False
+            or satellite_summary.get("n_frames_completed") != 800
+            or satellite_summary.get("output_sha256", {}).get(str(satellite_table_path)) != sha256(satellite_table_path)):
+        raise ValueError("unexpected or hash-mismatched full-sample satellite profile input")
+    satellite_rows = [row for row in read_tsv(satellite_table_path)
+                      if row["cohort"] == "full_sample" and row["radial_bin_kpc"] == "50-75"]
+    satellite_keys = {(str(row["cluster_id"]), str(row["filter"]))
+                      for row in satellite_rows}
+    if len(satellite_keys) != len(satellite_rows):
+        raise ValueError("duplicate 50-75 kpc satellite cluster/filter profile")
     if len(parent) != 224 or len(selected) != 94:
         raise ValueError(f"support sample changed: expected 224 parent and 94 association rows; got {len(parent)}, {len(selected)}")
     if len({(str(row["id"]), row["filter"]) for row in parent}) != len(parent):
@@ -136,6 +177,19 @@ def analyze(association_dir: Path, icl_dir: Path, extraction_summary: Path,
                        if (str(row["id"]), str(row["filter"])) in selected_keys]
     if len(selected_parent) != len(selected):
         raise ValueError("association rows do not map one-to-one onto ICL support parent")
+    icl_keys = {(str(row["id"]), str(row["filter"])) for row in parent}
+    support_overlap = summarize_support_overlap(icl_keys, satellite_keys, selected_keys)
+    expected_overlap_counts = {
+        "i": {"icl_supported": 71, "satellite_profile_supported": 42,
+              "both_supported": 26, "icl_supported_without_satellite_profile": 45,
+              "satellite_profile_without_icl_support": 16, "association_rows": 26},
+        "i2": {"icl_supported": 153, "satellite_profile_supported": 140,
+               "both_supported": 68, "icl_supported_without_satellite_profile": 85,
+               "satellite_profile_without_icl_support": 72, "association_rows": 68},
+    }
+    for band, expected in expected_overlap_counts.items():
+        if any(support_overlap[band][key] != value for key, value in expected.items()):
+            raise ValueError(f"fixed {band} support intersection changed")
     by_filter = {}
     expected_by_filter = {"i": (71, 26), "i2": (153, 68)}
     for band in ("i", "i2"):
@@ -178,12 +232,17 @@ def analyze(association_dir: Path, icl_dir: Path, extraction_summary: Path,
         "n_patch_qa_tracts": len(keys),
         "n_patch_qa_components": int(len(np.unique(region_labels))),
         "by_filter": by_filter,
+        "support_overlap": support_overlap,
         "approximate_region_counts": region_table,
         "provenance": provenance,
         "inputs": {
             "icl_annulus_table": str(annulus_path),
             "icl_annulus_table_sha256": sha256(annulus_path),
             "icl_summary_sha256": sha256(icl_dir / "summary.json"),
+            "satellite_summary": str(satellite_summary_path),
+            "satellite_summary_sha256": sha256(satellite_summary_path),
+            "satellite_profile_table": str(satellite_table_path),
+            "satellite_profile_table_sha256": sha256(satellite_table_path),
             "patch_qa": str(Path(patch_qa).resolve()),
             "patch_qa_sha256": sha256(Path(patch_qa)),
         },
@@ -206,17 +265,19 @@ def main() -> None:
     parser.add_argument("--association", type=Path, default=DEFAULT_ASSOC)
     parser.add_argument("--icl", type=Path, default=DEFAULT_ICL)
     parser.add_argument("--extraction-summary", type=Path, default=DEFAULT_EXTRACTION)
+    parser.add_argument("--satellite", type=Path, default=DEFAULT_SATELLITE)
     parser.add_argument("--patch-qa", type=Path, default=DEFAULT_PATCH_QA)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     result = analyze(args.association, args.icl, args.extraction_summary,
-                     args.patch_qa, args.output)
+                     args.satellite, args.patch_qa, args.output)
     print(json.dumps({"status": result["status"],
         "science_measurement": result["science_measurement"],
         "by_filter": {band: {key: value for key, value in summary.items()
                             if key != "numeric"}
                       for band, summary in result["by_filter"].items()},
-        "approximate_region_counts": result["approximate_region_counts"]},
+        "approximate_region_counts": result["approximate_region_counts"],
+        "support_overlap": result["support_overlap"]},
         ensure_ascii=False, indent=2))
 
 
