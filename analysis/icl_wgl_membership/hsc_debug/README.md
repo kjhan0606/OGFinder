@@ -1080,6 +1080,14 @@ target/control 블록 5,000회 재표집 후 i 77쌍, i2 183쌍에서 raw 및 co
 있다. 위성 수와 ICL 면적 지지를 추가 조정한 분석도 같은 결론을 보였다. 결과는
 `science_measurement=false`다.
 
+2026-10-20에는 같은 77개 i·183개 i2 은하단 공통표본에서 위성 5–75 kpc의 7개
+반경과 ICL의 관계를 추가 비교했다. 원시 상관과 raw-minus-outer 상관 차이의 95%
+공간블록 구간은 14개 필터·반경 조합 모두 0을 포함했다. i의 5–10 kpc 구간에서만
+외곽 차감 후 상관의 미보정 구간이 0보다 근소하게 높았으나 사후 다중비교를 보정하지
+않았고, paired 차이 구간은 0을 포함한다. 이를 검출로 해석하지 않는다. 자세한 반경별
+표와 공통표본 검증은 [고정 공통표본 평가](satellite_radial_icl_baseline_association_assessment_2026-10-20.md)에
+기록했다.
+
 `propagate_satellite_icl_measurement_noise.py`는 공분산이 있는 동일 57쌍(i 13,
 i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각각 전파한다.
 이는 공간 블록 재표본화와 합치지 않는 조건부 잡음 민감도다. i2의 44쌍 부분표본은

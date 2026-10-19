@@ -25,6 +25,7 @@ from evaluate_prestack_pair_support import pair_block_labels
 
 DATA = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
 FILTERS = ("i", "i2")
+SATELLITE_RADIAL_BINS = ("5-10", "10-15", "15-20", "20-30", "30-40", "40-50", "50-75")
 
 
 def sha256(path: Path) -> str:
@@ -205,6 +206,36 @@ def join_rows(icl_rows: list[dict[str, str]], outer_rows: list[dict[str, str]],
     return joined
 
 
+def expand_common_radial_profiles(base_rows: dict[str, list[dict]],
+                                  satellite_rows: list[dict[str, str]]) -> dict[str, list[dict]]:
+    """Expand the ICL-matched sample to all satellite bins on a fixed cluster set."""
+    profiles = {}
+    for row in satellite_rows:
+        if row["cohort"] != "full_sample":
+            continue
+        key = (str(row["cluster_id"]), row["filter"], row["radial_bin_kpc"])
+        if key in profiles:
+            raise ValueError(f"duplicate satellite radial profile for {key}")
+        profiles[key] = row
+    expanded = {band: [] for band in FILTERS}
+    for band in FILTERS:
+        for base in base_rows[band]:
+            cluster_id = base["cluster_id"]
+            by_bin = {radial_bin: profiles.get((cluster_id, band, radial_bin))
+                      for radial_bin in SATELLITE_RADIAL_BINS}
+            if any(row is None for row in by_bin.values()):
+                raise ValueError(f"cluster {cluster_id}/{band} lacks complete satellite radial support")
+            for radial_bin in SATELLITE_RADIAL_BINS:
+                profile = by_bin[radial_bin]
+                expanded[band].append({
+                    **base,
+                    "radial_bin_kpc": radial_bin,
+                    "satellite": float(profile["mean_delta_sb_njy_arcsec2"]),
+                    "n_satellites": int(profile["n_satellites"]),
+                })
+    return expanded
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DATA)
@@ -265,11 +296,15 @@ def main() -> int:
     controls = {str(row["target_cluster_id"]): row for row in extraction["records"]}
     if len(clusters) != len(manifest["clusters"]) or len(controls) != len(extraction["records"]):
         parser.error("duplicate cluster or control metadata rows")
+    satellite_rows = read_tsv(sat_path)
     joined = join_rows(read_tsv(stack_path), read_tsv(outer_path),
-                       read_tsv(sat_path), clusters, controls)
+                       satellite_rows, clusters, controls)
+    radial_joined = expand_common_radial_profiles(joined, satellite_rows)
 
     results = []
     detail_rows = []
+    radial_results = []
+    radial_detail_rows = []
     for band_index, band in enumerate(FILTERS):
         rows = joined[band]
         if len(rows) < 12:
@@ -285,6 +320,27 @@ def main() -> int:
                                            "partial_pearson_r_control_z_richness_satellite_count_area_support")},
                         "block_bootstrap": boot})
         detail_rows.extend(rows)
+        for radial_index, radial_bin in enumerate(SATELLITE_RADIAL_BINS):
+            bin_rows = [row for row in radial_joined[band]
+                        if row["radial_bin_kpc"] == radial_bin]
+            if len(bin_rows) != len(rows):
+                parser.error(f"common radial sample changed in {band}/{radial_bin}")
+            radial_point = metrics(bin_rows)
+            radial_boot = block_bootstrap(bin_rows, args.replicas,
+                                          args.seed + band_index * 10000 + radial_index * 100)
+            radial_results.append({
+                "filter": band, "radial_bin_kpc": radial_bin,
+                "n_clusters": len(bin_rows), "point_estimates": radial_point,
+                "corrected_minus_raw": {
+                    metric: (radial_point["icl_outer_subtracted"][metric]
+                             - radial_point["icl_raw"][metric]
+                             if radial_point["icl_outer_subtracted"][metric] is not None
+                             and radial_point["icl_raw"][metric] is not None else None)
+                    for metric in ("spearman_rho", "partial_pearson_r_control_z_richness",
+                                   "partial_pearson_r_control_z_richness_satellite_count_area_support")},
+                "block_bootstrap": radial_boot,
+            })
+            radial_detail_rows.extend(bin_rows)
 
     args.work.mkdir(parents=True, exist_ok=False)
     fields = ["cluster_id", "filter", "control_id", "icl_raw", "outer_baseline",
@@ -295,6 +351,11 @@ def main() -> int:
         writer = csv.DictWriter(stream, fieldnames=fields, delimiter="\t", extrasaction="raise")
         writer.writeheader()
         writer.writerows(detail_rows)
+    radial_fields = fields + ["radial_bin_kpc"]
+    with (args.work / "matched_radial_cluster_values.tsv").open("x", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=radial_fields, delimiter="\t", extrasaction="raise")
+        writer.writeheader()
+        writer.writerows(radial_detail_rows)
     summary = {
         "schema": "astrafek-satellite-outer-icl-baseline-association-v1",
         "status": "complete_exploratory", "science_measurement": False,
@@ -302,6 +363,7 @@ def main() -> int:
             "icl_raw": "same matched target/control pair, 200-300 kpc delta from the ICL profile",
             "icl_outer_subtracted": "raw 200-300 kpc pair delta minus that pair's 400-500 kpc target-control delta",
             "satellite": "full-sample equal-satellite-weighted cluster mean at 50-75 kpc",
+            "radial_sensitivity": "all seven satellite bins analyzed on the identical ICL-matched cluster set requiring support in every satellite bin; the satellite members can differ by bin",
             "support": "inherited 5% ICL inner/outer common-area cut; satellite outer-bin support is independent",
             "join": "exact cluster ID, exact filter, and exact matched-control ID",
             "filters": "i and i2 analyzed independently",
@@ -329,7 +391,11 @@ def main() -> int:
             "matched_control_extraction": {"path": str(extraction_path.resolve()), "sha256": sha256(extraction_path)},
         },
         "results": results,
-        "outputs_sha256": {"matched_cluster_values.tsv": sha256(args.work / "matched_cluster_values.tsv")},
+        "radial_common_support_results": radial_results,
+        "outputs_sha256": {
+            "matched_cluster_values.tsv": sha256(args.work / "matched_cluster_values.tsv"),
+            "matched_radial_cluster_values.tsv": sha256(args.work / "matched_radial_cluster_values.tsv"),
+        },
         "script_sha256": sha256(Path(__file__).resolve()),
     }
     with (args.work / "summary.json").open("x", encoding="utf-8") as stream:
@@ -337,7 +403,13 @@ def main() -> int:
         stream.write("\n")
     print(json.dumps({"status": summary["status"], "science_measurement": False,
                       "n_clusters": {r["filter"]: r["n_clusters"] for r in results},
-                      "results": results, "output": str(args.work)},
+                      "radial_common_support": [
+                          {"filter": r["filter"], "radial_bin_kpc": r["radial_bin_kpc"],
+                           "n_clusters": r["n_clusters"],
+                           "raw_spearman_rho": r["point_estimates"]["icl_raw"]["spearman_rho"],
+                           "outer_subtracted_spearman_rho": r["point_estimates"]["icl_outer_subtracted"]["spearman_rho"]}
+                          for r in radial_results],
+                      "output": str(args.work)},
                      ensure_ascii=False, indent=2))
     return 0
 

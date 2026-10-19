@@ -1,6 +1,8 @@
 import unittest
 
-from analyze_satellite_outer_icl_baseline_association import join_rows, metrics
+from analyze_satellite_outer_icl_baseline_association import (
+    SATELLITE_RADIAL_BINS, expand_common_radial_profiles, join_rows, metrics,
+)
 
 
 def fixture():
@@ -61,6 +63,20 @@ class AssociationJoinTests(unittest.TestCase):
         self.assertIn("spearman_rho", result["icl_outer_subtracted"])
         self.assertIn("partial_pearson_r_control_z_richness_satellite_count_area_support",
                       result["icl_raw"])
+
+    def test_radial_expansion_keeps_one_fixed_cluster_set(self):
+        base_rows = {"i": [{"cluster_id": "1", "filter": "i", "icl_raw": 4.0}], "i2": []}
+        profiles = [{"cluster_id": "1", "filter": "i", "cohort": "full_sample",
+                     "radial_bin_kpc": radial_bin,
+                     "mean_delta_sb_njy_arcsec2": str(index),
+                     "n_satellites": str(index + 1)}
+                    for index, radial_bin in enumerate(SATELLITE_RADIAL_BINS)]
+        expanded = expand_common_radial_profiles(base_rows, profiles)
+        self.assertEqual(len(expanded["i"]), 7)
+        self.assertEqual({row["cluster_id"] for row in expanded["i"]}, {"1"})
+        self.assertEqual([row["radial_bin_kpc"] for row in expanded["i"]],
+                         list(SATELLITE_RADIAL_BINS))
+        self.assertEqual(expanded["i2"], [])
 
 
 if __name__ == "__main__":
