@@ -295,6 +295,16 @@ calculation is not yet run because the random-source pairs have not been
 exported. Its grid is an exploratory fallback and does not guarantee contiguous
 independent HSC regions; region-based jackknife remains a science gate.
 
+The cluster-only spatial jackknife has now run for the existing 800-lens stack.
+Job 428563 used 52 occupied 5-degree equal-area cells and 2,153,004 selected
+pairs. The tangential `DeltaSigma` profile declines from 1.61×10^14 at 0.1–0.2
+Mpc to 1.53×10^13 Msun Mpc^-2 at 2–3 Mpc; the joint cross-component diagnostic
+is `chi2=9.30` for 7 modes (`p=0.232`). This remains exploratory because the
+covariance is cluster-only, random subtraction and matched-field variance are
+absent, and the grid is not a contiguous HSC-region partition. See
+[`wl_cluster_spatial_jackknife_assessment_2026-10-19.md`](wl_cluster_spatial_jackknife_assessment_2026-10-19.md)
+and its recorded machine-readable output hash.
+
 `prepare_wl_random_shape_count_plan.py` prepares (without submitting) a count-only
 S19A support query for a finalized `astrafek-wl-random-centers-v1` manifest. It
 retains the association between each unique random-center ID and its matched
