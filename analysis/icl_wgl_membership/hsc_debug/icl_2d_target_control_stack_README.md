@@ -32,7 +32,10 @@ radius-dependent pair count.
 
 Submit `run_icl_target_control_2d_stack.sbatch` from the repository root. It
 refuses to reuse an existing output directory. The default data output is
-`icl_2d_matched_stack_2026-10-19_02/` under the HSC sample directory.
+`icl_2d_matched_stack_2026-10-19_k2p5/` under the HSC sample directory. Select
+the alternative target/control Kron masks with `--mask-factor 3.5` or `5.0` and
+write each run to a new `--work` directory. The paired K=3.5/K=5.0 sensitivity
+job is `run_icl_target_control_mask_sensitivity.sbatch`.
 
 Each filter FITS contains target, matched-control, target-minus-control,
 pixelwise pair count, between-pair SEM maps, and a radius grid. The TSV outputs
@@ -40,7 +43,8 @@ are `paired_radial_profiles.tsv` and `stacked_radial_profiles.tsv`; `summary.jso
 contains input and code SHA-256 values, filter exclusions, processing
 definitions, and limitations. After independent verification,
 `evaluate_icl_target_control_2d_stack.py` also writes broad-annulus summaries
-and per-filter map/radial diagnostic figures.
+and per-filter map/radial diagnostic figures. The FITS primary header records
+the mask factor, and all outputs remain separate by filter and mask choice.
 
 ## Interpretation limits
 

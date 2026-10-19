@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 SCRIPT = Path(__file__).with_name("stack_hsc_icl_target_control_2d.py")
@@ -73,3 +74,10 @@ def test_native_flux_factor_is_njy_per_pixel():
 def test_json_safe_preserves_boolean_type():
     assert stack.json_safe(False) is False
     assert stack.json_safe(np.bool_(False)) is False
+
+
+def test_mask_factor_selects_matching_target_mask_extension():
+    assert [stack.mask_hdu_name(factor) for factor in stack.MASK_FACTORS] == [
+        "MASK_K2P5", "MASK_K3P5", "MASK_K5P0"]
+    with pytest.raises(ValueError):
+        stack.mask_hdu_name(4.0)

@@ -19,7 +19,7 @@ export MKL_NUM_THREADS=1
 
 REPO=/home/kjhan/BACKUP/Astrafek/OGFinder
 SAMPLE=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13
-WORK=$SAMPLE/icl_2d_matched_stack_2026-10-19_02
+WORK=$SAMPLE/icl_2d_matched_stack_2026-10-19_k2p5
 PYTHON=/home/kjhan/miniconda3/bin/python3
 
 if [[ -e "$WORK" ]]; then
@@ -29,4 +29,4 @@ fi
 cd "$REPO"
 exec flock /tmp/astrafex_heavy.lock "$PYTHON" \
   analysis/icl_wgl_membership/hsc_debug/stack_hsc_icl_target_control_2d.py \
-  --sample "$SAMPLE" --work "$WORK" --kpc-max 500 --n-side 201
+  --sample "$SAMPLE" --work "$WORK" --mask-factor 2.5 --kpc-max 500 --n-side 201

@@ -37,6 +37,7 @@ def verify(sample: Path, work: Path) -> dict:
             "unexpected stack summary schema")
     require(summary.get("status") == "complete_exploratory", "stack is not complete")
     require(summary.get("science_measurement") is False, "science gate must remain false")
+    require(summary.get("mask_factor") in (2.5, 3.5, 5.0), "unsupported mask factor")
 
     sample_manifest = sample / "sample_manifest.json"
     mask_summary = sample / "prestack_cluster_masks_2026-10-16_01/summary.json"
@@ -114,6 +115,8 @@ def verify(sample: Path, work: Path) -> dict:
             require(required.issubset({h.name for h in hdus}), f"{band} FITS extensions are incomplete")
             require(hdus[0].header.get("SCIVAL") is False, f"{band} FITS science gate is not false")
             require(hdus[0].header.get("FILTER") == band, f"{band} FITS filter header mismatch")
+            require(float(hdus[0].header.get("MASKFAC", -1)) == float(summary["mask_factor"]),
+                    f"{band} FITS mask-factor header mismatch")
             target, control = np.asarray(hdus["TARGET"].data), np.asarray(hdus["CONTROL"].data)
             delta, count = np.asarray(hdus["DELTA"].data), np.asarray(hdus["NPAIR"].data)
             require(target.shape == control.shape == delta.shape == count.shape == (201, 201),

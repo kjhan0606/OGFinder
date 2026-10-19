@@ -84,6 +84,7 @@ def plot_band(work: Path, band: str, profile_rows: list[dict], out_path: Path) -
         delta = np.asarray(hdus["DELTA"].data, dtype=float)
         n_pair = np.asarray(hdus["NPAIR"].data, dtype=int)
         kpc_max = float(hdus[0].header["KPCMAX"])
+        mask_factor = float(hdus[0].header["MASKFAC"])
         kpc = np.linspace(-kpc_max, kpc_max, target.shape[0], dtype=float)
     selected = [row for row in profile_rows if row["filter"] == band]
     radius = np.asarray([(float(r["r_min_kpc"]) + float(r["r_max_kpc"])) / 2 for r in selected])
@@ -117,7 +118,7 @@ def plot_band(work: Path, band: str, profile_rows: list[dict], out_path: Path) -
     fig.colorbar(imn, ax=axes[1, 1], shrink=.8)
     for ax in axes.ravel():
         ax.set_aspect("equal")
-    fig.suptitle(f"Exploratory HSC-{band} ICL stack; common target/control support")
+    fig.suptitle(f"Exploratory HSC-{band} ICL stack, Kron {mask_factor:g}; common support")
     fig.savefig(out_path, dpi=160)
     plt.close(fig)
 
@@ -165,6 +166,7 @@ def evaluate(work: Path) -> dict:
                for band in ("i", "i2")}
     report = {"schema": "astrafek-hsc-icl-2d-stack-evaluation-v1",
               "status": "completed_exploratory", "verification_sha256": verification["summary_sha256"],
+              "mask_factor": read_json(work / "summary.json")["mask_factor"],
               "n_pairs": len(pairs), "n_by_filter": {band: sum(row["filter"] == band for row in pairs)
                                                        for band in ("i", "i2")},
               "annuli_kpc": [list(x) for x in REGIONS_KPC],

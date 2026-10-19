@@ -37,9 +37,20 @@ from validate_control_images import nJy_factor
 
 
 DEFAULT_SAMPLE = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
-DEFAULT_WORK = DEFAULT_SAMPLE / "icl_2d_matched_stack_2026-10-19_01"
+DEFAULT_WORKS = {
+    2.5: DEFAULT_SAMPLE / "icl_2d_matched_stack_2026-10-19_k2p5",
+    3.5: DEFAULT_SAMPLE / "icl_2d_matched_stack_2026-10-19_k3p5",
+    5.0: DEFAULT_SAMPLE / "icl_2d_matched_stack_2026-10-19_k5p0",
+}
 FILTERS = ("i", "i2")
+MASK_FACTORS = (2.5, 3.5, 5.0)
 PROFILE_EDGES_KPC = np.arange(0.0, 525.0, 25.0)
+
+
+def mask_hdu_name(mask_factor: float) -> str:
+    if mask_factor not in MASK_FACTORS:
+        raise ValueError(f"mask factor must be one of {MASK_FACTORS}")
+    return "MASK_K" + str(mask_factor).replace(".", "P")
 
 
 def sha256(path: Path) -> str:
@@ -186,7 +197,7 @@ def target_and_control_map(image: np.ndarray, mask: np.ndarray, info: dict,
 def process_pair(target: dict, target_mask_record: dict, target_mask_summary: dict,
                  control: dict, control_download_record: dict, control_base: Path,
                  control_status_sha: str, cosmology: Cosmology,
-                 kpc_max: float, n_side: int) -> tuple[dict, dict]:
+                 kpc_max: float, n_side: int, mask_factor: float) -> tuple[dict, dict]:
     ident = str(target["id"])
     control_id = str(control["id"])
     target_path = Path(target_mask_record["image"])
@@ -221,8 +232,11 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
 
     with fits.open(target_path, memmap=False, checksum=True) as hdul:
         target_image = np.asarray(hdul[target_info["science_hdu"]].data, dtype=np.float32)
+    mask_hdu = mask_hdu_name(mask_factor)
     with fits.open(target_mask_path, memmap=False, checksum=True) as hdul:
-        target_mask = np.asarray(hdul["MASK_K2P5"].data, dtype=bool)
+        if mask_hdu not in hdul:
+            raise ValueError(f"{ident}: target mask lacks {mask_hdu}")
+        target_mask = np.asarray(hdul[mask_hdu].data, dtype=bool)
     if target_mask_summary.get("mask_output_sha256", {}).get(str(target_mask_path)) != target_mask_record["mask_sha256"]:
         raise ValueError(f"{ident}: target mask is absent from verified mask summary")
     if target_image.shape != target_mask.shape:
@@ -238,7 +252,8 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
         control_image, control_variance, control_bits,
         control_info["center_pixel_xy"], control_info["pixel_scale_arcsec"],
     )
-    control_mask = np.asarray(control_mask_variants[0], dtype=bool)
+    control_mask_index = MASK_FACTORS.index(mask_factor)
+    control_mask = np.asarray(control_mask_variants[control_mask_index], dtype=bool)
 
     target_warp = target_and_control_map(target_image, target_mask, target_info,
                                          float(target["z"]), cosmology, kpc_max, n_side)
@@ -251,6 +266,7 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
     axis = np.asarray(target_warp["kpc"], dtype=float)
     pair = {
         "id": ident, "control_id": control_id, "filter": band,
+        "mask_factor": float(mask_factor),
         "z": float(target["z"]), "ra_deg": float(target["ra_deg"]),
         "dec_deg": float(target["dec_deg"]), "n_common_pixels": int(valid.sum()),
         "common_grid_fraction": float(valid.mean()),
@@ -281,7 +297,7 @@ def write_pair_table(path: Path, rows: list[dict]) -> None:
 
 def save_band_fits(path: Path, band: str, kpc: np.ndarray, maps: dict,
                    accumulators: dict[str, OnlineMap], n_pairs: int,
-                   cosmology: dict, kpc_max: float) -> dict:
+                   cosmology: dict, kpc_max: float, mask_factor: float) -> dict:
     target, target_sem = accumulators["target"].result()
     control, control_sem = accumulators["control"].result()
     delta, delta_sem = accumulators["delta"].result()
@@ -290,6 +306,7 @@ def save_band_fits(path: Path, band: str, kpc: np.ndarray, maps: dict,
     radius = np.hypot(x, y).astype(np.float32)
     header = fits.Header()
     header["FILTER"] = band
+    header["MASKFAC"] = float(mask_factor)
     header["NPAIR"] = int(n_pairs)
     header["KPCMAX"] = float(kpc_max)
     header["GRIDSTEP"] = float(kpc[1] - kpc[0])
@@ -297,7 +314,7 @@ def save_band_fits(path: Path, band: str, kpc: np.ndarray, maps: dict,
     header["SCIVAL"] = False
     header["H0"] = float(cosmology["H0"])
     header["OMEGAM"] = float(cosmology["Om0"])
-    header["MASK"] = "Kron-2.5 target/control; common support"
+    header["MASK"] = f"Kron-{mask_factor:g} target/control; common support"
     hdus = [fits.PrimaryHDU(header=header)]
     for name, data, unit in (
         ("TARGET", target, "nJy/arcsec2"), ("CONTROL", control, "nJy/arcsec2"),
@@ -316,7 +333,10 @@ def save_band_fits(path: Path, band: str, kpc: np.ndarray, maps: dict,
                 [float(np.min(delta[finite])), float(np.max(delta[finite]))] if finite.any() else None}
 
 
-def run(sample: Path, work: Path, kpc_max: float, n_side: int) -> dict:
+def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: float = 2.5) -> dict:
+    if mask_factor not in MASK_FACTORS:
+        raise ValueError(f"mask factor must be one of {MASK_FACTORS}")
+    mask_hdu = mask_hdu_name(mask_factor)
     if work.exists():
         raise FileExistsError(f"refusing to overwrite existing work directory: {work}")
     work.mkdir(parents=True, exist_ok=False)
@@ -397,7 +417,7 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int) -> dict:
         try:
             pair, maps = process_pair(
                 target, mask_by_id[ident], mask_summary, control, download_row,
-                control_base, control_status_sha, cosmology, kpc_max, n_side,
+                control_base, control_status_sha, cosmology, kpc_max, n_side, mask_factor,
             )
             band = pair["filter"]
             if band not in accumulators:
@@ -432,7 +452,7 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int) -> dict:
         outputs[band] = save_band_fits(
             work / f"icl_target_control_stack_{band}.fits", band, axis,
             {"n_pairs": len(band_pairs)}, band_acc, len(band_pairs),
-            cosmology_values, kpc_max,
+            cosmology_values, kpc_max, mask_factor,
         )
     pair_table_path = work / "paired_radial_profiles.tsv"
     write_pair_table(pair_table_path, pair_rows)
@@ -455,11 +475,12 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int) -> dict:
         "n_pairs_excluded_filter_mismatch": len(exclusions),
         "filter_mismatch_exclusions": exclusions,
         "n_pairs_stacked": len(pair_rows), "n_by_filter": counts,
+        "mask_factor": float(mask_factor),
         "grid": {"coordinate": "proper_kpc", "kpc_max": kpc_max,
                  "n_side": n_side, "pixel_step_kpc": float(axis[1] - axis[0])},
         "stack_definition": {
             "calibration": "HSC FLUXMAG0 to nJy/pixel, then pixel-area division in icl.wgl.warp_metric",
-            "mask": "target MASK_K2P5; matched-control SEP/Kron 2.5; native bad/bright-object pixels retained",
+            "mask": f"target {mask_hdu}; matched-control SEP/Kron {mask_factor:g}; native bad/bright-object pixels retained",
             "support": "strict pairwise intersection of fully valid linearly interpolated target and control pixels",
             "weighting": "equal pair weight independently at each grid pixel; no inverse-variance weighting",
             "maps": "target, matched-control, and target-minus-control means; pixelwise pair count and between-pair SEM",
@@ -503,15 +524,17 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", type=Path, default=DEFAULT_SAMPLE)
-    parser.add_argument("--work", type=Path, default=DEFAULT_WORK)
+    parser.add_argument("--work", type=Path)
     parser.add_argument("--kpc-max", type=float, default=500.0)
     parser.add_argument("--n-side", type=int, default=201)
+    parser.add_argument("--mask-factor", type=float, choices=MASK_FACTORS, default=2.5)
     args = parser.parse_args(argv)
     if not os.environ.get("SLURM_JOB_ID"):
         parser.error("run the full 800-pair image stack inside a Slurm allocation")
     if not np.isfinite(args.kpc_max) or args.kpc_max <= 0 or args.n_side < 3:
         parser.error("grid size must be positive and n-side at least 3")
-    run(args.sample.resolve(), args.work.resolve(), args.kpc_max, args.n_side)
+    work = args.work or DEFAULT_WORKS[args.mask_factor]
+    run(args.sample.resolve(), work.resolve(), args.kpc_max, args.n_side, args.mask_factor)
     return 0
 
 
