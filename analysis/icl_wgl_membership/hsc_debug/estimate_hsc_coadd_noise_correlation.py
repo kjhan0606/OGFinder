@@ -117,7 +117,7 @@ def frame_correlations(record: dict, prep_dir: Path, *, patch_size: int,
                        min_valid_fraction: float) -> tuple[dict, list[dict]]:
     ident, band = str(record["cluster_id"]), str(record["filter"])
     image_path = Path(record["path"])
-    if sha256(image_path) != record["source_image_sha256_from_audited_run"]:
+    if sha256(image_path) != record["source_image_sha256"]:
         raise ValueError(f"{ident}/{band}: image hash differs from audited input")
     role = str(record["role"])
     prep_path = None
