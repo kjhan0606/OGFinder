@@ -437,6 +437,9 @@ count binding, SQL scope, submission gates, pair mapping, endpoint deletion and
 existing stack math. The target/random provenance check passes against the
 existing B-mode-zero cluster-only stack summary and compares its stored
 `masked_value` and `H0_km_s_mpc` fields before subtraction.
+The compute wrapper is `run_wl_random_shape_stack.sbatch`; it requests bounded
+Slurm CPU and memory resources and only consumes completed local exports. It
+does not contact CAS or request data.
 
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 
