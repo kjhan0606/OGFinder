@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
 
-from audit_satellite_icl_target_control_covariance import annulus_weights, combine_variances
+from audit_satellite_icl_target_control_covariance import (
+    annulus_weights, combine_variances, diagonal_weighted_variance,
+)
 
 
 def test_annulus_weights_are_uniform_and_match_valid_coverage():
@@ -32,3 +34,16 @@ def test_target_control_variances_add_and_cross_covariance_is_retained():
 def test_combine_variances_rejects_nonpositive_variance():
     with pytest.raises(ValueError):
         combine_variances(2, 3, 5, 0, 11, 13, 0.5, 0.75)
+
+
+def test_diagonal_variance_ignores_nonfinite_unweighted_pixels():
+    weights = np.array([[0.5, 0.5], [0.0, 0.0]])
+    variance = np.array([[4.0, 8.0], [np.inf, np.nan]])
+    assert np.isclose(diagonal_weighted_variance(weights, variance, 2.0), 12.0)
+
+
+def test_diagonal_variance_rejects_nonfinite_weighted_pixels():
+    weights = np.array([[0.5, 0.5]])
+    variance = np.array([[4.0, np.inf]])
+    with pytest.raises(ValueError):
+        diagonal_weighted_variance(weights, variance, 1.0)

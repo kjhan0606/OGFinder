@@ -150,6 +150,21 @@ def combine_variances(target_diag: float, target_lag: float,
     }
 
 
+def diagonal_weighted_variance(weights: np.ndarray, variance: np.ndarray,
+                               conversion: float) -> float:
+    """Compute diagonal aperture variance without evaluating 0*inf pixels."""
+    weights, variance = np.asarray(weights, dtype=np.float64), np.asarray(variance, dtype=np.float64)
+    if weights.shape != variance.shape or weights.ndim != 2:
+        raise ValueError("weights and variance must be matching 2D arrays")
+    selected = weights != 0
+    if (not np.any(selected) or not np.isfinite(weights[selected]).all()
+            or not np.isfinite(variance[selected]).all() or np.any(variance[selected] <= 0)
+            or not math.isfinite(float(conversion)) or conversion <= 0):
+        raise ValueError("weighted pixels and conversion must be finite with positive variance")
+    return float(np.sum(weights[selected]**2 * variance[selected], dtype=np.float64)
+                 * float(conversion)**2)
+
+
 def run(target_covariance_dir: Path, lag_dir: Path, metadata_path: Path,
         control_manifest_path: Path, control_status_path: Path,
         output_dir: Path) -> dict:
@@ -271,7 +286,7 @@ def run(target_covariance_dir: Path, lag_dir: Path, metadata_path: Path,
                 "pixel_scale_arcsec": scale,
             }))
             kernel = control_kernels[key]
-            control_diag = float(np.sum(weights**2 * variance, dtype=np.float64) * conversion**2)
+            control_diag = diagonal_weighted_variance(weights, variance, conversion)
             control_lag = lag_weighted_covariance(
                 weights, weights, variance, kernel, conversion)
             if control_diag <= 0 or control_lag <= 0:
