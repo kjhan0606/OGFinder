@@ -28,21 +28,42 @@ redshift calibration caused the discrepancy or validate a weak-lensing signal.
 
 The paper states that its calibration code and figure data are public in the
 authors' [`desi-y3-hsc` repository](https://github.com/JeanCHDJdev/desi-y3-hsc/),
-with result files under `results/distributions/`. No files from that directory
-have been downloaded into Astrafek or the project data tree. Before importing
-any result, inspect the exact file names, format, provenance, and license; keep
-only the calibrated `n(z)` products needed for the four-bin lensing calculation
-and their posterior samples if available. Do not retrieve additional HSC image,
-shape, or per-object photo-z data as part of this calibration update.
+with result files under `results/distributions/`. A metadata-only GitHub API
+inspection pinned the current `main` revision to
+`abc70af29910e49fce17a63ef3083160d515fb6c` (2026-08-28). The repository API
+does not declare an SPDX license; the arXiv paper is marked CC BY 4.0. Retain
+the paper citation and check file-level terms when the artifacts arrive.
 
-Once separately authorized, add a manifest with source URL, revision, file
-hashes, and schema checks. Extend the Astrafek SACC loader only after the
-published file schema is confirmed. Compare the new distributions to the current
-SACC baseline on identical cluster/source pairs, with the same random-lens
-subtraction and paired spatial-block jackknife. Propagate redshift-distribution
-posterior uncertainty through the pair-wise `Sigma_crit^{-1}` calculation.
-Keep `science_measurement=false` until the random controls, source-overlap
-covariance, redshift calibration, and remaining shear-systematic gates pass.
+The authors' README marks `_v_1p1` as the corrected release and describes the
+`distributions_*.npz` files as the calibrated distributions. Metadata-only
+inspection found two scale-cut variants and their small sidecar metadata files:
+
+| File | Size |
+|---|---:|
+| `results/distributions/0.3_3_v_1p1/distributions_0.3_3_v_1p1.npz` | 272,416 bytes |
+| `results/distributions/0.3_3_v_1p1/nz_res_metadata_0.3_3_v_1p1.json` | 2,494 bytes |
+| `results/distributions/1_5_v_1p1/distributions_1_5_v_1p1.npz` | 272,416 bytes |
+| `results/distributions/1_5_v_1p1/nz_res_metadata_1_5_v_1p1.json` | 2,492 bytes |
+| **Total** | **549,818 bytes** |
+
+These four files are the requested import scope; no files have been downloaded
+into Astrafek or the project data tree. The approval request is limited to these
+four author-published distribution products for comparing the fiducial 0.3–3
+Mpc/h cut with the 1–5 Mpc/h sensitivity cut. Do not retrieve HSC images, shape
+catalog rows, per-object photo-z data, or the repository's other derived files
+as part of this step. After approval, verify the NPZ schema and whether it
+contains posterior samples before implementing an importer; the GitHub README
+does not establish the internal array schema.
+
+After authorization, store the four files outside Git and add a manifest with
+source URL, pinned revision, file hashes, license notes, and schema checks. Extend
+the Astrafek loader only after confirming the published NPZ schema and whether it
+provides posterior samples. Compare the two scale cuts and the current SACC
+baseline on identical cluster/source pairs, with the same random-lens subtraction
+and paired spatial-block jackknife. Propagate redshift-distribution uncertainty
+through the pair-wise `Sigma_crit^{-1}` calculation. Keep
+`science_measurement=false` until the random controls, source-overlap covariance,
+redshift calibration, and remaining shear-systematic gates pass.
 
 ## Sources
 

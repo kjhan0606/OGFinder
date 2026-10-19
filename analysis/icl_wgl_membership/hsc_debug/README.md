@@ -646,8 +646,9 @@ It includes high-redshift tracers absent from the older HSC Y3 calibration and
 reports upward shifts in bins 3 and 4 relative to Rau+2022. See
 [`wl_pdr3_desi_nz_calibration_update_2026-10-20.md`](wl_pdr3_desi_nz_calibration_update_2026-10-20.md).
 Those result files have not been imported; obtain approval before downloading
-the calibration data, then compare them to the SACC baseline with the same
-random-subtracted stack and spatial jackknife.
+the four `_v_1p1` distribution/metadata files (549,818 bytes total) identified
+in the calibration note, then compare both published scale cuts to the SACC
+baseline with the same random-subtracted stack and spatial jackknife.
 
 ### B-mode polarity sensitivity stack
 
