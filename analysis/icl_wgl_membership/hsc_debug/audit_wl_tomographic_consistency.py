@@ -11,9 +11,17 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
 from scipy.stats import chi2
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+ROOT = HERE.parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from fetch_ancillary_catalogues import sha
 from ogfkit.wlcluster import Cosmology
