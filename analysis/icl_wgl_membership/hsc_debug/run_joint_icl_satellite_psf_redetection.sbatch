@@ -17,7 +17,7 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_MAX_TH
 cd /home/kjhan/BACKUP/Astrafek/OGFinder
 exec flock /tmp/astrafex_icl_redetection_injection.lock /home/kjhan/miniconda3/bin/python3 \
   analysis/icl_wgl_membership/hsc_debug/run_joint_icl_satellite_batch.py \
-  --output-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/joint_icl_satellite_psf_redetection_2026-10-19_01 \
+  --output-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/joint_icl_satellite_psf_redetection_2026-10-19_02 \
   --rerun-detection-masks \
   --unresolved-bcg-policy mask_all \
   --psf-plan-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_picker_injection_plan_2026-10-19_02 \
