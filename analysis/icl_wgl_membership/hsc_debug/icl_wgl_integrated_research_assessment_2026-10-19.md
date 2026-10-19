@@ -19,6 +19,8 @@ Astrafek에는 HSC PDR3 영상·대조장·PSF 입력을 사용한 ICL 스택, �
 
 공분산 감사는 position별 PSF 주입 표본 57개(i 13, i2 44)의 표적·매칭 대조 coadd에서 9×9 단거리 잔차 커널을 측정하고 실제 signed aperture 가중치에 전파했다. 큰 top-hat 근사 분산 비는 표적 1.59, 대조장 1.54–1.55였다. 정확한 ICL 및 위성 가중치와 양쪽 ICL 영상의 분산을 사용하면 대각 분산만 쓴 경우보다 ICL 잡음 표준편차가 i에서 1.234배, i2에서 1.240배였고, 잡음만으로 계산한 ICL–위성 상관 중앙값은 각각 −0.0073, −0.00091이었다. 이는 해당 57개 프레임에 조건부인 단거리·정상 커널 민감도다. source Poisson 잡음, 상류 sky 전달, 위치별 완전 공분산은 포함하지 않으며 공간 블록 오차에 단순 곱하면 같은 변동을 중복 셀 수 있다. 따라서 관측 연관성을 보정하거나 검출 여부를 결정하는 수치로 사용하지 않는다.
 
+57쌍의 잡음 공분산을 같은 표본의 측정 ICL·위성값으로 전파한 10,000회 Monte Carlo에서는 i2 부분표본 44개의 측정 편상관 `r=0.409`가 finite-lag 잡음 범위 `[0.320, 0.465]`를 보였다. 하지만 전체 68쌍 i2 추정값은 `r≈0.293`이고 공간 블록 구간은 블록 폭에 민감하다. 공분산이 있는 표본만의 값이 전체보다 큰 점은 선택 효과를 경고한다. i 부분표본은 finite-lag 잡음 범위가 0을 포함한다. 이 조건부 잡음 실험은 spatial-block 범위와 합치지 않으며 과학 검출을 뜻하지 않는다. 세부 결과는 [측정 잡음 Monte Carlo 평가](icl_satellite_measurement_noise_mc_assessment_2026-10-19.md)에 기록했다.
+
 현재 CAMIRA 후보를 더 넓히는 오프라인 검토에서는 기존 선택 아래 새로 분리되는 후보가 57개뿐이고 새 5도 하늘 셀은 없었다. 적색이동 범위를 넓혀도 분광 확인을 유지하면 새 5도 셀은 2개였다. 따라서 같은 발자국에서 영상 수만 늘리는 것으로 독립 하늘 영역의 부족을 해결하기 어렵다.
 
 **해석:** 양의 ICL–위성 관계는 흥미로운 가설이지만 검출로 보고할 수 없다. 다음 ICL 관문은 반경·필터·마스크·통계량을 분석 전에 고정하고, 실제 검출·마스크 재생성을 포함하는 diffuse+위성 공동 주입으로 sky·PSF 날개·마스크 누출 전달함수를 평가하는 것이다. 독립 통계력을 높이려면 단순히 기존 CAMIRA 선택을 완화하기보다 새 독립 하늘 영역과 완전도·렌즈 보정을 함께 설계해야 한다.
@@ -41,7 +43,7 @@ HSC 문서는 `b_mode_mask`가 큰 B-mode 구역을 제거하는 데 쓰인다�
 
 - [표적–대조장 2-D ICL 스택](icl_2d_target_control_stack_README.md), [독립지원 민감도](icl_2d_independent_support_assessment_2026-10-19.md)
 - [ICL–위성 다중비교 검정](icl_satellite_familywise_2026-10-18.md), [반경별 블록 폭 민감도](icl_satellite_perbin_block_scale_assessment_2026-10-19.md)
-- [소광 민감도](icl_pixel_extinction_assessment_2026-10-19.md), [평면 주입 전달](icl_plane_injection_assessment_2026-10-19.md), [위치별 PSF 및 공동 주입](psf_convolved_joint_injection_assessment_2026-10-19.md), [coadd 잔차 공분산](icl_coadd_residual_covariance_assessment_2026-10-19.md), [ICL–위성 lag 공분산](satellite_icl_lag_covariance_assessment_2026-10-19.md), [표적·대조 공분산](satellite_icl_target_control_covariance_assessment_2026-10-19.md), [PSF 파일 감사](psf_picker_batch_2026-10-19.md)
+- [소광 민감도](icl_pixel_extinction_assessment_2026-10-19.md), [평면 주입 전달](icl_plane_injection_assessment_2026-10-19.md), [위치별 PSF 및 공동 주입](psf_convolved_joint_injection_assessment_2026-10-19.md), [coadd 잔차 공분산](icl_coadd_residual_covariance_assessment_2026-10-19.md), [ICL–위성 lag 공분산](satellite_icl_lag_covariance_assessment_2026-10-19.md), [표적·대조 공분산](satellite_icl_target_control_covariance_assessment_2026-10-19.md), [측정 잡음 전파](icl_satellite_measurement_noise_mc_assessment_2026-10-19.md), [PSF 파일 감사](psf_picker_batch_2026-10-19.md)
 - [CAMIRA 표본 확장 검토](camira_expansion_pool_assessment_2026-10-19.md), [B-mode 극성 좌표 검증과 calibrated stack](wl_bmode_coordinate_validation_2026-10-19.md), [표적 전용 약한렌즈 공분산](wl_cluster_spatial_jackknife_assessment_2026-10-19.md), [무작위 좌표 기하 파일럿](wl_random_coordinate_geometry_pilot_2026-10-20.md)
 
 이 문서는 결과를 통합해 읽기 위한 과학 현황 기록이다. 위의 탐색 분석을 논문용 측정으로 승격하지 않으며 새 영상·shape·photo-z 반출을 승인하지 않는다.

@@ -746,3 +746,9 @@ outside the model. Results, row/table hashes, and limitations are in
 [`satellite_icl_target_control_covariance_assessment_2026-10-19.md`](satellite_icl_target_control_covariance_assessment_2026-10-19.md).
 The saved row table and summary can be independently checked with
 [`verify_satellite_icl_target_control_covariance.py`](verify_satellite_icl_target_control_covariance.py).
+
+`propagate_satellite_icl_measurement_noise.py`는 공분산이 있는 동일 57쌍(i 13,
+i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각각 전파한다.
+이는 공간 블록 재표본화와 합치지 않는 조건부 잡음 민감도다. i2의 44쌍 부분표본은
+전체 68쌍과 다른 `r`을 보이므로 전체 관계로 확대하지 않는다. 산출물·한계와
+체크섬은 [`icl_satellite_measurement_noise_mc_assessment_2026-10-19.md`](icl_satellite_measurement_noise_mc_assessment_2026-10-19.md)에 기록한다.
