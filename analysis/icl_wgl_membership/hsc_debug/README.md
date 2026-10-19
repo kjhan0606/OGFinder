@@ -396,6 +396,9 @@ factor from the summary definition and the mask in its archived run snapshot,
 then resolves K=3.5/K=5.0
 runner versions from Git history by exact SHA-256. Verification records are
 saved alongside each stack as `independent_verification_2026-10-20.json`.
+Their SHA-256 values are K=2.5 `0da3238fa4105118667d5e67392e09c07dc1b59db68adc4344aada464447d740`,
+K=3.5 `113645d19e2ca56a9f091d6cca38b5c48cf9bc15c534fdc319fb172d9f229997`,
+and K=5.0 `34e0019cfeee01a4aed239c354e5f9035956798ea1cd9fdb9a52cdeb29a2a906`.
 The verifier and regression tests are
 [`verify_icl_target_control_2d_stack.py`](verify_icl_target_control_2d_stack.py)
 and [`test_verify_icl_target_control_2d_stack.py`](test_verify_icl_target_control_2d_stack.py).
