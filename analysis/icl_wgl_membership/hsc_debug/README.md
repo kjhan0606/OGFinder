@@ -614,3 +614,11 @@ has no multiplicity correction, and is not a detection. Details and hashes are
 in [`icl_satellite_block_scale_assessment_2026-10-19.md`](icl_satellite_block_scale_assessment_2026-10-19.md).
 The output is outside Git at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_block_scale_sensitivity_2026-10-19_04/`.
+
+The follow-up [`audit_satellite_icl_perbin_block_scale.py`](audit_satellite_icl_perbin_block_scale.py)
+repeats the same test on the primary 94-row per-annulus sample (68 i2 pairs),
+checking its 5° result against the archived bootstrap. The i2 partial r is
+0.293 at each width, but its 95% block interval changes from [−0.003, 0.504]
+at 2.5° to [0.042, 0.497] at 5° and [0.057, 0.491] at 10°. This remains an
+exploratory, width-sensitive interval, not a detection; the report is
+[`icl_satellite_perbin_block_scale_assessment_2026-10-19.md`](icl_satellite_perbin_block_scale_assessment_2026-10-19.md).
