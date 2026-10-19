@@ -45,6 +45,17 @@ bash scripts/run_debug.sh
 PSF 코어 입력은 준비됐지만 확장 날개와 영상 노이즈는 별도로 검증해야 하며,
 과학 측정은 수행하지 않았다.
 
+2026-10-20에는 이미 저장된 PSF 배치를 재요청하지 않고 승인 계획 기준으로
+744개 파일을 다시 감사했다. Astrafek `PositionPSFBank`가 57개 cluster/filter
+프레임과 688개 위성 위치를 연결하고, 시험 중심 PSF를 포함한 745개 고유 FITS의
+체크섬과 영상 배열을 모두 읽는 통합 검증도 수행했다. 재현 스크립트는
+[`verify_position_psf_bank.py`](verify_position_psf_bank.py)이며, 결과는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_position_psf_bank_validation_2026-10-20_01/`
+에 있다. 요약 SHA-256은
+`384b859fd59169446515027b80990c9482f64bf7e51d108f8008014c5d024207`, 스크립트
+SHA-256은 `59ccba1aedc76a7cd43110f969c17cdd3f15b51307d3602428b5b3cf7c128302`이다.
+이 검증은 PSF 코어 위치·파일 연결만 확인하며 확장 날개나 과학 측정의 검증은 아니다.
+
 같은 승인 PSF를 실제 위치별 주입에 연결한 재검출 민감도도 57/57 프레임에서
 완료했다(i 13, i2 44, 오류 0). PSF 코어와 무PSF 실행의 짝지은 응답 차이는
 실제 관측 coadd 픽셀 배열의 복사본에서 얻었고, 각 필터에서 중앙값이 작으며
