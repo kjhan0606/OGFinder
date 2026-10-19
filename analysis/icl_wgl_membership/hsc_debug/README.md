@@ -358,6 +358,25 @@ limitations, and reproducibility hashes are in
 the saved figure is outside Git beside `summary.json` as
 `tomographic_profiles.png`.
 
+`audit_wl_source_reuse_covariance.py` measures how reusing the same source
+galaxy in multiple lens stacks changes delete-one covariance when blocks are
+deleted by lens endpoint, source endpoint, or either endpoint jointly. The
+independent `validate_wl_source_reuse_covariance.py` checks each saved matrix's
+symmetry, positive semidefiniteness, rank and profile-error diagonal; it also
+recomputes the four-bin GLS consistency tests and Holm adjustments and checks
+the source-reuse counts. Run it only after the producer writes `summary.json`,
+using a fresh output path:
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/validate_wl_source_reuse_covariance.py \
+  --summary /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_source_reuse_covariance_2026-10-20_01/summary.json \
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_source_reuse_covariance_validation_2026-10-20_01/validation.json
+```
+
+The validator audits internal numerical consistency of the producer output; it
+does not reload the catalogue rows or replace random-lens subtraction and
+connected-survey-region covariance.
+
 `prepare_wl_random_shape_count_plan.py` prepares (without submitting) a count-only
 S19A support query for a finalized `astrafek-wl-random-centers-v1` manifest. It
 retains the association between each unique random-center ID and its matched
