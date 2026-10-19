@@ -650,6 +650,11 @@ the four `_v_1p1` distribution/metadata files (549,818 bytes total) identified
 in the calibration note, then compare both published scale cuts to the SACC
 baseline with the same random-subtracted stack and spatial jackknife.
 
+The current S19A responsivity, object-level shear corrections, and HSC
+edge-selection coefficients were also checked against the HSC Y3 paper and its
+linked calibration utility. The source-level formula review is recorded in
+[`wl_s19a_shape_calibration_formula_review_2026-10-20.md`](wl_s19a_shape_calibration_formula_review_2026-10-20.md).
+
 ### B-mode polarity sensitivity stack
 
 The earlier two-hypothesis calibrated stack used only the previously approved row export
