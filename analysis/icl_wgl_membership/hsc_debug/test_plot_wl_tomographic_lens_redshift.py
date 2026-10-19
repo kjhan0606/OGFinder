@@ -32,6 +32,11 @@ def _summary():
             "upper_z_min": 0.43519,
             "midpoint_between_boundary_lenses": 0.434765,
         },
+        "source_bin_counts_by_lens_redshift_cohort": [
+            {"lens_redshift_cohort": cohort,
+             "counts_by_source_bin": [{"unique_used_lenses": 399} for _ in range(4)]}
+            for cohort in ("lower_z", "upper_z")
+        ],
         "profile": profiles,
     }
 
@@ -48,9 +53,10 @@ def test_lens_redshift_plot_rejects_incomplete_profiles(tmp_path):
 def test_plot_lens_redshift_tomography_writes_png(tmp_path):
     summary_path = tmp_path / "summary.json"
     summary_path.write_text(json.dumps(_summary()))
-    _, profiles = load_profiles(summary_path)
+    _, profiles, counts = load_profiles(summary_path)
     assert len(profiles["lower_z"]) == 4
     assert len(profiles["upper_z"]) == 4
+    assert counts["lower_z"] == (399, 399)
     output = tmp_path / "profiles.png"
     plot(summary_path, output)
     assert output.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")

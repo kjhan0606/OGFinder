@@ -24,6 +24,17 @@ def load_profiles(summary_path: Path):
     records = result.get("profile")
     if not isinstance(records, list) or len(records) != 56:
         raise ValueError("expected 2 lens-redshift cohorts by 4 source bins by 7 radial bins")
+    counts = result.get("source_bin_counts_by_lens_redshift_cohort")
+    if not isinstance(counts, list) or len(counts) != 2:
+        raise ValueError("source-bin count metadata is missing for a lens-redshift cohort")
+    used_lens_counts = {}
+    for cohort_record in counts:
+        name = cohort_record.get("lens_redshift_cohort")
+        bin_counts = cohort_record.get("counts_by_source_bin", [])
+        if name not in ("lower_z", "upper_z") or len(bin_counts) != 4:
+            raise ValueError("invalid per-cohort source-bin count metadata")
+        values = [int(item["unique_used_lenses"]) for item in bin_counts]
+        used_lens_counts[name] = (min(values), max(values))
     profiles = {}
     for cohort in ("lower_z", "upper_z"):
         profiles[cohort] = {}
@@ -50,7 +61,7 @@ def load_profiles(summary_path: Path):
                 "tangent": tangent, "tangent_error": tangent_error,
                 "cross": cross, "cross_error": cross_error,
             }
-    return result, profiles
+    return result, profiles, used_lens_counts
 
 
 def plot(summary_path: Path, output_path: Path):
@@ -60,7 +71,7 @@ def plot(summary_path: Path, output_path: Path):
 
     if output_path.exists():
         raise FileExistsError(f"refusing to overwrite figure: {output_path}")
-    result, profiles = load_profiles(summary_path)
+    result, profiles, used_lens_counts = load_profiles(summary_path)
     split = result["lens_redshift_split"]
     colors = ("#4c78a8", "#f58518", "#54a24b", "#e45756")
     markers = ("o", "s", "^", "D")
@@ -91,13 +102,17 @@ def plot(summary_path: Path, output_path: Path):
         axes[1, column].set_xlabel("Proper projected radius [Mpc]")
         axes[1, column].axhline(0.0, color="black", linewidth=0.8, alpha=0.7)
     axes[0, 0].set_title(
-        f"Lower-z lenses (N={split['n_lenses_lower_z']}; z≤{split['lower_z_max']:.4f})"
+        f"Lower-z (input N={split['n_lenses_lower_z']}; used {used_lens_counts['lower_z'][0]}–{used_lens_counts['lower_z'][1]}; z≤{split['lower_z_max']:.5f})"
     )
-    axes[0, 1].set_title("Lower-z lenses")
+    axes[0, 1].set_title(
+        f"Lower-z (input N={split['n_lenses_lower_z']}; used {used_lens_counts['lower_z'][0]}–{used_lens_counts['lower_z'][1]})"
+    )
     axes[1, 0].set_title(
-        f"Higher-z lenses (N={split['n_lenses_upper_z']}; z≥{split['upper_z_min']:.4f})"
+        f"Higher-z (input N={split['n_lenses_upper_z']}; used {used_lens_counts['upper_z'][0]}–{used_lens_counts['upper_z'][1]}; z≥{split['upper_z_min']:.5f})"
     )
-    axes[1, 1].set_title("Higher-z lenses")
+    axes[1, 1].set_title(
+        f"Higher-z (input N={split['n_lenses_upper_z']}; used {used_lens_counts['upper_z'][0]}–{used_lens_counts['upper_z'][1]})"
+    )
     fig.suptitle(
         "HSC Y3 source-bin consistency by lens redshift\n"
         "Cluster-only; random-lens subtraction not applied; diagnostic, not a detection",
