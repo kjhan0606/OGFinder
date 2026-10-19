@@ -996,3 +996,7 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 이는 공간 블록 재표본화와 합치지 않는 조건부 잡음 민감도다. i2의 44쌍 부분표본은
 전체 68쌍과 다른 `r`을 보이므로 전체 관계로 확대하지 않는다. 산출물·한계와
 체크섬은 [`icl_satellite_measurement_noise_mc_assessment_2026-10-19.md`](icl_satellite_measurement_noise_mc_assessment_2026-10-19.md)에 기록한다.
+
+## ICL–위성 HSC 영역 고정효과 민감도 (2026-10-20)
+
+같은 94쌍에서 redshift·richness를 보정한 뒤 표적/대조 HSC 연결영역 지시변수를 추가했다. i2 부분상관은 `r=0.29264`에서 `0.29105`로 거의 유지됐고, i는 `0.07898`에서 `0.13860`으로 변했으나 26쌍뿐이다. 표본의 target/control endpoint가 모두 같은 근사 영역에 배정되어 두 영역 효과 열은 중복되므로 하나만 적합했다. 이는 영역 간 평균 오프셋에 대한 민감도이며 검출이나 공분산 추정이 아니다. 방법과 한계는 [`satellite_icl_region_fixed_effects_assessment_2026-10-20.md`](satellite_icl_region_fixed_effects_assessment_2026-10-20.md)에 있다.
