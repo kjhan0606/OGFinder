@@ -254,6 +254,14 @@ def main() -> int:
     if (checked_pairs & error_pairs or checked_pairs | error_pairs != expected_frames
             or len(error_pairs) != int(summary.get("n_errors", -1))):
         raise ValueError("frame results and errors do not partition the approved PSF sample")
+    scenario_gap_counts = {
+        scenario: sum(scenario in row["satellite_support_gaps"] for row in checked_records)
+        for scenario in ("baseline", "icl_only", "satellite_only", "both")
+    }
+    frames_with_gaps = sum(bool(row["satellite_support_gaps"]) for row in checked_records)
+    if (summary.get("n_frames_with_satellite_support_gaps") != frames_with_gaps
+            or summary.get("satellite_support_gaps_by_scenario") != scenario_gap_counts):
+        raise ValueError("batch support-gap totals differ from audited frame results")
     paired_summary = {}
     def summarize_deltas(values):
         return ({
@@ -279,6 +287,9 @@ def main() -> int:
         "n_approved_frames": len(expected_frames),
         "n_frame_results_checked": len(checked_records),
         "n_errors_reported_by_batch": summary.get("n_errors"),
+        "n_frames_with_satellite_support_gaps": frames_with_gaps,
+        "satellite_support_gaps_by_scenario": scenario_gap_counts,
+        "support_status": "partial_satellite_support" if frames_with_gaps else "complete",
         "approved_frame_pairs": [{"cluster_id": c, "filter": f} for c, f in expected_pairs],
         "batch_summary_sha256": sha256(summary_path),
         "psf_plan_sha256": sha256(args.plan_dir / "psf_picker_plan.json"),
