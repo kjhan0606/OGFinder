@@ -364,6 +364,18 @@ selected-sample exploratory result, not a detection. See
 [`satellite_icl_spatial_block_assessment_2026-10-19.md`](satellite_icl_spatial_block_assessment_2026-10-19.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_spatial_blocks_2026-10-20_02/`.
 
+`plan_icl_spatial_block_power.py` converts that exploratory effect size into a
+design approximation using the 33 connected spatial blocks as independent
+units, two adjustment variables, and the 30-test family. For the i2 partial
+correlation scenario `r=0.293`, estimated power is 0.359 at nominal α=0.05 and
+0.061 at Bonferroni α=0.05/30. The Fisher-z approximation requires 180
+independent blocks for 80% power at the adjusted threshold. These are not 180
+clusters: additional clusters inside the same connected sky blocks do not meet
+the independent-block requirement. This is a planning bound, not a detection
+or a replacement for the connected-block maxT analysis. The reproducible
+report and JSON are at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_association_power_plan_2026-10-19_01/`.
+
 `analyze_extinction_sensitivity_icl_satellite.py` applies center-based SFD extinction corrections
 separately to the saved ICL targets and matched controls, and compares them with a target-only
 HSC PDR3 forced-source `a_i` sensitivity. It verifies the existing profile/catalogue hashes and
