@@ -674,6 +674,8 @@ The audit now persists that joint covariance. Slurm job 428856 is rerunning to
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02/`.
 Afterward, `audit_wl_tomographic_redshift_interaction.py` will test the
 difference-in-differences between source-bin offsets with the saved covariance.
+The initial split statistics and profile figure are documented in
+[`wl_tomographic_lens_redshift_assessment_2026-10-20.md`](wl_tomographic_lens_redshift_assessment_2026-10-20.md).
 This remains a cluster-only diagnostic with no random-lens subtraction and
 `science_measurement=false`.
 
