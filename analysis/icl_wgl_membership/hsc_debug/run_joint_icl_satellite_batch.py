@@ -92,7 +92,8 @@ def run_batch(data: Path, output_dir: Path,
               satellite_amplitude: float = 1.0,
               diffuse_scale_kpc: float = 100.0,
               satellite_scale_kpc: float = 15.0,
-              rerun_detection_masks: bool = False) -> dict:
+              rerun_detection_masks: bool = False,
+              unresolved_bcg_policy: str = "error") -> dict:
     if output_dir.exists():
         raise FileExistsError(f"refusing to overwrite {output_dir}")
     selected = select_jointly_supported_pairs(icl_pairs_path, satellite_profiles_path)
@@ -106,7 +107,7 @@ def run_batch(data: Path, output_dir: Path,
             result = run_frame(
                 data, ident, path, icl_masks_dir, satellite_prep_dir, icl_pairs_path,
                 diffuse_amplitude, satellite_amplitude, diffuse_scale_kpc,
-                satellite_scale_kpc, rerun_detection_masks)
+                satellite_scale_kpc, rerun_detection_masks, unresolved_bcg_policy)
             if result["filter"] != filt:
                 raise ValueError(f"image filter mismatch for cluster {ident}")
             records.append({
@@ -143,6 +144,7 @@ def run_batch(data: Path, output_dir: Path,
             "satellite_scale_kpc": satellite_scale_kpc,
             "masks_and_segmentation_fixed": not rerun_detection_masks,
             "detection_rerun": rerun_detection_masks,
+            "unresolved_bcg_policy": unresolved_bcg_policy if rerun_detection_masks else None,
             "poisson_noise_added": False,
             "psf_convolution_applied": False,
             "original_fits_modified": False,
@@ -164,6 +166,7 @@ def run_batch(data: Path, output_dir: Path,
              if rerun_detection_masks else "This is a support-selected fixed-mask measurement-transfer sensitivity, not a science measurement."),
             ("SEP source detection and K2.5 masks are regenerated per injection, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
              if rerun_detection_masks else "It does not rerun source detection, grow masks, convolve the injected shapes with PSFs, or model upstream sky subtraction."),
+            "A missing or ambiguous central detection never establishes BCG identity; mask_all masks every detection conservatively.",
             "The artificial components and diagonal-variance estimator do not establish population completeness or flux covariance.",
             "The paired annular sample is selected by existing exploratory coverage cuts and is not an independent validation sample.",
         ],
@@ -187,13 +190,15 @@ def main() -> None:
     parser.add_argument("--satellite-scale-kpc", type=float, default=15.0)
     parser.add_argument("--rerun-detection-masks", action="store_true",
                         help="rerun SEP detection and regenerate source masks for each injection scenario")
+    parser.add_argument("--unresolved-bcg-policy", choices=("error", "mask_all"), default="error",
+                        help="on ambiguous/missing central detection, fail or mask every detected source")
     args = parser.parse_args()
     result = run_batch(args.data.resolve(), args.output_dir.resolve(),
                        args.icl_masks.resolve(), args.satellite_prep.resolve(),
                        args.icl_pairs.resolve(), args.satellite_profiles.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
                        args.diffuse_scale_kpc, args.satellite_scale_kpc,
-                       args.rerun_detection_masks)
+                       args.rerun_detection_masks, args.unresolved_bcg_policy)
     print(json.dumps({k: result[k] for k in
                       ("status", "n_completed", "n_errors", "by_filter", "elapsed_seconds")},
                      indent=2))

@@ -125,8 +125,11 @@ def satellite_outer_measurement(image: np.ndarray, variance: np.ndarray,
 
 def redetect_masks_and_targets(image: np.ndarray, variance: np.ndarray,
                                bits: np.ndarray, member_rows: list[dict],
-                               center_xy: np.ndarray, pixel_scale: float):
+                               center_xy: np.ndarray, pixel_scale: float,
+                               unresolved_bcg_policy: str = "error"):
     """Re-run SEP detection and regenerate K2.5 masks on an injected image."""
+    if unresolved_bcg_policy not in {"error", "mask_all"}:
+        raise ValueError("unresolved_bcg_policy must be 'error' or 'mask_all'")
     invalid = ~np.isfinite(image) | ~np.isfinite(variance) | (variance <= 0)
     bad_bits = sum(1 << bit for bit in satellite.BAD_BIT_POSITIONS)
     bad = ((bits & bad_bits) != 0) | invalid
@@ -138,10 +141,18 @@ def redetect_masks_and_targets(image: np.ndarray, variance: np.ndarray,
     objects, segmentation, kron, kron_flags, bcg, _, diagnostics = detection_pipeline.detect(
         image, variance, bad, center_xy, member_xy, pixel_scale,
     )
+    bcg_candidates = int(diagnostics["bcg_matches"])
+    bcg_for_mask = bcg
+    if bcg < 0 and unresolved_bcg_policy == "error":
+        raise ValueError(
+            f"redetection found {bcg_candidates} BCG candidates at the supplied center "
+            f"(nearest={diagnostics['nearest_bcg_detection_arcsec']})")
     if bcg < 0:
-        raise ValueError("redetection did not yield one unambiguous BCG at the supplied center")
+        # Conservatively mask every segmentation/source rather than guessing which
+        # detection is the BCG. This is a separately recorded sensitivity mode.
+        bcg_for_mask = -1
     masks, fallback_count = detection_pipeline.source_masks(
-        objects, segmentation, kron, kron_flags, base, bcg, member_xy, pixel_scale,
+        objects, segmentation, kron, kron_flags, base, bcg_for_mask, member_xy, pixel_scale,
     )
     rows = []
     for index, obj in enumerate(objects):
@@ -172,6 +183,8 @@ def redetect_masks_and_targets(image: np.ndarray, variance: np.ndarray,
         "fallback_tree": fallback_tree, "member_tree": member_tree,
         "targets_pixel_radius": targets, "icl_mask": masks[0],
         "diagnostics": {**diagnostics, "n_detections": len(rows),
+                         "n_bcg_candidates": bcg_candidates,
+                         "bcg_mask_policy": ("preserve_unique_bcg" if bcg >= 0 else "mask_all_sources"),
                          "n_fallback_member_masks": fallback_count,
                          "n_matched_members": len(matched),
                          "n_ambiguous_member_matches": match_stats["ambiguous"]},
@@ -186,7 +199,8 @@ def run_frame(data: Path, ident: str, output: Path,
               satellite_amplitude: float = 1.0,
               diffuse_scale_kpc: float = 100.0,
               satellite_scale_kpc: float = 15.0,
-              rerun_detection_masks: bool = False) -> dict:
+              rerun_detection_masks: bool = False,
+              unresolved_bcg_policy: str = "error") -> dict:
     if output.exists():
         raise FileExistsError(f"refusing to overwrite {output}")
     if (not platform.node().lower().startswith("lageunha")
@@ -308,6 +322,7 @@ def run_frame(data: Path, ident: str, output: Path,
         if rerun_detection_masks:
             redetected = redetect_masks_and_targets(
                 synthetic, variance, bits, member_rows, center_xy, pixel_scale,
+                unresolved_bcg_policy,
             )
             targets_now = []
             for match, det, radius_pix in redetected["targets_pixel_radius"]:
@@ -372,6 +387,7 @@ def run_frame(data: Path, ident: str, output: Path,
             "template_unit": "nJy/arcsec^2, divided by FLUXMAG0-derived conversion before adding to native image",
             "n_injected_satellite_centers": len(targets),
             "source_detection_and_masks_rerun": rerun_detection_masks,
+            "unresolved_bcg_policy": unresolved_bcg_policy if rerun_detection_masks else None,
             "variance_and_poisson_noise_changed": False,
             "original_fits_modified": False,
         },
@@ -436,6 +452,8 @@ def main() -> None:
     parser.add_argument("--satellite-scale-kpc", type=float, default=15.0)
     parser.add_argument("--rerun-detection-masks", action="store_true",
                         help="rerun SEP detection and regenerate source masks for each injection scenario")
+    parser.add_argument("--unresolved-bcg-policy", choices=("error", "mask_all"), default="error",
+                        help="on ambiguous/missing central detection, fail or mask every detected source")
     args = parser.parse_args()
     started = time.time()
     result = run_frame(args.data.resolve(), args.cluster_id, args.output.resolve(),
@@ -443,7 +461,7 @@ def main() -> None:
                        args.icl_pairs.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
                        args.diffuse_scale_kpc, args.satellite_scale_kpc,
-                       args.rerun_detection_masks)
+                       args.rerun_detection_masks, args.unresolved_bcg_policy)
     result["elapsed_seconds"] = time.time() - started
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n",
                            encoding="utf-8")

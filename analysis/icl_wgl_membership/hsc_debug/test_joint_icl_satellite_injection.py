@@ -63,4 +63,27 @@ def test_redetection_rebuilds_masks_and_recovers_injected_member():
     assert len(result["targets_pixel_radius"]) == 1
     assert result["icl_mask"].shape == image.shape
     assert result["icl_mask"].any()
+    assert result["diagnostics"]["n_bcg_candidates"] == 1
+    assert result["diagnostics"]["bcg_mask_policy"] == "preserve_unique_bcg"
     assert result["segmentation"].max() <= result["diagnostics"]["n_detections"]
+
+
+def test_missing_bcg_can_use_explicit_all_source_mask_policy():
+    yy, xx = np.mgrid[:128, :128]
+    rng = np.random.default_rng(91)
+    variance = np.ones((128, 128), dtype=np.float32)
+    bits = np.zeros((128, 128), dtype=np.int32)
+    image = rng.normal(0.0, 0.2, size=variance.shape).astype(np.float32)
+    image += (80 * np.exp(-((xx - 90) ** 2 + (yy - 64) ** 2) / (2 * 2.0 ** 2))).astype(np.float32)
+    members = [{"INDEX": "0", "IN_FRAME": "True", "X_IMAGE": "91", "Y_IMAGE": "65"}]
+
+    with pytest.raises(ValueError, match="found 0 BCG candidates"):
+        redetect_masks_and_targets(image, variance, bits, members,
+                                   np.array([64.0, 64.0]), 0.168)
+    result = redetect_masks_and_targets(image, variance, bits, members,
+                                       np.array([64.0, 64.0]), 0.168,
+                                       unresolved_bcg_policy="mask_all")
+
+    assert result["diagnostics"]["n_bcg_candidates"] == 0
+    assert result["diagnostics"]["bcg_mask_policy"] == "mask_all_sources"
+    assert len(result["targets_pixel_radius"]) == 1
