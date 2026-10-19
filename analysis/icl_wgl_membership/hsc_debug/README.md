@@ -45,9 +45,14 @@ PSF 코어 입력은 준비됐지만 확장 날개와 영상 노이즈는 별도
 
 같은 승인 PSF를 실제 위치별 주입에 연결한 재검출 민감도도 57/57 프레임에서
 완료했다(i 13, i2 44, 오류 0). PSF 코어와 무PSF 실행의 짝지은 응답 차이는
-각 필터에서 중앙값이 작고 16–84백분위가 0을 포함한다. 이는 확장 PSF 날개,
-주입 photon noise, 상관 coadd noise 또는 HSC 상류 sky 전달을 검증하지 않으며
-science measurement로 승격하지 않았다. 상세 결과·SHA-256은
+실제 관측 coadd 픽셀 배열의 복사본에서 얻었고, 각 필터에서 중앙값이 작으며
+16–84백분위가 0을 포함한다. 해당 57개 target FITS 헤더에는 `FLUXMAG0`와
+variance plane은 있지만 `GAIN`·`EXPTIME`가 없어 source photon variance를
+정량 추가할 수 없다. 확장 PSF 날개, 상관 coadd noise, HSC 상류 sky 전달도
+별도 검증이 필요하며 science measurement로 승격하지 않았다. 이 헤더 검사는
+[`audit_icl_coadd_noise_metadata.py`](audit_icl_coadd_noise_metadata.py)로 재현하고
+[`icl_coadd_noise_metadata_assessment_2026-10-19.md`](icl_coadd_noise_metadata_assessment_2026-10-19.md)에 기록했다.
+PSF 반응 상세·SHA-256은
 [`psf_convolved_joint_injection_assessment_2026-10-19.md`](psf_convolved_joint_injection_assessment_2026-10-19.md),
 재현 명령은 [`run_joint_icl_satellite_psf_redetection.sbatch`](run_joint_icl_satellite_psf_redetection.sbatch),
 감사기는 [`audit_joint_icl_satellite_psf_redetection.py`](audit_joint_icl_satellite_psf_redetection.py)에 있다.
