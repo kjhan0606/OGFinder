@@ -758,6 +758,119 @@ def paired_tomographic_spatial_jackknife(
     }
 
 
+def paired_tomographic_endpoint_jackknife(
+        lens_pairs, random_pairs, lens_lens_blocks, lens_source_blocks,
+        random_lens_blocks, random_source_blocks, nz_redshift, nz_by_bin,
+        radial_edges_mpc, cosmology, *, apply_b_mode_mask=True,
+        block_method="user-supplied matched sky blocks"):
+    """Recompute matched lens/random stacks after deleting either endpoint block.
+
+    The same sky-block labels must be used for lens and random endpoints. This
+    makes repeated source IDs and shared survey modes leave out together. The
+    jackknife reruns the complete calibrated estimator for every deletion.
+    """
+    lens, n_lens = _check_columns(lens_pairs)
+    random, n_random = _check_columns(random_pairs)
+    if n_lens == 0 or n_random == 0:
+        raise ValueError("lens and random pair tables must both be non-empty")
+
+    def blocks(values, expected, label):
+        raw = np.asarray(values)
+        if raw.ndim != 1 or len(raw) != expected:
+            raise ValueError(f"{label} must have one block ID per pair")
+        try:
+            numeric = raw.astype(float)
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError(f"{label} must contain finite integer block IDs") from None
+        if not np.all(np.isfinite(numeric)) or not np.array_equal(numeric, numeric.astype(np.int64)):
+            raise ValueError(f"{label} must contain finite integer block IDs")
+        return numeric.astype(np.int64)
+
+    lens_lens_blocks = blocks(lens_lens_blocks, n_lens, "lens_lens_blocks")
+    lens_source_blocks = blocks(lens_source_blocks, n_lens, "lens_source_blocks")
+    random_lens_blocks = blocks(random_lens_blocks, n_random, "random_lens_blocks")
+    random_source_blocks = blocks(random_source_blocks, n_random, "random_source_blocks")
+    block_ids = np.unique(np.concatenate((
+        lens_lens_blocks, lens_source_blocks, random_lens_blocks, random_source_blocks,
+    )))
+    if len(block_ids) < 3:
+        raise ValueError("paired endpoint jackknife requires at least three occupied sky blocks")
+
+    def subset(pairs, keep):
+        return {key: np.asarray(value)[keep] for key, value in pairs.items()}
+
+    def profile_vector(pairs):
+        result = stack_s19a_tomographic_pairs(
+            pairs, nz_redshift, nz_by_bin, radial_edges_mpc, cosmology,
+            apply_b_mode_mask=apply_b_mode_mask,
+        )
+        values = []
+        for row in result["profile"]:
+            ds = row["delta_sigma_weak_msun_mpc2"]
+            cross = row["cross_delta_sigma_weak_msun_mpc2"]
+            if ds is None or cross is None or not np.isfinite(ds) or not np.isfinite(cross):
+                raise ValueError("every radial bin must remain populated in each jackknife replicate")
+            values.extend((float(ds), float(cross)))
+        return result, np.asarray(values, dtype=float)
+
+    lens_full_result, lens_full = profile_vector(lens)
+    random_full_result, random_full = profile_vector(random)
+    lens_replicas, random_replicas, deletions = [], [], []
+    for block_id in block_ids:
+        keep_lens = (lens_lens_blocks != block_id) & (lens_source_blocks != block_id)
+        keep_random = (random_lens_blocks != block_id) & (random_source_blocks != block_id)
+        _, lens_replica = profile_vector(subset(lens, keep_lens))
+        _, random_replica = profile_vector(subset(random, keep_random))
+        lens_replicas.append(lens_replica)
+        random_replicas.append(random_replica)
+        deletions.append({
+            "block_id": int(block_id),
+            "lens_pairs_deleted": int(np.count_nonzero(~keep_lens)),
+            "random_pairs_deleted": int(np.count_nonzero(~keep_random)),
+        })
+
+    covariance = paired_jackknife_covariance(
+        np.asarray(lens_replicas), np.asarray(random_replicas),
+    )
+    full_delta = lens_full - random_full
+    errors = covariance["standard_error"]
+    profile = []
+    for index, (lens_row, random_row) in enumerate(zip(
+            lens_full_result["profile"], random_full_result["profile"])):
+        profile.append({
+            "bin": index,
+            "r_min_mpc": lens_row["r_min_mpc"],
+            "r_max_mpc": lens_row["r_max_mpc"],
+            "lens_delta_sigma_msun_mpc2": float(lens_full[2 * index]),
+            "lens_cross_delta_sigma_msun_mpc2": float(lens_full[2 * index + 1]),
+            "random_delta_sigma_msun_mpc2": float(random_full[2 * index]),
+            "random_cross_delta_sigma_msun_mpc2": float(random_full[2 * index + 1]),
+            "delta_sigma_random_subtracted_msun_mpc2": float(full_delta[2 * index]),
+            "cross_delta_sigma_random_subtracted_msun_mpc2": float(full_delta[2 * index + 1]),
+            "delta_sigma_jackknife_error_msun_mpc2": float(errors[2 * index]),
+            "cross_jackknife_error_msun_mpc2": float(errors[2 * index + 1]),
+            "n_lens_pairs": lens_row["n_pairs"],
+            "n_random_pairs": random_row["n_pairs"],
+        })
+    return {
+        "schema": "hsc-s19a-paired-endpoint-jackknife-v1",
+        "status": "exploratory",
+        "science_measurement": False,
+        "block_method": block_method,
+        "n_occupied_blocks": int(len(block_ids)),
+        "block_deletions": deletions,
+        "profile_order": "[DeltaSigma bin 0, cross bin 0, DeltaSigma bin 1, cross bin 1, ...]",
+        "profile": profile,
+        "covariance": covariance["covariance"].tolist(),
+        "jackknife_mean_diagnostic": covariance["mean_random_subtracted"].tolist(),
+        "limitations": [
+            "the result is conditional on the supplied sky-block partition",
+            "photo-z calibration uncertainty, reduced shear, and block-scale sensitivity are not propagated",
+            "this covariance does not by itself authorize a science detection",
+        ],
+    }
+
+
 def paired_jackknife_covariance(lens_leave_one_block, random_leave_one_block):
     """Covariance of random-subtracted profiles from matched delete-one blocks.
 

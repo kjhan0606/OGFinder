@@ -10,6 +10,7 @@ from prepare_wl_random_shape_rows import (
 )
 from run_wl_random_shape_stack import (
     validate_cluster_stack_compatibility, verify_and_load_pairs,
+    verify_saved_cluster_profile,
 )
 from submit_wl_random_shape_counts import sha
 from submit_wl_random_shape_rows import read_shape_rows, run, validate_plan
@@ -227,6 +228,7 @@ def test_stack_loader_requires_complete_hashed_rows_and_preserves_center_mapping
 def test_random_stack_accepts_existing_cluster_stack_provenance_and_rejects_mismatch():
     payload = {
         "schema": "hsc-s19a-cluster-lens-stack-run-v1",
+        "science_measurement": False,
         "random_lens_subtraction_applied": False,
         "spatial_block_covariance_applied": False,
         "input": {
@@ -242,3 +244,20 @@ def test_random_stack_accepts_existing_cluster_stack_provenance_and_rejects_mism
         validate_cluster_stack_compatibility(
             payload, "test-nz-hash", 1, [0.1, 0.2, 0.4], 70.0, 0.3,
         )
+
+
+def test_stack_runner_checks_recomputed_target_profile_against_saved_product():
+    saved = {"profile": [{
+        "r_min_mpc": 0.1, "r_max_mpc": 0.2,
+        "delta_sigma_weak_msun_mpc2": 10.0,
+        "cross_delta_sigma_weak_msun_mpc2": -0.5,
+    }]}
+    recomputed = [{
+        "r_min_mpc": 0.1, "r_max_mpc": 0.2,
+        "lens_delta_sigma_msun_mpc2": 10.0 + 1e-13,
+        "lens_cross_delta_sigma_msun_mpc2": -0.5,
+    }]
+    verify_saved_cluster_profile(saved, recomputed)
+    recomputed[0]["lens_delta_sigma_msun_mpc2"] = 12.0
+    with pytest.raises(ValueError, match="do not reproduce"):
+        verify_saved_cluster_profile(saved, recomputed)

@@ -19,6 +19,7 @@ from s19a_shape_stack import (
     paired_jackknife_covariance,
     equal_area_source_blocks,
     paired_tomographic_spatial_jackknife,
+    paired_tomographic_endpoint_jackknife,
     subtract_random_lens_profile,
     tomographic_nz_lensing_efficiency,
 )
@@ -480,3 +481,31 @@ def test_paired_tomographic_jackknife_recomputes_both_stacks(cosmo):
     assert all(row["delta_sigma_random_subtracted_msun_mpc2"] == pytest.approx(0.0, abs=1e-8)
                for row in result["profile"])
     assert all(row["delta_sigma_jackknife_error_msun_mpc2"] >= 0 for row in result["profile"])
+
+
+def test_paired_endpoint_jackknife_deletes_lens_and_source_blocks(cosmo):
+    pairs, source_ids, z, pdf, edges, _injected = _synthetic_catalog(cosmo)
+    lens_pairs = {key: value.copy() for key, value in pairs.items()}
+    random_pairs = {key: value.copy() for key, value in pairs.items()}
+    lens_pairs["source_zbin"] = np.ones(len(source_ids), dtype=int)
+    random_pairs["source_zbin"] = np.ones(len(source_ids), dtype=int)
+    random_pairs["lens_id"][:] = "random-lens-1"
+    nz_by_bin = np.tile(pdf[0], (4, 1))
+    lens_endpoint_blocks = np.arange(len(source_ids)) % 4
+    source_endpoint_blocks = (np.arange(len(source_ids)) // 4) % 4
+
+    result = paired_tomographic_endpoint_jackknife(
+        lens_pairs, random_pairs,
+        lens_endpoint_blocks, source_endpoint_blocks,
+        lens_endpoint_blocks.copy(), source_endpoint_blocks.copy(),
+        z, nz_by_bin, edges, cosmo,
+    )
+
+    assert result["science_measurement"] is False
+    assert result["n_occupied_blocks"] == 4
+    assert result["schema"] == "hsc-s19a-paired-endpoint-jackknife-v1"
+    assert all(row["lens_pairs_deleted"] > 0 and row["random_pairs_deleted"] > 0
+               for row in result["block_deletions"])
+    assert all(row["delta_sigma_random_subtracted_msun_mpc2"] == pytest.approx(0.0, abs=1e-8)
+               for row in result["profile"])
+    assert np.asarray(result["covariance"]).shape == (2 * (len(edges) - 1),) * 2

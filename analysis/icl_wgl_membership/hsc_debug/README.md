@@ -425,15 +425,18 @@ and count evidence without network access. Submission requires a distinct
 `--approved-random-shape-row-export` flag and remains a separate approval from
 the count-only query. `run_wl_random_shape_stack.py` accepts only complete,
 hash-matched row exports, checks each center-to-lens association and count, and
-runs the random-center S19A stack. Optional cluster-profile subtraction is a
-point estimate only; spatial-block covariance and photo-z uncertainty remain
-unpropagated, so the output keeps `science_measurement=false`. None of these
-shape-row requests or stacks has been run. Focused offline tests cover count
-binding, SQL scope, submission gates, mapping checks and existing stack math.
-The target/random provenance compatibility check also passes against the
-existing B-mode-zero cluster-only stack summary; it compares the exact stored
-`masked_value` and `H0_km_s_mpc` fields before allowing point-estimate
-subtraction.
+runs the random-center S19A stack. With the verified cluster row export, it
+recomputes the stored target profile and forms paired delete-one 5-degree
+equal-area sky-cell replicates, removing a pair whenever either endpoint is in
+the deleted cell. This carries shared source positions through the same block
+in both samples. The covariance is still conditional on this approximate grid;
+block-width and connected HSC-region sensitivity, plus photo-z uncertainty,
+remain to be assessed, so the output keeps `science_measurement=false`. None of
+these shape-row requests or stacks has been run. Focused offline tests cover
+count binding, SQL scope, submission gates, pair mapping, endpoint deletion and
+existing stack math. The target/random provenance check passes against the
+existing B-mode-zero cluster-only stack summary and compares its stored
+`masked_value` and `H0_km_s_mpc` fields before subtraction.
 
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 

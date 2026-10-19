@@ -22,9 +22,12 @@ if str(ROOT) not in sys.path:
 from fetch_ancillary_catalogues import catalogue_reader, sha
 from ogfkit.wlcluster import Cosmology
 from prepare_wl_random_shape_rows import OUTPUT_COLUMNS
+from run_wl_cluster_spatial_jackknife import equal_area_block_ids
+from run_wl_shape_stack import verify_and_load_pairs as verify_and_load_lens_pairs
 from s19a_shape_stack import (
     decode_hsc_b_mode_mask,
     load_hsc_y3_nz_sacc,
+    paired_tomographic_endpoint_jackknife,
     stack_s19a_tomographic_pairs,
     subtract_random_lens_profile,
 )
@@ -168,6 +171,7 @@ def verify_and_load_pairs(rows_dir, plan_dir, masked_value):
 def validate_cluster_stack_compatibility(lens_payload, nz_sacc_sha256, masked_value,
                                          radial_edges_mpc, h0, omega_m):
     if (lens_payload.get("schema") != "hsc-s19a-cluster-lens-stack-run-v1"
+            or lens_payload.get("science_measurement") is not False
             or lens_payload.get("random_lens_subtraction_applied") is not False
             or lens_payload.get("spatial_block_covariance_applied") is not False):
         raise ValueError("target stack input is not the verified cluster-only exploratory product")
@@ -180,11 +184,38 @@ def validate_cluster_stack_compatibility(lens_payload, nz_sacc_sha256, masked_va
         raise ValueError("target and random stacks do not use identical n(z), mask, bins, and cosmology")
 
 
+def verify_saved_cluster_profile(saved_stack, recomputed_profile):
+    saved = saved_stack.get("profile")
+    if not isinstance(saved, list) or len(saved) != len(recomputed_profile):
+        raise ValueError("saved cluster profile has an unexpected radial-bin layout")
+    for index, (saved_row, recomputed_row) in enumerate(zip(saved, recomputed_profile)):
+        if (saved_row.get("r_min_mpc") != recomputed_row["r_min_mpc"]
+                or saved_row.get("r_max_mpc") != recomputed_row["r_max_mpc"]
+                or saved_row.get("delta_sigma_weak_msun_mpc2") is None
+                or saved_row.get("cross_delta_sigma_weak_msun_mpc2") is None
+                or not np.isclose(
+                    saved_row["delta_sigma_weak_msun_mpc2"],
+                    recomputed_row["lens_delta_sigma_msun_mpc2"], rtol=1e-10, atol=1e-12,
+                )
+                or not np.isclose(
+                    saved_row["cross_delta_sigma_weak_msun_mpc2"],
+                    recomputed_row["lens_cross_delta_sigma_msun_mpc2"], rtol=1e-10, atol=1e-12,
+                )):
+            raise ValueError(f"verified target source rows do not reproduce saved radial bin {index}")
+
+
 def run(args):
     if args.masked_value not in (0, 1):
         raise ValueError("--b-mode-masked-value must be 0 or 1, verified from the HSC catalog")
     if not args.nz_sacc.is_file():
         raise FileNotFoundError(f"local HSC Y3 n(z) SACC file not found: {args.nz_sacc}")
+    lens_row_args = (args.lens_rows, args.lens_preflight, args.lens_plan)
+    if args.lens_stack is None and any(value is not None for value in lens_row_args):
+        raise ValueError("--lens-rows, --lens-preflight, and --lens-plan require --lens-stack")
+    if args.lens_stack is not None and (
+            any(value is None for value in lens_row_args)
+            or not np.isfinite(args.block_width_deg) or args.block_width_deg <= 0):
+        raise ValueError("paired covariance requires verified lens inputs and positive --block-width-deg")
     output = args.output.resolve()
     if output.exists():
         raise FileExistsError(f"refusing to overwrite random stack output: {output}")
@@ -195,8 +226,12 @@ def run(args):
         pairs, z_nz, nz_by_bin, args.radial_edges_mpc, cosmology,
     )
     subtracted_profile = None
+    paired_jackknife = None
     target_stack_sha = None
+    lens_row_provenance = None
     if args.lens_stack is not None:
+        if not all((args.lens_rows, args.lens_preflight, args.lens_plan)):
+            raise ValueError("paired covariance requires --lens-rows, --lens-preflight, and --lens-plan")
         lens_path = args.lens_stack.resolve()
         lens_payload = json.loads(lens_path.read_text(encoding="utf-8"))
         validate_cluster_stack_compatibility(
@@ -204,6 +239,37 @@ def run(args):
             args.radial_edges_mpc, args.h0, args.omega_m,
         )
         target_stack = lens_payload.get("stack")
+        lens_pairs, lens_row_provenance = verify_and_load_lens_pairs(
+            args.lens_rows, args.lens_preflight, args.lens_plan, args.masked_value,
+        )
+        lens_input = lens_payload.get("input", {})
+        if (lens_row_provenance["row_plan_sha256"] != lens_input.get("row_plan_sha256")
+                or lens_row_provenance["masked_value"] != int(args.masked_value)):
+            raise ValueError("verified cluster source rows do not match the stored target stack provenance")
+        lens_lens_blocks = equal_area_block_ids(
+            lens_pairs["lens_ra_deg"], lens_pairs["lens_dec_deg"],
+            cell_width_deg=args.block_width_deg,
+        )
+        lens_source_blocks = equal_area_block_ids(
+            lens_pairs["source_ra_deg"], lens_pairs["source_dec_deg"],
+            cell_width_deg=args.block_width_deg,
+        )
+        random_lens_blocks = equal_area_block_ids(
+            pairs["lens_ra_deg"], pairs["lens_dec_deg"],
+            cell_width_deg=args.block_width_deg,
+        )
+        random_source_blocks = equal_area_block_ids(
+            pairs["source_ra_deg"], pairs["source_dec_deg"],
+            cell_width_deg=args.block_width_deg,
+        )
+        paired_jackknife = paired_tomographic_endpoint_jackknife(
+            lens_pairs, pairs, lens_lens_blocks, lens_source_blocks,
+            random_lens_blocks, random_source_blocks, z_nz, nz_by_bin,
+            args.radial_edges_mpc, cosmology,
+            block_method=(f"matched delete-one equal-area sky cells; "
+                          f"RA/sin(Dec) width {args.block_width_deg:g} deg"),
+        )
+        verify_saved_cluster_profile(target_stack, paired_jackknife["profile"])
         subtracted = subtract_random_lens_profile(target_stack, random_stack)
         subtracted_profile = subtracted["profile"]
         target_stack_sha = sha(lens_path)
@@ -213,7 +279,7 @@ def run(args):
         "status": "exploratory",
         "science_measurement": False,
         "random_lens_subtraction_applied": args.lens_stack is not None,
-        "spatial_block_covariance_applied": False,
+        "spatial_block_covariance_applied": paired_jackknife is not None,
         "photoz_uncertainty_propagated": False,
         "input": {
             **provenance,
@@ -223,13 +289,16 @@ def run(args):
             "cosmology": {"H0_km_s_Mpc": args.h0, "Omega_m": args.omega_m},
             "target_stack_path": str(args.lens_stack.resolve()) if args.lens_stack else None,
             "target_stack_sha256": target_stack_sha,
+            "lens_row_plan_sha256": lens_row_provenance["row_plan_sha256"] if lens_row_provenance else None,
+            "block_width_deg": args.block_width_deg if paired_jackknife else None,
         },
         "random_stack": random_stack,
         "random_subtracted_profile": subtracted_profile,
+        "paired_spatial_jackknife": paired_jackknife,
         "limitations": [
             "Random centers are only as valid as their upstream full-aperture depth, mask, PSF, and sky matching gates.",
-            "Random subtraction is a point estimate; field/source-overlap covariance is not included.",
-            "Photo-z calibration uncertainty, reduced shear, and spatial-block jackknife are not propagated here.",
+            "Equal-area blocks can cross disconnected HSC regions; block-width sensitivity remains required.",
+            "Photo-z calibration uncertainty and reduced shear are not propagated here.",
         ],
     }
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -256,6 +325,13 @@ def build_parser():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lens-stack", type=Path,
                         help="optional verified cluster-only stack JSON for point-estimate subtraction")
+    parser.add_argument("--lens-rows", type=Path,
+                        help="verified cluster source-row export; required with --lens-stack")
+    parser.add_argument("--lens-preflight", type=Path,
+                        help="verified cluster count/preflight directory; required with --lens-stack")
+    parser.add_argument("--lens-plan", type=Path,
+                        help="verified cluster row-export plan directory; required with --lens-stack")
+    parser.add_argument("--block-width-deg", type=float, default=5.0)
     parser.add_argument("--h0", type=float, default=70.0)
     parser.add_argument("--omega-m", type=float, default=0.3)
     return parser
