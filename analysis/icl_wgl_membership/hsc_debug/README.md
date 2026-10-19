@@ -713,8 +713,41 @@ submitter was alive. A later SSH recheck on `lageunha` confirmed that
 submitter PID 1049265 remains live and polling the CAS job. The checkpoint is
 still at 2/32 complete with batch 002 submitted. Its ID 1062312 is an HSC CAS
 job ID, not a Slurm job ID; do not query it with `squeue` or submit it again.
-Let the existing process continue. Any later HSC shape-row or image export
-needs its own explicit user approval.
+The 2026-10-20 checkpoint still reports 2/32 batches complete (33,514 rows),
+with that submitter alive after more than 13 hours. The JSON also carries an
+`error_type=HTTPError` field while its top-level status remains `running`; this
+is unresolved state, not completion. Do not resubmit the batch. Any later HSC
+shape-row or image export needs its own explicit user approval.
+
+### Reuse test for the existing ICL matched-control centers
+
+The 798 already downloaded ICL matched-control positions were tested as a
+possible shortcut for weak-lensing random subtraction. Astrafek's
+[`audit_wl_matched_control_centers.py`](audit_wl_matched_control_centers.py)
+rechecks the assigned target redshifts and audits each 3-proper-Mpc aperture
+against all 7,319 entries in the supplied S20A CAMIRA catalogue. Among the
+798 unique controls, 768 overlap a CAMIRA 3-Mpc aperture; only 30 remain free
+of both CAMIRA overlaps and mutual overlap with another clean control aperture
+(3.8%). The original ICL-control selection therefore cannot represent the
+full 800-lens weak-lensing random sample. The 30 clean positions are only
+geometry candidates, not approved WL random centers; their shape-source
+coverage, selection, and spatial covariance remain unverified.
+
+This audit used no HSC query or source-shape rows. It ran on `lageunha` against
+the existing manifests and the hash-verified full CAMIRA catalogue. Results:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_icl_matched_control_geometry_2026-10-20_04/`.
+The 798-row table SHA-256 is
+`74dd333e7af2b35c4da305d747f585e5ab4ae2e9cde19753550a2f17df1db0dc`; the
+summary SHA-256 is
+`12eec246699c24a6f194e271758bfdc09d85660b1eeedcc73a54c7aec1109cc9`.
+Reproduce on `lageunha` with a new output directory:
+
+```bash
+python3 analysis/icl_wgl_membership/hsc_debug/audit_wl_matched_control_centers.py \
+  --controls /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/control_download_01/download_manifest.json \
+  --targets /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/download_01/download_manifest.json \
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_icl_matched_control_geometry_NEW
+```
 
 The 780k-coordinate geometry screen is available as the Slurm job
 `run_wl_random_coordinate_geometry.sbatch`; its analysis code is CPU-only.
