@@ -43,6 +43,8 @@ def max_lag_distance_arcsec(kernel_shape: tuple[int, int], pixel_scale: float) -
 
 
 def verify(run_dir: Path) -> dict:
+    from download_pilot import validate_fits
+
     summary_path = run_dir / "summary.json"
     table_path = run_dir / "target_control_pixel_covariance.tsv"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -74,6 +76,36 @@ def verify(run_dir: Path) -> dict:
     if sum(r["filter"] == "i" for r in rows) != 13 or sum(r["filter"] == "i2" for r in rows) != 44:
         raise ValueError("filter counts differ from the audited support sample")
 
+    sample_manifest_path = ROOT / "sample_manifest.json"
+    sample_manifest = json.loads(sample_manifest_path.read_text(encoding="utf-8"))
+    frames = {str(frame["id"]): frame for frame in sample_manifest["clusters"]}
+    if len(frames) != len(sample_manifest["clusters"]):
+        raise ValueError("sample manifest has duplicate target IDs")
+    target_download_status = json.loads(
+        (ROOT / "download_01/download_status.json").read_text(encoding="utf-8"))
+    downloaded = {str(item["id"]): item for item in target_download_status["completed"]}
+    target_scales: dict[str, tuple[float, str]] = {}
+    for row in rows:
+        ident = row["cluster_id"]
+        frame = frames.get(ident)
+        if frame is None:
+            raise ValueError(f"target frame absent from sample manifest: {ident}")
+        if ident not in target_scales:
+            download = downloaded.get(ident)
+            if download is None:
+                raise ValueError(f"target image absent from verified download status: {ident}")
+            image_path = ROOT / "download_01/images" / download["file"]
+            info = validate_fits(image_path, frame)
+            reviewed_scale = float(download["review"]["pixel_scale_arcsec"])
+            if not math.isclose(info["pixel_scale_arcsec"], reviewed_scale,
+                                rel_tol=0, abs_tol=1e-12):
+                raise ValueError(f"target WCS pixel scale differs from saved review: {ident}")
+            target_scales[ident] = (float(info["pixel_scale_arcsec"]),
+                                    str(info["coadd_header_filter"]))
+        target_scale, target_filter = target_scales[ident]
+        if target_filter != row["filter"]:
+            raise ValueError(f"target FITS filter mismatch for {ident}/{row['filter']}")
+
     control_manifest_path = ROOT / "control_download_01/download_manifest.json"
     control_status_path = ROOT / "control_download_01/download_status.json"
     control_manifest = json.loads(control_manifest_path.read_text(encoding="utf-8"))
@@ -99,8 +131,10 @@ def verify(run_dir: Path) -> dict:
             raise ValueError(f"control annulus fails support/separation gate for {key}")
         gap = (float(row["target_control_center_separation_arcsec"])
                - float(row["minimum_separation_for_disjoint_300kpc_annuli_arcsec"]))
-        kernel_support = max_lag_distance_arcsec(
+        target_kernel_support = max_lag_distance_arcsec((9, 9), target_scale)
+        control_kernel_support = max_lag_distance_arcsec(
             (9, 9), float(row["control_pixel_scale_arcsec"]))
+        kernel_support = max(target_kernel_support, control_kernel_support)
         if gap <= kernel_support:
             raise ValueError(f"target/control apertures approach within 9x9 lag support for {key}")
         short_range_gaps.append(gap)
@@ -161,6 +195,11 @@ def verify(run_dir: Path) -> dict:
         "n_disjoint_covered_apertures_verified": len(rows),
         "finite_lag_target_control_separation": {
             "kernel_shape_pixels": [9, 9],
+            "n_target_wcs_pixel_scales_verified": len(target_scales),
+            "target_pixel_scale_arcsec_min": min(scale for scale, _ in target_scales.values()),
+            "target_pixel_scale_arcsec_max": max(scale for scale, _ in target_scales.values()),
+            "control_pixel_scale_arcsec_min": min(float(r["control_pixel_scale_arcsec"]) for r in rows),
+            "control_pixel_scale_arcsec_max": max(float(r["control_pixel_scale_arcsec"]) for r in rows),
             "pairs_outside_finite_lag_covariance_support": len(short_range_gaps),
             "minimum_annulus_boundary_gap_arcsec": min(short_range_gaps),
             "median_annulus_boundary_gap_arcsec": float(np.median(short_range_gaps)),

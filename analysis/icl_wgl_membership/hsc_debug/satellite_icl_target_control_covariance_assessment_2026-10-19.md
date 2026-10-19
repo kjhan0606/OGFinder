@@ -62,25 +62,29 @@ directory.
 
 ## Interpretation and limits
 
-The target and matched-control noise terms are added as independent. Their
-annuli are separated by at least 297.497 arcsec across all 57 pairs; the largest
-pixel-center separation represented by the measured 9×9 lag kernel is 0.9504
-arcsec. The new independent geometry audit therefore excludes cross-aperture
-pixel covariance within that finite-lag model, with a minimum gap/support ratio
-of 313.0. It does not directly measure cross-image covariance on larger scales;
-sky-subtraction residuals, calibration, and other broad spatial terms could
-still couple separated coadds. The lag kernel is a stationary local patch
-estimate rather than the exact position-dependent full covariance. The
-masks/detections and selected sample are fixed. Source Poisson noise, upstream
-sky transfer, PSF and calibration uncertainty, extinction, and astrophysical
-covariance remain excluded. Spatial-block scatter may contain some of this
-noise, so multiplying the sigma factor into block errors could double-count
-it. This remains an exploratory noise-only audit with
+The target and matched-control noise terms are added as independent. An
+independent header audit checked WCS pixel scale for all 57 target frames
+against the saved download review; the target and control scales are both
+0.168 arcsec/pixel to header precision. Their annuli are separated by at least
+297.497 arcsec, while the largest pixel-center separation represented by the
+measured 9×9 lag kernel is 0.9504 arcsec. The geometry audit therefore excludes
+cross-aperture pixel covariance within that finite-lag model, with a minimum
+gap/support ratio of 313.0. It does not directly measure cross-image covariance
+on larger scales; sky-subtraction residuals, calibration, and other broad
+spatial terms could still couple separated coadds. The lag kernel is a
+stationary local patch estimate rather than the exact position-dependent full
+covariance. The masks/detections and selected sample are fixed. Source Poisson
+noise, upstream sky transfer, PSF and calibration uncertainty, extinction, and
+astrophysical covariance remain excluded. Spatial-block scatter may contain
+some of this noise, so multiplying the sigma factor into block errors could
+double-count it. This remains an exploratory noise-only audit with
 `science_measurement=false`, not a correction to the observed ICL–satellite
 relation or a final uncertainty estimate.
 
 The geometry extension is reproduced by
 [`verify_satellite_icl_target_control_covariance.py`](verify_satellite_icl_target_control_covariance.py)
-and its focused kernel-support test. The verifier output is
-`finite_lag_separation_audit_2026-10-20.json` in the run directory; its
-SHA-256 is `55b8b22843316edff1acfde91c71fe579a9f66e1ccf9563f5453c39a77dc65da`.
+and its focused kernel-support test. The target-WCS-verified output is
+`finite_lag_separation_target_wcs_audit.json` in the run directory; its
+SHA-256 is `79937c8aca5e90e3cc9cdc99ad64b5b18668e67f1683c1a0650649a081a183eb`.
+The preceding control-scale-only check is retained separately as
+`finite_lag_separation_audit_2026-10-20.json`.
