@@ -20,9 +20,15 @@ from joint_icl_satellite_injection import (
     run_frame,
     sha256,
 )
+from position_psf import PositionPSFBank
 
 
 DEFAULT_SATELLITE_TABLE = DEFAULT_DATA / "satellite_outer_profile_perbin_full_2026-10-18_01/satellite_profiles.tsv"
+SCRIPT_SHA256_AT_IMPORT = sha256(Path(__file__))
+SINGLE_FRAME_SCRIPT = Path(__file__).with_name("joint_icl_satellite_injection.py")
+SINGLE_FRAME_SHA256_AT_IMPORT = sha256(SINGLE_FRAME_SCRIPT)
+POSITION_PSF_SCRIPT = Path(__file__).with_name("position_psf.py")
+POSITION_PSF_SHA256_AT_IMPORT = sha256(POSITION_PSF_SCRIPT)
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -93,10 +99,17 @@ def run_batch(data: Path, output_dir: Path,
               diffuse_scale_kpc: float = 100.0,
               satellite_scale_kpc: float = 15.0,
               rerun_detection_masks: bool = False,
-              unresolved_bcg_policy: str = "error") -> dict:
+              unresolved_bcg_policy: str = "error",
+              psf_bank: PositionPSFBank | None = None) -> dict:
     if output_dir.exists():
         raise FileExistsError(f"refusing to overwrite {output_dir}")
     selected = select_jointly_supported_pairs(icl_pairs_path, satellite_profiles_path)
+    n_joint_supported = len(selected)
+    if psf_bank is not None:
+        selected = [pair for pair in selected if pair in psf_bank.supported_frames]
+        if len(selected) != len(psf_bank.supported_frames):
+            missing = sorted(psf_bank.supported_frames - set(selected))
+            raise ValueError(f"approved PSF frame roles lack joint annulus support: {missing[:10]}")
     output_dir.mkdir(parents=True, exist_ok=False)
     started = time.time()
     records, errors = [], []
@@ -107,7 +120,8 @@ def run_batch(data: Path, output_dir: Path,
             result = run_frame(
                 data, ident, path, icl_masks_dir, satellite_prep_dir, icl_pairs_path,
                 diffuse_amplitude, satellite_amplitude, diffuse_scale_kpc,
-                satellite_scale_kpc, rerun_detection_masks, unresolved_bcg_policy)
+                satellite_scale_kpc, rerun_detection_masks, unresolved_bcg_policy,
+                psf_bank)
             if result["filter"] != filt:
                 raise ValueError(f"image filter mismatch for cluster {ident}")
             records.append({
@@ -124,7 +138,11 @@ def run_batch(data: Path, output_dir: Path,
                            "error_type": type(exc).__name__, "error": str(exc)})
             print(f"  ERROR {type(exc).__name__}: {exc}", flush=True)
     summary = {
-        "schema": "hsc-joint-icl-satellite-fixed-mask-batch-v1",
+        "schema": ("hsc-joint-icl-satellite-psf-redetection-batch-v1"
+                   if psf_bank is not None else
+                   "hsc-joint-icl-satellite-redetection-batch-v1"
+                   if rerun_detection_masks else
+                   "hsc-joint-icl-satellite-fixed-mask-batch-v1"),
         "status": "complete" if not errors else "partial",
         "science_measurement": False,
         "observational_validation_passed": False,
@@ -135,6 +153,8 @@ def run_batch(data: Path, output_dir: Path,
             "satellite_bin_kpc": [50.0, 75.0],
             "satellite_target_and_control_coverage_floor": 0.60,
             "n_selected_cluster_filter_pairs": len(selected),
+            "n_joint_supported_before_psf_intersection": n_joint_supported,
+            "selection_limited_to_approved_psf_positions": psf_bank is not None,
             "selected_pairs": [{"cluster_id": ident, "filter": filt} for ident, filt in selected],
         },
         "injection": {
@@ -146,7 +166,9 @@ def run_batch(data: Path, output_dir: Path,
             "detection_rerun": rerun_detection_masks,
             "unresolved_bcg_policy": unresolved_bcg_policy if rerun_detection_masks else None,
             "poisson_noise_added": False,
-            "psf_convolution_applied": False,
+            "psf_convolution_applied": psf_bank is not None,
+            "psf_model": ("position-dependent HSC-I coadd model PSF core"
+                          if psf_bank is not None else None),
             "original_fits_modified": False,
         },
         "n_completed": len(records),
@@ -158,19 +180,33 @@ def run_batch(data: Path, output_dir: Path,
             str(icl_pairs_path): sha256(icl_pairs_path),
             str(satellite_profiles_path): sha256(satellite_profiles_path),
         },
-        "script_sha256": sha256(Path(__file__)),
-        "single_frame_script_sha256": sha256(Path(__file__).with_name("joint_icl_satellite_injection.py")),
+        "code_sha256": {
+            str(Path(__file__).resolve()): SCRIPT_SHA256_AT_IMPORT,
+            str(SINGLE_FRAME_SCRIPT.resolve()): SINGLE_FRAME_SHA256_AT_IMPORT,
+            str(POSITION_PSF_SCRIPT.resolve()): POSITION_PSF_SHA256_AT_IMPORT,
+        },
         "elapsed_seconds": time.time() - started,
         "limitations": [
             ("This is a support-selected redetection/mask-response sensitivity, not a science measurement."
              if rerun_detection_masks else "This is a support-selected fixed-mask measurement-transfer sensitivity, not a science measurement."),
-            ("SEP source detection and K2.5 masks are regenerated per injection, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
-             if rerun_detection_masks else "It does not rerun source detection, grow masks, convolve the injected shapes with PSFs, or model upstream sky subtraction."),
+            (("SEP source detection and K2.5 masks are regenerated per injection, but injected-source photon noise and HSC upstream sky processing are not modeled."
+              if rerun_detection_masks else "It does not rerun source detection, grow masks, or model upstream sky subtraction.")
+             if psf_bank is not None else
+             ("SEP source detection and K2.5 masks are regenerated per injection, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
+              if rerun_detection_masks else "It does not rerun source detection, grow masks, convolve the injected shapes with PSFs, or model upstream sky subtraction.")),
+            *( ["Only compact PSF cores are used; extended wings and source Poisson noise remain unmodeled."]
+               if psf_bank is not None else [] ),
             "A missing or ambiguous central detection never establishes BCG identity; mask_all masks every detection conservatively.",
             "The artificial components and diagonal-variance estimator do not establish population completeness or flux covariance.",
             "The paired annular sample is selected by existing exploratory coverage cuts and is not an independent validation sample.",
         ],
     }
+    if psf_bank is not None:
+        summary["inputs"].update({
+            str(psf_bank.plan_path): sha256(psf_bank.plan_path),
+            str(psf_bank.mapping_path): sha256(psf_bank.mapping_path),
+            str(psf_bank.audit_path): sha256(psf_bank.audit_path),
+        })
     (output_dir / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
     return summary
@@ -192,13 +228,24 @@ def main() -> None:
                         help="rerun SEP detection and regenerate source masks for each injection scenario")
     parser.add_argument("--unresolved-bcg-policy", choices=("error", "mask_all"), default="error",
                         help="on ambiguous/missing central detection, fail or mask every detected source")
+    parser.add_argument("--psf-plan-dir", type=Path,
+                        help="apply audited position-dependent HSC model PSF cores from this approved plan")
+    parser.add_argument("--psf-download-dir", type=Path,
+                        help="directory containing the audited PSF batch")
+    parser.add_argument("--psf-test-center", type=Path,
+                        default=Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_picker_test_2026-10-19_01/cluster10_i2_center_psf.fits"))
     args = parser.parse_args()
+    if bool(args.psf_plan_dir) != bool(args.psf_download_dir):
+        parser.error("--psf-plan-dir and --psf-download-dir must be supplied together")
+    psf_bank = (PositionPSFBank(args.psf_plan_dir.resolve(), args.psf_download_dir.resolve(),
+                                args.psf_test_center.resolve())
+                if args.psf_plan_dir else None)
     result = run_batch(args.data.resolve(), args.output_dir.resolve(),
                        args.icl_masks.resolve(), args.satellite_prep.resolve(),
                        args.icl_pairs.resolve(), args.satellite_profiles.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
                        args.diffuse_scale_kpc, args.satellite_scale_kpc,
-                       args.rerun_detection_masks, args.unresolved_bcg_policy)
+                       args.rerun_detection_masks, args.unresolved_bcg_policy, psf_bank)
     print(json.dumps({k: result[k] for k in
                       ("status", "n_completed", "n_errors", "by_filter", "elapsed_seconds")},
                      indent=2))

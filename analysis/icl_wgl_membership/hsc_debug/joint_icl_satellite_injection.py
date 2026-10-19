@@ -30,6 +30,7 @@ import measure_full_sample_profiles as icl
 import measure_satellite_outer_profiles as satellite
 import prestack_core
 import prepare_detection_psf as detection_pipeline
+from position_psf import PositionPSFBank, convolve_surface_brightness, satellite_halos_with_psfs
 
 
 DEFAULT_DATA = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
@@ -44,6 +45,11 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+SCRIPT_SHA256_AT_IMPORT = sha256(Path(__file__))
+POSITION_PSF_SCRIPT = Path(__file__).with_name("position_psf.py")
+POSITION_PSF_SHA256_AT_IMPORT = sha256(POSITION_PSF_SCRIPT)
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -200,7 +206,8 @@ def run_frame(data: Path, ident: str, output: Path,
               diffuse_scale_kpc: float = 100.0,
               satellite_scale_kpc: float = 15.0,
               rerun_detection_masks: bool = False,
-              unresolved_bcg_policy: str = "error") -> dict:
+              unresolved_bcg_policy: str = "error",
+              psf_bank: PositionPSFBank | None = None) -> dict:
     if output.exists():
         raise FileExistsError(f"refusing to overwrite {output}")
     if (not platform.node().lower().startswith("lageunha")
@@ -305,9 +312,18 @@ def run_frame(data: Path, ident: str, output: Path,
     dx, dy, _, _, _ = icl_geom
     diffuse_template = prestack_core.diffuse_model(
         dx, dy, diffuse_scale_kpc, 1.0, diffuse_amplitude).astype(np.float32)
-    satellite_template = satellite_halo_template(
-        original.shape, np.asarray(sat_centers), kpc_per_pixel,
-        satellite_amplitude, satellite_scale_kpc)
+    psf_names: list[str] = []
+    if psf_bank is None:
+        satellite_template = satellite_halo_template(
+            original.shape, np.asarray(sat_centers), kpc_per_pixel,
+            satellite_amplitude, satellite_scale_kpc)
+    else:
+        center_psf, satellite_psfs, psf_names = psf_bank.frame(
+            ident, str(mask_record["primary_filter"]), len(sat_centers))
+        diffuse_template = convolve_surface_brightness(diffuse_template, center_psf)
+        satellite_template = satellite_halos_with_psfs(
+            original.shape, np.asarray(sat_centers), kpc_per_pixel,
+            satellite_amplitude, satellite_scale_kpc, satellite_psfs)
     empty = np.zeros_like(original, dtype=np.float32)
     scenarios = {
         "baseline": empty,
@@ -388,6 +404,13 @@ def run_frame(data: Path, ident: str, output: Path,
             "n_injected_satellite_centers": len(targets),
             "source_detection_and_masks_rerun": rerun_detection_masks,
             "unresolved_bcg_policy": unresolved_bcg_policy if rerun_detection_masks else None,
+            "psf_convolution_applied": psf_bank is not None,
+            "psf_model": ("position-dependent HSC-I coadd model PSF core; center PSF for diffuse component, local PSF per satellite"
+                          if psf_bank is not None else None),
+            "psf_file_count": len(psf_names),
+            "psf_stamp_pixels": ("position-dependent odd arrays, 41–43 pixels"
+                                 if psf_bank is not None else None),
+            "psf_negative_pixels_preserved": psf_bank is not None,
             "variance_and_poisson_noise_changed": False,
             "original_fits_modified": False,
         },
@@ -419,19 +442,33 @@ def run_frame(data: Path, ident: str, output: Path,
             str(members_path): sha256(members_path), str(sat_mask_path): sha256(sat_mask_path),
             str(sat_prep_path): sha256(sat_prep_path), str(icl_pairs_path): sha256(icl_pairs_path),
         },
-        "script_sha256": sha256(Path(__file__)),
+        "code_sha256": {
+            str(Path(__file__).resolve()): SCRIPT_SHA256_AT_IMPORT,
+            str(POSITION_PSF_SCRIPT.resolve()): POSITION_PSF_SHA256_AT_IMPORT,
+        },
         "limitations": [
             ("This is a support-selected, redetection-and-mask-response sensitivity, not a population calibration."
              if rerun_detection_masks else "Single-frame fixed-mask measurement-transfer pilot, not a population calibration."),
             "Synthetic satellite envelopes are added to every positional member match; they are not fitted galaxy light profiles.",
             "The ICL metric is the target-side raw annular mean; target-minus-control stack injection is modeled by leaving controls unmodified.",
-            ("SEP source detection and K2.5 masks are regenerated, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
-             if rerun_detection_masks else "Masks and source detections remain fixed, so detection completeness, segmentation/Kron response and mask growth are not tested."),
+            (("SEP source detection and K2.5 masks are regenerated, but injected-source photon noise and HSC upstream sky processing are not modeled."
+              if rerun_detection_masks else "Masks and source detections remain fixed, so detection completeness, segmentation/Kron response and mask growth are not tested.")
+             if psf_bank is not None else
+             ("SEP source detection and K2.5 masks are regenerated, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
+              if rerun_detection_masks else "Masks and source detections remain fixed, so detection completeness, segmentation/Kron response, mask growth and PSF convolution are not tested.")),
             "The result is conditional on a single image, diagonal variance, assumed injection shapes, and existing automated centers/masks.",
-            "It does not include PSF convolution, upstream sky processing, source Poisson noise, extinction or passband calibration.",
+            ("It uses only the compact model-PSF core; extended PSF wings, upstream sky processing, source Poisson noise, extinction and passband calibration remain unmodeled."
+             if psf_bank is not None else "It does not include PSF convolution, upstream sky processing, source Poisson noise, extinction or passband calibration."),
         ],
         "elapsed_seconds": None,
     }
+    if psf_bank is not None:
+        result["input_sha256"].update({
+            str(psf_bank.plan_path): sha256(psf_bank.plan_path),
+            str(psf_bank.mapping_path): sha256(psf_bank.mapping_path),
+            str(psf_bank.audit_path): sha256(psf_bank.audit_path),
+            **psf_bank.file_hashes(psf_names),
+        })
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n",
                       encoding="utf-8")
@@ -454,14 +491,25 @@ def main() -> None:
                         help="rerun SEP detection and regenerate source masks for each injection scenario")
     parser.add_argument("--unresolved-bcg-policy", choices=("error", "mask_all"), default="error",
                         help="on ambiguous/missing central detection, fail or mask every detected source")
+    parser.add_argument("--psf-plan-dir", type=Path,
+                        help="apply audited position-dependent HSC model PSF cores from this approved plan")
+    parser.add_argument("--psf-download-dir", type=Path,
+                        help="directory containing the audited PSF batch")
+    parser.add_argument("--psf-test-center", type=Path,
+                        default=Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_picker_test_2026-10-19_01/cluster10_i2_center_psf.fits"))
     args = parser.parse_args()
     started = time.time()
+    if bool(args.psf_plan_dir) != bool(args.psf_download_dir):
+        parser.error("--psf-plan-dir and --psf-download-dir must be supplied together")
+    psf_bank = (PositionPSFBank(args.psf_plan_dir.resolve(), args.psf_download_dir.resolve(),
+                                args.psf_test_center.resolve())
+                if args.psf_plan_dir else None)
     result = run_frame(args.data.resolve(), args.cluster_id, args.output.resolve(),
                        args.icl_masks.resolve(), args.satellite_prep.resolve(),
                        args.icl_pairs.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
                        args.diffuse_scale_kpc, args.satellite_scale_kpc,
-                       args.rerun_detection_masks, args.unresolved_bcg_policy)
+                       args.rerun_detection_masks, args.unresolved_bcg_policy, psf_bank)
     result["elapsed_seconds"] = time.time() - started
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n",
                            encoding="utf-8")
