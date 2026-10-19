@@ -853,11 +853,16 @@ submitter was alive. A later SSH recheck on `lageunha` confirmed that
 submitter PID 1049265 remains live and polling the CAS job. The checkpoint is
 still at 2/32 complete with batch 002 submitted. Its ID 1062312 is an HSC CAS
 job ID, not a Slurm job ID; do not query it with `squeue` or submit it again.
-The 2026-10-20 checkpoint still reports 2/32 batches complete (33,514 rows),
-with that submitter alive after more than 13 hours. The JSON also carries an
-`error_type=HTTPError` field while its top-level status remains `running`; this
-is unresolved state, not completion. Do not resubmit the batch. Any later HSC
-shape-row or image export needs its own explicit user approval.
+The 2026-10-20 16:57 KST recheck found PID 1049265 alive after about 29 h 49 m.
+The checkpoint remains at 2/32 batches complete (33,514 rows), with batch 002
+submitted. Its file modification time is still 2026-10-19 11:07:53 KST, five
+seconds after that process started. The `error_type=HTTPError` field is not
+reliable evidence of a current failure: when resuming, the submitter sets the
+top-level status to `running` but does not clear an older `error_type`. It also
+does not save each successful CAS status poll. The current CAS status and any
+progress after startup therefore remain unknown. Keep the live submitter and
+do not resubmit batch 002. Any later HSC shape-row or image export needs its
+own explicit user approval.
 
 ### Reuse test for the existing ICL matched-control centers
 
