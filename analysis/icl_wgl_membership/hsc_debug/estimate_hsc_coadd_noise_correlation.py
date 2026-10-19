@@ -24,7 +24,9 @@ from astropy.io import fits
 ROOT = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
 DEFAULT_METADATA = ROOT / "icl_coadd_noise_metadata_2026-10-19_01/summary.json"
 DEFAULT_PREP = ROOT / "satellite_detection_psf_2026-10-18_01"
-DEFAULT_OUTPUT = ROOT / "icl_coadd_noise_correlation_2026-10-19_01"
+DEFAULT_CONTROL_MANIFEST = ROOT / "control_download_01/download_manifest.json"
+DEFAULT_CONTROL_STATUS = ROOT / "control_download_01/download_status.json"
+DEFAULT_OUTPUT = ROOT / "icl_coadd_noise_correlation_2026-10-19_02"
 
 
 def sha256(path: Path) -> str:
@@ -117,18 +119,33 @@ def frame_correlations(record: dict, prep_dir: Path, *, patch_size: int,
     image_path = Path(record["path"])
     if sha256(image_path) != record["source_image_sha256_from_audited_run"]:
         raise ValueError(f"{ident}/{band}: image hash differs from audited input")
-    prep_path = prep_dir / f"cluster_{ident}" / "masks.fits.gz"
-    if not prep_path.is_file():
-        raise FileNotFoundError(prep_path)
+    role = str(record["role"])
+    prep_path = None
     with fits.open(image_path, memmap=True, checksum=True) as hdus:
         image = np.asarray(hdus[1].data, dtype=np.float32)
+        image_mask = np.asarray(hdus[2].data, dtype=np.int64)
         variance = np.asarray(hdus[3].data, dtype=np.float32)
-    with fits.open(prep_path, memmap=True, checksum=True) as hdus:
-        base = np.asarray(hdus["BASE_MASK"].data, dtype=bool)
-    if image.shape != variance.shape or image.shape != base.shape:
+    if role == "target":
+        prep_path = prep_dir / f"cluster_{ident}" / "masks.fits.gz"
+        if not prep_path.is_file():
+            raise FileNotFoundError(prep_path)
+        with fits.open(prep_path, memmap=True, checksum=True) as hdus:
+            excluded = np.asarray(hdus["BASE_MASK"].data, dtype=bool)
+    elif role == "matched_control":
+        exclude_bits = [int(value) for value in record["mask_exclude_bits"]]
+        bitmask = 0
+        for value in exclude_bits:
+            bitmask |= value
+        # HSC source-detection footprints are also excluded; the archived
+        # control mask list intentionally contains only instrumental flags.
+        bitmask |= (1 << 5) | (1 << 6)
+        excluded = (image_mask & bitmask) != 0
+    else:
+        raise ValueError(f"unknown image role: {role}")
+    if image.shape != variance.shape or image.shape != excluded.shape:
         raise ValueError(f"{ident}/{band}: science, variance, and mask shapes differ")
-    valid = np.isfinite(image) & np.isfinite(variance) & (variance > 0) & ~base
-    seed = zlib.crc32(f"20261019:{ident}:{band}".encode("utf-8"))
+    valid = np.isfinite(image) & np.isfinite(variance) & (variance > 0) & ~excluded
+    seed = zlib.crc32(f"20261019:{ident}:{band}:{role}".encode("utf-8"))
     origins = _sample_patch_origins(
         valid, patch_size=patch_size, max_patches=max_patches, seed=seed,
         min_valid_fraction=min_valid_fraction,
@@ -148,25 +165,71 @@ def frame_correlations(record: dict, prep_dir: Path, *, patch_size: int,
             median = float(np.median(values)) if len(values) else None
             q16, q84 = (np.quantile(values, [0.16, 0.84]).tolist()
                         if len(values) else (None, None))
-            rows.append({"cluster_id": ident, "filter": band, "dy": dy, "dx": dx,
-                         "n_patches": len(values), "median_rho": median,
-                         "q16_rho": q16, "q84_rho": q84})
+            rows.append({"cluster_id": ident, "role": role, "filter": band,
+                         "dy": dy, "dx": dx, "n_patches": len(values),
+                         "median_variance_normalized_covariance": median,
+                         "q16_variance_normalized_covariance": q16,
+                         "q84_variance_normalized_covariance": q84})
             frame_corr[(dy, dx)] = median
     factor = sum(value for value in frame_corr.values() if value is not None)
     center = frame_corr[(0, 0)]
     result = {
-        "cluster_id": ident, "filter": band, "image_sha256": record["source_image_sha256_from_audited_run"],
-        "mask_path": str(prep_path), "mask_sha256": sha256(prep_path),
+        "cluster_id": ident, "role": role, "filter": band,
+        "image_id": str(record.get("image_id", ident)),
+        "image_sha256": record["source_image_sha256"],
+        "mask_path": str(prep_path) if prep_path else "HSC mask plane; instrumental exclusions plus DETECTED/DETECTED_NEGATIVE",
+        "mask_sha256": sha256(prep_path) if prep_path else None,
         "image_shape": list(image.shape), "usable_pixels_fraction": float(valid.mean()),
         "patch_size": patch_size, "n_patches": len(origins),
-        "max_lag_pixels": max_lag, "central_rho": center,
+        "max_lag_pixels": max_lag, "variance_plane_ratio_at_zero_lag": center,
         "top_hat_variance_inflation_approx_square_lag_window": float(factor),
         "top_hat_sigma_inflation_approx_square_lag_window": math.sqrt(factor) if factor > 0 else None,
     }
     return result, rows
 
 
-def run(metadata_path: Path, prep_dir: Path, output_dir: Path, *, patch_size: int = 64,
+def load_matched_controls(metadata: dict, control_manifest_path: Path,
+                          control_status_path: Path) -> list[dict]:
+    """Match one downloaded random control to each target cluster/filter."""
+    manifest = json.loads(control_manifest_path.read_text(encoding="utf-8"))
+    status = json.loads(control_status_path.read_text(encoding="utf-8"))
+    if (manifest.get("frame_role") != "matched_control"
+            or manifest.get("science_measurement") is not False
+            or status.get("status") != "complete"
+            or status.get("n_expected") != len(manifest.get("clusters", []))):
+        raise ValueError("expected the complete matched-control image download")
+    downloaded = {str(row["id"]): row for row in status.get("completed", [])}
+    if len(downloaded) != len(status["completed"]):
+        raise ValueError("duplicate IDs in control image download checkpoint")
+    matched = []
+    for target in metadata["frame_headers"]:
+        choices = [row for row in manifest["clusters"]
+                   if str(row["target_cluster_id"]) == str(target["cluster_id"])
+                   and str(row.get("coadd_header_filter")) == str(target["filter"])]
+        if len(choices) != 1:
+            raise ValueError(f"{target['cluster_id']}/{target['filter']}: expected one matched control, got {len(choices)}")
+        control = choices[0]
+        saved = downloaded.get(str(control["id"]))
+        if saved is None or saved.get("file") != control.get("image"):
+            raise ValueError(f"control image missing from completed checkpoint: {control['id']}")
+        image_path = control_manifest_path.parent / str(control["image"])
+        if not image_path.is_file() or sha256(image_path) != saved.get("sha256"):
+            raise ValueError(f"control image file missing or changed: {image_path}")
+        matched.append({
+            "cluster_id": str(target["cluster_id"]),
+            "filter": str(target["filter"]), "role": "matched_control",
+            "image_id": str(control["id"]), "path": str(image_path),
+            "source_image_sha256": str(saved["sha256"]),
+            "mask_exclude_bits": list(control["bad_mask"]["exclude_bits"])
+                + list(control["bright_star_mask"]["exclude_bits"]),
+        })
+    if len(matched) != 57:
+        raise ValueError(f"expected 57 matched controls; got {len(matched)}")
+    return matched
+
+
+def run(metadata_path: Path, prep_dir: Path, control_manifest_path: Path,
+        control_status_path: Path, output_dir: Path, *, patch_size: int = 64,
         max_patches: int = 96, max_lag: int = 4,
         min_valid_fraction: float = 0.80) -> dict:
     if output_dir.exists():
@@ -182,9 +245,14 @@ def run(metadata_path: Path, prep_dir: Path, output_dir: Path, *, patch_size: in
             or metadata.get("n_frames") != 57
             or metadata.get("variance_plane_present_in_all_frames") is not True):
         raise ValueError("expected the audited 57-frame coadd-metadata input")
+    targets = [{**record, "role": "target", "image_id": record["cluster_id"],
+                "source_image_sha256": record["source_image_sha256_from_audited_run"]}
+               for record in metadata["frame_headers"]]
+    controls = load_matched_controls(metadata, control_manifest_path, control_status_path)
+    records = targets + controls
     details, lag_rows = [], []
-    for index, record in enumerate(metadata["frame_headers"], 1):
-        print(f"[{index}/57] coadd noise correlation {record['cluster_id']} {record['filter']}", flush=True)
+    for index, record in enumerate(records, 1):
+        print(f"[{index}/{len(records)}] coadd residual covariance {record['cluster_id']} {record['role']}", flush=True)
         frame, rows = frame_correlations(
             record, prep_dir, patch_size=patch_size, max_patches=max_patches,
             max_lag=max_lag, min_valid_fraction=min_valid_fraction,
@@ -193,16 +261,31 @@ def run(metadata_path: Path, prep_dir: Path, output_dir: Path, *, patch_size: in
         lag_rows.extend(rows)
     by_filter = {}
     for band in sorted({row["filter"] for row in details}):
-        subset = [row for row in details if row["filter"] == band]
-        factors = np.asarray([row["top_hat_variance_inflation_approx_square_lag_window"]
-                              for row in subset], dtype=float)
-        central = np.asarray([row["central_rho"] for row in subset], dtype=float)
-        by_filter[band] = {
-            "n_frames": len(subset),
-            "median_square_window_variance_inflation_approx": float(np.median(factors)),
-            "q16_q84_square_window_variance_inflation_approx": np.quantile(factors, [0.16, 0.84]).tolist(),
-            "median_normalized_neighbor_covariance": float(np.median(central)),
-        }
+        for role in ("target", "matched_control"):
+            subset = [row for row in details if row["filter"] == band and row["role"] == role]
+            factors = np.asarray([row["top_hat_variance_inflation_approx_square_lag_window"]
+                                  for row in subset], dtype=float)
+            central = np.asarray([row["variance_plane_ratio_at_zero_lag"] for row in subset], dtype=float)
+            by_filter[f"{role}/{band}"] = {
+                "n_frames": len(subset),
+                "median_square_window_variance_inflation_approx": float(np.median(factors)),
+                "q16_q84_square_window_variance_inflation_approx": np.quantile(factors, [0.16, 0.84]).tolist(),
+                "median_variance_plane_ratio_at_zero_lag": float(np.median(central)),
+            }
+    paired = {}
+    for band in sorted({row["filter"] for row in details}):
+        target_by_id = {row["cluster_id"]: row for row in details
+                        if row["filter"] == band and row["role"] == "target"}
+        control_by_id = {row["cluster_id"]: row for row in details
+                         if row["filter"] == band and row["role"] == "matched_control"}
+        if set(target_by_id) != set(control_by_id):
+            raise ValueError(f"target/control pairing differs for filter {band}")
+        differences = [target_by_id[key]["top_hat_variance_inflation_approx_square_lag_window"]
+                       - control_by_id[key]["top_hat_variance_inflation_approx_square_lag_window"]
+                       for key in sorted(target_by_id)]
+        paired[band] = {"n_pairs": len(differences),
+                        "median_target_minus_control_variance_factor": float(np.median(differences)),
+                        "q16_q84_target_minus_control_variance_factor": np.quantile(differences, [0.16, 0.84]).tolist()}
     output_dir.mkdir(parents=True, exist_ok=False)
     frame_path, lag_path = output_dir / "frame_noise_correlation.tsv", output_dir / "lag_correlation.tsv"
     for path, rows in ((frame_path, details), (lag_path, lag_rows)):
@@ -213,16 +296,19 @@ def run(metadata_path: Path, prep_dir: Path, output_dir: Path, *, patch_size: in
     summary = {
         "schema": "astrafek-hsc-coadd-noise-correlation-v1",
         "status": "complete_exploratory", "science_measurement": False,
+        "n_target_frames": len(targets), "n_matched_control_frames": len(controls),
         "n_frames": len(details), "patch_size_pixels": patch_size,
         "max_patches_per_frame": max_patches, "max_lag_pixels": max_lag,
         "minimum_valid_fraction_per_patch": min_valid_fraction,
-        "method": "random non-overlapping 64-pixel patches; reject source/bad-mask pixels; fit a local affine plane with 4-sigma iterative clipping; normalize residuals by sqrt(delivered variance); estimate robust median lag covariance across patches",
-        "by_filter": by_filter,
-        "input_sha256": {str(metadata_path): sha256(metadata_path)},
+        "method": "paired target and control images; non-overlapping 64-pixel patches; apply saved target BASE_MASK or control HSC instrumental/source-detection masks; fit a local affine plane with 4-sigma clipping; normalize residuals by sqrt(delivered variance); estimate median lag covariance across patches",
+        "by_role_filter": by_filter, "paired_target_minus_control": paired,
+        "input_sha256": {str(path): sha256(path) for path in
+                         (metadata_path, control_manifest_path, control_status_path)},
+        "analysis_script_sha256": sha256(Path(__file__).resolve()),
         "frame_results_sha256": sha256(frame_path), "lag_results_sha256": sha256(lag_path),
         "limitations": [
-            "patch-scale residuals can include unresolved sources and real diffuse structure despite masking and local plane removal",
-            "the square-lag-window top-hat variance factor is an approximate noise-correlation diagnostic, not the exact covariance of the ICL or satellite estimators",
+            "patch-scale target residuals can include real diffuse structure; matched controls reduce but do not remove residual-object contamination",
+            "the square-lag-window top-hat variance factor is an approximate residual-covariance diagnostic, not the exact covariance of the ICL or satellite estimators",
             "the normalized kernel uses delivered variance and does not identify source-photon noise or an effective gain",
             "these 57 target frames do not establish the covariance for all 800 cluster or matched-control frames",
             "no upstream sky-transfer or PSF-wing uncertainty is measured",
@@ -239,17 +325,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--metadata", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--satellite-prep", type=Path, default=DEFAULT_PREP)
+    parser.add_argument("--control-manifest", type=Path, default=DEFAULT_CONTROL_MANIFEST)
+    parser.add_argument("--control-status", type=Path, default=DEFAULT_CONTROL_STATUS)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--patch-size", type=int, default=64)
     parser.add_argument("--max-patches", type=int, default=96)
     parser.add_argument("--max-lag", type=int, default=4)
     parser.add_argument("--min-valid-fraction", type=float, default=0.80)
     args = parser.parse_args()
-    result = run(args.metadata.resolve(), args.satellite_prep.resolve(), args.output.resolve(),
+    result = run(args.metadata.resolve(), args.satellite_prep.resolve(),
+                 args.control_manifest.resolve(), args.control_status.resolve(), args.output.resolve(),
                  patch_size=args.patch_size, max_patches=args.max_patches,
                  max_lag=args.max_lag, min_valid_fraction=args.min_valid_fraction)
     print(json.dumps({"status": result["status"], "science_measurement": False,
-                      "n_frames": result["n_frames"], "by_filter": result["by_filter"],
+                      "n_frames": result["n_frames"], "by_role_filter": result["by_role_filter"],
+                      "paired_target_minus_control": result["paired_target_minus_control"],
                       "output": str(args.output.resolve())}, indent=2))
 
 
