@@ -1088,6 +1088,12 @@ target/control 블록 5,000회 재표집 후 i 77쌍, i2 183쌍에서 raw 및 co
 표와 공통표본 검증은 [고정 공통표본 평가](satellite_radial_icl_baseline_association_assessment_2026-10-20.md)에
 기록했다.
 
+이어서 위성 7개 반경별 raw·외곽차감 ICL 상관의 은하단 하나/연결 블록 하나 삭제
+영향도를 계산했다. 외곽 차감 i-band 안쪽 상관은 삭제 후에도 양수였지만, 이는
+신뢰구간이 아니며 기존 bootstrap 변화 구간은 0을 포함한다. 표와 해시는
+[영향도 평가](satellite_radial_icl_association_influence_assessment_2026-10-20.md)에
+있다. 결과는 여전히 `science_measurement=false`다.
+
 `propagate_satellite_icl_measurement_noise.py`는 공분산이 있는 동일 57쌍(i 13,
 i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각각 전파한다.
 이는 공간 블록 재표본화와 합치지 않는 조건부 잡음 민감도다. i2의 44쌍 부분표본은
