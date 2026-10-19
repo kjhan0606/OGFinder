@@ -938,6 +938,14 @@ successful batch status, poll time, and poll count atomically in the checkpoint.
 This code change applies only to a future invocation; the already-live PID
 1049265 continues running its previously loaded code and is left untouched.
 
+2026-10-20 06:53 KST에 `lageunha`에서 PID 1049265를 다시 확인했다. 프로세스는
+여전히 살아 있었고, 같은 시각 새 Astrafek 체크포인트 감사도 2/32 배치
+(33,514/780,191행)만 확인했다. 감사 요약 SHA-256은
+`d5072ee7cecd4ec4798892dc6d3be4acf1d916738e0ff65564666234a3ec8212`, 체크포인트
+SHA-256은 `84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`다.
+이는 저장 체크포인트만 검증하며 살아 있는 프로세스의 CAS 작업 완료 여부는 보여주지
+않는다. 프로세스와 기존 CAS 요청은 그대로 두었고 재제출하지 않았다.
+
 ### Reuse test for the existing ICL matched-control centers
 
 The 798 already downloaded ICL matched-control positions were tested as a
@@ -1067,7 +1075,8 @@ target/control 블록 5,000회 재표집 후 i 77쌍, i2 183쌍에서 raw 및 co
 20% 미만인 쌍은 i 47/77, i2 111/183이다. 따라서 차감 결과는 sky 보정 또는 검출로
 볼 수 없다. 코드는 [`analyze_satellite_outer_icl_baseline_association.py`](analyze_satellite_outer_icl_baseline_association.py),
 입력·출력 해시와 정량 해석은 [민감도 평가](satellite_outer_icl_baseline_association_assessment_2026-10-20.md)에
-있다. 결과는 `science_measurement=false`다.
+있다. 위성 수와 ICL 면적 지지를 추가 조정한 분석도 같은 결론을 보였다. 결과는
+`science_measurement=false`다.
 
 `propagate_satellite_icl_measurement_noise.py`는 공분산이 있는 동일 57쌍(i 13,
 i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각각 전파한다.

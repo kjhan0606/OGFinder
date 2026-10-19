@@ -45,8 +45,10 @@ def read_tsv(path: Path) -> list[dict[str, str]]:
 
 
 def partial_pearson(x: np.ndarray, y: np.ndarray,
-                    z: np.ndarray, richness: np.ndarray) -> float:
-    covariates = np.column_stack((z, richness))
+                    covariates: np.ndarray) -> float:
+    covariates = np.asarray(covariates, dtype=float)
+    if covariates.ndim == 1:
+        covariates = covariates[:, None]
     scales = np.std(covariates, axis=0)
     if (not np.isfinite(covariates).all() or np.any(scales <= 0)
             or np.std(x) <= 0 or np.std(y) <= 0):
@@ -64,6 +66,12 @@ def metrics(rows: list[dict]) -> dict:
     satellite = np.asarray([r["satellite"] for r in rows], dtype=float)
     redshift = np.asarray([r["redshift"] for r in rows], dtype=float)
     richness = np.asarray([r["richness"] for r in rows], dtype=float)
+    support_covariates = np.column_stack((
+        redshift, richness,
+        np.log1p([r["n_satellites"] for r in rows]),
+        [r["inner_coverage"] for r in rows],
+        [r["outer_coverage"] for r in rows],
+    ))
     out = {}
     for label in ("icl_raw", "icl_outer_subtracted"):
         icl = np.asarray([r[label] for r in rows], dtype=float)
@@ -71,10 +79,13 @@ def metrics(rows: list[dict]) -> dict:
             out[label] = {"spearman_rho": None, "partial_pearson_r": None}
             continue
         rho = float(spearmanr(icl, satellite).statistic)
-        partial = partial_pearson(icl, satellite, redshift, richness)
+        partial = partial_pearson(icl, satellite, np.column_stack((redshift, richness)))
+        partial_supported = partial_pearson(icl, satellite, support_covariates)
         out[label] = {
             "spearman_rho": rho,
             "partial_pearson_r_control_z_richness": partial if math.isfinite(partial) else None,
+            "partial_pearson_r_control_z_richness_satellite_count_area_support": (
+                partial_supported if math.isfinite(partial_supported) else None),
             "mean_icl_delta_njy_arcsec2": float(np.mean(icl)),
             "mean_satellite_delta_njy_arcsec2": float(np.mean(satellite)),
         }
@@ -91,7 +102,8 @@ def block_bootstrap(rows: list[dict], replicas: int, seed: int) -> dict:
     members = [np.flatnonzero(labels == label) for label in np.unique(labels)]
     rng = np.random.default_rng(seed)
     names = ("icl_raw", "icl_outer_subtracted")
-    quantities = ("spearman_rho", "partial_pearson_r_control_z_richness")
+    quantities = ("spearman_rho", "partial_pearson_r_control_z_richness",
+                  "partial_pearson_r_control_z_richness_satellite_count_area_support")
     draws = {name: {metric: [] for metric in quantities} for name in names}
     draws["corrected_minus_raw"] = {metric: [] for metric in quantities}
     for _ in range(replicas):
@@ -269,7 +281,8 @@ def main() -> int:
                             metric: (point["icl_outer_subtracted"][metric] - point["icl_raw"][metric]
                                      if point["icl_outer_subtracted"][metric] is not None
                                      and point["icl_raw"][metric] is not None else None)
-                            for metric in ("spearman_rho", "partial_pearson_r_control_z_richness")},
+                            for metric in ("spearman_rho", "partial_pearson_r_control_z_richness",
+                                           "partial_pearson_r_control_z_richness_satellite_count_area_support")},
                         "block_bootstrap": boot})
         detail_rows.extend(rows)
 
@@ -293,6 +306,7 @@ def main() -> int:
             "join": "exact cluster ID, exact filter, and exact matched-control ID",
             "filters": "i and i2 analyzed independently",
             "covariates": "redshift and richness linear residuals for partial Pearson diagnostic",
+            "support_sensitivity": "additional partial Pearson diagnostic adjusts log(1+n_satellites), ICL inner coverage, and ICL outer coverage",
             "uncertainty": "95% percentile intervals from connected 5-degree target/control block bootstrap",
             "multiplicity": "descriptive comparison; no confirmatory p-values or multiplicity claims",
         },

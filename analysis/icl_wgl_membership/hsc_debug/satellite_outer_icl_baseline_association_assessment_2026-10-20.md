@@ -28,6 +28,23 @@ i Spearman 변화는 `0.074 [−0.138, 0.295]`, 조정 상관 변화는
 `0.045 [−0.100, 0.209]`다. 현 표본에서는 위성 외곽광–ICL 연관성의 증거가 없으며,
 외곽 기준 차감이 그 관계를 유의하게 바꾼다는 증거도 없다.
 
+위성 표본 수와 ICL 면적 지지가 상관을 설명하는지 확인하기 위해 redshift·richness에
+`log(1+n_satellites)`, 200–300 kpc 내부 지지율, 400–500 kpc 외곽 지지율을 더한
+부분상관도 계산했다.
+
+| 필터 | ICL 항 | 확장 조정 r [95% 블록 구간] |
+|---|---|---:|
+| i | 원시 | 0.029 [−0.252, 0.252] |
+| i | 400–500 kpc 차감 후 | 0.077 [−0.141, 0.250] |
+| i | 차감 후−원시 변화 | 0.048 [−0.199, 0.333] |
+| i2 | 원시 | 0.033 [−0.082, 0.142] |
+| i2 | 400–500 kpc 차감 후 | 0.083 [−0.051, 0.237] |
+| i2 | 차감 후−원시 변화 | 0.050 [−0.097, 0.221] |
+
+이 추가 조정에서도 모든 구간은 0을 포함한다. 이 결과는 위성 수나 면적 지지만으로
+관계가 가려졌다는 근거를 주지 않는다. 다만 위성 수와 지원율은 측정 완전도와 함께
+변할 수 있어 이 선형 조정 자체를 선택편향 보정으로 해석하지 않는다.
+
 단, 400–500 kpc 공통 유효면적의 중앙값은 i 17.2%, i2 17.3%이고, 20% 미만인 쌍이
 각각 47/77, 111/183이다. 외곽 기준광은 i에서 40%, i2에서 56%의 쌍에서 음수였다.
 따라서 외곽 기준을 빼면 평균 ICL이 i `3.90 → 2.59`, i2 `2.16 → 3.62`
@@ -46,16 +63,16 @@ passband response, 전체 coadd 픽셀 공분산은 검증되지 않았다. 블�
 ## 재현과 계보
 
 산출물 디렉터리:
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_baseline_assoc_2026-10-20_03/`.
-요약 JSON SHA-256은 `20255052d96e91baa4d098f5d559d71e357510d8a984ad00d682fcfcd9b34b7b`,
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_baseline_assoc_2026-10-20_05/`.
+요약 JSON SHA-256은 `3583d146a659843eea0ec0f0984e630b496a8694d32c150e6c8208d8ed40396d`,
 쌍별 표 SHA-256은 `899f209a129c951aacfc4f9878ef6c0706b917f6bbf0574acd5798ea985eac48`이며,
-분석기 SHA-256은 `a6c79ad87eb6b8b3e1ef3a2b0124adfa42faad28cbbd1029ad85fb35cf3253a1`이다.
+분석기 SHA-256은 `3c5cd2229486c69437c4accfc07117969f9457cad8e1c5463ed1affe2172e41b`이다.
 입력 자료의 경로와 SHA-256도 `summary.json`에 저장했다.
 명령:
 
 ```bash
 python3 analysis/icl_wgl_membership/hsc_debug/analyze_satellite_outer_icl_baseline_association.py \
-  --work /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_baseline_assoc_2026-10-20_03 \
+  --work /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_outer_icl_baseline_assoc_2026-10-20_05 \
   --replicas 5000
 ```
 

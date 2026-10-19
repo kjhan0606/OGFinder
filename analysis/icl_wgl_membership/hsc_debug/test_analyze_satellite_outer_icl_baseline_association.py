@@ -52,12 +52,15 @@ class AssociationJoinTests(unittest.TestCase):
         rows = [
             {"icl_raw": float(i), "icl_outer_subtracted": float(i * 2),
              "satellite": float(i + (i % 2)), "redshift": 0.2 + i * 0.01,
-             "richness": 10.0 + i}
+             "richness": 10.0 + i, "n_satellites": i,
+             "inner_coverage": 0.2 + i * 0.01, "outer_coverage": 0.3 + i * 0.01}
             for i in range(1, 8)
         ]
         result = metrics(rows)
         self.assertIn("spearman_rho", result["icl_raw"])
         self.assertIn("spearman_rho", result["icl_outer_subtracted"])
+        self.assertIn("partial_pearson_r_control_z_richness_satellite_count_area_support",
+                      result["icl_raw"])
 
 
 if __name__ == "__main__":
