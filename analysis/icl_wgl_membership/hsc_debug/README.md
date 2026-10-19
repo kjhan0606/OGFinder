@@ -516,6 +516,22 @@ The complete-profile selection remains the reference; no threshold was relaxed. 
 [`icl_satellite_control_gate_assessment_2026-10-19.md`](icl_satellite_control_gate_assessment_2026-10-19.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_sample_retention_2026-10-19_02/`.
 
+On 2026-10-20 the retention audit was rerun against the current 800-frame mask table,
+corrected full-profile diagnostics, per-annulus profiles, and the spatial-block association
+table; it verifies their SHA-256 links. The ICL–satellite statistics are now read from the
+association result rows rather than copied as constants. The saved audit is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_sample_retention_2026-10-20_02/summary.json`
+(SHA-256 `7952f53bd29289dc182b24abdd7b0356b9a09e40c4e15055a0ea1f6aa1ca354f`).
+It confirms that independent 50–75 kpc satellite stacks have means
+`2.51 [-0.30, 5.50]` nJy/arcsec² (i; 70 satellites/42 clusters) and
+`1.19 [-0.24, 2.49]` (i2; 308/140), both with cluster-bootstrap intervals crossing zero.
+For the 94 joined ICL–satellite pairs, i2 partial Pearson `r=0.293` has a 5° block interval
+`[0.042, 0.497]`, while the ordinary-pair interval `[-0.007, 0.526]` and Spearman block
+interval `[-0.088, 0.301]` include zero. The i partial Pearson estimate is `0.079` with a
+block interval `[-0.186, 0.479]`. This estimator-dependent evidence remains exploratory.
+The audit regression tests cover dynamic statistic extraction and reject inconsistent input
+rows in [`test_audit_icl_satellite_sample_retention.py`](test_audit_icl_satellite_sample_retention.py).
+
 The approved HSC weak-lensing source-row export is complete for 800 lenses and 3,069,544
 lens–source rows. It contains 22 columns, excludes full photo-z PDF rows, and remains
 `science_measurement=false` pending random-lens subtraction and the remaining selection and

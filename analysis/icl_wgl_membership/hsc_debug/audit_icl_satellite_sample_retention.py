@@ -118,6 +118,55 @@ def summarize_candidate_diagnostics(rows):
     return by_filter
 
 
+def summarize_matched_association(results):
+    """Read the reported statistics from the hash-linked association rows."""
+    selected = [row for row in results if row.get("selection") == "all_supported_pairs"]
+    by_filter = {str(row.get("filter")): row for row in selected}
+    if len(selected) != 2 or set(by_filter) != {"i", "i2"}:
+        raise ValueError("expected exactly one all-supported association row per filter")
+    details = {}
+    for band, row in by_filter.items():
+        spatial = row.get("partial_spatial_block_bootstrap", {})
+        ordinary = row.get("partial_ordinary_pair_bootstrap", {})
+        if (row.get("status") != "complete_exploratory"
+                or spatial.get("status") != "complete_exploratory"
+                or ordinary.get("status") != "complete_exploratory"):
+            raise ValueError(f"association result is incomplete for {band}")
+        n_pairs = int(row["n_pairs"])
+        n_blocks = int(row["n_connected_5deg_blocks"])
+        partial_r = float(row["partial_pearson_r_control_redshift_richness"])
+        spatial_ci = [float(value) for value in spatial["ci95_partial_r"]]
+        ordinary_ci = [float(value) for value in ordinary["ci95_partial_r"]]
+        spearman = float(row["spearman_rho"])
+        spearman_ci = [float(value) for value in row["spearman_spatial_block_ci95"]]
+        numeric = [partial_r, spearman, *spatial_ci, *ordinary_ci, *spearman_ci]
+        if (len(spatial_ci) != 2 or len(ordinary_ci) != 2 or len(spearman_ci) != 2
+                or not all(math.isfinite(value) for value in numeric)
+                or spatial["n_pairs"] != n_pairs or spatial["n_blocks"] != n_blocks
+                or not math.isclose(partial_r, float(spatial["partial_r_point"]), abs_tol=1e-12)
+                or not math.isclose(partial_r, float(ordinary["partial_r_point"]), abs_tol=1e-12)):
+            raise ValueError(f"association summary fields disagree for {band}")
+        details[band] = {
+            "n_pairs": n_pairs,
+            "n_connected_5deg_blocks": n_blocks,
+            "partial_r_control_redshift_richness": partial_r,
+            "spatial_block_ci95_partial_r": spatial_ci,
+            "ordinary_pair_ci95_partial_r": ordinary_ci,
+            "spearman_rho": spearman,
+            "spatial_block_ci95_spearman_rho": spearman_ci,
+        }
+    return {
+        "n_cluster_filter_pairs_by_filter": {band: details[band]["n_pairs"] for band in ("i", "i2")},
+        "n_connected_5deg_blocks_by_filter": {band: details[band]["n_connected_5deg_blocks"] for band in ("i", "i2")},
+        "by_filter": details,
+        # Retain the original i2 convenience fields, sourced from the result table.
+        "partial_r_i2": details["i2"]["partial_r_control_redshift_richness"],
+        "spatial_block_ci95_i2": details["i2"]["spatial_block_ci95_partial_r"],
+        "ordinary_pair_ci95_i2": details["i2"]["ordinary_pair_ci95_partial_r"],
+        "spearman_spatial_block_ci95_i2": details["i2"]["spatial_block_ci95_spearman_rho"],
+    }
+
+
 def _satellite_key(row):
     return (str(row["cluster_id"]), str(row["filter"]), str(row["member_index"]),
             str(row["detection_number"]))
@@ -258,17 +307,20 @@ def audit(masks_dir, satellites_dir, per_bin_dir, association_dir):
     assoc = json.loads(assoc_summary_path.read_text())
     if assoc.get("status") != "complete_exploratory" or assoc.get("science_measurement") is not False:
         raise ValueError("spatial-block association summary is incomplete or has unexpected flags")
+    assoc_table_path = Path(assoc["output_table"])
+    if (not assoc_table_path.is_file()
+            or sha256(assoc_table_path) != assoc.get("output_table_sha256")):
+        raise ValueError("spatial-block association table checksum mismatch")
 
     per_bin_outer = {}
     for band in ("i", "i2"):
         values = per_bin_summary["filters"]["full_sample"][band]["bins"]["50-75"]
         per_bin_outer[band] = {key: values[key] for key in ("n_clusters", "n_satellites", "mean_delta", "bootstrap_low", "bootstrap_high")}
-    matched = {row["filter"]: row["n_pairs"] for row in assoc["results"] if row["selection"] == "all_supported_pairs"}
-    spatial = {row["filter"]: row["n_connected_5deg_blocks"] for row in assoc["results"] if row["selection"] == "all_supported_pairs"}
-    if matched != {"i": 26, "i2": 68}:
-        raise ValueError(f"unexpected matched ICL-satellite support: {matched}")
-    if spatial != {"i": 13, "i2": 33}:
-        raise ValueError(f"unexpected spatial block counts: {spatial}")
+    association_result = summarize_matched_association(assoc["results"])
+    matched = association_result["n_cluster_filter_pairs_by_filter"]
+    spatial = association_result["n_connected_5deg_blocks_by_filter"]
+    if matched != {"i": 26, "i2": 68} or spatial != {"i": 13, "i2": 33}:
+        raise ValueError(f"unexpected matched ICL-satellite support: {matched}, blocks={spatial}")
     mask_metrics = summarize_mask_support(mask_rows)
     candidate_metrics = summarize_candidate_diagnostics(candidate_rows)
     return {
@@ -281,14 +333,7 @@ def audit(masks_dir, satellites_dir, per_bin_dir, association_dir):
         "complete_profile_control_gate_attrition": summarize_control_gate_attrition(
             candidate_rows, per_bin_candidate_rows, per_bin_profile_rows),
         "per_annulus_satellite_50_75_kpc_stack": per_bin_outer,
-        "matched_icl_satellite_association": {
-            "n_cluster_filter_pairs_by_filter": matched,
-            "n_connected_5deg_blocks_by_filter": spatial,
-            "partial_r_i2": 0.2926385303703714,
-            "spatial_block_ci95_i2": [0.04234471282373385, 0.4972908249681033],
-            "ordinary_pair_ci95_i2": [-0.00709738518280587, 0.5260703386161849],
-            "spearman_spatial_block_ci95_i2": [-0.08829931741011786, 0.30059075612694064],
-        },
+        "matched_icl_satellite_association": association_result,
         "sample_size_interpretation": [
             "800 input frames are not 800 usable ICL-satellite pairs; the audited join retains 26 i and 68 i2 pairs.",
             "Per-annulus stacks recover more support than requiring all six satellite radial bins simultaneously.",
@@ -302,6 +347,7 @@ def audit(masks_dir, satellites_dir, per_bin_dir, association_dir):
             "candidate_diagnostics_sha256": candidate_hash,
             "per_bin_summary_sha256": sha256(per_bin_summary_path),
             "association_summary_sha256": sha256(assoc_summary_path),
+            "association_table_sha256": sha256(assoc_table_path),
         },
         "limitations": [
             "the input 800 cluster frames are the fixed selected parent, not a complete HSC CAMIRA population",

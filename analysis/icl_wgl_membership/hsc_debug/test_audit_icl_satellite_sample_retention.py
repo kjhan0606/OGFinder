@@ -1,7 +1,8 @@
 import pytest
 
 from audit_icl_satellite_sample_retention import (
-    summarize_candidate_diagnostics, summarize_control_gate_attrition, summarize_mask_support,
+    summarize_candidate_diagnostics, summarize_control_gate_attrition,
+    summarize_mask_support, summarize_matched_association,
 )
 
 
@@ -66,3 +67,52 @@ def test_control_gate_audit_rejects_changed_control_geometry():
                "valid_controls_by_bin": "3,3,3,3,3,3,3"}
     with pytest.raises(ValueError, match="control geometry changed"):
         summarize_control_gate_attrition([full], [per_bin], [])
+
+
+def test_matched_association_statistics_are_derived_from_results():
+    def row(band, n, blocks, r, spatial_ci, ordinary_ci, rho, rho_ci):
+        return {
+            "filter": band, "selection": "all_supported_pairs", "status": "complete_exploratory",
+            "n_pairs": n, "n_connected_5deg_blocks": blocks,
+            "partial_pearson_r_control_redshift_richness": r, "spearman_rho": rho,
+            "spearman_spatial_block_ci95": rho_ci,
+            "partial_spatial_block_bootstrap": {
+                "status": "complete_exploratory", "n_pairs": n, "n_blocks": blocks,
+                "partial_r_point": r, "ci95_partial_r": spatial_ci,
+            },
+            "partial_ordinary_pair_bootstrap": {
+                "status": "complete_exploratory", "partial_r_point": r,
+                "ci95_partial_r": ordinary_ci,
+            },
+        }
+
+    result = summarize_matched_association([
+        row("i", 26, 13, 0.08, [-0.19, 0.48], [-0.32, 0.56], 0.27, [-0.13, 0.54]),
+        row("i2", 68, 33, 0.29, [0.04, 0.50], [-0.01, 0.53], 0.11, [-0.09, 0.30]),
+    ])
+
+    assert result["n_cluster_filter_pairs_by_filter"] == {"i": 26, "i2": 68}
+    assert result["by_filter"]["i"]["partial_r_control_redshift_richness"] == pytest.approx(0.08)
+    assert result["partial_r_i2"] == pytest.approx(0.29)
+    assert result["ordinary_pair_ci95_i2"] == pytest.approx([-0.01, 0.53])
+
+
+def test_matched_association_rejects_incomplete_or_inconsistent_result_rows():
+    with pytest.raises(ValueError, match="exactly one"):
+        summarize_matched_association([])
+    invalid = {
+        "filter": "i", "selection": "all_supported_pairs", "status": "complete_exploratory",
+        "n_pairs": 26, "n_connected_5deg_blocks": 13,
+        "partial_pearson_r_control_redshift_richness": 0.2, "spearman_rho": 0.1,
+        "spearman_spatial_block_ci95": [-0.1, 0.2],
+        "partial_spatial_block_bootstrap": {
+            "status": "complete_exploratory", "n_pairs": 26, "n_blocks": 13,
+            "partial_r_point": 0.2, "ci95_partial_r": [-0.1, 0.2],
+        },
+        "partial_ordinary_pair_bootstrap": {
+            "status": "complete_exploratory", "partial_r_point": 0.3,
+            "ci95_partial_r": [-0.2, 0.4],
+        },
+    }
+    with pytest.raises(ValueError, match="disagree"):
+        summarize_matched_association([invalid, {**invalid, "filter": "i2"}])
