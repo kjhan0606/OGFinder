@@ -28,8 +28,11 @@ i-band raw ICL 상관은 10–50 kpc 구간에서 일부 삭제에 따라 부호
 외곽 차감 상관은 5–40 kpc에서 삭제 한 건씩에 대해서는 양수를 유지했다. 이는 선택한
 표본 안에서 순위의 영향도가 제한적이라는 뜻일 뿐, 표본·광도·마스크·배경 오차가
 작다는 뜻이 아니다. 앞 분석의 공간 블록 bootstrap 95% 구간은 모든 raw 상관 및
-paired raw-to-corrected 변화에서 0을 포함했다. 14개 비교의 사후 다중검정도 보정하지
-않았다. 따라서 반경별 ICL–위성 연관성을 검출했다고 판단하지 않는다.
+paired raw-to-corrected 변화에서 0을 포함했다. 이어서 7개 반경을 공동 재표집한
+max-T family-wise 95% 구간도 14개 상관과 14개 paired 변화 모두 0을 포함했다.
+따라서 반경별 ICL–위성 연관성을 검출했다고 판단하지 않는다. 상세 구간과 산출물 해시는
+[family-wise 평가](satellite_radial_icl_association_familywise_assessment_2026-10-20.md)에
+기록했다.
 
 ## 방법과 제한
 
