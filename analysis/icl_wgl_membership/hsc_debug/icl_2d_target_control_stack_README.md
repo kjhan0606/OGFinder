@@ -53,6 +53,15 @@ and retains the per-annulus covariance matrices and diagnostic figures outside
 Git. See `icl_2d_spatial_block_bootstrap_assessment_2026-10-19.md` for the
 interpretation; these intervals remain exploratory.
 
+`stack_hsc_icl_independent_support.py` measures each pair's target and control
+annular means on their own valid pixels, then compares that result with the
+strict common-support estimator on the same pairs. Its Slurm sensitivity run
+and output verifier are `run_icl_independent_support_sensitivity.sbatch` and
+`verify_icl_independent_support.py`. The paired comparison distinguishes the
+effect of relaxing pixel intersection from the effect of admitting additional
+pairs; the alternate estimator remains a sensitivity because target/control
+masks may remove different source environments.
+
 ## Interpretation limits
 
 The output is marked `science_measurement=false`. It does not apply extinction,

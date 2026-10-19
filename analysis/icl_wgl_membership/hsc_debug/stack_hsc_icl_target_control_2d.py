@@ -158,6 +158,46 @@ def pair_radial_profile(target: np.ndarray, control: np.ndarray, delta: np.ndarr
     return rows
 
 
+def independent_support_radial_profile(target: np.ndarray, control: np.ndarray,
+                                       target_weight: np.ndarray, control_weight: np.ndarray,
+                                       axis_kpc: np.ndarray,
+                                       edges_kpc: np.ndarray = PROFILE_EDGES_KPC) -> list[dict]:
+    """Measure target/control annular means on their separate valid pixels.
+
+    The per-pair difference is the difference of the two annular means. This
+    avoids discarding target pixels solely because the matched control is
+    masked at the same angular grid location (and vice versa).
+    """
+    target = np.asarray(target, dtype=float)
+    control = np.asarray(control, dtype=float)
+    target_valid = (np.asarray(target_weight) > 0) & np.isfinite(target)
+    control_valid = (np.asarray(control_weight) > 0) & np.isfinite(control)
+    if target.shape != control.shape or target.shape != target_valid.shape or target.shape != control_valid.shape:
+        raise ValueError("independent-support maps and weights must share the same shape")
+    yy, xx = np.meshgrid(axis_kpc, axis_kpc, indexing="ij")
+    radius = np.hypot(xx, yy)
+    rows = []
+    for lo, hi in zip(edges_kpc[:-1], edges_kpc[1:]):
+        annulus = (radius >= lo) & (radius < hi)
+        tsel = annulus & target_valid
+        csel = annulus & control_valid
+        common = tsel & csel
+        nt, nc = int(tsel.sum()), int(csel.sum())
+        tmean = float(np.mean(target[tsel])) if nt else None
+        cmean = float(np.mean(control[csel])) if nc else None
+        rows.append({
+            "r_min_kpc": float(lo), "r_max_kpc": float(hi),
+            "n_target_pixels": nt, "n_control_pixels": nc,
+            "n_common_pixels": int(common.sum()), "geometric_pixels": int(annulus.sum()),
+            "target_coverage_fraction": nt / int(annulus.sum()) if annulus.any() else 0.0,
+            "control_coverage_fraction": nc / int(annulus.sum()) if annulus.any() else 0.0,
+            "common_coverage_fraction": int(common.sum()) / int(annulus.sum()) if annulus.any() else 0.0,
+            "target_mean_njy_arcsec2": tmean, "control_mean_njy_arcsec2": cmean,
+            "delta_mean_njy_arcsec2": tmean - cmean if nt and nc else None,
+        })
+    return rows
+
+
 def summarize_profiles(pair_rows: list[dict], filters: tuple[str, ...] = FILTERS) -> list[dict]:
     """Equal-weight pair-level radial profiles and their between-pair SEM."""
     output = []
@@ -197,7 +237,8 @@ def target_and_control_map(image: np.ndarray, mask: np.ndarray, info: dict,
 def process_pair(target: dict, target_mask_record: dict, target_mask_summary: dict,
                  control: dict, control_download_record: dict, control_base: Path,
                  control_status_sha: str, cosmology: Cosmology,
-                 kpc_max: float, n_side: int, mask_factor: float) -> tuple[dict, dict]:
+                 kpc_max: float, n_side: int, mask_factor: float,
+                 include_independent_profile: bool = False) -> tuple[dict, dict]:
     ident = str(target["id"])
     control_id = str(control["id"])
     target_path = Path(target_mask_record["image"])
@@ -276,6 +317,10 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
         "control_download_status_sha256": control_status_sha,
         "profile": pair_radial_profile(tmap, cmap, dmap, valid, axis),
     }
+    if include_independent_profile:
+        pair["independent_profile"] = independent_support_radial_profile(
+            target_warp["sb"], control_warp["sb"], target_warp["weight"],
+            control_warp["weight"], axis)
     maps = {"target": tmap, "control": cmap, "delta": dmap, "valid": valid, "axis_kpc": axis}
     return pair, maps
 
