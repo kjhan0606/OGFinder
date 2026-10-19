@@ -43,6 +43,15 @@ bash scripts/run_debug.sh
 PSF 코어 입력은 준비됐지만 확장 날개와 영상 노이즈는 별도로 검증해야 하며,
 과학 측정은 수행하지 않았다.
 
+같은 승인 PSF를 실제 위치별 주입에 연결한 재검출 민감도도 57/57 프레임에서
+완료했다(i 13, i2 44, 오류 0). PSF 코어와 무PSF 실행의 짝지은 응답 차이는
+각 필터에서 중앙값이 작고 16–84백분위가 0을 포함한다. 이는 확장 PSF 날개,
+주입 photon noise, 상관 coadd noise 또는 HSC 상류 sky 전달을 검증하지 않으며
+science measurement로 승격하지 않았다. 상세 결과·SHA-256은
+[`psf_convolved_joint_injection_assessment_2026-10-19.md`](psf_convolved_joint_injection_assessment_2026-10-19.md),
+재현 명령은 [`run_joint_icl_satellite_psf_redetection.sbatch`](run_joint_icl_satellite_psf_redetection.sbatch),
+감사기는 [`audit_joint_icl_satellite_psf_redetection.py`](audit_joint_icl_satellite_psf_redetection.py)에 있다.
+
 2026-10-12 수집 확장: 이후 12개 FITS 다운로드가 모두 완료됐으며, 파일 크기와
 SHA-256, FITS 구조와 WCS를 재검사했다. 이제 213개 후보 전체를 받도록
 `hsc_pilot.py prepare --all-selected`로 목록을 만들고 기존 `download_pilot.py`의

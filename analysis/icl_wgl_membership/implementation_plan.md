@@ -1,6 +1,13 @@
 # 스케일 스택 구현 계획
 
-최신 진행(2026-10-16): [공통 면적 paired 지원 민감도](hsc_debug/prestack_validation_README.md).
+최신 진행(2026-10-19): [위치별 HSC PSF 주입·재검출 민감도](hsc_debug/psf_convolved_joint_injection_assessment_2026-10-19.md).
+승인된 PDR3 HSC-I PSF 코어를 기존 57개 주입 프레임에 연결해 57/57을 완료했고,
+독립 감사에서 PSF 역할·파일 해시·코드 해시를 확인했다. 무PSF 대비 응답 중앙 변화는
+작고 필터별 프레임 분포의 16–84백분위가 0을 포함했다. 이는 선택된 인공 모형의
+PSF 코어 민감도이며 확장 날개·주입 광자잡음·상관 coadd noise·상류 sky 전달을
+검증하지 않는다. `science_measurement=false`를 유지한다.
+
+이전 진행(2026-10-16): [공통 면적 paired 지원 민감도](hsc_debug/prestack_validation_README.md).
 기존 50쌍에서 원래 Kron 3.5·50% 기준의 완전 50–300 kpc 표본은 1쌍뿐이고,
 50–500 kpc는 0쌍이다. 탐색 조건 Kron 2.5·40%에서는 50–300 kpc 완전 쌍 24개,
 공동 공간 블록 21개, rank-4 기술 공분산 진단 통과가 나왔다. 같은 조건의
