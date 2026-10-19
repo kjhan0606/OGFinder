@@ -18,6 +18,7 @@ import platform
 import sys
 import time
 import urllib.error
+from datetime import datetime, timezone
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -223,6 +224,15 @@ def cas_status(client, job_id: str):
             time.sleep(60)
 
 
+def record_status_poll(state, item, status, timestamp=None):
+    """Persist every successful status response so long polls remain auditable."""
+    polled_at = timestamp or datetime.now(timezone.utc).isoformat()
+    item["last_cas_status"] = str(status.get("status", "unknown"))
+    item["last_status_poll_utc"] = polled_at
+    item["status_poll_count"] = int(item.get("status_poll_count", 0)) + 1
+    state.pop("error_type", None)
+
+
 def fetch_batch(client, batch, expected_ids, expected_counts, results, state, checkpoint):
     name = Path(batch["path"]).stem
     item = state["jobs"].setdefault(name, {"status": "pending"})
@@ -254,6 +264,8 @@ def fetch_batch(client, batch, expected_ids, expected_counts, results, state, ch
         save(checkpoint, state)
     while True:
         status = cas_status(client, item["job_id"])
+        record_status_poll(state, item, status)
+        save(checkpoint, state)
         if status.get("status") == "done":
             break
         if status.get("status") == "error":
@@ -327,6 +339,7 @@ def main():
             raise ValueError("Empty password")
         client = Cas("kjhan0606", password)
         state["status"] = "running"
+        state.pop("error_type", None)
         save(checkpoint, state)
         try:
             size = int(manifest["batch_size"])

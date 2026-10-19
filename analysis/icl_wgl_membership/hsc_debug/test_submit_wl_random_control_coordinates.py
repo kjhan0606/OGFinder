@@ -2,7 +2,7 @@ import csv
 
 import pytest
 
-from submit_wl_random_control_coordinates import coordinate_query, read_coordinates
+from submit_wl_random_control_coordinates import coordinate_query, read_coordinates, record_status_poll
 
 
 def test_coordinate_query_preserves_candidate_filters_without_catalog_rows():
@@ -46,3 +46,16 @@ def test_read_coordinates_rejects_wrong_counts_and_invalid_coordinates(tmp_path)
         writer.writerow(["b", "20.2", "0"])
     with pytest.raises(ValueError, match="per-lens candidate counts"):
         read_coordinates(path, {"a": 2, "b": 1})
+
+
+def test_status_polls_clear_stale_error_and_persist_progress_fields():
+    state = {"status": "running", "error_type": "HTTPError"}
+    item = {"status": "submitted", "job_id": "1062312"}
+    record_status_poll(state, item, {"status": "executing"}, "2026-10-20T00:00:00+00:00")
+    assert "error_type" not in state
+    assert item["last_cas_status"] == "executing"
+    assert item["last_status_poll_utc"] == "2026-10-20T00:00:00+00:00"
+    assert item["status_poll_count"] == 1
+    record_status_poll(state, item, {"status": "done"}, "2026-10-20T00:01:00+00:00")
+    assert item["status_poll_count"] == 2
+    assert item["last_cas_status"] == "done"

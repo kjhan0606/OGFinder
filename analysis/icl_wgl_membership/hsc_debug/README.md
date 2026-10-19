@@ -871,6 +871,11 @@ progress after startup therefore remain unknown. Keep the live submitter and
 do not resubmit batch 002. Any later HSC shape-row or image export needs its
 own explicit user approval.
 
+The submitter now clears stale top-level errors on entry and stores each
+successful batch status, poll time, and poll count atomically in the checkpoint.
+This code change applies only to a future invocation; the already-live PID
+1049265 continues running its previously loaded code and is left untouched.
+
 ### Reuse test for the existing ICL matched-control centers
 
 The 798 already downloaded ICL matched-control positions were tested as a
