@@ -134,6 +134,33 @@ for diffuse→satellites, and 4.8×10⁻⁷ for satellites→satellites. These t
 products share the input star sample, so this is a comparison of variants,
 not an independent replication.
 
+## Matched position-core versus public-wing sensitivity
+
+An independent audit paired the public symmetric-reference results with the
+position-dependent-core results for the same 13 i-band frames, after verifying
+both batch summaries, each referenced frame JSON checksum, identical injection
+support and amplitudes, and the non-science status flags. The table gives the
+public extended-reference response minus the local model-core response. The
+brackets are the 16th–84th percentile of paired frame differences, not
+confidence intervals.
+
+| Transfer response | Public-reference minus position-core median [q16, q84] |
+|---|---:|
+| Diffuse injection → ICL 200–300 kpc | −0.00034 [−0.00151, +0.00165] |
+| Satellite envelopes → ICL 200–300 kpc | +0.00750 [−0.01655, +0.04231] |
+| Diffuse injection → satellite 50–75 kpc | +0.00013 [−0.00017, +0.00571] |
+| Satellite envelopes → satellite 50–75 kpc | −0.00274 [−0.09227, +0.06423] |
+
+All four paired medians are small compared with the frame-to-frame spread, and
+each 16th–84th interval spans zero. For this fixed support and these injected
+profiles, substituting the unmatched public reference did not materially move
+the median transfer response. This does not validate the actual extended PSF
+wings at the target locations: the public reference is not matched in
+position, epoch, or seeing, and the 13-frame support is selected. The
+machine-readable audit is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_core_vs_wide_audit_2026-10-19_01/summary.json`
+(SHA-256 `4facf009b4833cf886de47ba3a646fac727e0ebb0dab82625f20f9be315bf9fd`).
+
 The 13 frames are a support-selected i-band subset, and the reference PSF is
 not matched to their position, epoch, or seeing. The run omits injected-source
 photon noise, correlated coadd noise, and upstream sky transfer. It does not
