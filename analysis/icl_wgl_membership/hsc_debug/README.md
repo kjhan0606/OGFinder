@@ -391,10 +391,16 @@ the hash-recorded output at
 `audit_satellite_icl_shared_pixel_covariance.py` reconstructs the accepted 50–75 kpc satellite
 target and azimuthal-control annuli, then contracts their signed equal-satellite weights with
 the ICL target annulus and the HSC diagonal variance map. It verifies saved target/control
-support counts and reports only a nominal independent-pixel noise covariance; coadd-correlated
-noise and the ICL random-control term remain absent. It does not correct the measured relation.
+support counts and reports the nominal independent-pixel covariance. With
+`--lag-covariance-dir`, it also contracts the exact signed weights through the
+checksum-verified 9×9 per-frame short-range lag kernel measured from matched
+target/control coadds. This is a finite-lag sensitivity, not a full coadd model;
+the external ICL random-control term remains absent and no measured relation is
+corrected.
 See [`satellite_icl_shared_pixel_covariance_2026-10-18.md`](satellite_icl_shared_pixel_covariance_2026-10-18.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_shared_pixel_covariance_2026-10-18_01/`.
+The lag-kernel sensitivity runner is
+[`run_satellite_icl_lag_covariance.sbatch`](run_satellite_icl_lag_covariance.sbatch).
 
 `audit_satellite_icl_leave_block_out.py` recalculates the redshift/richness-adjusted partial
 correlation after omitting each connected 5-degree target/control sky block in turn. This
