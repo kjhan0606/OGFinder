@@ -57,6 +57,17 @@ PSF 반응 상세·SHA-256은
 재현 명령은 [`run_joint_icl_satellite_psf_redetection.sbatch`](run_joint_icl_satellite_psf_redetection.sbatch),
 감사기는 [`audit_joint_icl_satellite_psf_redetection.py`](audit_joint_icl_satellite_psf_redetection.py)에 있다.
 
+`estimate_hsc_coadd_noise_correlation.py` measures short-range pixel
+correlations in those 57 existing target coadds. It samples masked 64×64
+patches, removes a clipped local plane, normalizes by the delivered variance,
+and records the lag-correlation kernel plus an approximate large-top-hat noise
+inflation factor. It makes no data request and does not supply a source-photon
+noise model; unresolved objects and residual diffuse structure can still
+contribute. Run it through
+[`run_icl_coadd_noise_correlation.sbatch`](run_icl_coadd_noise_correlation.sbatch).
+This technical factor cannot replace the exact ICL/satellite estimator
+covariance or total science error.
+
 2026-10-12 수집 확장: 이후 12개 FITS 다운로드가 모두 완료됐으며, 파일 크기와
 SHA-256, FITS 구조와 WCS를 재검사했다. 이제 213개 후보 전체를 받도록
 `hsc_pilot.py prepare --all-selected`로 목록을 만들고 기존 `download_pilot.py`의
