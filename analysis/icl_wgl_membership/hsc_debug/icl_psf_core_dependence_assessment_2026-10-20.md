@@ -18,3 +18,5 @@
 이 검사는 57개 PSF 검증 표본이며 전체 800개 모집단이 아니다. 중심 PSF 모델은 약 7 arcsec 크기의 코어뿐이므로 확장 PSF 날개, 대규모 sky 잔차, 마스크·noise 계통효과는 포함하지 않는다. 따라서 이 상관은 ICL 검출이나 관측값 보정이 아니다. `science_measurement=false`, `psf_wings_validated=false`를 유지한다.
 
 재현기는 [`audit_icl_psf_core_dependence.py`](audit_icl_psf_core_dependence.py), 테스트는 [`test_audit_icl_psf_core_dependence.py`](test_audit_icl_psf_core_dependence.py)다. 산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_core_dependence_2026-10-20_02/summary.json` (SHA-256 `2fbbf6f89c16eea38153f19002b6e14b8b63d28b72d73c6fabd7ab000af5a805`)에 있다. 신규 HSC 자료 요청은 없었다.
+
+영역 평균 차이 민감도는 [`icl_psf_region_fixed_effects_assessment_2026-10-20.md`](icl_psf_region_fixed_effects_assessment_2026-10-20.md)에서 추가로 확인했다. 근사 tract 영역 고정효과 후 부분상관은 i `0.484`, i2 `0.231`이며, 이 분석도 탐색적 민감도이지 검출이나 유의성 검정은 아니다.
