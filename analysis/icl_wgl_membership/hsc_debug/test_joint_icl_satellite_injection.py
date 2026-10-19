@@ -3,6 +3,7 @@ import pytest
 
 from joint_icl_satellite_injection import (
     add_surface_brightness_injection,
+    redetect_masks_and_targets,
     satellite_halo_template,
 )
 
@@ -41,3 +42,25 @@ def test_surface_brightness_injection_rejects_bad_units_or_shape():
         add_surface_brightness_injection(native, native, 0.0)
     with pytest.raises(ValueError):
         add_surface_brightness_injection(native, np.zeros((3, 3)), 1.0)
+
+
+def test_redetection_rebuilds_masks_and_recovers_injected_member():
+    yy, xx = np.mgrid[:128, :128]
+    rng = np.random.default_rng(27)
+    variance = np.ones((128, 128), dtype=np.float32)
+    bits = np.zeros((128, 128), dtype=np.int32)
+    image = rng.normal(0.0, 0.2, size=variance.shape).astype(np.float32)
+    image += (500 * np.exp(-((xx - 64) ** 2 + (yy - 64) ** 2) / (2 * 2.0 ** 2))).astype(np.float32)
+    image += (30 * np.exp(-((xx - 90) ** 2 + (yy - 64) ** 2) / (2 * 2.0 ** 2))).astype(np.float32)
+    members = [{"INDEX": "0", "IN_FRAME": "True", "X_IMAGE": "91", "Y_IMAGE": "65"}]
+
+    result = redetect_masks_and_targets(
+        image, variance, bits, members, np.array([64.0, 64.0]), 0.168,
+    )
+
+    assert result["diagnostics"]["n_detections"] >= 2
+    assert result["diagnostics"]["n_matched_members"] == 1
+    assert len(result["targets_pixel_radius"]) == 1
+    assert result["icl_mask"].shape == image.shape
+    assert result["icl_mask"].any()
+    assert result["segmentation"].max() <= result["diagnostics"]["n_detections"]

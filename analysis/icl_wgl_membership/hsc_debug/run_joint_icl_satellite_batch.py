@@ -68,7 +68,9 @@ def summarize(records: list[dict]) -> dict:
         subset = [r for r in records if r["filter"] == filt]
         metrics = {}
         for key in ("icl_response_to_diffuse_unit_injection",
+                    "icl_plane_corrected_response_to_diffuse_unit_injection",
                     "icl_response_to_all_satellite_envelopes",
+                    "icl_plane_corrected_response_to_all_satellite_envelopes",
                     "satellite_response_to_smooth_diffuse",
                     "satellite_response_to_satellite_unit_injection"):
             vals = [r["transfer_response"][key] for r in subset]
@@ -89,7 +91,8 @@ def run_batch(data: Path, output_dir: Path,
               diffuse_amplitude: float = 1.0,
               satellite_amplitude: float = 1.0,
               diffuse_scale_kpc: float = 100.0,
-              satellite_scale_kpc: float = 15.0) -> dict:
+              satellite_scale_kpc: float = 15.0,
+              rerun_detection_masks: bool = False) -> dict:
     if output_dir.exists():
         raise FileExistsError(f"refusing to overwrite {output_dir}")
     selected = select_jointly_supported_pairs(icl_pairs_path, satellite_profiles_path)
@@ -102,8 +105,8 @@ def run_batch(data: Path, output_dir: Path,
         try:
             result = run_frame(
                 data, ident, path, icl_masks_dir, satellite_prep_dir, icl_pairs_path,
-                diffuse_amplitude, satellite_amplitude,
-                diffuse_scale_kpc, satellite_scale_kpc)
+                diffuse_amplitude, satellite_amplitude, diffuse_scale_kpc,
+                satellite_scale_kpc, rerun_detection_masks)
             if result["filter"] != filt:
                 raise ValueError(f"image filter mismatch for cluster {ident}")
             records.append({
@@ -138,9 +141,10 @@ def run_batch(data: Path, output_dir: Path,
             "diffuse_scale_kpc": diffuse_scale_kpc,
             "satellite_amplitude_at_50_per_galaxy_njy_arcsec2": satellite_amplitude,
             "satellite_scale_kpc": satellite_scale_kpc,
-            "masks_and_segmentation_fixed": True,
-            "detection_rerun": False,
+            "masks_and_segmentation_fixed": not rerun_detection_masks,
+            "detection_rerun": rerun_detection_masks,
             "poisson_noise_added": False,
+            "psf_convolution_applied": False,
             "original_fits_modified": False,
         },
         "n_completed": len(records),
@@ -156,8 +160,10 @@ def run_batch(data: Path, output_dir: Path,
         "single_frame_script_sha256": sha256(Path(__file__).with_name("joint_icl_satellite_injection.py")),
         "elapsed_seconds": time.time() - started,
         "limitations": [
-            "This is a support-selected fixed-mask measurement-transfer sensitivity, not a science measurement.",
-            "It does not rerun source detection, grow masks, convolve the injected shapes with PSFs, or model upstream sky subtraction.",
+            ("This is a support-selected redetection/mask-response sensitivity, not a science measurement."
+             if rerun_detection_masks else "This is a support-selected fixed-mask measurement-transfer sensitivity, not a science measurement."),
+            ("SEP source detection and K2.5 masks are regenerated per injection, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
+             if rerun_detection_masks else "It does not rerun source detection, grow masks, convolve the injected shapes with PSFs, or model upstream sky subtraction."),
             "The artificial components and diagonal-variance estimator do not establish population completeness or flux covariance.",
             "The paired annular sample is selected by existing exploratory coverage cuts and is not an independent validation sample.",
         ],
@@ -179,12 +185,15 @@ def main() -> None:
     parser.add_argument("--satellite-amplitude", type=float, default=1.0)
     parser.add_argument("--diffuse-scale-kpc", type=float, default=100.0)
     parser.add_argument("--satellite-scale-kpc", type=float, default=15.0)
+    parser.add_argument("--rerun-detection-masks", action="store_true",
+                        help="rerun SEP detection and regenerate source masks for each injection scenario")
     args = parser.parse_args()
     result = run_batch(args.data.resolve(), args.output_dir.resolve(),
                        args.icl_masks.resolve(), args.satellite_prep.resolve(),
                        args.icl_pairs.resolve(), args.satellite_profiles.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
-                       args.diffuse_scale_kpc, args.satellite_scale_kpc)
+                       args.diffuse_scale_kpc, args.satellite_scale_kpc,
+                       args.rerun_detection_masks)
     print(json.dumps({k: result[k] for k in
                       ("status", "n_completed", "n_errors", "by_filter", "elapsed_seconds")},
                      indent=2))

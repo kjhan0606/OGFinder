@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Fixed-mask joint ICL/satellite injection test on one existing HSC frame.
+"""Joint ICL/satellite injection test on one existing HSC frame.
 
 The runner adds synthetic components only to an in-memory science array. It
-reuses the stored K2.5 ICL mask and the satellite profile estimator's saved
-segmentation/base mask. This is a measurement-transfer pilot, not a science
-measurement or a replacement for rerunning source detection and sky processing.
+reuses the stored K2.5 ICL mask and satellite segmentation by default. An
+optional redetection mode reruns SEP detection and K2.5 masks for each injected
+scenario. Neither mode is a science measurement or models HSC upstream sky,
+PSF convolution, or injected-source photon noise.
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ from scipy.spatial import cKDTree
 import measure_full_sample_profiles as icl
 import measure_satellite_outer_profiles as satellite
 import prestack_core
+import prepare_detection_psf as detection_pipeline
 
 
 DEFAULT_DATA = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
@@ -121,6 +123,61 @@ def satellite_outer_measurement(image: np.ndarray, variance: np.ndarray,
     }
 
 
+def redetect_masks_and_targets(image: np.ndarray, variance: np.ndarray,
+                               bits: np.ndarray, member_rows: list[dict],
+                               center_xy: np.ndarray, pixel_scale: float):
+    """Re-run SEP detection and regenerate K2.5 masks on an injected image."""
+    invalid = ~np.isfinite(image) | ~np.isfinite(variance) | (variance <= 0)
+    bad_bits = sum(1 << bit for bit in satellite.BAD_BIT_POSITIONS)
+    bad = ((bits & bad_bits) != 0) | invalid
+    bright = (bits & satellite.BRIGHT_OBJECT_BIT) != 0
+    base = bad | bright
+    in_frame = [row for row in member_rows if row["IN_FRAME"] == "True"]
+    member_xy = np.asarray([[float(row["X_IMAGE"]) - 1.,
+                             float(row["Y_IMAGE"]) - 1.] for row in in_frame], dtype=float).reshape((-1, 2))
+    objects, segmentation, kron, kron_flags, bcg, _, diagnostics = detection_pipeline.detect(
+        image, variance, bad, center_xy, member_xy, pixel_scale,
+    )
+    if bcg < 0:
+        raise ValueError("redetection did not yield one unambiguous BCG at the supplied center")
+    masks, fallback_count = detection_pipeline.source_masks(
+        objects, segmentation, kron, kron_flags, base, bcg, member_xy, pixel_scale,
+    )
+    rows = []
+    for index, obj in enumerate(objects):
+        rows.append({
+            "NUMBER": str(index + 1),
+            "X_IMAGE": str(float(obj["x"]) + 1.), "Y_IMAGE": str(float(obj["y"]) + 1.),
+            "A_IMAGE": str(float(obj["a"])), "B_IMAGE": str(float(obj["b"])),
+            "THETA_RAD": str(float(obj["theta"])), "KRON_RADIUS": str(float(kron[index])),
+            "KRON_FLAGS": str(int(kron_flags[index])),
+        })
+    detections = satellite.parse_detections(rows)
+    matched, match_stats = satellite.match_members(member_rows, detections, pixel_scale)
+    matched_indices = {item["member_index"] for item in matched}
+    fallback_xy = np.asarray([[float(row["X_IMAGE"]) - 1., float(row["Y_IMAGE"]) - 1.]
+                              for row in in_frame if int(row["INDEX"]) not in matched_indices],
+                             dtype=float).reshape((-1, 2))
+    fallback_tree = cKDTree(fallback_xy) if len(fallback_xy) else None
+    member_tree = cKDTree(member_xy) if len(member_xy) else None
+    det_arrays = satellite.detection_arrays(detections, pixel_scale)
+    targets = []
+    for item in matched:
+        det = detections[item["detection_index"]]
+        radius = math.hypot(det["x"] - center_xy[0], det["y"] - center_xy[1])
+        # The caller converts this pixel radius to proper kpc using its frame cosmology.
+        targets.append((item, det, radius))
+    return {
+        "base": base, "segmentation": segmentation, "detections": det_arrays,
+        "fallback_tree": fallback_tree, "member_tree": member_tree,
+        "targets_pixel_radius": targets, "icl_mask": masks[0],
+        "diagnostics": {**diagnostics, "n_detections": len(rows),
+                         "n_fallback_member_masks": fallback_count,
+                         "n_matched_members": len(matched),
+                         "n_ambiguous_member_matches": match_stats["ambiguous"]},
+    }
+
+
 def run_frame(data: Path, ident: str, output: Path,
               icl_masks_dir: Path = DEFAULT_ICL_MASKS,
               satellite_prep_dir: Path = DEFAULT_SAT_PREP,
@@ -128,7 +185,8 @@ def run_frame(data: Path, ident: str, output: Path,
               diffuse_amplitude: float = 1.0,
               satellite_amplitude: float = 1.0,
               diffuse_scale_kpc: float = 100.0,
-              satellite_scale_kpc: float = 15.0) -> dict:
+              satellite_scale_kpc: float = 15.0,
+              rerun_detection_masks: bool = False) -> dict:
     if output.exists():
         raise FileExistsError(f"refusing to overwrite {output}")
     if (not platform.node().lower().startswith("lageunha")
@@ -244,16 +302,42 @@ def run_frame(data: Path, ident: str, output: Path,
         "both": diffuse_template + satellite_template,
     }
     measurements = {}
+    redetection_diagnostics = {}
     for name, injected in scenarios.items():
         synthetic = add_surface_brightness_injection(original, injected, conversion)
-        icl_result = prestack_core.measure(
-            synthetic, variance, icl_excluded, icl_geom, center_xy, kpc_per_pixel)
+        if rerun_detection_masks:
+            redetected = redetect_masks_and_targets(
+                synthetic, variance, bits, member_rows, center_xy, pixel_scale,
+            )
+            targets_now = []
+            for match, det, radius_pix in redetected["targets_pixel_radius"]:
+                radius_kpc = radius_pix * kpc_per_pixel
+                if satellite.MIN_CLUSTER_RADIUS_KPC <= radius_kpc < satellite.MAX_CLUSTER_RADIUS_KPC:
+                    targets_now.append((match, det, radius_kpc))
+            if not targets_now:
+                raise ValueError("redetection left no matched satellite targets in the configured radius range")
+            icl_result = prestack_core.measure(
+                synthetic, variance, redetected["icl_mask"], icl_geom,
+                center_xy, kpc_per_pixel)
+            sat_metric = satellite_outer_measurement(
+                synthetic, variance, redetected["base"], redetected["segmentation"],
+                redetected["detections"], redetected["fallback_tree"],
+                redetected["member_tree"], targets_now, center_xy, pixel_scale,
+                kpc_per_pixel, conversion)
+            redetection_diagnostics[name] = {
+                **redetected["diagnostics"],
+                "n_targets_in_50_500_kpc": len(targets_now),
+                "icl_mask_pixels": int(np.count_nonzero(redetected["icl_mask"])),
+            }
+        else:
+            icl_result = prestack_core.measure(
+                synthetic, variance, icl_excluded, icl_geom, center_xy, kpc_per_pixel)
+            sat_metric = satellite_outer_measurement(
+                synthetic, variance, base, segmentation, detections, fallback_tree,
+                member_tree, targets, center_xy, pixel_scale, kpc_per_pixel, conversion)
         icl_metric = float(icl_result["raw"][3] * conversion)
-        sat_metric = satellite_outer_measurement(
-            synthetic, variance, base, segmentation, detections, fallback_tree,
-            member_tree, targets, center_xy, pixel_scale, kpc_per_pixel,
-            conversion)
         measurements[name] = {"icl_raw_200_300_njy_arcsec2": icl_metric,
+                              "icl_plane_corrected_200_300_njy_arcsec2": float(icl_result["corrected"][3] * conversion),
                               "satellite_delta_50_75_njy_arcsec2": sat_metric["delta_sb_njy_arcsec2"],
                               "satellite_support": {k: sat_metric[k] for k in
                                                     ("n_satellites", "n_control_profiles")},
@@ -268,7 +352,8 @@ def run_frame(data: Path, ident: str, output: Path,
     both_icl = measurements["both"]["icl_raw_200_300_njy_arcsec2"] - base_icl
     both_sat = measurements["both"]["satellite_delta_50_75_njy_arcsec2"] - base_sat
     result = {
-        "schema": "hsc-joint-icl-satellite-fixed-mask-injection-v1",
+        "schema": ("hsc-joint-icl-satellite-redetection-injection-v1" if rerun_detection_masks
+                   else "hsc-joint-icl-satellite-fixed-mask-injection-v1"),
         "status": "complete",
         "science_measurement": False,
         "observational_validation_passed": False,
@@ -286,19 +371,28 @@ def run_frame(data: Path, ident: str, output: Path,
             "satellite_scale_kpc": satellite_scale_kpc,
             "template_unit": "nJy/arcsec^2, divided by FLUXMAG0-derived conversion before adding to native image",
             "n_injected_satellite_centers": len(targets),
-            "source_detection_and_masks_rerun": False,
+            "source_detection_and_masks_rerun": rerun_detection_masks,
             "variance_and_poisson_noise_changed": False,
             "original_fits_modified": False,
         },
         "transfer_response": {
             "icl_response_to_diffuse_unit_injection": inc_icl / diffuse_amplitude if diffuse_amplitude else None,
+            "icl_plane_corrected_response_to_diffuse_unit_injection": (
+                (measurements["icl_only"]["icl_plane_corrected_200_300_njy_arcsec2"]
+                 - measurements["baseline"]["icl_plane_corrected_200_300_njy_arcsec2"])
+                / diffuse_amplitude if diffuse_amplitude else None),
             "icl_response_to_all_satellite_envelopes": icl_from_sat / satellite_amplitude if satellite_amplitude else None,
+            "icl_plane_corrected_response_to_all_satellite_envelopes": (
+                (measurements["satellite_only"]["icl_plane_corrected_200_300_njy_arcsec2"]
+                 - measurements["baseline"]["icl_plane_corrected_200_300_njy_arcsec2"])
+                / satellite_amplitude if satellite_amplitude else None),
             "satellite_response_to_smooth_diffuse": sat_from_icl / diffuse_amplitude if diffuse_amplitude else None,
             "satellite_response_to_satellite_unit_injection": inc_sat / satellite_amplitude if satellite_amplitude else None,
             "both_minus_sum_residual_icl_njy_arcsec2": both_icl - (inc_icl + icl_from_sat),
             "both_minus_sum_residual_satellite_njy_arcsec2": both_sat - (sat_from_icl + inc_sat),
         },
         "measurements_by_scenario": measurements,
+        "redetection_by_scenario": redetection_diagnostics,
         "support": {"n_matched_members": len(matched),
                     "n_ambiguous_matches_rejected": match_stats["ambiguous"],
                     "n_injected_targets_in_50_500_kpc": len(targets)},
@@ -311,10 +405,12 @@ def run_frame(data: Path, ident: str, output: Path,
         },
         "script_sha256": sha256(Path(__file__)),
         "limitations": [
-            "Single-frame fixed-mask measurement-transfer pilot, not a population calibration.",
+            ("This is a support-selected, redetection-and-mask-response sensitivity, not a population calibration."
+             if rerun_detection_masks else "Single-frame fixed-mask measurement-transfer pilot, not a population calibration."),
             "Synthetic satellite envelopes are added to every positional member match; they are not fitted galaxy light profiles.",
             "The ICL metric is the target-side raw annular mean; target-minus-control stack injection is modeled by leaving controls unmodified.",
-            "Masks and source detections remain fixed, so detection completeness, segmentation/Kron response and mask growth are not tested.",
+            ("SEP source detection and K2.5 masks are regenerated, but injected-source photon noise, PSF convolution and HSC upstream sky processing are not modeled."
+             if rerun_detection_masks else "Masks and source detections remain fixed, so detection completeness, segmentation/Kron response and mask growth are not tested."),
             "The result is conditional on a single image, diagonal variance, assumed injection shapes, and existing automated centers/masks.",
             "It does not include PSF convolution, upstream sky processing, source Poisson noise, extinction or passband calibration.",
         ],
@@ -338,13 +434,16 @@ def main() -> None:
     parser.add_argument("--satellite-amplitude", type=float, default=1.0)
     parser.add_argument("--diffuse-scale-kpc", type=float, default=100.0)
     parser.add_argument("--satellite-scale-kpc", type=float, default=15.0)
+    parser.add_argument("--rerun-detection-masks", action="store_true",
+                        help="rerun SEP detection and regenerate source masks for each injection scenario")
     args = parser.parse_args()
     started = time.time()
     result = run_frame(args.data.resolve(), args.cluster_id, args.output.resolve(),
                        args.icl_masks.resolve(), args.satellite_prep.resolve(),
                        args.icl_pairs.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
-                       args.diffuse_scale_kpc, args.satellite_scale_kpc)
+                       args.diffuse_scale_kpc, args.satellite_scale_kpc,
+                       args.rerun_detection_masks)
     result["elapsed_seconds"] = time.time() - started
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n",
                            encoding="utf-8")

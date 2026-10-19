@@ -48,7 +48,9 @@ def test_duplicate_icl_pair_is_rejected(tmp_path):
 def test_summary_reports_filter_level_medians_and_keeps_exploratory_gate():
     records = [{"filter": "i", "transfer_response": {
         "icl_response_to_diffuse_unit_injection": x,
+        "icl_plane_corrected_response_to_diffuse_unit_injection": x / 2,
         "icl_response_to_all_satellite_envelopes": 2*x,
+        "icl_plane_corrected_response_to_all_satellite_envelopes": x,
         "satellite_response_to_smooth_diffuse": 0.1*x,
         "satellite_response_to_satellite_unit_injection": 0.5*x,
     }} for x in (1.0, 3.0, 5.0)]
