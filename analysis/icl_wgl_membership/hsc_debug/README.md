@@ -693,6 +693,14 @@ persists in both halves. Full statistics, limits, and figures are documented in
 This remains a cluster-only diagnostic with no random-lens subtraction and
 `science_measurement=false`.
 
+`audit_wl_source_reuse_covariance.py` uses the same approved pair rows to
+compare lens-endpoint, source-endpoint, and joint-endpoint spatial jackknife
+covariances. It also counts reused HSC source IDs and verifies that one source
+ID maps to one 5° source cell, so all repeated lens pairs are deleted together
+in the source-aware variants. It makes no HSC request and keeps
+`science_measurement=false`; output is written to a new directory by
+[`run_wl_source_reuse_covariance.sbatch`](run_wl_source_reuse_covariance.sbatch).
+
 ### B-mode polarity sensitivity stack
 
 The earlier two-hypothesis calibrated stack used only the previously approved row export
