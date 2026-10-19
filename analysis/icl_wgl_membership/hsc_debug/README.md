@@ -346,6 +346,17 @@ covariance. The Slurm wrapper is
 [`run_wl_tomographic_consistency.sbatch`](run_wl_tomographic_consistency.sbatch).
 It reads only the already approved cluster lens-source rows and local SACC
 `n(z)` input; no new HSC request or export is involved.
+The successful run was Slurm job 428830 (12m 41s, 1.83 GiB peak RSS), with
+52 shared sky-cell deletions and 2,153,004 selected pairs. Source-bin
+`DeltaSigma` differs across bins at 0.1–0.7 Mpc; the GLS consistency tests
+remain significant after Holm correction across seven radial intervals. The
+global cross-component test also flags a joint-bin residual, although no
+single-bin cross test survives four-test Holm correction. These are
+cluster-only calibration diagnostics, not detections. Full values, covariance,
+limitations, and reproducibility hashes are in
+[`wl_tomographic_consistency_assessment_2026-10-20.md`](wl_tomographic_consistency_assessment_2026-10-20.md);
+the saved figure is outside Git beside `summary.json` as
+`tomographic_profiles.png`.
 
 `prepare_wl_random_shape_count_plan.py` prepares (without submitting) a count-only
 S19A support query for a finalized `astrafek-wl-random-centers-v1` manifest. It
