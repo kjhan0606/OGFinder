@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 from fetch_ancillary_catalogues import sha
+from screen_wl_random_control_coordinates import load_preflight_cosmology
 from submit_wl_random_control_coordinates import validate_coordinate_plan
 
 
@@ -152,14 +153,12 @@ def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str):
     count_manifest = json.loads(
         (Path(coord_manifest["count_plan"]) / "random_control_count_plan.json").read_text(encoding="utf-8")
     )
-    preflight_manifest = json.loads(
-        (Path(count_manifest["source_preflight"]) / "preflight_manifest.json").read_text(encoding="utf-8")
-    )
+    h0, omega_m = load_preflight_cosmology(Path(count_manifest["source_preflight"]))
     center_manifest = {
         "schema": "astrafek-wl-random-centers-v1",
         "status": "selected_for_shape_count_preflight",
-        "h0_km_s_mpc": float(preflight_manifest["h0"]),
-        "omega_m": float(preflight_manifest["omega_m"]),
+        "h0_km_s_mpc": h0,
+        "omega_m": omega_m,
         "science_measurement": False,
         "selection": {
             "method": "lowest SHA-256 ranks per matched lens; coordinates selected without replacement",

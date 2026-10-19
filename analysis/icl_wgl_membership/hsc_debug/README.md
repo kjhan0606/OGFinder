@@ -636,17 +636,27 @@ batches complete (33,514 rows) and batch 002 submitted as CAS job 1062312. The
 checkpoint and batch hashes, rather than this progress note, are authoritative
 for completion.
 
-`screen_wl_random_control_coordinates.py` is the offline next step after that
-checkpoint is complete. It verifies each coordinate CSV against the approved
-per-lens counts and checksums, then audits overlap between each candidate's
-3-proper-Mpc aperture and every supplied CAMIRA cluster's 3-proper-Mpc
-aperture. It also flags exact repeated sky coordinates across lens-associated
-candidate rows. Its output is only a geometry-eligible pool: full-aperture HSC
-coverage, i-band mask completeness, HSC-I depth/PSF/sky matching, random-center
-selection, and spatial-block covariance remain separate gates. It is not a
-science measurement. The coordinate export was active when recorded; the
-offline screen has not been run. Any later HSC shape-row or image export needs
-its own explicit user approval.
+`screen_wl_random_control_coordinates.py` is the offline full-sample step after
+that checkpoint is complete. It verifies each coordinate CSV against the
+approved per-lens counts and checksums, then audits overlap between each
+candidate's 3-proper-Mpc aperture and every supplied CAMIRA cluster's
+3-proper-Mpc aperture. It also flags exact repeated sky coordinates across
+lens-associated candidate rows. Its output is only a geometry-eligible pool:
+full-aperture HSC coverage, i-band mask completeness, HSC-I depth/PSF/sky
+matching, random-center selection, and spatial-block covariance remain
+separate gates. It is not a science measurement.
+
+While the export is incomplete, `screen_wl_random_completed_batches.py` can
+run an explicitly partial geometry pilot on only hash-verified completed
+batches. Slurm job 428780 screened the first 50 lenses and 33,514 coordinates:
+2,129 passed the geometry rules, only 31 lenses had any such candidate, and
+the median was 5.5 candidates per lens. This early subset is not representative
+of all 800 targets; it does show why per-lens support must be checked before
+random-center selection. See
+[`wl_random_coordinate_geometry_pilot_2026-10-20.md`](wl_random_coordinate_geometry_pilot_2026-10-20.md).
+At the latest checkpoint, batch 002 remained submitted and the authenticated
+submitter was still alive; do not duplicate it. Any later HSC shape-row or
+image export needs its own explicit user approval.
 
 The 780k-coordinate geometry screen is available as the Slurm job
 `run_wl_random_coordinate_geometry.sbatch`; its analysis code is CPU-only.

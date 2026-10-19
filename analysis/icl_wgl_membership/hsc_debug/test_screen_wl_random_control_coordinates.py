@@ -1,6 +1,11 @@
 import numpy as np
 
-from screen_wl_random_control_coordinates import screen_geometry
+import hashlib
+import json
+
+import pytest
+
+from screen_wl_random_control_coordinates import load_preflight_cosmology, screen_geometry
 
 
 def test_geometry_screen_handles_ra_wrap_and_flags_duplicate_candidate():
@@ -35,3 +40,20 @@ def test_geometry_screen_rejects_unknown_lens_and_bad_chunk_size():
                         lenses, camira, 70, 0.3)
     with np.testing.assert_raises_regex(ValueError, "chunk size"):
         screen_geometry([], lenses, camira, 70, 0.3, chunk_size=0)
+
+
+def test_load_preflight_cosmology_uses_hash_verified_source_manifest(tmp_path):
+    sample_path = tmp_path / "sample_manifest.json"
+    sample_path.write_text(json.dumps({"h0": 70.0, "omega_m": 0.3}), encoding="utf-8")
+    digest = hashlib.sha256(sample_path.read_bytes()).hexdigest()
+    preflight_dir = tmp_path / "preflight"
+    preflight_dir.mkdir()
+    (preflight_dir / "preflight_manifest.json").write_text(json.dumps({
+        "source_manifest": str(sample_path), "source_sha256": digest,
+    }), encoding="utf-8")
+
+    assert load_preflight_cosmology(preflight_dir) == (70.0, 0.3)
+
+    sample_path.write_text(json.dumps({"h0": 68.0, "omega_m": 0.31}), encoding="utf-8")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        load_preflight_cosmology(preflight_dir)

@@ -33,6 +33,20 @@ from submit_wl_random_control_coordinates import (
 DEFAULT_CATALOG = Path("/gpfs/kjhan/Astrafek/data/catalog/camira_s20a_wide_sm.tbl")
 
 
+def load_preflight_cosmology(preflight_dir: Path) -> tuple[float, float]:
+    """Read cosmology from the hash-verified source sample manifest."""
+    preflight_dir = Path(preflight_dir)
+    preflight = json.loads((preflight_dir / "preflight_manifest.json").read_text(encoding="utf-8"))
+    source_manifest = Path(preflight["source_manifest"])
+    if sha(source_manifest) != preflight.get("source_sha256"):
+        raise ValueError("preflight source-manifest checksum mismatch")
+    sample = json.loads(source_manifest.read_text(encoding="utf-8"))
+    h0, omega_m = float(sample["h0"]), float(sample["omega_m"])
+    if not math.isfinite(h0) or h0 <= 0 or not math.isfinite(omega_m) or not 0 < omega_m < 1:
+        raise ValueError("source sample has invalid cosmology")
+    return h0, omega_m
+
+
 def unit_vectors(ra_deg, dec_deg):
     ra = np.deg2rad(np.asarray(ra_deg, dtype=float))
     dec = np.deg2rad(np.asarray(dec_deg, dtype=float))
@@ -186,9 +200,9 @@ def main():
     if np.any(values[:, 1] < 0) or np.any(values[:, 1] >= 360) or np.any(np.abs(values[:, 2]) > 90):
         raise ValueError("CAMIRA catalogue has invalid sky coordinates")
     preflight = Path(json.loads((Path(manifest["count_plan"]) / "random_control_count_plan.json").read_text())["source_preflight"])
-    preflight_doc = json.loads((preflight / "preflight_manifest.json").read_text())
+    h0, omega_m = load_preflight_cosmology(preflight)
     audited = screen_geometry(coordinates, lenses, values,
-                              preflight_doc["h0"], preflight_doc["omega_m"], args.chunk_size)
+                              h0, omega_m, args.chunk_size)
 
     per_lens = defaultdict(lambda: {"n_candidates": 0, "n_geometry_candidates": 0})
     for row in audited:

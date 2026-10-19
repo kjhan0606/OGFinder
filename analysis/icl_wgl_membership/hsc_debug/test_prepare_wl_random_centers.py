@@ -66,10 +66,15 @@ def test_prepare_writes_downstream_manifest_only_from_hashed_geometry(monkeypatc
     count_plan.mkdir()
     preflight = tmp_path / "preflight"
     preflight.mkdir()
+    source_manifest = tmp_path / "sample_manifest.json"
+    source_manifest.write_text(json.dumps({"h0": 70.0, "omega_m": 0.3}))
     (count_plan / "random_control_count_plan.json").write_text(json.dumps({
         "source_preflight": str(preflight),
     }))
-    (preflight / "preflight_manifest.json").write_text(json.dumps({"h0": 70.0, "omega_m": 0.3}))
+    (preflight / "preflight_manifest.json").write_text(json.dumps({
+        "source_manifest": str(source_manifest),
+        "source_sha256": sha(source_manifest),
+    }))
     plan_doc = {"count_plan": str(count_plan)}
     plan_path = coordinate_plan / "random_control_coordinate_plan.json"
     plan_path.write_text(json.dumps(plan_doc))
