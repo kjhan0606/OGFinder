@@ -536,3 +536,18 @@ selection, and spatial-block covariance remain separate gates. It is not a
 science measurement. The coordinate export was active when recorded; the
 offline screen has not been run. Any later HSC shape-row or image export needs
 its own explicit user approval.
+
+`prepare_wl_random_centers.py` is the local step after the geometry screen. It
+verifies the coordinate plan/checkpoint hashes, the geometry output hashes and
+the per-lens counts, then selects up to an explicitly supplied number of
+centers per matched lens by a recorded SHA-256 ranking seed. It writes the
+`astrafek-wl-random-centers-v1` manifest consumed by
+`prepare_wl_random_shape_count_plan.py`. The required `--per-lens` argument has
+no default, so the provisional sample size is an explicit analysis choice. The
+manifest remains `science_measurement=false`: full-aperture coverage, depth,
+PSF, sky matching, random-center overlap and spatial covariance are still
+unverified. Preparing the later S19A count-only SQL is offline; submitting it
+requires separate user approval, and exporting any source-shape rows requires
+another approval after the observed counts and transfer size are known. Tests
+for deterministic balanced selection are in
+`test_prepare_wl_random_centers.py`.
