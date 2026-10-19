@@ -457,6 +457,18 @@ or ICL–satellite association significance. See
 [`icl_2d_target_control_stack_README.md`](icl_2d_target_control_stack_README.md)
 and [`icl_2d_independent_support_assessment_2026-10-19.md`](icl_2d_independent_support_assessment_2026-10-19.md).
 
+The 2026-10-20 outer-annulus test subtracts each matched pair's own 400–500 kpc
+mean from its inner profile, requiring at least 5% common-pixel support in both
+regions. In this support-selected sensitivity the i-band outer level is
+`1.66–1.78` nJy/arcsec² across the three inner annuli, while i2 is near zero;
+the resulting inner excesses remain positive in the connected 5° block
+intervals. This does not show whether the i-band offset is residual sky or real
+extended light, and the outer annulus itself may contain ICL. It is not a
+corrected ICL profile or a detection. Reproduce with
+[`audit_icl_outer_annulus_baseline.py`](audit_icl_outer_annulus_baseline.py);
+the 5,000-replicate output and paired rows are in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_outer_annulus_baseline_2026-10-20_02/`.
+
 Keep the `i` and `i2` stacks separate. HSC PDR3 documents those as similar but
 non-identical response curves; the combined coadds use object-specific
 effective-response corrections, and the uncorrected photometric difference is
