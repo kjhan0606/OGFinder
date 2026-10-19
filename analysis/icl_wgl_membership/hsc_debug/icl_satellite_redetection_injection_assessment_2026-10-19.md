@@ -48,19 +48,53 @@ azimuthal-control 프로필을 측정했다. 원본 FITS는 수정하지 않았�
 고정 분산에서 마스크/분할 변화만 다시 계산한 것이므로 응답의 표본 중앙값을
 보정계수나 실제 ICL–위성 공분산으로 사용할 수 없다.
 
+## 미해결 BCG 보수 마스크 민감도 실행
+
+유일 BCG 검출에 실패했을 때 BCG를 추정하지 않고 모든 검출원을 마스크하는
+`unresolved_bcg_policy=mask_all` 민감도 실행을 별도 출력 폴더에서 수행했다.
+Slurm job 428217은 GPU 1개·16 GiB 메모리 요청으로 6분 6초에 완료했고 최대 RSS는
+835,136 KiB였다. 63쌍 중 57쌍( i 13, i2 44 )이 완료됐으며, 6쌍은 모두
+`no satellite profile passed fixed 50--75 kpc support`로 실패했다. 독립 감사는
+57개 프레임 파일 해시와 전체 결과/오류 분할을 확인했고 `verified_partial`을
+기록했다. 요약 SHA-256은
+`c5b564a6f45488e5eadbd92764a776f0682d571304dd7c234c9bde1e3af334b6`이다.
+
+완료된 57쌍의 네 시나리오(총 228개)에서 146개 시나리오는
+`mask_all_sources`, 82개는 `preserve_unique_bcg`를 기록했다. 엄격 기준 실행의
+20쌍은 모두 이번 실행에도 포함되며, 두 실행에서 네 응답량 모두 프레임별 값이
+정확히 일치했다(최대 절대 차이 0). 즉 추가 성공은 BCG 중심을 추측해 채운 결과가
+아니라, BCG 검출이 불명확할 때 모든 검출원을 가리는 별도 민감도 정책으로 얻은
+범위다.
+
+두 번째 실행 결과와 감사 파일은 각각
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/joint_icl_satellite_redetection_2026-10-19_02/summary.json`과
+같은 폴더의 `audit.json`에 있다.
+
+| 응답량 중앙값 | i (n=13) | i2 (n=44) |
+|---|---:|---:|
+| ICL←확산 주입 | 0.2153 | 0.2224 |
+| ICL←위성 외곽광 | 0.3610 | 0.4921 |
+| 위성←확산광 | −0.0371 | 0.0156 |
+| 위성←위성 주입 | 0.2978 | 0.3962 |
+
+이 값들은 mask-all 설정에서 완료된 하위표본의 주입 회수 민감도 요약이다. BCG
+광을 제거할 수 있고, 검출/마스크가 신호에 따라 달라지며, 실패가 6쌍 남아 있으므로
+전체 모집단의 회수율·보정행렬·관측 공분산으로 해석하면 안 된다. 감사기는 새
+민감도 정책과 각 시나리오의 BCG 후보 수/적용 마스크 정책이 일치하는지도 검증한다.
+
 ## 판단과 다음 관문
 
-현재 주입 측정기는 63쌍 모집단에서 유일 BCG 재검출과 위성 annulus 지원을 동시에
-유지하지 못했다. 이는 주입행렬을 관측 ICL–위성 상관에 적용할 수 없다는 추가
-근거다. `science_measurement=false`, `observational_validation_passed=false`,
+현재 주입 측정기는 63쌍 전체에서 유일 BCG 재검출과 위성 annulus 지원을 동시에
+유지하지 못했다. mask-all 민감도는 처리 범위를 넓혔지만 BCG 정의 자체를 바꾸므로
+주입행렬을 관측 ICL–위성 상관에 적용할 수 없다는 판단은 그대로다.
+`science_measurement=false`, `observational_validation_passed=false`,
 `flux_covariance_available=false`를 유지한다.
 
-이번 계산은 주입원 photon noise, 관측 PSF convolution, upstream HSC sky 처리,
-상관된 coadd 분산을 포함하지 않는다. 다음 단계는 BCG 검출을 억지로 통과시키는
-것이 아니라, 실패 원인을 중심 검출 후보 수·입력 BCG/중심 오프셋·Kron 마스크
-coverage로 분리해 기록하고, 사전에 정한 마스크 정책으로 전체 표본의 주입 회수율을
-다시 검증하는 것이다. 그 뒤 실제 PSF/잡음 및 source 재검출을 포함한 공분산 검증이
-필요하다.
+두 실행 모두 주입원 photon noise, 관측 PSF convolution, upstream HSC sky 처리,
+상관된 coadd 분산을 포함하지 않는다. 다음 계산 관문은 실제 PSF와 잡음 모델을
+포함하고, BCG/중심 오프셋과 마스크 coverage를 보존하는 주입 회수 및 공분산 검증이다.
+그 계산의 설정·자원 요청·출력 규모를 먼저 고정하고 검토 승인을 받은 뒤에만
+실행한다.
 
 재현 도구는 [`joint_icl_satellite_injection.py`](joint_icl_satellite_injection.py),
 [`run_joint_icl_satellite_batch.py`](run_joint_icl_satellite_batch.py),

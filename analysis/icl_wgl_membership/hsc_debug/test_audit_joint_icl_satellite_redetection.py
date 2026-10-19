@@ -24,7 +24,10 @@ def test_audit_verifies_partial_redetection_batch_and_keeps_science_gate(tmp_pat
             "baseline": {}, "icl_only": {}, "satellite_only": {}, "both": {},
         },
         "redetection_by_scenario": {
-            "baseline": {}, "icl_only": {}, "satellite_only": {}, "both": {},
+            "baseline": {"n_bcg_candidates": 1, "bcg_mask_policy": "preserve_unique_bcg"},
+            "icl_only": {"n_bcg_candidates": 1, "bcg_mask_policy": "preserve_unique_bcg"},
+            "satellite_only": {"n_bcg_candidates": 1, "bcg_mask_policy": "preserve_unique_bcg"},
+            "both": {"n_bcg_candidates": 1, "bcg_mask_policy": "preserve_unique_bcg"},
         },
     }))
     summary_path = tmp_path / "summary.json"
@@ -33,6 +36,7 @@ def test_audit_verifies_partial_redetection_batch_and_keeps_science_gate(tmp_pat
         "status": "partial", "science_measurement": False,
         "injection": {"detection_rerun": True,
                       "masks_and_segmentation_fixed": False,
+                      "unresolved_bcg_policy": "mask_all",
                       "poisson_noise_added": False,
                       "psf_convolution_applied": False,
                       "original_fits_modified": False},
@@ -53,6 +57,8 @@ def test_audit_verifies_partial_redetection_batch_and_keeps_science_gate(tmp_pat
     assert result["n_selected"] == 2
     assert result["frame_sha256_verified"] == 1
     assert result["errors_by_type_and_message"] == {"ValueError: synthetic test gate": 1}
+    assert result["unresolved_bcg_policy"] == "mask_all"
+    assert result["bcg_mask_policy_scenarios"] == {"preserve_unique_bcg": 4}
 
 
 def test_audit_rejects_missing_selected_pair(tmp_path):

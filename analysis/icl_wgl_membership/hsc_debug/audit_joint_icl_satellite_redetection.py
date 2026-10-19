@@ -31,6 +31,9 @@ def audit(summary_path: Path) -> dict:
             or injection.get("psf_convolution_applied") is not False
             or injection.get("original_fits_modified") is not False):
         raise ValueError("batch provenance does not match the redetection injection stage")
+    unresolved_bcg_policy = injection.get("unresolved_bcg_policy")
+    if unresolved_bcg_policy not in (None, "error", "mask_all"):
+        raise ValueError("unknown unresolved-BCG policy in batch provenance")
     selection = summary.get("selection", {})
     selected = [(str(row["cluster_id"]), str(row["filter"]))
                 for row in selection.get("selected_pairs", [])]
@@ -50,6 +53,7 @@ def audit(summary_path: Path) -> dict:
         raise ValueError("batch totals/status do not match its records")
 
     per_filter = Counter()
+    bcg_mask_policies = Counter()
     for record in records:
         path = Path(record["path"])
         if not path.is_file() or sha256(path) != record.get("sha256"):
@@ -68,6 +72,19 @@ def audit(summary_path: Path) -> dict:
             raise ValueError(f"frame does not contain all paired injection scenarios: {path}")
         if set(frame.get("redetection_by_scenario", {})) != {"baseline", "icl_only", "satellite_only", "both"}:
             raise ValueError(f"frame is missing redetection diagnostics: {path}")
+        if unresolved_bcg_policy is not None:
+            for scenario, diagnostic in frame["redetection_by_scenario"].items():
+                candidate_count = diagnostic.get("n_bcg_candidates")
+                policy = diagnostic.get("bcg_mask_policy")
+                if (not isinstance(candidate_count, int) or candidate_count < 0
+                        or policy not in {"preserve_unique_bcg", "mask_all_sources"}):
+                    raise ValueError(f"missing or invalid BCG mask diagnostic for {scenario}: {path}")
+                expected = ("preserve_unique_bcg" if candidate_count == 1
+                            else "mask_all_sources" if unresolved_bcg_policy == "mask_all"
+                            else None)
+                if policy != expected:
+                    raise ValueError(f"BCG candidate count and mask policy disagree for {scenario}: {path}")
+                bcg_mask_policies[policy] += 1
         per_filter[str(record["filter"])] += 1
 
     return {
@@ -78,6 +95,8 @@ def audit(summary_path: Path) -> dict:
         "n_completed": len(records),
         "n_errors": len(errors),
         "completed_by_filter": dict(sorted(per_filter.items())),
+        "unresolved_bcg_policy": unresolved_bcg_policy,
+        "bcg_mask_policy_scenarios": dict(sorted(bcg_mask_policies.items())),
         "errors_by_type_and_message": {
             f"{kind}: {message}": count
             for (kind, message), count in sorted(Counter(
