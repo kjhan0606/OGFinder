@@ -551,3 +551,18 @@ requires separate user approval, and exporting any source-shape rows requires
 another approval after the observed counts and transfer size are known. Tests
 for deterministic balanced selection are in
 `test_prepare_wl_random_centers.py`.
+
+`plan_wl_random_center_scale.py` compares candidate random-to-lens ratios using
+the measured 800-lens shape-row count and CSV bytes; it performs no network
+request. The current export has 3,069,544 pairs in 909,833,598 bytes (296.4
+bytes per pair). An 8:1 scenario would mean 6,400 random centers, 256 count-only
+SQL batches, and an estimated 24,556,352 source-pair rows (6.78 GiB), if
+random fields match the lens export's mean density and row width. Under equal,
+independent per-center shape variance, the random stack would contribute 1/8 of
+the lens-stack variance, or 11.1% of their combined variance. This is a
+planning candidate only: spatial overlap, depth and the eventual per-center
+CAS counts can change the estimate. The reproducible scenario table is saved
+outside Git at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_center_scale_2026-10-19_01/scale_plan.json`.
+Exact random centers and count-only SQL will be prepared after the coordinate
+geometry screen; no query has been submitted for this sample-size plan.
