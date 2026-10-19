@@ -94,6 +94,10 @@ def test_validates_covariance_summary_internal_invariants():
     assert result["status"] == "verified"
     assert result["science_measurement"] is False
     assert result["covariance_modes"]["joint_endpoints"]["profile_rows_checked"] == 28
+    assert result["covariance_modes"]["joint_endpoints"][
+        "minimum_covariance_eigenvalue_relative_to_entry_scale"] == 1.0
+    assert result["covariance_modes"]["joint_endpoints"][
+        "psd_tolerance_relative_to_entry_scale"] == 1e-12
 
 
 def test_rejects_profile_error_that_disagrees_with_covariance():

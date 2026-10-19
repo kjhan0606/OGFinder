@@ -362,7 +362,8 @@ the saved figure is outside Git beside `summary.json` as
 galaxy in multiple lens stacks changes delete-one covariance when blocks are
 deleted by lens endpoint, source endpoint, or either endpoint jointly. The
 independent `validate_wl_source_reuse_covariance.py` checks each saved matrix's
-symmetry, positive semidefiniteness, rank and profile-error diagonal; it also
+symmetry, positive semidefiniteness to `1e-12` of the largest matrix-entry
+scale, rank and profile-error diagonal; it also
 recomputes the four-bin GLS consistency tests and Holm adjustments and checks
 the source-reuse counts. Run it only after the producer writes `summary.json`,
 using a fresh output path:
@@ -370,7 +371,7 @@ using a fresh output path:
 ```bash
 python3 analysis/icl_wgl_membership/hsc_debug/validate_wl_source_reuse_covariance.py \
   --summary /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_source_reuse_covariance_2026-10-20_01/summary.json \
-  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_source_reuse_covariance_validation_2026-10-20_01/validation.json
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_source_reuse_covariance_validation_2026-10-20_02/validation.json
 ```
 
 The validator audits internal numerical consistency of the producer output; it

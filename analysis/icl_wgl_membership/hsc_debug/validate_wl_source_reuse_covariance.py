@@ -101,7 +101,8 @@ def validate_summary(payload: dict) -> dict:
             raise ValueError(f"{mode_name} covariance is not symmetric")
         symmetric = 0.5 * (matrix + matrix.T)
         eigen_min = float(np.linalg.eigvalsh(symmetric)[0])
-        if eigen_min < -1e-9 * scale:
+        psd_tolerance_relative = 1e-12
+        if eigen_min < -psd_tolerance_relative * scale:
             raise ValueError(f"{mode_name} covariance is not positive semidefinite")
         rank = int(np.linalg.matrix_rank(symmetric))
         if int(mode.get("covariance_rank", -1)) != rank:
@@ -193,7 +194,10 @@ def validate_summary(payload: dict) -> dict:
             "n_deletion_blocks": len(deletions),
             "covariance_rank": rank,
             "covariance_dimension": dimension,
+            "maximum_absolute_covariance_entry": scale,
             "minimum_covariance_eigenvalue": eigen_min,
+            "minimum_covariance_eigenvalue_relative_to_entry_scale": eigen_min / scale,
+            "psd_tolerance_relative_to_entry_scale": psd_tolerance_relative,
             "maximum_holm_p_value": float(np.max(adjusted)),
             "profile_rows_checked": len(profile),
         }
