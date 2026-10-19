@@ -656,14 +656,13 @@ the median was 5.5 candidates per lens. This early subset is not representative
 of all 800 targets; it does show why per-lens support must be checked before
 random-center selection. See
 [`wl_random_coordinate_geometry_pilot_2026-10-20.md`](wl_random_coordinate_geometry_pilot_2026-10-20.md).
-The contemporaneous pilot note records batch 002 as submitted while its
-authenticated submitter was alive. A later checkpoint recheck still found
-2/32 batches complete and batch 002 recorded as submitted, but the submitter
-process was gone and Slurm no longer recognized job 1062312. The HSC CAS job
-state has not yet been reconciled; check it through the authenticated CAS
-status endpoint before resuming, and do not resubmit batch 002 until its remote
-state is known. Any later HSC shape-row or image export needs its own explicit
-user approval.
+The pilot note records batch 002 as submitted while its authenticated
+submitter was alive. A later SSH recheck on `lageunha` confirmed that
+submitter PID 1049265 remains live and polling the CAS job. The checkpoint is
+still at 2/32 complete with batch 002 submitted. Its ID 1062312 is an HSC CAS
+job ID, not a Slurm job ID; do not query it with `squeue` or submit it again.
+Let the existing process continue. Any later HSC shape-row or image export
+needs its own explicit user approval.
 
 The 780k-coordinate geometry screen is available as the Slurm job
 `run_wl_random_coordinate_geometry.sbatch`; its analysis code is CPU-only.
