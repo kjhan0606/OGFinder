@@ -272,6 +272,16 @@ calculation is not yet run because the random-source pairs have not been
 exported. Its grid is an exploratory fallback and does not guarantee contiguous
 independent HSC regions; region-based jackknife remains a science gate.
 
+`prepare_wl_random_shape_count_plan.py` prepares (without submitting) a count-only
+S19A support query for a finalized `astrafek-wl-random-centers-v1` manifest. It
+retains the association between each unique random-center ID and its matched
+cluster ID, enforces a common target redshift per matched cluster, and counts
+distinct shape objects within that target's proper 3 Mpc aperture. The result
+contains no source shape rows and no images. Its SQL/count plan must be reviewed
+for a separate explicit approval before execution; the eventual source-row
+export will require another approval after observed counts and transfer size
+are known.
+
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 
 `analyze_member_weighted_satellite_profiles.py` joins existing per-annulus satellite
