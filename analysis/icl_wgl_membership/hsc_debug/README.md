@@ -92,6 +92,8 @@ PSF 반응 상세·SHA-256은
 
 744개 승인 배치와 시험 PSF 1개의 중심부 크기 분포를 해시 재검증한 뒤 요약했다. 전체 745개 중 양수 성분 2차 모멘트의 가우스 등가 장축 FWHM 중앙값은 1.084 arcsec이고, 5–95백분위는 0.965–1.198 arcsec다. 프레임 중심 57개와 위성 위치 688개의 중앙값은 각각 1.087, 1.084 arcsec다. 이들은 7 arcsec 안팎 모델 코어의 설명 지표이며 target-specific 확장 PSF 날개나 seeing 보정값이 아니다. 음수 보간 픽셀을 보존하고 `science_measurement=false`를 유지한다. 재현 코드·테스트·해시는 [PSF 코어 분포 평가](psf_core_variation_assessment_2026-10-20.md)에 있다.
 
+같은 57개 주입 프레임에서 ICL 200–300 kpc target-minus-control 신호와 중심 PSF 코어 폭의 양의 공변동을 점검했다. redshift·richness·저장 mask common coverage를 조정한 부분상관은 i `r=0.500`(13개), i2 `r=0.247`(44개)였다. 블록 재표집은 i에서 매우 넓고 i2에서 0 부근을 포함해 검출로 해석하지 않는다. 저장 annulus 마스크와 재검출 마스크의 지원률 차이도 기록했다. 상세 방법과 SHA-256은 [ICL–PSF 코어 공변동 평가](icl_psf_core_dependence_assessment_2026-10-20.md)에 있다.
+
 `estimate_hsc_coadd_noise_correlation.py` compares short-range pixel residual
 covariance in those 57 target coadds with their 57 already-downloaded matched
 control coadds. It applies the saved K2.5 target source masks and regenerates
@@ -1019,4 +1021,4 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 
 면적지원 불균형의 영향을 점검하기 위해 동일 94행에서 공통지원률 또는 표적·대조 지원률을 추가 공변량으로 둔 부분상관도 계산했다. i2 기준 `r=0.293`은 각각 `0.320`, `0.305`였고, 같은 5° 연결 공간블록의 짝지은 조정 전후 차이 분포는 모두 0을 포함했다. i는 26쌍뿐이며 기준 `0.079`가 `0.086`, `0.129`로 변했지만 차이 범위가 넓다. 이는 선택 편향 교정이나 검출이 아닌 지원 민감도다. 재현 코드·시험·원자료 해시는 [면적지원 조정 민감도](satellite_icl_coverage_adjustment_assessment_2026-10-20.md)에 기록했다.
 
-2026-10-20 전체 `hsc_debug` 테스트 스위트는 275개 테스트와 6개 하위 테스트를 모두 통과했다. 이는 재현 도구의 코드 검증이며 ICL·렌즈 신호의 과학 승인이나 랜덤 차감 관문을 대신하지 않는다.
+2026-10-20 전체 `hsc_debug` 테스트 스위트는 282개 테스트와 6개 하위 테스트를 모두 통과했다. 이는 재현 도구의 코드 검증이며 ICL·렌즈 신호의 과학 승인이나 랜덤 차감 관문을 대신하지 않는다.
