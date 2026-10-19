@@ -119,6 +119,9 @@ def main() -> int:
         "satellite_response_to_smooth_diffuse",
         "satellite_response_to_satellite_unit_injection",
     )}
+    response_deltas_by_filter = {
+        filt: {key: [] for key in response_deltas} for filt in ("i", "i2")
+    }
     output_root = args.output_dir.resolve()
     for row in summary.get("records", []):
         pair = (str(row["cluster_id"]), str(row["filter"]).lower())
@@ -178,6 +181,8 @@ def main() -> int:
                 if not np.isfinite(value):
                     raise ValueError(f"non-finite paired PSF response difference for {pair}/{key}")
                 response_deltas[key].append(value)
+                if pair[1] in response_deltas_by_filter:
+                    response_deltas_by_filter[pair[1]][key].append(value)
                 deltas[key] = value
         checked_records.append({"cluster_id": pair[0], "filter": pair[1],
                                 "n_satellite_psfs": n_sat,
@@ -190,14 +195,21 @@ def main() -> int:
             or len(error_pairs) != int(summary.get("n_errors", -1))):
         raise ValueError("frame results and errors do not partition the approved PSF sample")
     paired_summary = {}
-    for key, values in response_deltas.items():
-        paired_summary[key] = ({
+    def summarize_deltas(values):
+        return ({
             "n_paired_frames": len(values),
             "median_psf_minus_no_psf": float(np.median(values)),
             "q16": float(np.quantile(values, 0.16)),
             "q84": float(np.quantile(values, 0.84)),
         } if values else {"n_paired_frames": 0, "median_psf_minus_no_psf": None,
                           "q16": None, "q84": None})
+
+    for key, values in response_deltas.items():
+        paired_summary[key] = summarize_deltas(values)
+    paired_by_filter = {
+        filt: {key: summarize_deltas(values) for key, values in metrics.items()}
+        for filt, metrics in response_deltas_by_filter.items()
+    }
 
     result = {
         "schema": "astrafek-joint-icl-satellite-psf-redetection-audit-v1",
@@ -212,9 +224,11 @@ def main() -> int:
         "psf_plan_sha256": sha256(args.plan_dir / "psf_picker_plan.json"),
         "psf_mapping_sha256": sha256(mapping_path),
         "psf_download_audit_sha256": sha256(audit_path),
+        "audit_script_sha256": sha256(Path(__file__)),
         "code_sha256": code_hashes,
         "records": checked_records,
         "paired_no_psf_comparison": paired_summary,
+        "paired_no_psf_comparison_by_filter": paired_by_filter,
         "limitations": [
             "The test uses compact model-PSF cores only; extended wings are not included.",
             "Injected source Poisson noise, HSC upstream sky transfer, and correlated coadd noise are not modeled.",
