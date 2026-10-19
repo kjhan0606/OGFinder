@@ -154,18 +154,34 @@ i2 필터는 491개 중 457개가 4개 이상이다. 후보 테이블은 모두
 요청하며 HSC 영상, shape 행, photo-z는 포함하지 않는다.
 
 계획은 748개 프레임의 새 후보를 포함하고 이전 요청 50개 프레임과 합쳐 798/800
-프레임에 후보를 둔다. 업로드 좌표 VOTable은 815,917바이트이며, 기존 대조의
-행률을 단순 외삽한 예상 응답은 약 963행/0.20 MB다. 이는 예상치일 뿐이며 기존
-TAP 실행기는 20,000행 제한에 닿으면 잘림 가능성을 이유로 실패하도록 구성돼 있다.
+프레임에 후보를 둔다. 계획 당시 업로드 좌표 VOTable은 815,917바이트였고 기존
+대조 행률의 단순 외삽 응답은 약 963행/0.20 MB였다. 2026-10-20 사용자 승인 뒤
+ESA Gaia DR3 TAP 조회를 완료했다. 업로드 조인은 7,509개와 250개 시험 배치 모두
+서버에서 약 60초 후 중단되어, 동일한 2초각 원뿔을 250개씩 ADQL에 넣는 31개
+직렬 조회로 전환했다. TAP은 승인된 16개 Gaia 열만 반환했고, Astrafek이 각
+응답원을 원래 후보에 정확히 연결해 최종 18개 열을 만들었다. 이미지·HSC shape·
+photo-z는 요청하지 않았다.
 입력 위치 목록 SHA-256은
 `8b0bb74973a003bea6b1efe673fbb37a755743f76d6dbf3b027505441bc0489a`, ADQL SHA-256은
-`488b7c71c209da3bf3487f4c0c8b4d2210f8ddb329d24af8dc8544c5c917d4db`다. 계획 파일은
+`488b7c71c209da3bf3487f4c0c8b4d2210f8ddb329d24af8dc8544c5c917d4db`다. 승인 계획은
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_gaia_full_sample_plan_2026-10-20_01/plan.json`
-에 있으며 `prepared_not_submitted`다. 외부 좌표 업로드나 Gaia 조회는 아직 하지
-않았다. 사용자 승인 후에만 기존 `match_psf_gaia.py`를 비동기 모드로 실행한다.
-현재 plan.json SHA-256은 `1a94d87ca338de95befc48500c8df69f5e8c0fef19af9d1d6623f789f49e9799`다.
-Gaia 매칭과 품질 검토를 통과해도 실제 별의 확장 날개·coadd epoch·밝은별 포화
-문제는 별도로 검증해야 하며 PSF 과학 승인이 자동으로 이뤄지지 않는다.
+에 보존했고 SHA-256은 `1a94d87ca338de95befc48500c8df69f5e8c0fef19af9d1d6623f789f49e9799`다.
+실제 결과는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_gaia_full_sample_match_2026-10-20_03/`
+에 있다. 7,509개 위치에서 944개 후보–Gaia 쌍을 찾았으며 944개 Gaia source는
+서로 달랐다. 파일은 184,572바이트, SHA-256은
+`51ca816a3bb39d3044410f75532f6ec03ef2b37e2e2e8ebc5c99251db5f49b33`다. 독립
+재대조에서 944개 모두 2초각 이내였고 측정 분리각은 0.00098–0.25033초각이었다.
+기존 Astrafek 증거 분류기는 후보 6,565개를 무매칭, 464개를 별 증거 불충분,
+480개를 항성 근거가 있으나 epoch·영상 검토가 필요한 대상으로 분류했다. 이는
+우선순위 표식일 뿐 별 표본 승인이나 과학 측정이 아니다. Gaia 기준 epoch와 HSC
+coadd 유효 epoch 차이, 변광·포화·고립도, 확장 PSF 날개는 여전히 검토해야 한다.
+배치 실행기는 [`match_psf_gaia_batched.py`](match_psf_gaia_batched.py)이며, 결과
+요약 SHA-256은 `2ea53a689ad0655cdec1f3d7b05ab8acab020463c4275698c2a3244f8d2da2ef`다.
+[`audit_psf_gaia_batched.py`](audit_psf_gaia_batched.py)가 31개 쿼리·원시 응답·후보 연결·
+분리각·최종 CSV를 대조했다. `verification.json`은 `verified`이고 SHA-256은
+`b5b2309a8cc3bc205b7e998076863e373909f3d94f4db138e83d921701540ac3`다.
+`science_measurement=false`, `psf_approved=false`를 유지한다.
 
 ## 산출물과 다음 조건
 
