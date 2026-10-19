@@ -2,6 +2,8 @@
 
 이 디렉터리의 스크립트는 ICL 스케일 스택을 실제 목록으로 준비하는 절차이다. 논문에 함께 제공한다. 실행 결과는 과학 측정이 아니다. `science_measurement` 는 거짓으로 남는다.
 
+두 연구 갈래의 현재 표본, ICL–위성 연관성 검증, 표적 전용 weak-lensing 결과와 남은 과학 관문은 [통합 연구 평가](icl_wgl_integrated_research_assessment_2026-10-19.md)를 참조한다.
+
 작업 디렉터리는 `/gpfs/kjhan/Astrafek/data` 이다. 다른 경로를 쓰려면 `ASTRAFEK_DATA` 를 둔다. OGFinder 위치는 `ASTRAFEX_OGF_ROOT` 이다.
 
 ```bash
@@ -654,9 +656,14 @@ the median was 5.5 candidates per lens. This early subset is not representative
 of all 800 targets; it does show why per-lens support must be checked before
 random-center selection. See
 [`wl_random_coordinate_geometry_pilot_2026-10-20.md`](wl_random_coordinate_geometry_pilot_2026-10-20.md).
-At the latest checkpoint, batch 002 remained submitted and the authenticated
-submitter was still alive; do not duplicate it. Any later HSC shape-row or
-image export needs its own explicit user approval.
+The contemporaneous pilot note records batch 002 as submitted while its
+authenticated submitter was alive. A later checkpoint recheck still found
+2/32 batches complete and batch 002 recorded as submitted, but the submitter
+process was gone and Slurm no longer recognized job 1062312. The HSC CAS job
+state has not yet been reconciled; check it through the authenticated CAS
+status endpoint before resuming, and do not resubmit batch 002 until its remote
+state is known. Any later HSC shape-row or image export needs its own explicit
+user approval.
 
 The 780k-coordinate geometry screen is available as the Slurm job
 `run_wl_random_coordinate_geometry.sbatch`; its analysis code is CPU-only.
