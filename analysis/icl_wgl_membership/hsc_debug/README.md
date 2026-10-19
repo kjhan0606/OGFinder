@@ -68,6 +68,11 @@ unresolved sources and residual diffuse structure can still contribute. Run it t
 [`run_icl_coadd_noise_correlation.sbatch`](run_icl_coadd_noise_correlation.sbatch).
 This technical factor cannot replace the exact ICL/satellite estimator
 covariance or total science error.
+The matched-mask run found a 9×9 lag-grid variance factor near 1.59 in targets
+and 1.54 in controls, with paired differences spanning zero. See
+[`icl_coadd_residual_covariance_assessment_2026-10-19.md`](icl_coadd_residual_covariance_assessment_2026-10-19.md)
+for the independent checksum and numerical audit; no correction was applied
+to the science profile.
 
 2026-10-12 수집 확장: 이후 12개 FITS 다운로드가 모두 완료됐으며, 파일 크기와
 SHA-256, FITS 구조와 WCS를 재검사했다. 이제 213개 후보 전체를 받도록
