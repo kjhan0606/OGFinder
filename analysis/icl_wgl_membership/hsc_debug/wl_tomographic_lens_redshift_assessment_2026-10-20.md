@@ -41,7 +41,7 @@ and the poorly separated first source bin, but this split alone cannot identify
 the cause. The plotted profiles show source bin 1 near zero or negative in the
 innermost bins while bins 2–4 are positive; the upper-z bin-1 errors are broad.
 
-## Interpretation and next test
+## Interpretation and cross-cohort interaction
 
 This is a cluster-only stack using the fiducial HSC Y3 `n(z)`. It has no
 random-lens subtraction, no posterior/systematic `n(z)` propagation, no
@@ -50,15 +50,34 @@ reduced-shear correction. It therefore diagnoses a calibration/selection
 consistency issue rather than measuring a cluster mass signal. Keep
 `science_measurement=false`.
 
-The first run computed the 112×112 joint covariance in memory but did not
-persist the matrix in its summary. The per-cohort consistency statistics above
-are from that covariance, but a direct test of whether relative source-bin
-offsets change with lens redshift cannot be recovered from the saved diagonal
-errors. The corrected Astrafek runner now writes the full covariance. Slurm job
-428856 is rerunning the same approved data to a new directory; its saved
-covariance will feed a difference-in-differences interaction test that permits
-each cohort its own common lensing amplitude. No additional catalog data are
-requested for that test.
+The persisted 112×112 jackknife covariance has rank 51 and is symmetric to
+relative precision better than 10⁻¹⁴; its smallest eigenvalue is
+−1.13×10⁻¹⁶ of the largest, consistent with floating-point roundoff. A
+difference-in-differences Wald test compares the relative offsets of source
+bins 2–4 from bin 1 between the two lens cohorts, while allowing each cohort
+its own common lensing amplitude. Across all seven radii the result is
+χ²=29.34 for 21 degrees of freedom (`p=0.106`). The per-radius interaction
+statistics are:
+
+| R (Mpc) | χ²/dof | Raw p | Holm p (7 tests) |
+|---|---:|---:|---:|
+| 0.1–0.2 | 3.15/3 | 0.369 | 1.000 |
+| 0.2–0.4 | 10.17/3 | 0.0171 | 0.120 |
+| 0.4–0.7 | 1.52/3 | 0.677 | 1.000 |
+| 0.7–1.0 | 1.52/3 | 0.678 | 1.000 |
+| 1.0–1.5 | 3.96/3 | 0.266 | 1.000 |
+| 1.5–2.0 | 1.67/3 | 0.644 | 1.000 |
+| 2.0–3.0 | 2.84/3 | 0.418 | 1.000 |
+
+The most discrepant single radial interval is 0.2–0.4 Mpc (`p=0.0171` before
+correction, `p=0.120` after Holm correction across seven radii). These data do not show a
+family-wise-significant change in the relative source-bin offsets with lens
+redshift. This does not explain the within-cohort bin mismatch: the
+0.2–0.4 Mpc consistency test remains significant in both halves.
+
+This interaction diagnostic uses the full saved covariance and the same
+already-approved rows. It adds no catalog downloads. It still inherits the
+cluster-only stack, fiducial `n(z)`, and equal-area jackknife limitations.
 
 ## Reproducibility
 
@@ -70,6 +89,13 @@ requested for that test.
 - Initial summary SHA-256: `e80d85b031b6184511cfcb475d3c19da41c685a8867859034dba333d4aace43c`
 - Profile figure: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_01/tomographic_profiles_by_lens_redshift_v2.png`
 - Figure SHA-256: `cacff2c9ed94c100015452a464b32ce42aee2ed68e0878ff0a8b6ccacf2ededb`
+- Covariance-complete Slurm job 428856: completed in 12m25s; maximum RSS 1.916 GiB.
+- Final summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02/summary.json`
+- Final summary SHA-256: `eed7322a3383a9d4a774daa969c7e8e52c157a20235a4001b720bad54b6cfc6a`
+- Interaction output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02/redshift_interaction.json`
+- Interaction SHA-256: `c20a346d98386c786ff871ed7bb8100744b64387f39e8dc980063e0b9b89d9f8`
+- Final figure: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02/tomographic_profiles_by_lens_redshift.png`
+- Final figure SHA-256: `cacff2c9ed94c100015452a464b32ce42aee2ed68e0878ff0a8b6ccacf2ededb`
 
 The CSV row hashes and SACC checksum are retained in the machine-readable
 summary. The figure and all numerical outputs remain outside Git.

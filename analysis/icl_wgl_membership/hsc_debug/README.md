@@ -670,11 +670,12 @@ result does not pass correction. That initial summary did not persist the full
 112×112 covariance, so it cannot support a direct test of whether the relative
 bin offsets differ between lens-redshift halves.
 
-The audit now persists that joint covariance. Slurm job 428856 is rerunning to
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02/`.
-Afterward, `audit_wl_tomographic_redshift_interaction.py` will test the
-difference-in-differences between source-bin offsets with the saved covariance.
-The initial split statistics and profile figure are documented in
+The covariance-complete rerun and
+`audit_wl_tomographic_redshift_interaction.py` now test the difference-in-
+differences between source-bin offsets with the saved covariance. There is no
+family-wise-significant change of the relative source-bin offsets across the
+lens-redshift halves (global p=0.106); the 0.2–0.4 Mpc within-cohort mismatch
+persists in both halves. Full statistics, limits, and figures are documented in
 [`wl_tomographic_lens_redshift_assessment_2026-10-20.md`](wl_tomographic_lens_redshift_assessment_2026-10-20.md).
 This remains a cluster-only diagnostic with no random-lens subtraction and
 `science_measurement=false`.
