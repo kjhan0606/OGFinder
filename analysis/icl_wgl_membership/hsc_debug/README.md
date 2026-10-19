@@ -396,6 +396,14 @@ include zero. This is a fixed-sample estimator sensitivity, not a population
 reanalysis or a science measurement. Details and limitations are in
 [`satellite_icl_independent_support_association_2026-10-20.md`](satellite_icl_independent_support_association_2026-10-20.md).
 
+`audit_satellite_icl_leave_one_block_out.py` omits each connected target/control
+sky block in turn and refits the redshift/richness partial correlation. The i2
+estimate stays positive at 2.5°, 5°, and 10° widths, though its minimum falls
+from 0.293 to 0.166–0.177; the i estimate changes sign at 2.5° and 10°. These
+are influence ranges, not confidence intervals or detection tests. Full results
+and cluster IDs are in
+[`satellite_icl_leave_one_block_out_assessment_2026-10-20.md`](satellite_icl_leave_one_block_out_assessment_2026-10-20.md).
+
 ## ICL annulus sample-selection audit (2026-10-18)
 
 `audit_icl_sample_selection.py` compares the 137-cluster K2.5/40% all-annulus sample
