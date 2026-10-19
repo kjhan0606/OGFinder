@@ -202,10 +202,35 @@ G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355
 표본이 아니며 확장 날개 검출로 해석하지 않는다. 요약은
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_bright_pilot_2026-10-20_02/summary.json`
 에 있고 SHA-256은 `df4ea713a4beec6cd8d0cd4be61cc4bf96b7b7cfced3936263786e4607e1a71c`다.
-전체 480개 별의 영상 진단은 아직 실행하지 않았다. 재현 명령은
-[`diagnose_empirical_psf.py`](diagnose_empirical_psf.py), Slurm 자원 설명은
+전체 480개 후보 영상 진단을 완료했다. Gaia DR3 `vari_summary`와
+`vari_classifier_result`도 승인된 480개 source ID만 조회했으며 두 표 모두
+일치 행이 없었다. 이는 DR3 변광 분석 기록이 없다는 뜻이지 비변광 증명이 아니다.
+해당 조회는 이미지·HSC 원자료를 요청하지 않았다.
+
+전체 영상 진단은 288개 프레임의 333개 401×401 우표에서 1,920개 방법 조합을
+기록했다. 조합 중 358개는 진단 프로필을 생성했고, 588개는 우표 경계,
+906개는 바깥 배경 면적/방향 지원, 68개는 중심 마스크로 막혔다. 480개 후보 중
+137개가 적어도 한 조합에서 진단 프로필을 냈고, 42개만 네 조합 모두 유효했다.
+64–96픽셀 고리는 프로필을 낸 358개 방법 중 274개가 기하 지원을 통과했으며,
+그중 118개는 양수·156개는 0 이하의 sky-subtracted 평균이었다. 후보별 반복
+방법은 독립 표본이 아니고, 양·음 혼재 및 배경 고리 선택 민감도는 단일 확장
+날개 검출 주장을 지지하지 않는다. `radial_review.png`는 진단 프로필의 큰
+산포와 부호 혼재를 보여주는 시각 점검 자료다.
+
+결과는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_full_sample_2026-10-20_02/`
+에 있다. `summary.json` SHA-256은
+`f22a3b34ebc822af24f30b4f19ec3c1cc1b773bc840bbed5127f0ba4b886af6d`이고, Gaia
+변광 조회 요약은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_gaia_variability_2026-10-20_01/summary.json`
+에 있으며 SHA-256은
+`1864144dfbd835e5c145e6a474cf38c3cace87909adc17cb87a2db67d1f9ebfb`다. 재현기는
+[`diagnose_empirical_psf.py`](diagnose_empirical_psf.py)와
+[`query_psf_gaia_variability.py`](query_psf_gaia_variability.py), Slurm 자원 설명은
 [`run_empirical_psf_gaia_full_sample.sbatch`](run_empirical_psf_gaia_full_sample.sbatch)에
-있다. 현재 `science_measurement=false`, `psf_approved=false`다.
+있다. Gaia 2016 위치의 HSC epoch 전파, 포화·고립도 판정, 영상 기반 wing 비교와
+프레임별 전달함수 검증은 여전히 남아 있다. 현재 `science_measurement=false`,
+`psf_approved=false`다.
 
 ## 산출물과 다음 조건
 

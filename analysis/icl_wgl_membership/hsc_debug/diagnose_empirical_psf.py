@@ -80,9 +80,23 @@ def objects_from_rows(rows, x0, y0):
     if [int(r['NUMBER']) for r in rows]!=list(range(1,len(rows)+1)):
         raise ValueError('Detection numbering changed')
     objects=np.zeros(len(rows),dtype=[(s,float) for s in ('x','y','a','b','theta')])
-    for key,column,shift in (('x','X_IMAGE',1+x0),('y','Y_IMAGE',1+y0),('a','A_IMAGE',0),('b','B_IMAGE',0),('theta','THETA_RAD',0)):
-        objects[key]=[float(r[column])-shift for r in rows]
-    return objects,np.array([float(r['KRON_RADIUS']) for r in rows]),np.array([int(r['KRON_FLAGS']) for r in rows])
+    def numeric(value, default):
+        try:
+            result=float(value)
+            return result if np.isfinite(result) else default
+        except (TypeError,ValueError):
+            return default
+    for i,row in enumerate(rows):
+        x=numeric(row.get('X_IMAGE'),-1e6)
+        y=numeric(row.get('Y_IMAGE'),-1e6)
+        objects['x'][i]=x-1-x0 if abs(x)<1e5 else x
+        objects['y'][i]=y-1-y0 if abs(y)<1e5 else y
+        objects['a'][i]=max(.5,numeric(row.get('A_IMAGE'),.5))
+        objects['b'][i]=max(.5,numeric(row.get('B_IMAGE'),.5))
+        objects['theta'][i]=numeric(row.get('THETA_RAD'),0.0)
+    kron=np.array([numeric(row.get('KRON_RADIUS'),1.2) for row in rows])
+    kron_flags=np.array([int(numeric(row.get('KRON_FLAGS'),1)) for row in rows])
+    return objects,kron,kron_flags
 
 
 def main():
@@ -127,14 +141,14 @@ def main():
         if hashes[str(raw)]!=download[cid]['sha256']:raise ValueError('Original image hash changed')
         source=detection_dir/('cluster_'+cid)
         detections=read_table(record(source/'detections.tsv'));mp=record(source/'masks.fits.gz')
-        with fits.open(raw,memmap=False) as h,fits.open(mp,memmap=False) as mh:
-            image=np.asarray(h[review['science_hdu']].data,dtype=float)
-            variance=np.asarray(h[review['variance_hdu']].data,dtype=float)
-            bits=np.asarray(h[review['mask_hdu']].data)
-            seg=mh['SEGMENTATION'].data;original_base=mh['BASE_MASK'].data.astype(bool)
-            base=(bits&(sum(1<<b for b in BAD_BIT_POSITIONS)|BRIGHT_OBJECT_BIT))!=0
-            base|=~np.isfinite(image)|~np.isfinite(variance)|(variance<=0)
-            if not np.array_equal(base,original_base):raise ValueError('Base quality mask mismatch')
+        with fits.open(raw,memmap=True) as h,fits.open(mp,memmap=False) as mh:
+            image_hdu=h[review['science_hdu']]
+            variance_hdu=h[review['variance_hdu']]
+            bits_hdu=h[review['mask_hdu']]
+            image_shape=image_hdu.shape
+            if any(hdu.shape!=image_shape for hdu in (variance_hdu,bits_hdu,mh['SEGMENTATION'],mh['BASE_MASK'])):
+                raise ValueError('Image, variance, mask, and segmentation dimensions differ')
+            bad_bits=sum(1<<b for b in BAD_BIT_POSITIONS)|BRIGHT_OBJECT_BIT
             for star in stars:
                 sid=star['candidate_id'];number=star['number'];d=detections[number-1];g=gaia[sid];req=requests[sid]
                 if str(req['cluster_id'])!=cid or req['number']!=number or g['source_id']!=star['source_ids'][0]:
@@ -146,14 +160,22 @@ def main():
                     gaia_variability=g['phot_variable_flag'],epoch_review_required=True,pixel_scale_arcsec=scale)
                 sr=dict(**common,x0=x0,y0=y0,native_x=x,native_y=y,stamp=None,status='diagnostic_only',psf_approved=False)
                 block=None
-                if x0<0 or y0<0 or ix+200>=image.shape[1] or iy+200>=image.shape[0]:block='blocked_stamp_edge'
+                if x0<0 or y0<0 or ix+200>=image_shape[1] or iy+200>=image_shape[0]:block='blocked_stamp_edge'
                 elif str(g['phot_variable_flag']).upper()=='VARIABLE':block='blocked_known_variable'
                 if block:
                     sr['status']=block
                     for factor in FACTORS:
                         for ann in ANNULI:measures.append(dict(**common,kron_factor=factor,background_r_min_pix=ann[0],background_r_max_pix=ann[1],status=block,psf_approved=False,science_measurement=False))
                     star_records.append(sr);continue
-                sl=np.s_[y0:y0+401,x0:x0+401];cut=image[sl].copy();var=variance[sl].copy();bas=base[sl].copy();labels=seg[sl].copy()
+                sl=np.s_[y0:y0+401,x0:x0+401]
+                cut=np.asarray(image_hdu.section[sl],dtype=float)
+                var=np.asarray(variance_hdu.section[sl],dtype=float)
+                bits=np.asarray(bits_hdu.section[sl])
+                labels=np.asarray(mh['SEGMENTATION'].data[sl])
+                original_base=np.asarray(mh['BASE_MASK'].data[sl],dtype=bool)
+                bas=(bits&bad_bits)!=0
+                bas|=~np.isfinite(cut)|~np.isfinite(var)|(var<=0)
+                if not np.array_equal(bas,original_base):raise ValueError('Base quality mask mismatch')
                 objects,kron,kflags=objects_from_rows(detections,x0,y0)
                 masks,_=prep.source_masks(objects,labels,kron,kflags,bas,number-1,np.empty((0,2)),scale)
                 assert all(np.all(mask[bas]) for mask in masks) and np.all(~masks[0]|masks[1])
