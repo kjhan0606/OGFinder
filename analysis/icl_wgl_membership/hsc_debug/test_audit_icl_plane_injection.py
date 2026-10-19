@@ -58,3 +58,9 @@ def test_shape_group_keeps_all_pairs_without_mixing_injection_models():
                    and r["scale_kpc"] == 100.0 and r["axis_ratio"] == 0.65)]
     with pytest.raises(ValueError, match="fixed paired sample"):
         select_shape_rows(incomplete, "i2", 100, 0.65, expected_pairs=3)
+
+
+def test_extended_500_kpc_profiles_are_explicit_stress_cases():
+    assert (500.0, 1.0) in SHAPES
+    assert (500.0, 0.65) in SHAPES
+    assert len(SHAPES) == 6

@@ -35,7 +35,11 @@ from validate_control_images import nJy_factor
 
 DEFAULT_SAMPLE = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
 DEFAULT_ASSOCIATION = DEFAULT_SAMPLE / "icl_pixel_extinction_2026-10-19_03/pixel_extinction_satellite_association.tsv"
-SHAPES = ((100.0, 1.0), (100.0, 0.65), (250.0, 1.0), (250.0, 0.65))
+# Include a 500 kpc scale-length stress profile to bracket very extended ICL.
+# It is not a fitted or assumed population profile and must not be used as a
+# universal correction.
+SHAPES = ((100.0, 1.0), (100.0, 0.65), (250.0, 1.0), (250.0, 0.65),
+          (500.0, 1.0), (500.0, 0.65))
 AMPLITUDE_NJY_ARCSEC2 = 1.0
 BIN_INDEX = 3  # 200--300 proper kpc, matching the existing ICL–satellite table.
 
@@ -356,7 +360,7 @@ def run(args):
             "n_connected_target_control_blocks": int(n_blocks),
             "largest_block_pairs": int(largest_block),
             "method": {
-                "injection": "elliptical exponential diffuse profile, fixed angle 37 degrees, observed amplitude at elliptical radius 100 kpc",
+                "injection": "elliptical exponential diffuse profile, fixed angle 37 degrees, observed amplitude at elliptical radius 100 kpc; 500 kpc scale length is an extended stress scenario",
                 "shapes": [{"scale_kpc": scale, "axis_ratio": q} for scale, q in SHAPES],
                 "amplitude_njy_arcsec2": args.amplitude,
                 "measurement": "same K2.5 valid-pixel mask and Astrafek 600--900 kpc 64-pixel tile-plane estimator; measure 200--300 kpc annulus before and after injection",
@@ -370,7 +374,7 @@ def run(args):
             "limitations": [
                 "Only the existing 74-pair ICL/satellite support sample is used; inference does not represent the full 800-cluster parent sample.",
                 "K2.5 source masks are fixed after injection; source detection, segmentation, and mask growth response are not measured.",
-                "Analytic exponential profiles do not span the full observed ICL morphology distribution.",
+                "Analytic exponential profiles, including the 500 kpc stress case, do not span the full observed ICL morphology distribution.",
                 "This validates transfer through one downstream plane estimator only; upstream sky subtraction, extended PSF wings, extinction, and correlated coadd noise remain unvalidated.",
                 "The result is an exploratory transfer calibration and must not be used to correct the ICL signal or covariance without broader validation.",
             ],
