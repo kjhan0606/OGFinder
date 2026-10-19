@@ -2,11 +2,13 @@ import csv
 import json
 
 import pytest
+import numpy as np
 
 from prepare_wl_random_shape_count_plan import prepare as prepare_count_plan
 from prepare_wl_random_shape_rows import (
     OUTPUT_COLUMNS, prepare, shape_rows_query,
 )
+from run_wl_random_shape_stack import verify_and_load_pairs
 from submit_wl_random_shape_counts import sha
 from submit_wl_random_shape_rows import read_shape_rows, run, validate_plan
 
@@ -167,3 +169,54 @@ def test_row_response_rejects_changed_lens_mapping(tmp_path):
         writer.writerow(row)
     with pytest.raises(ValueError, match="association"):
         read_shape_rows(path, [center], {"R-001": {"n_shape_sources": 1}})
+
+
+def test_stack_loader_requires_complete_hashed_rows_and_preserves_center_mapping(tmp_path):
+    count_plan, count_results, _ = _make_count_inputs(tmp_path)
+    row_plan_dir = tmp_path / "row-plan"
+    manifest = prepare(count_plan, count_results, row_plan_dir)
+    row_manifest_path = row_plan_dir / "random_shape_row_plan.json"
+    rows_dir = tmp_path / "row-results"
+    rows_dir.mkdir()
+    centers = _centers()["centers"]
+    expected = {"R-001": 2, "R-002": 1, "R-003": 1}
+    jobs = {}
+    for index, start in enumerate(range(0, len(centers), manifest["batch_size"])):
+        name = f"random_shape_rows_{index:03d}"
+        path = rows_dir / f"{name}.csv"
+        chunk = centers[start:start + manifest["batch_size"]]
+        with path.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=OUTPUT_COLUMNS)
+            writer.writeheader()
+            for center in chunk:
+                for source_index in range(expected[center["random_center_id"]]):
+                    writer.writerow(_shape_row(center, f"{center['random_center_id']}-O{source_index}"))
+        jobs[name] = {
+            "status": "complete", "rows": sum(expected[c["random_center_id"]] for c in chunk),
+            "sha256": sha(path),
+        }
+    plan_sha = sha(row_manifest_path)
+    count_plan_sha = manifest["source_count_plan_sha256"]
+    summary = {
+        "status": "complete", "plan_sha256": plan_sha,
+        "n_source_pairs": sum(expected.values()), "source_shape_rows_downloaded": True,
+        "photoz_pdf_rows_included": False, "images_returned": False,
+        "science_measurement": False,
+    }
+    state = {
+        "schema": "hsc-s19a-random-shape-row-run-v1", "status": "complete",
+        "plan_sha256": plan_sha, "count_plan_sha256": count_plan_sha,
+        "source_shape_rows_downloaded": True, "credentials_saved": False,
+        "photoz_pdf_rows_included": False, "images_returned": False,
+        "science_measurement": False, "jobs": jobs,
+    }
+    (rows_dir / "row_status.json").write_text(json.dumps(state))
+    (rows_dir / "row_summary.json").write_text(json.dumps(summary))
+
+    pairs, provenance = verify_and_load_pairs(rows_dir, row_plan_dir, masked_value=0)
+
+    assert len(pairs["object_id"]) == 4
+    assert set(pairs["lens_id"]) == {"R-001", "R-002", "R-003"}
+    assert np.all(pairs["b_mode_pass"])
+    assert provenance["n_source_pairs"] == 4
+    assert provenance["n_random_centers"] == 3
