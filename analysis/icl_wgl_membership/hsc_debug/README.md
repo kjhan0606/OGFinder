@@ -459,7 +459,7 @@ interpretation are recorded in
 The two scenarios are sensitivity bounds only; neither is a decoded catalog
 convention or a science measurement.
 
-### Random-control availability query (CAS execution in progress)
+### Random-control availability query (CAS count-only query complete)
 
 HSC documents `pdr3_wide.random` as the public random-point table, with a
 nominal density of 100 points/arcmin², an `adjust_density` thinning column,
@@ -480,9 +480,14 @@ was rejected by CAS before a job was created because `patch_inner` is not a
 column in the PDR3 random table. The corrected plan is at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_02/`;
 it uses the documented `isprimary` selection for the same non-overlap intent.
-As of 2026-10-19, seven of 32 CAS batches (175 lens counts) are complete and
-validated; the remaining batches are running sequentially. A sufficient
-candidate count would only establish availability. Any later coordinate
-export still needs all-CAMIRA exclusion, full-aperture footprint checks, HSC-I
-depth/PSF matching, uniqueness and overlap checks, and spatial covariance
-validation before random centers can serve as random lenses.
+On 2026-10-19, all 32 CAS batches completed and passed validation: 800 unique
+lenses have one integer count each, totaling 780,191 random-point candidates;
+all 800 lenses have at least one candidate. Only the two aggregate columns
+(`lens_id`, `n_random_candidates`) were returned. No random coordinates, shape
+rows, source rows, photo-z values, or images were returned, and this was not a
+science measurement. A sufficient candidate count establishes availability
+only. Any later coordinate export still needs all-CAMIRA exclusion,
+full-aperture footprint checks, HSC-I depth/PSF matching, uniqueness and overlap
+checks, and spatial covariance validation before random centers can serve as
+random lenses. The count summary and per-batch checksums are stored outside Git
+under `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_02/cas_counts/`.
