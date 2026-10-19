@@ -477,6 +477,15 @@ real outer ICL and does not estimate covariance. Details, row counts, and the
 verified result hash are in
 [`icl_outer_baseline_region_influence_assessment_2026-10-20.md`](icl_outer_baseline_region_influence_assessment_2026-10-20.md),
 reproduced with [`audit_icl_outer_baseline_regions.py`](audit_icl_outer_baseline_regions.py).
+An additional pair-level coherence analysis finds that the same 400–500 kpc
+offset covaries with inner target-minus-control light after adjustment for
+redshift, richness, and area support, most clearly at 200–300 kpc (partial
+`r=0.455` in i and `0.421` in i2). Connected-block intervals are descriptive
+across six exploratory comparisons. The relation cannot distinguish residual
+sky from real extended ICL; see
+[`icl_outer_baseline_coherence_assessment_2026-10-20.md`](icl_outer_baseline_coherence_assessment_2026-10-20.md)
+and reproduce it with
+[`analyze_icl_outer_baseline_coherence.py`](analyze_icl_outer_baseline_coherence.py).
 
 Keep the `i` and `i2` stacks separate. HSC PDR3 documents those as similar but
 non-identical response curves; the combined coadds use object-specific
