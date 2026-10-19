@@ -34,6 +34,22 @@ approval for this one file is pending. No other CAMIRA table, HSC image, shape
 row, random-source row, or photo-z distribution is included in this proposed
 transfer.
 
+## Data-release compatibility check
+
+The catalog paper identifies its parent as the HSC-SSP final-year S23B data
+and says S23B will correspond to Public Data Release 4 (PDR4); it reports
+roughly 1,200 deg² for the parent sample. The current project images and
+shape-source data are from PDR3. HSC's official PDR3 availability page reports
+over 600 deg² at nominal depth. Therefore the S23B catalog cannot be treated
+as an automatic expansion of the current image sample: the approved catalog-only
+screen can identify overlap with the existing PDR3 image inventory, but no
+candidate outside that verified support should enter a stack. Any later image
+request requires confirming the relevant release, product, and full-aperture
+coverage as a separate gate.
+
+Sources: [Oguri et al., S23B CAMIRA catalog paper](https://arxiv.org/abs/2512.13954),
+[official HSC PDR3 availability page](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/).
+
 ## Audit after approval
 
 1. Retrieve only the one file above; verify exact byte count and Git blob
