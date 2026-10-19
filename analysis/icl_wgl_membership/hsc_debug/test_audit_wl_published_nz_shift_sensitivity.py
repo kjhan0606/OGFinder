@@ -1,7 +1,28 @@
 import numpy as np
 import pytest
 
-from audit_wl_published_nz_shift_sensitivity import translate_nz_curve
+from audit_wl_published_nz_shift_sensitivity import (
+    PUBLISHED_HIGH_Z_SHIFT_INTERVALS,
+    PUBLISHED_SHIFT_SCENARIOS,
+    translate_nz_curve,
+)
+
+
+def test_published_shift_scenarios_cover_central_and_interval_corners():
+    assert len(PUBLISHED_SHIFT_SCENARIOS) == 5
+    assert PUBLISHED_SHIFT_SCENARIOS["central"][3] == pytest.approx(0.043)
+    assert PUBLISHED_SHIFT_SCENARIOS["central"][4] == pytest.approx(0.050)
+    assert PUBLISHED_HIGH_Z_SHIFT_INTERVALS == {
+        3: (0.021, 0.063),
+        4: (0.038, 0.062),
+    }
+    corners = [tuple(value[b] for b in (3, 4))
+               for name, value in PUBLISHED_SHIFT_SCENARIOS.items()
+               if name != "central"]
+    assert len(corners) == 4
+    for expected in ((0.021, 0.038), (0.021, 0.062),
+                     (0.063, 0.038), (0.063, 0.062)):
+        assert any(actual == pytest.approx(expected) for actual in corners)
 
 
 def test_translation_moves_distribution_and_renormalizes():

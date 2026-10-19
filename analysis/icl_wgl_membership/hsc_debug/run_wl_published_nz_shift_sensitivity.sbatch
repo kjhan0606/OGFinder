@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --mem=24G
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl-nz-shift-%j.out
 #SBATCH --error=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl-nz-shift-%j.err
 set -euo pipefail
@@ -25,4 +25,4 @@ exec /home/kjhan/miniconda3/bin/python3 \
   --masked-value 0 \
   --cell-width-deg 5 \
   --radial-edges-mpc 0.1 0.2 0.4 0.7 1.0 1.5 2.0 3.0 \
-  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_published_nz_shift_sensitivity_2026-10-20_01
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_published_nz_shift_sensitivity_2026-10-20_02

@@ -2,10 +2,10 @@
 """Approximate HSC Y3 tomography sensitivity to published DESI mean shifts.
 
 This applies simple constant translations to only the existing local SACC
-curves for source bins 3 and 4, using the central higher-redshift shifts
-reported by Choppin de Janvry et al. (2026). It is not a substitute for the
-authors' calibrated spline distributions; those files require separate user
-approval and are not downloaded here.
+curves for source bins 3 and 4, using the central and marginal 68% endpoint
+higher-redshift shifts reported by Choppin de Janvry et al. (2026). It is not
+a substitute for the authors' calibrated spline distributions; those files
+require separate user approval and are not downloaded here.
 """
 from __future__ import annotations
 
@@ -32,6 +32,17 @@ from s19a_shape_stack import load_hsc_y3_nz_sacc
 
 
 PUBLISHED_MEAN_SHIFTS = {1: 0.0, 2: 0.0, 3: 0.043, 4: 0.050}
+# The paper reports Delta-z in the opposite sign convention: negative values
+# mean the calibrated n(z) shifts to higher redshift. Convert its asymmetric
+# intervals to positive higher-z translation amplitudes.
+PUBLISHED_HIGH_Z_SHIFT_INTERVALS = {3: (0.021, 0.063), 4: (0.038, 0.062)}
+PUBLISHED_SHIFT_SCENARIOS = {
+    "central": {1: 0.0, 2: 0.0, 3: 0.043, 4: 0.050},
+    "low3_low4": {1: 0.0, 2: 0.0, 3: 0.021, 4: 0.038},
+    "low3_high4": {1: 0.0, 2: 0.0, 3: 0.021, 4: 0.062},
+    "high3_low4": {1: 0.0, 2: 0.0, 3: 0.063, 4: 0.038},
+    "high3_high4": {1: 0.0, 2: 0.0, 3: 0.063, 4: 0.062},
+}
 _integral = getattr(np, "trapezoid", np.trapz)
 
 
@@ -92,7 +103,8 @@ def compare_profiles(baseline, shifted):
 
 
 def run_sensitivity(pairs, provenance, nz_redshift, nz_by_bin, baseline,
-                    radial_edges_mpc, cosmology, *, cell_width_deg):
+                    radial_edges_mpc, cosmology, *, cell_width_deg,
+                    mean_shifts=PUBLISHED_MEAN_SHIFTS, scenario_label="central"):
     if baseline.get("schema") != "astrafek-hsc-y3-tomographic-consistency-jackknife-v1":
         raise ValueError("baseline summary is not the expected full-sample tomography audit")
     if baseline.get("science_measurement") is not False:
@@ -108,7 +120,7 @@ def run_sensitivity(pairs, provenance, nz_redshift, nz_by_bin, baseline,
     if shifted.shape != (4, len(nz_redshift)):
         raise ValueError("expected the four official HSC Y3 n(z) curves")
     for source_bin in (1, 2, 3, 4):
-        delta = PUBLISHED_MEAN_SHIFTS[source_bin]
+        delta = float(mean_shifts[source_bin])
         if delta:
             curve, detail = translate_nz_curve(nz_redshift, shifted[source_bin - 1], delta)
             shifted[source_bin - 1] = curve
@@ -158,8 +170,9 @@ def run_sensitivity(pairs, provenance, nz_redshift, nz_by_bin, baseline,
         "schema": "astrafek-hsc-y3-published-nz-shift-sensitivity-v1",
         "status": "approximate_sensitivity",
         "science_measurement": False,
-        "method": "translate only local SACC HSC Y3 source-bin 3 and 4 curves by the paper's central mean shifts toward higher redshift, renormalize on the SACC grid, and rerun the same four-bin joint spatial jackknife",
-        "published_shift_source": "Choppin de Janvry et al. 2026, arXiv:2511.18133v3; reported Delta z_3=-0.043 and Delta z_4=-0.050 in the paper convention, described as shifts toward higher redshift",
+        "scenario": scenario_label,
+        "method": "translate only local SACC HSC Y3 source-bin 3 and 4 curves by a published central or marginal-interval endpoint shift toward higher redshift, renormalize on the SACC grid, and rerun the same four-bin joint spatial jackknife",
+        "published_shift_source": "Choppin de Janvry et al. 2026, arXiv:2511.18133v3; paper-convention Delta z_3=-0.043(+0.022/-0.020), Delta z_4=-0.050(+0.012/-0.012); negative Delta z is described as a shift toward higher redshift",
         "applied_mean_redshift_shifts": shifts,
         "bins_1_and_2_treatment": "unchanged; bin 1's small lower-z shift is not quantified in this approximation, while bin 2 is reported consistent with photometric calibration",
         "shifted_tomography": result,
@@ -167,7 +180,8 @@ def run_sensitivity(pairs, provenance, nz_redshift, nz_by_bin, baseline,
         "baseline_vs_shifted_profiles": compare_profiles(baseline["profile"], result["profile"]),
         "limitations": [
             "A constant translation of two fiducial SACC curves is an approximation, not the authors' calibrated spline distributions or posterior samples.",
-            "The published central shifts are applied without their uncertainty and without the bin-1 low-redshift correction.",
+            "The five scenarios span the reported marginal 68% endpoints as a rectangular sensitivity grid; no joint posterior or covariance between the two shifts is available here.",
+            "The bin-1 low-redshift correction is not included.",
             "This remains a cluster-only stack with no random-lens subtraction or connected-footprint covariance.",
             "No DESI distribution files, new catalog rows, or images are downloaded by this analysis.",
         ],
@@ -177,6 +191,50 @@ def run_sensitivity(pairs, provenance, nz_redshift, nz_by_bin, baseline,
             "n_z_sacc_sha256": sha(Path(baseline_input["n_z_sacc_path"])),
             "n_z_sacc_path": baseline_input["n_z_sacc_path"],
         },
+    }
+
+
+def run_published_shift_grid(pairs, provenance, nz_redshift, nz_by_bin, baseline,
+                             radial_edges_mpc, cosmology, *, cell_width_deg):
+    scenarios = {}
+    for label, shifts in PUBLISHED_SHIFT_SCENARIOS.items():
+        scenarios[label] = run_sensitivity(
+            pairs, provenance, nz_redshift, nz_by_bin, baseline,
+            radial_edges_mpc, cosmology, cell_width_deg=cell_width_deg,
+            mean_shifts=shifts, scenario_label=label,
+        )
+    radii = [(float(row["r_min_mpc"]), float(row["r_max_mpc"]))
+             for row in next(iter(scenarios.values()))["baseline_vs_shifted_consistency"]]
+    consistency_envelope = []
+    for r_min, r_max in radii:
+        rows = [next(row for row in scenario["baseline_vs_shifted_consistency"]
+                     if (float(row["r_min_mpc"]), float(row["r_max_mpc"])) == (r_min, r_max))
+                for scenario in scenarios.values()]
+        consistency_envelope.append({
+            "r_min_mpc": r_min,
+            "r_max_mpc": r_max,
+            "min_shifted_chi2": min(float(row["shifted_chi2"]) for row in rows),
+            "max_shifted_chi2": max(float(row["shifted_chi2"]) for row in rows),
+            "min_shifted_holm_p_value": min(float(row["shifted_holm_p_value_7_radial_tests"]) for row in rows),
+            "max_shifted_holm_p_value": max(float(row["shifted_holm_p_value_7_radial_tests"]) for row in rows),
+        })
+    return {
+        "schema": "astrafek-hsc-y3-published-nz-shift-uncertainty-grid-v1",
+        "status": "approximate_sensitivity_grid",
+        "science_measurement": False,
+        "shift_intervals_higher_redshift": {
+            str(k): list(v) for k, v in PUBLISHED_HIGH_Z_SHIFT_INTERVALS.items()
+        },
+        "grid_definition": "central point plus all four corners of the rectangular marginal 68% shift intervals for bins 3 and 4",
+        "scenarios": scenarios,
+        "tomographic_consistency_envelope": consistency_envelope,
+        "input": scenarios["central"]["input"],
+        "limitations": [
+            "Each curve is a constant translation of a local SACC fiducial n(z), not the authors' calibrated spline distribution or posterior samples.",
+            "The marginal endpoint rectangle is not a joint credible region; covariance between bin shifts is not propagated.",
+            "This remains a cluster-only stack with no random-lens subtraction or connected-footprint covariance.",
+            "No DESI distribution files, new catalog rows, or images are downloaded by this analysis.",
+        ],
     }
 
 
@@ -208,7 +266,7 @@ def main():
     if baseline_input.get("cosmology") != {"H0_km_s_mpc": args.h0, "Omega_m": args.omega_m}:
         parser.error("baseline summary and requested cosmology differ")
     nz_redshift, nz_by_bin = load_hsc_y3_nz_sacc(args.nz_sacc)
-    result = run_sensitivity(
+    result = run_published_shift_grid(
         pairs, provenance, nz_redshift, nz_by_bin, baseline,
         args.radial_edges_mpc, Cosmology(H0=args.h0, Om=args.omega_m),
         cell_width_deg=args.cell_width_deg,
@@ -229,8 +287,9 @@ def main():
     print(json.dumps({
         "status": result["status"],
         "science_measurement": result["science_measurement"],
-        "shifts": result["applied_mean_redshift_shifts"],
-        "consistency": result["baseline_vs_shifted_consistency"],
+        "scenarios": {key: value["applied_mean_redshift_shifts"]
+                      for key, value in result["scenarios"].items()},
+        "consistency_envelope": result["tomographic_consistency_envelope"],
         "output": str(path),
     }, ensure_ascii=False))
     return 0
