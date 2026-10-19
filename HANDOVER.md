@@ -791,3 +791,29 @@ Kron 3.5에서 171/50/27/4개다. paired 면적 집계 job 424865도 완료했�
 `prestack_full_pair_area_support_2026-10-16_01`이다. mask summary에 입력/출력 해시
 800개를 보존했다. 두 작업 모두 GPU 코드를 사용하지 않고 과학용 마스크/측정을
 승인하지 않는다.
+
+
+### 2026-10-20 후속: 전체 Gaia PSF 후보 진단과 weak-lensing 좌표 반출 상태
+
+기존 Gaia DR3 별 근거 후보 480개에 대해 `vari_summary`와
+`vari_classifier_result`를 조회했다. 두 표에서 일치 source 행은 0개였으며,
+이는 비변광 판정이 아니라 Gaia DR3 변광 처리 기록이 없다는 뜻이다. 전체
+HSC 진단은 288개 프레임, 333개 401×401 우표, 1,920개 방법 조합을 기록했다.
+137개 후보가 적어도 한 조합의 유효 프로필을 냈고 42개는 네 조합 모두에서
+중심/배경 분석 조건을 통과했다. 64–96픽셀 외곽 고리에서는 기하 지원을 통과한
+방법 프로필 274개 중 118개 양수·156개 0 이하였고, 후보별 묶음 113개의 지원
+설정 부호는 전체 양수 38, 전체 0 이하 58, 혼합 17이었다. 외곽 PSF 날개는
+검출/승인되지 않았다. Gaia 변광 분석 자료 부재, Gaia 위치의 coadd epoch 전파,
+영상별 포화·고립도 및 프레임 전달 검증이 남아 `science_measurement=false`,
+`psf_approved=false`다.
+
+재현 스크립트와 수치는 `analysis/icl_wgl_membership/hsc_debug/`의
+`diagnose_empirical_psf.py`, `query_psf_gaia_variability.py`,
+`summarize_empirical_psf_star_level.py`, `extended_psf_README.md`, 통합 연구평가에
+있다. 원자료 기반 진단과 Gaia 조회 산출물은 Git 밖의 `/gpfs/kjhan/Astrafek/data/`
+아래에 보존한다.
+
+Weak-lensing 대조장용 좌표 export 프로세스 PID 1049265는 2026-10-20 확인 시
+`lageunha`에서 살아 있었다. checkpoint에서 SQL batch 000과 001은 완료,
+002는 CAS job 1062312에 제출된 상태다. 프로세스를 재시작하지 않는다. Slurm
+제어기 DNS SRV 조회가 실패해 `squeue`와 새 `sbatch` 작업을 사용할 수 없다.

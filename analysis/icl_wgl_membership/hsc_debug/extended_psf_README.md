@@ -217,6 +217,20 @@ G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355
 날개 검출 주장을 지지하지 않는다. `radial_review.png`는 진단 프로필의 큰
 산포와 부호 혼재를 보여주는 시각 점검 자료다.
 
+반복 설정을 별도의 별로 세지 않도록 64–96픽셀 고리 결과를 후보별 한 값으로
+요약했다. 외곽 고리 기하 지원이 한 설정 이상 유효한 후보는 113개였고, 각
+후보의 지원 설정별 중앙 profile/core 비는 중앙값 `−3.07×10⁻⁷`, q16–q84
+`[−1.85×10⁻⁶, 1.29×10⁻⁶]`으로 0을 포함했다. 후보별 유효 설정 모두 양수인
+경우 38, 모두 0 이하인 경우 58, 부호 혼합은 17이었다. 네 설정 모두에서
+외곽 고리 지원까지 확보한 후보는 30개뿐이다. G≤19의 밝은 후보는 4개만
+외곽 지원을 가져, 밝은 별만으로 날개를 검증하기에도 부족하다. 이는 방법 간
+변동을 드러내는 탐색 요약이지 별 모집단에 대한 추론이나 PSF wing 검출은 아니다.
+후보별 표와 해시는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_star_level_2026-10-20_01/`
+의 `per_star_outer_profile.tsv`와 `summary.json`에 있다. 파일 해시는 각각
+`d087d8135b32fe3e826a0164d8b01971bc05445a0d14b0dbe6f4f9d50af96421`과
+`1278a150b7a10531d437b64e966cd5a065010a0eae59c3f1f4ea511b615166dc`다.
+
 결과는
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_full_sample_2026-10-20_02/`
 에 있다. `summary.json` SHA-256은
@@ -226,7 +240,8 @@ G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355
 에 있으며 SHA-256은
 `1864144dfbd835e5c145e6a474cf38c3cace87909adc17cb87a2db67d1f9ebfb`다. 재현기는
 [`diagnose_empirical_psf.py`](diagnose_empirical_psf.py)와
-[`query_psf_gaia_variability.py`](query_psf_gaia_variability.py), Slurm 자원 설명은
+[`query_psf_gaia_variability.py`](query_psf_gaia_variability.py),
+[`summarize_empirical_psf_star_level.py`](summarize_empirical_psf_star_level.py), Slurm 자원 설명은
 [`run_empirical_psf_gaia_full_sample.sbatch`](run_empirical_psf_gaia_full_sample.sbatch)에
 있다. Gaia 2016 위치의 HSC epoch 전파, 포화·고립도 판정, 영상 기반 wing 비교와
 프레임별 전달함수 검증은 여전히 남아 있다. 현재 `science_measurement=false`,
