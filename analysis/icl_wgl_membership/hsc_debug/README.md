@@ -409,6 +409,15 @@ satellite-association audit remains exploratory. See
 [`icl_pixel_extinction_assessment_2026-10-19.md`](icl_pixel_extinction_assessment_2026-10-19.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_pixel_extinction_2026-10-19_03/`.
 
+`audit_icl_satellite_sample_retention.py` now audits why 398 candidates that passed the
+target-side gate failed the complete seven-annulus control gate. For 396, eight azimuthal
+positions were generated; the attrition occurs when a control must pass the 60% coverage floor
+in every annulus. Of these failures, 102 still have at least three controls in the primary
+50–75 kpc annulus and match exactly to the existing independent-annulus profiles (25 i, 77 i2).
+The complete-profile selection remains the reference; no threshold was relaxed. See
+[`icl_satellite_control_gate_assessment_2026-10-19.md`](icl_satellite_control_gate_assessment_2026-10-19.md)
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_sample_retention_2026-10-19_02/`.
+
 The approved HSC weak-lensing source-row export is complete for 800 lenses and 3,069,544
 lens–source rows. It contains 22 columns, excludes full photo-z PDF rows, and remains
 `science_measurement=false` pending calibrated n(z), B-mode mask polarity, and the remaining

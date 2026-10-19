@@ -68,11 +68,17 @@ unresolved. `science_measurement=false` remains in all outputs.
 
 ## Next analysis gates
 
-Keep the radial-bin-specific estimator for the 50–75 kpc primary satellite
-measurement; all-bin completeness unnecessarily discards valid outer-annulus
-data. Before changing the mask or control criteria, inspect why the 398
-target-qualified positions lack three controls and retain the current
-selection as the reference. The 800-frame sample cannot provide the planned
+The 398-control-failure gate has now been audited without changing the original
+selection. Almost all failures had eight generated control positions, but fewer
+than three complete controls after requiring 60% coverage in every annulus.
+Among these failures, 102 already had at least three controls in 50–75 kpc
+(25 i, 77 i2) and match exactly to the existing independent-annulus profiles.
+Keep the complete-profile selection as the reference and use the
+radial-bin-specific estimator for the prespecified 50–75 kpc measurement.
+Details and checksums are in
+[`icl_satellite_control_gate_assessment_2026-10-19.md`](icl_satellite_control_gate_assessment_2026-10-19.md).
+
+The 800-frame sample cannot provide the planned
 confirmatory power for a moderate effect under the current multiplicity and
 spatial-block assumptions. A larger independent cluster footprint or a
 pre-registered lower-comparison analysis will be needed; further cluster data
