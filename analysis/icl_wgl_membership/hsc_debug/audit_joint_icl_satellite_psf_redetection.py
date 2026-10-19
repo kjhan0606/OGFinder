@@ -22,6 +22,59 @@ def coord_key(ra: float, dec: float) -> tuple[float, float]:
     return round(float(ra), 9), round(float(dec), 9)
 
 
+def validate_support_accounting(result: dict) -> list[str]:
+    """Check that satellite support gaps do not erase valid ICL responses."""
+    measurements = result.get("measurements_by_scenario", {})
+    scenarios = ("baseline", "icl_only", "satellite_only", "both")
+    if set(measurements) != set(scenarios):
+        raise ValueError("frame does not contain all four injection scenarios")
+    gaps = []
+    for scenario in scenarios:
+        row = measurements[scenario]
+        support = row.get("satellite_support", {})
+        status = support.get("status")
+        delta = row.get("satellite_delta_50_75_njy_arcsec2")
+        if status == "supported":
+            if delta is None or not np.isfinite(float(delta)) or int(support.get("n_satellites", 0)) < 1:
+                raise ValueError(f"supported satellite result is malformed in {scenario}")
+        elif status == "no_satellite_passed_minimum_support":
+            if delta is not None or int(support.get("n_satellites", -1)) != 0:
+                raise ValueError(f"missing satellite support is not recorded in {scenario}")
+            gaps.append(scenario)
+        else:
+            raise ValueError(f"unknown satellite support status in {scenario}: {status}")
+        for key in ("icl_raw_200_300_njy_arcsec2",
+                    "icl_plane_corrected_200_300_njy_arcsec2"):
+            value = row.get(key)
+            if value is None or not np.isfinite(float(value)):
+                raise ValueError(f"valid ICL measurement missing in {scenario}/{key}")
+
+    if result.get("satellite_support_gaps") != gaps:
+        raise ValueError("frame support-gap list differs from scenario measurements")
+    expected_status = "partial_satellite_support" if gaps else "complete"
+    if result.get("support_status") != expected_status:
+        raise ValueError("frame support_status differs from scenario measurements")
+    response = result.get("transfer_response", {})
+    required_responses = (
+        "icl_response_to_diffuse_unit_injection",
+        "icl_plane_corrected_response_to_diffuse_unit_injection",
+        "icl_response_to_all_satellite_envelopes",
+        "icl_plane_corrected_response_to_all_satellite_envelopes",
+    )
+    for key in required_responses:
+        if response.get(key) is None or not np.isfinite(float(response[key])):
+            raise ValueError(f"ICL transfer response is unavailable: {key}")
+    if ("baseline" in gaps or "icl_only" in gaps) != (
+            response.get("satellite_response_to_smooth_diffuse") is None):
+        raise ValueError("diffuse-to-satellite response does not match support")
+    if ("baseline" in gaps or "satellite_only" in gaps) != (
+            response.get("satellite_response_to_satellite_unit_injection") is None):
+        raise ValueError("satellite-to-satellite response does not match support")
+    if bool(gaps) != (response.get("both_minus_sum_residual_satellite_njy_arcsec2") is None):
+        raise ValueError("joint satellite residual does not match scenario support")
+    return gaps
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -139,6 +192,7 @@ def main() -> int:
             raise ValueError(f"frame {pair} used a different core code snapshot than the batch")
         if result.get("science_measurement") is not False:
             raise ValueError(f"frame {pair} incorrectly claims a science measurement")
+        support_gaps = validate_support_accounting(result)
         injection = result["injection"]
         n_sat = len(expected_indices.get(pair, set()))
         if (injection.get("psf_convolution_applied") is not True
@@ -192,6 +246,7 @@ def main() -> int:
         checked_records.append({"cluster_id": pair[0], "filter": pair[1],
                                 "n_satellite_psfs": n_sat,
                                 "n_psf_files_verified": len(used_psf_paths),
+                                "satellite_support_gaps": support_gaps,
                                 "paired_no_psf_response_deltas": deltas})
 
     error_pairs = {(str(row["cluster_id"]), str(row["filter"]).lower())
