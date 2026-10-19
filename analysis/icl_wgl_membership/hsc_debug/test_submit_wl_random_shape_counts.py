@@ -4,7 +4,7 @@ import json
 import pytest
 
 from prepare_wl_random_shape_count_plan import prepare
-from submit_wl_random_shape_counts import read_count_rows, validate_plan
+from submit_wl_random_shape_counts import read_count_rows, run, validate_plan
 
 
 def _centers():
@@ -37,6 +37,19 @@ def test_submitter_validates_the_exact_generated_plan(tmp_path):
     assert len(centers) == 3
     assert len(batches) == 2
     assert len(plan_sha) == 64
+
+
+def test_submitter_requires_explicit_approval_before_any_submission_setup(tmp_path):
+    source = tmp_path / "centers.json"
+    source.write_text(json.dumps(_centers()))
+    plan_dir = tmp_path / "plan"
+    prepare(source, plan_dir, batch_size=2)
+    results_dir = tmp_path / "results"
+
+    with pytest.raises(ValueError, match="explicit user approval"):
+        run(plan_dir, results_dir, "test-user", submit=True, approved=False)
+
+    assert not results_dir.exists()
 
 
 def test_submitter_rejects_changed_sql_or_source_manifest(tmp_path):
