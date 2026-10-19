@@ -72,7 +72,7 @@ for the satellite metric they are `−0.00660` and `+0.00452` nJy/arcsec².
 This nonlinearity is part of the detection/masking response, not an estimate
 of the observed ICL–satellite flux covariance.
 
-## Limits and next analysis gate
+## Limits of the compact PSF-core result
 
 This is an injection/mask sensitivity on the existing selected support sample,
 not an observational detection, population completeness estimate, or
@@ -83,8 +83,68 @@ the much larger angular scales of ICL wings. `science_measurement=false`,
 `observational_validation_passed=false`, and
 `flux_covariance_available=false` remain unchanged.
 
-Next, add extended-PSF-wing and noise-transfer sensitivity only after their
-inputs are calibrated and matched to these frames. Then assess observed-pixel
-injection recovery and spatial covariance; keep the i and i2 filters separate
-and retain the full mask/redetection failure accounting. The current result
-does not authorize further HSC data requests.
+## Public extended-PSF reference sensitivity
+
+The public PDR3 intermediate `coadd/bg` reference was separately applied to
+synthetic components on the 13 i-band frames that overlap the approved
+position-specific injection sample. Slurm job **428491** ran the cluster-411
+pilot (5.0 s measured Python runtime; exit 0). Job **428493** ran all 13 frames
+with both the symmetric and asymmetric reference kernels (84.99 s and 84.41 s
+calculation time; exit 0, zero frame errors in either variant). The 4001²
+signed kernel was kept intact; no clipping or renormalization was applied.
+SEP detection and masks were regenerated in each injection scenario. Only
+synthetic light was convolved; the observed coadds were not altered.
+
+The outputs are outside Git under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`:
+
+| Output | SHA-256 of `summary.json` |
+|---|---|
+| `icl_extended_psf_pilot_2026-10-19_01` | `e2c752bd369b91a27d7e7ce47295c751c5233f81a3337e587a529b68d6c75a4a` |
+| `icl_extended_psf_symmetric_2026-10-19_01` | `190dbdaa2590dfe31047fb72bfbfd10a084419b2ee6726f10e41aadcd93a3636` |
+| `icl_extended_psf_asymmetric_2026-10-19_01` | `3ce650480412ddc53f1488e9d493fbbe6751183e098c55fef559b8c98a99bbaa` |
+
+The per-frame JSON hashes and frozen source hashes were checked. An independent
+summary pass recomputed the four transfer responses from the saved baseline and
+single-component measurements and confirmed their stored values. The table
+shows median and 16th–84th percentile across the same 13 frames; the interval
+describes frame-to-frame spread and is not a confidence interval.
+
+| Injected component → measured annulus | Median [q16, q84] response |
+|---|---:|
+| Smooth diffuse → ICL 200–300 kpc | 0.2150 [0.1615, 0.2314] |
+| Sum of satellite envelopes → ICL 200–300 kpc | 0.3531 [0.1500, 0.6115] |
+| Smooth diffuse → satellite 50–75 kpc | −0.0390 [−0.1000, 0.1337] |
+| Satellite envelopes → satellite 50–75 kpc | 0.2941 [−0.2343, 0.7265] |
+
+Thus, under these particular profiles, masks, and public reference kernel, only
+about 21.5% of the unit diffuse injection appears in the ICL measurement
+annulus, while summed satellite envelopes produce a median 0.353 response in
+that annulus. Responses can be negative in individual satellite measurements.
+These figures indicate substantial transfer and masking dependence; they are
+not universal corrections and cannot be applied to observed profiles. The
+median non-additive `both − (ICL-only + satellite-only)` residuals are 0.0180
+nJy/arcsec² for the ICL metric and 0.0152 nJy/arcsec² for the satellite metric.
+They arise after source/mask redetection and are not flux covariance.
+
+The paired symmetric-versus-asymmetric reference differences are negligible
+for these radial measurements: maximum absolute difference across the 13
+frames is 5.1×10⁻⁹ for diffuse→ICL, 2.3×10⁻⁸ for satellites→ICL, 6.8×10⁻⁸
+for diffuse→satellites, and 4.8×10⁻⁷ for satellites→satellites. These two
+products share the input star sample, so this is a comparison of variants,
+not an independent replication.
+
+The 13 frames are a support-selected i-band subset, and the reference PSF is
+not matched to their position, epoch, or seeing. The run omits injected-source
+photon noise, correlated coadd noise, and upstream sky transfer. It does not
+test i2. The result remains `science_measurement=false`,
+`observational_validation_passed=false`, and `flux_covariance_available=false`.
+
+## Final status and next analysis gate
+
+The extended reference sensitivity is now measured, but it does not validate
+the target-specific PSF wings. Next, calibrate a position/epoch-matched wing
+model and the noise/sky transfer, then test observed-pixel injection recovery
+and spatial covariance. Keep i and i2 separate and retain the full
+mask/redetection failure accounting. These results do not authorize further
+HSC data requests.
