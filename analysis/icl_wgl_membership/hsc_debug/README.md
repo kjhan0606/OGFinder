@@ -649,6 +649,13 @@ Those result files have not been imported; obtain approval before downloading
 the four `_v_1p1` distribution/metadata files (549,818 bytes total) identified
 in the calibration note, then compare both published scale cuts to the SACC
 baseline with the same random-subtracted stack and spatial jackknife.
+While those files await approval, `audit_wl_published_nz_shift_sensitivity.py`
+tests a no-download approximation: it translates the local SACC source-bin 3
+and 4 curves toward higher redshift by the paper's central mean shifts (+0.043
+and +0.050), renormalizes them, and repeats the same joint jackknife. The
+[paper's v3](https://arxiv.org/abs/2511.18133v3) reports these shifts relative
+to Rau+2022; this constant-translation sensitivity is not the authors'
+calibrated spline distributions or their uncertainty.
 
 The current S19A responsivity, object-level shear corrections, and HSC
 edge-selection coefficients were also checked against the HSC Y3 paper and its
