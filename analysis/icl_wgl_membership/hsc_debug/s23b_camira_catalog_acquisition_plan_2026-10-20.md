@@ -47,8 +47,16 @@ candidate outside that verified support should enter a stack. Any later image
 request requires confirming the relevant release, product, and full-aperture
 coverage as a separate gate.
 
+The official HSC-SSP release schedule currently says PDR4 is the final release
+but lists its date as TBD and says the timing is not yet known. Thus the
+S23B/PDR4 paper catalog is only a candidate-discovery input for this project
+until compatible PDR4 image and shape products are actually available; this
+plan does not imply or request PDR4 imaging. The exact schedule page was
+checked on 2026-10-20.
+
 Sources: [Oguri et al., S23B CAMIRA catalog paper](https://arxiv.org/abs/2512.13954),
-[official HSC PDR3 availability page](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/).
+[official HSC PDR3 availability page](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/),
+and [official HSC-SSP release schedule](https://hsc.mtk.nao.ac.jp/ssp/data-release/).
 
 ## Audit after approval
 
