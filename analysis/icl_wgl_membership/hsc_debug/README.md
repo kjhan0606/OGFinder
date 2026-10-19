@@ -656,16 +656,25 @@ linked calibration utility. The source-level formula review is recorded in
 [`wl_s19a_shape_calibration_formula_review_2026-10-20.md`](wl_s19a_shape_calibration_formula_review_2026-10-20.md).
 
 To test whether the inner source-bin disagreement is concentrated in one lens-
-redshift range, `audit_wl_tomographic_lens_redshift.py` splits the 800 unique
-lenses into equal-count lower/upper halves sorted only by `(lens_z, lens_id)`.
-It recalculates all four source-bin stacks in one shared spatial jackknife and
-Holm-adjusts the 14 radial consistency tests. The result plotter
-`plot_wl_tomographic_lens_redshift.py` displays all source-bin profiles in the
-two lens cohorts, with tangential and cross components. The scripts and their
-focused tests are in Astrafek. Slurm job 428849 was submitted on 2026-10-20 using
-only the already approved shape rows and local SACC input; its output directory is
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_01/`.
-It remains a cluster-only diagnostic with no random-lens subtraction and
+redshift range, `audit_wl_tomographic_lens_redshift.py` splits lenses into equal-
+count lower/upper halves sorted only by `(lens_z, lens_id)`. It recalculates all
+four source-bin stacks in one shared spatial jackknife and Holm-adjusts the 14
+radial consistency tests. The result plotter
+`plot_wl_tomographic_lens_redshift.py` displays both lens cohorts' tangential and
+cross profiles. The initial Slurm job 428849 completed using only the approved
+shape rows and local SACC input; it represented 632 lenses, 316 per half, with
+609 lenses surviving the published shape/radius selections. Both halves show
+source-bin disagreement at 0.2–0.4 Mpc after 14-test Holm correction. The lower-
+redshift half also shows corrected disagreement at 0.1–0.2 Mpc; its 0.4–0.7 Mpc
+result does not pass correction. That initial summary did not persist the full
+112×112 covariance, so it cannot support a direct test of whether the relative
+bin offsets differ between lens-redshift halves.
+
+The audit now persists that joint covariance. Slurm job 428856 is rerunning to
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02/`.
+Afterward, `audit_wl_tomographic_redshift_interaction.py` will test the
+difference-in-differences between source-bin offsets with the saved covariance.
+This remains a cluster-only diagnostic with no random-lens subtraction and
 `science_measurement=false`.
 
 ### B-mode polarity sensitivity stack
