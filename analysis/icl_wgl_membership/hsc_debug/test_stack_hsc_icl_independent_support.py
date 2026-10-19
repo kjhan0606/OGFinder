@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import numpy as np
@@ -43,7 +44,12 @@ def test_summary_separates_support_gain_from_same_pair_estimator_change():
     pair = {"id": "a", "control_id": "ca", "filter": "i",
             "independent_profile": independent_profile}
     lo, hi = (int(stack.PROFILE_EDGES_KPC[0]), int(stack.PROFILE_EDGES_KPC[1]))
-    common = {("a", "ca", "i", lo, hi): {"delta_njy_arcsec2": "1.0"}}
+    common_profile = [{"delta_mean_njy_arcsec2": None} for _ in range(20)]
+    common_profile[0]["delta_mean_njy_arcsec2"] = 1.0
+    common = independent.profile_by_pair([{
+        "target_id": "a", "control_id": "ca", "filter": "i",
+        "profile_json": json.dumps(common_profile),
+    }])
     rows = independent.summarize_pairs([pair], common)
     first = rows[0]
     assert first["n_pairs_independent_delta"] == 1

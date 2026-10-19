@@ -18,9 +18,9 @@ export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_MAX_TH
 REPO=/home/kjhan/BACKUP/Astrafek/OGFinder
 SAMPLE=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13
 PYTHON=/home/kjhan/miniconda3/bin/python3
-WORK25=$SAMPLE/icl_2d_independent_support_k2p5_2026-10-19_01
-WORK35=$SAMPLE/icl_2d_independent_support_k3p5_2026-10-19_01
-WORK50=$SAMPLE/icl_2d_independent_support_k5p0_2026-10-19_01
+WORK25=$SAMPLE/icl_2d_independent_support_k2p5_2026-10-19_02
+WORK35=$SAMPLE/icl_2d_independent_support_k3p5_2026-10-19_02
+WORK50=$SAMPLE/icl_2d_independent_support_k5p0_2026-10-19_02
 COMMON25=$SAMPLE/icl_2d_matched_stack_2026-10-19_02
 COMMON35=$SAMPLE/icl_2d_matched_stack_2026-10-19_k3p5
 COMMON50=$SAMPLE/icl_2d_matched_stack_2026-10-19_k5p0

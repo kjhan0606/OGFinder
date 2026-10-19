@@ -52,17 +52,25 @@ def verify(work: Path) -> dict:
             "source sample counts differ from the approved inputs")
     require(summary.get("n_pairs") == 783 and summary.get("n_filter_mismatch_excluded") == 15,
             "pair/filter counts differ from the expected matched sample")
+    for source, digest in summary.get("scripts_sha256", {}).items():
+        path = Path(source)
+        require(path.is_file() and sha256(path) == digest,
+                f"run-time source checksum mismatch: {path}")
 
     common = summary["common_support_reference"]
     common_work = Path(common["work"])
     for filename, key in (("summary.json", "summary_sha256"),
                           ("independent_verification.json", "verification_sha256"),
-                          ("broad_radial_pair_profiles.tsv", "pair_profile_sha256")):
+                          ("paired_radial_profiles.tsv", "pair_profile_sha256")):
         path = common_work / filename
         require(path.is_file() and sha256(path) == common[key],
                 f"common-support provenance mismatch: {path}")
     common_summary = read_json(common_work / "summary.json")
     common_verification = read_json(common_work / "independent_verification.json")
+    common_pairs_path = common_work / "paired_radial_profiles.tsv"
+    require(common_pairs_path.is_file()
+            and sha256(common_pairs_path) == common_summary.get("outputs", {}).get("paired_profiles_sha256"),
+            "common-support annular pair profiles fail their saved checksum")
     require(common_summary.get("status") == "complete_exploratory"
             and common_summary.get("science_measurement") is False
             and common_verification.get("status") == "verified",
@@ -105,14 +113,15 @@ def verify(work: Path) -> dict:
                 require(delta is None, f"unsupported pair has a delta for pair {key}")
         pair_map[key] = profile
 
-    common_rows = read_tsv(common_work / "broad_radial_pair_profiles.tsv")
+    common_rows = read_tsv(common_work / "paired_radial_profiles.tsv")
     common_map = {}
     for row in common_rows:
-        key = (row["target_id"], row["control_id"], row["filter"],
-               int(row["r_min_kpc"]), int(row["r_max_kpc"]))
-        require(key not in common_map, f"duplicate common-support profile: {key}")
-        common_map[key] = row
-    require({key[:3] for key in common_map} == set(pair_map),
+        key = (row["target_id"], row["control_id"], row["filter"])
+        require(key not in common_map, f"duplicate common-support pair: {key}")
+        profile = json.loads(row["profile_json"])
+        require(len(profile) == 20, f"expected 20 common-support annuli for pair {key}")
+        common_map[key] = profile
+    require(set(common_map) == set(pair_map),
             "independent and common-support pair sets differ")
     require(len(radial_rows) == 40, "expected 20 radial bins in each filter")
     radial_map = {}
@@ -140,8 +149,9 @@ def verify(work: Path) -> dict:
                 if value is None:
                     continue
                 independent_values.append(float(value))
-                ref = common_map[(pair_key[0], pair_key[1], band, lo, hi)].get("delta_njy_arcsec2", "")
-                if ref not in ("", "None"):
+                ref = common_map[(pair_key[0], pair_key[1], band)][bin_index].get(
+                    "delta_mean_njy_arcsec2")
+                if ref is not None:
                     shared_independent.append(float(value))
                     shared_common.append(float(ref))
             row = radial_map.get(key)

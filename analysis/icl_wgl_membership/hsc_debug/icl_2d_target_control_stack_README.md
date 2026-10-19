@@ -55,7 +55,8 @@ interpretation; these intervals remain exploratory.
 
 `stack_hsc_icl_independent_support.py` measures each pair's target and control
 annular means on their own valid pixels, then compares that result with the
-strict common-support estimator on the same pairs. Its Slurm sensitivity run
+strict common-support estimator on the same pairs and the exact same 25 kpc
+annuli. Its Slurm sensitivity run
 and output verifier are `run_icl_independent_support_sensitivity.sbatch` and
 `verify_icl_independent_support.py`. The paired comparison distinguishes the
 effect of relaxing pixel intersection from the effect of admitting additional

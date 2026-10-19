@@ -47,18 +47,20 @@ def write_tsv(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def profile_by_key(common_rows: list[dict[str, str]]) -> dict[tuple, dict[str, str]]:
+def profile_by_pair(common_rows: list[dict[str, str]]) -> dict[tuple, list[dict]]:
     result = {}
     for row in common_rows:
-        key = (row["target_id"], row["control_id"], row["filter"],
-               int(row["r_min_kpc"]), int(row["r_max_kpc"]))
+        key = (row["target_id"], row["control_id"], row["filter"])
         if key in result:
-            raise ValueError(f"duplicate common-support pair/annulus row: {key}")
-        result[key] = row
+            raise ValueError(f"duplicate common-support pair: {key}")
+        profile = json.loads(row["profile_json"])
+        if len(profile) != len(stack.PROFILE_EDGES_KPC) - 1:
+            raise ValueError(f"unexpected common-support annulus count for pair {key}")
+        result[key] = profile
     return result
 
 
-def summarize_pairs(pair_rows: list[dict], common_profiles: dict[tuple, dict[str, str]]) -> list[dict]:
+def summarize_pairs(pair_rows: list[dict], common_profiles: dict[tuple, list[dict]]) -> list[dict]:
     output = []
     for band in stack.FILTERS:
         selected_pairs = [row for row in pair_rows if row["filter"] == band]
@@ -79,10 +81,11 @@ def summarize_pairs(pair_rows: list[dict], common_profiles: dict[tuple, dict[str
                     continue
                 row = {"pair": pair, "profile": profile}
                 supported.append(row)
-                common = common_profiles.get((pair["id"], pair["control_id"], band,
-                                              int(lo), int(hi)))
-                if common is not None and common.get("delta_njy_arcsec2") not in ("", "None"):
-                    row["common_delta"] = float(common["delta_njy_arcsec2"])
+                common = common_profiles.get((pair["id"], pair["control_id"], band))
+                common_delta = (common[bin_index].get("delta_mean_njy_arcsec2")
+                                if common is not None else None)
+                if common_delta is not None:
+                    row["common_delta"] = float(common_delta)
                     shared.append(row)
 
             def stat(rows, key):
@@ -162,16 +165,16 @@ def run(sample: Path, common_work: Path, work: Path, mask_factor: float,
 
     common_summary = stack.read_json(common_work / "summary.json")
     common_verification = stack.read_json(common_work / "independent_verification.json")
-    common_profile_path = common_work / "broad_radial_pair_profiles.tsv"
+    common_profile_path = common_work / "paired_radial_profiles.tsv"
     if (common_summary.get("status") != "complete_exploratory"
             or common_summary.get("science_measurement") is not False
             or float(common_summary.get("mask_factor", 2.5)) != mask_factor
             or common_verification.get("status") != "verified"
             or common_verification.get("science_measurement") is not False):
         raise ValueError("common-support reference is incomplete, unverified, or uses another mask")
-    common_profiles = profile_by_key(stack.read_tsv(common_profile_path))
-    if len(common_profiles) != int(common_summary["n_pairs_stacked"]) * 6:
-        raise ValueError("common-support reference has unexpected pair/profile coverage")
+    common_profiles = profile_by_pair(stack.read_tsv(common_profile_path))
+    if len(common_profiles) != int(common_summary["n_pairs_stacked"]):
+        raise ValueError("common-support reference has unexpected pair coverage")
 
     cosmology = stack.Cosmology(H0=float(sample_doc["h0"]), Om=float(sample_doc["omega_m"]))
     control_status_sha = control_hashes[str(control_status_path)]
@@ -256,7 +259,7 @@ def run(sample: Path, common_work: Path, work: Path, mask_factor: float,
         "common_support_reference": {
             "work": str(common_work), "summary_sha256": stack.sha256(common_work / "summary.json"),
             "verification_sha256": stack.sha256(common_work / "independent_verification.json"),
-            "pair_profile_sha256": stack.sha256(common_work / "broad_radial_pair_profiles.tsv"),
+            "pair_profile_sha256": stack.sha256(common_profile_path),
             "n_pairs": common_summary["n_pairs_stacked"],
         },
         "input_sha256": input_hashes,
