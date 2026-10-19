@@ -638,6 +638,17 @@ polarity has since been resolved and a calibrated cluster-only stack completed, 
 is not a science measurement: random-lens subtraction, n(z) uncertainty, source overlap,
 and spatial covariance still need resolution.
 
+The tomographic disagreement investigation identified a newer DESI DR1/DR2
+clustering-redshift calibration performed directly on the HSC PDR3 S19A shape
+catalog. Its authors publish calibrated distributions under
+[`desi-y3-hsc/results/distributions`](https://github.com/JeanCHDJdev/desi-y3-hsc/tree/main/results/distributions).
+It includes high-redshift tracers absent from the older HSC Y3 calibration and
+reports upward shifts in bins 3 and 4 relative to Rau+2022. See
+[`wl_pdr3_desi_nz_calibration_update_2026-10-20.md`](wl_pdr3_desi_nz_calibration_update_2026-10-20.md).
+Those result files have not been imported; obtain approval before downloading
+the calibration data, then compare them to the SACC baseline with the same
+random-subtracted stack and spatial jackknife.
+
 ### B-mode polarity sensitivity stack
 
 The earlier two-hypothesis calibrated stack used only the previously approved row export
