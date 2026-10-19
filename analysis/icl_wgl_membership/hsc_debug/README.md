@@ -707,3 +707,5 @@ noise-only ICL–satellite covariance stays small. Target/control noise
 independence is assumed, not measured, and other major error terms remain
 outside the model. Results, row/table hashes, and limitations are in
 [`satellite_icl_target_control_covariance_assessment_2026-10-19.md`](satellite_icl_target_control_covariance_assessment_2026-10-19.md).
+The saved row table and summary can be independently checked with
+[`verify_satellite_icl_target_control_covariance.py`](verify_satellite_icl_target_control_covariance.py).

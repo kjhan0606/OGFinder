@@ -50,10 +50,14 @@ Independent validation rechecked all ten source checksums and the output TSV
 checksum, confirmed 57 unique rows (13 `i`, 44 `i2`), verified control
 coverage and disjoint apertures, and recomputed the combined diagonal/lag
 variances, sigma factors, correlations, medians, and quantiles from the row
-table.
+table. This audit is reproducible with
+[`verify_satellite_icl_target_control_covariance.py`](verify_satellite_icl_target_control_covariance.py);
+its machine-readable result is `independent_audit.json` in the output
+directory.
 
 - `summary.json` SHA-256: `961614b00d8c73d3464396c7f384b25599710f4b6b4115cf0131f04ebfab4bc2`
 - `target_control_pixel_covariance.tsv` SHA-256: `35f59684196029f4bc1525aab079edf2c1616dbda9194d3ccd14ababe3dfb479`
+- `independent_audit.json` SHA-256: `d97c16afa6b089d3c2c1a67f07a3297c78b6f9217152dfee3b0ee81f42281e5d`
 - Analysis script SHA-256: `ac1d3fd474290ad44e8671979f0c18a5ac540d0ee7d9247abd6aadd2bc511df7`
 
 ## Interpretation and limits
