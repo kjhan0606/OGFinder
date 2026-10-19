@@ -28,6 +28,7 @@ EXPECTED_COLUMNS = [
     "source_zbin",
 ]
 QUALITY_COLUMNS = ("e1", "e2", "sigma_e", "resolution", "mag_a10", "source_zbin")
+PUBLISHED_BMODE_FOOTPRINT = {"ra_deg": [132.5, 140.0], "dec_deg": [1.6, 5.0]}
 
 
 def normalize_shape_header(fieldnames: list[str] | None) -> list[str] | None:
@@ -56,6 +57,29 @@ def grid_cell(ra_deg: float, dec_deg: float, width_deg: float = 1.0) -> tuple[in
     if not math.isfinite(width) or width <= 0 or width > 180:
         raise ValueError("grid width must lie in (0, 180]")
     return int(math.floor(ra / width)), int(math.floor((dec + 90.0) / width))
+
+
+def in_published_bmode_footprint(ra_deg: float, dec_deg: float) -> bool:
+    """Test the published GAMA09H B-mode rectangle using inclusive bounds."""
+    ra, dec = float(ra_deg), float(dec_deg)
+    if not (math.isfinite(ra) and 0 <= ra < 360 and math.isfinite(dec) and -90 <= dec <= 90):
+        raise ValueError("invalid sky position")
+    ra_min, ra_max = PUBLISHED_BMODE_FOOTPRINT["ra_deg"]
+    dec_min, dec_max = PUBLISHED_BMODE_FOOTPRINT["dec_deg"]
+    return ra_min <= ra <= ra_max and dec_min <= dec <= dec_max
+
+
+def decode_mask_from_footprint(footprint_pairs: dict[str, list[int]]) -> int | None:
+    """Decode the excluded raw bit only for an exact two-way footprint match."""
+    inside = footprint_pairs.get("inside", [])
+    outside = footprint_pairs.get("outside", [])
+    if len(inside) != 2 or len(outside) != 2:
+        raise ValueError("expected two raw mask counts inside and outside the published footprint")
+    if inside[0] > 0 and inside[1] == 0 and outside[0] == 0 and outside[1] > 0:
+        return 0
+    if inside[1] > 0 and inside[0] == 0 and outside[1] == 0 and outside[0] > 0:
+        return 1
+    return None
 
 
 def passes_published_source_cuts(row: dict[str, str]) -> bool:
@@ -98,8 +122,10 @@ def audit(rows_dir: Path, preflight: Path, plan_dir: Path, grid_width_deg: float
     invalid_or_ineligible = 0
     # Each object should retain one sky position and one catalog mask value
     # across the multiple lens cones in which it can appear.
-    seen_sources: dict[str, tuple[tuple[int, int], int]] = {}
+    seen_sources: dict[str, tuple[tuple[int, int], int, bool]] = {}
     cells = defaultdict(lambda: [0, 0])
+    footprint_pairs = {"inside": [0, 0], "outside": [0, 0]}
+    footprint_unique_sources = {"inside": [0, 0], "outside": [0, 0]}
     batch_hashes = {}
     observed_total = 0
     for index, batch in enumerate(batches):
@@ -129,12 +155,16 @@ def audit(rows_dir: Path, preflight: Path, plan_dir: Path, grid_width_deg: float
                 eligible_pairs += 1
                 pair_counts[raw] += 1
                 cells[cell][raw] += 1
+                inside_footprint = in_published_bmode_footprint(ra, dec)
+                region = "inside" if inside_footprint else "outside"
+                footprint_pairs[region][raw] += 1
                 ident = str(row["object_id"])
                 prior = seen_sources.get(ident)
                 if prior is None:
-                    seen_sources[ident] = (cell, raw)
+                    seen_sources[ident] = (cell, raw, inside_footprint)
                     unique_counts[raw] += 1
-                elif prior != (cell, raw):
+                    footprint_unique_sources[region][raw] += 1
+                elif prior != (cell, raw, inside_footprint):
                     raise ValueError(f"object_id {ident} changes sky cell or b_mode_mask")
 
     total_rows = int(checkpoint.get("total_pair_rows", -1))
@@ -151,11 +181,14 @@ def audit(rows_dir: Path, preflight: Path, plan_dir: Path, grid_width_deg: float
             "raw_1_pair_rows": values[1],
             "raw_0_fraction": values[0] / sum(values),
         })
+    masked_raw_value = decode_mask_from_footprint(footprint_pairs)
     return {
         "schema": "hsc-s19a-bmode-spatial-distribution-audit-v1",
         "status": "complete_spatial_diagnostic",
         "science_measurement": False,
-        "b_mode_polarity_decoded": False,
+        "b_mode_polarity_decoded": masked_raw_value is not None,
+        "b_mode_masked_raw_value": masked_raw_value,
+        "b_mode_polarity_validation": "exact raw-bit match to the published GAMA09H exclusion rectangle; no shear statistic used",
         "raw_value_meaning_inferred_from_shear": False,
         "n_lenses": 800,
         "n_exported_pair_rows": total_rows,
@@ -164,6 +197,13 @@ def audit(rows_dir: Path, preflight: Path, plan_dir: Path, grid_width_deg: float
         "raw_mask_pair_rows_after_cuts": {"0": pair_counts[0], "1": pair_counts[1]},
         "n_unique_sources_after_cuts": len(seen_sources),
         "raw_mask_unique_sources_after_cuts": {"0": unique_counts[0], "1": unique_counts[1]},
+        "published_bmode_footprint": PUBLISHED_BMODE_FOOTPRINT,
+        "mask_value_counts_by_published_footprint": {
+            "pair_rows": {region: {"0": values[0], "1": values[1]}
+                          for region, values in footprint_pairs.items()},
+            "unique_sources": {region: {"0": values[0], "1": values[1]}
+                               for region, values in footprint_unique_sources.items()},
+        },
         "grid_width_deg": grid_width_deg,
         "source_sky_grid": grid,
         "provenance": {
@@ -173,7 +213,7 @@ def audit(rows_dir: Path, preflight: Path, plan_dir: Path, grid_width_deg: float
             "grid_method": "equal-width RA/Dec bins; no area correction at high declination",
         },
         "limitations": [
-            "a spatial concentration can identify a likely masked footprint but does not establish the raw-bit polarity",
+            "raw-bit polarity is decoded only when each value maps exclusively inside or outside the published rectangular exclusion footprint",
             "the source map is a coordinate-bin diagnostic, not a spherical-area density estimator",
             "lens-source pairs repeat sources across overlapping lens apertures; unique-source counts are also reported",
             "the export covers only the approved 800-lens sample and cone queries",

@@ -5,7 +5,7 @@ import pytest
 
 from fetch_ancillary_catalogues import catalogue_reader
 from prepare_wl_shape_rows import OUTPUT_COLUMNS
-from run_wl_shape_stack import _arrays_from_csv
+from run_wl_shape_stack import _arrays_from_csv, build_parser
 
 
 def _csv_reader(raw_masks=(1, 0), z_bins=(1, 2)):
@@ -54,3 +54,11 @@ def test_csv_adapter_rejects_noninteger_redshift_bins():
     with pytest.raises(ValueError, match="integer values"):
         _arrays_from_csv(_csv_reader(z_bins=(1.5, 2)), masked_value=1,
                          lens_counts={"lens-1": 2})
+
+
+def test_cli_maps_verified_mask_argument_to_runtime_option():
+    args = build_parser().parse_args([
+        "--rows", "rows", "--nz-sacc", "nz.sacc", "--b-mode-masked-value", "0",
+        "--radial-edges-mpc", "0.1", "0.2", "--output", "out.json",
+    ])
+    assert args.masked_value == 0

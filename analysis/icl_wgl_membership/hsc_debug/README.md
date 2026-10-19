@@ -222,9 +222,10 @@ HSC의 경계 밀도 선택편향 처방을 적용한다. 선택편향에는 반
 기본 적용하며, 명시적 민감도 실행에서만 끌 수 있다.
 
 HSC PDR3 문서는 `b_mode_mask`가 큰 B-mode 영역을 제거하는 데 쓰인다고 설명하지만,
-저장값의 0/1 극성은 명시하지 않는다. `decode_hsc_b_mode_mask(raw, masked_value=...)`는
-검증된 masked 값을 필수로 받아 자동 추측을 막는다. 행 export 결과의 값 범위와 해당 릴리스의
-스키마/설명을 대조하기 전에는 실제 stack 입력의 `b_mode_pass`를 만들지 않는다.
+저장값의 0/1 극성은 명시하지 않는다. Astrafek은 HSC Y3 PSF-systematics 논문에
+실린 GAMA09H 제외 사각형과 승인된 shape-row 좌표를 교차해 이 릴리스에서 raw 0이
+제외 영역임을 확인했다. 해석 함수는 여전히 `masked_value`를 필수로 받아 자동 추측을
+막는다. 검증과 이후 stack은 아래 B-mode 검증 절의 보고서를 참조한다.
 
 공식 HSC Y3 SACC 보정 파일을 로컬에 받은 뒤 `load_hsc_y3_nz_sacc(path)`로
 `wl_0`–`wl_3` tracer를 읽어 공통 `z` 격자와 네 개 `n(z)` 배열을 만들 수 있다.
@@ -256,14 +257,14 @@ random-lens 차감, 겹치는 source/하늘 블록 공분산, 선택 보정 계�
 실제 row export와 SACC `n(z)` 파일이 준비되면 `run_wl_shape_stack.py`가 이 adapter를
 연결한다. 후처리기는 네트워크를 쓰지 않으며 32개 row-batch 해시, 렌즈별 행 수,
 800개 렌즈, count-only 계획 연결을 다시 검증한다. HSC `b_mode_mask`에서 제외할 저장값을
-`--b-mode-masked-value`로 명시해야 하며, 이 값은 해당 릴리스 스키마나 검증된 자료에서
-확인하기 전에는 정하지 않는다. 예시:
+`--b-mode-masked-value`로 명시해야 하며, 현재 승인된 S19A 내보내기에서는 검증된 값 `0`을
+사용한다. 다른 릴리스나 내보내기에 자동 일반화하지 않는다. 예시:
 
 ```bash
 python3 analysis/icl_wgl_membership/hsc_debug/run_wl_shape_stack.py \
   --rows /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_01 \
   --nz-sacc /path/to/hsc_y3_fourier_space_data_vector.sacc \
-  --b-mode-masked-value VERIFIED_0_OR_1 \
+  --b-mode-masked-value 0 \
   --radial-edges-mpc 0.1 0.2 0.4 0.7 1.0 1.5 2.0 3.0 \
   --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_cluster_stack_01.json
 ```
@@ -420,14 +421,15 @@ and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_sample_retent
 
 The approved HSC weak-lensing source-row export is complete for 800 lenses and 3,069,544
 lens–source rows. It contains 22 columns, excludes full photo-z PDF rows, and remains
-`science_measurement=false` pending calibrated n(z), B-mode mask polarity, and the remaining
-selection and covariance gates. Its row summary is at
+`science_measurement=false` pending random-lens subtraction and the remaining selection and
+covariance gates. Its row summary is at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_03/row_summary.json`.
 The streaming quality audit finds 88,460 rows with `1<|e|<2` and none with `|e|>=2`,
 so the adapter was corrected to follow the published `|e|<2` and `sigma_e<=0.4`
 selection instead of rejecting the whole input at `|e|>=1`. The four published shape
 cuts plus tomographic assignment leave 2,234,510 candidate pairs before B-mode and
-radial selection. The stored B-mode bit remains undecoded. See
+radial selection. The raw B-mode bit was later decoded by coordinate matching to the
+published HSC Y3 excluded footprint; see the validation record below. See
 [`wl_shape_row_quality_assessment_2026-10-19.md`](wl_shape_row_quality_assessment_2026-10-19.md)
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_row_quality_2026-10-19_03/`.
 
@@ -437,8 +439,8 @@ and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_row_quality_2026-1
 cross `e_x` from the approved row export after the published HSC Y3 cuts and
 tomographic bins 1–4. It uses 0.1–3 Mpc proper-radius bins and reports three
 mask cases: no B-mode exclusion, exclude raw zero, and exclude raw one. The
-last two are sensitivity cases only; the stored `b_mode_mask` polarity remains
-undecoded. The loader validates the raw bit without assigning a polarity.
+last two were sensitivity cases before the coordinate-based polarity validation below.
+The loader validates the raw bit without assigning a polarity.
 
 The run is descriptive only: it has no shear response/bias calibration, source
 `n(z)` dilution correction, random-lens subtraction, or source-overlap/spatial
@@ -495,41 +497,40 @@ available. The SACC retrieval, checksum, duplicated tracer tables, and
 `source_zbin` count comparison are documented in
 [`hsc_y3_nz_sacc_validation_2026-10-19.md`](hsc_y3_nz_sacc_validation_2026-10-19.md).
 The official HSC page describes the four `wl_0`–`wl_3` n(z) tracers and calls
-for dilution and selection-bias corrections. This input gate now passes, but
-the calibrated stack is not yet a science measurement: B-mode mask polarity,
-random-lens subtraction, n(z) uncertainty, source overlap, and spatial
-covariance still need resolution.
+for dilution and selection-bias corrections. This input gate now passes. The B-mode
+polarity has since been resolved and a calibrated cluster-only stack completed, but it
+is not a science measurement: random-lens subtraction, n(z) uncertainty, source overlap,
+and spatial covariance still need resolution.
 
 ### B-mode polarity sensitivity stack
 
-The HSC column description does not state whether raw `b_mode_mask=0` or `1`
-marks the excluded region. Do not select a polarity based on which profile
-looks more physical. The two-hypothesis calibrated stack uses only the
-previously approved row export and SACC input; it does not query HSC or download
-anything. Submit the reproducible Slurm runner with:
+The earlier two-hypothesis calibrated stack used only the previously approved row export
+and SACC input; it did not query HSC or download anything. Its competing bit assignments
+were resolved by matching exported source coordinates to the excluded footprint published
+in the HSC Y3 systematics paper, not by choosing the more physical-looking shear profile.
 
 ```bash
 sbatch analysis/icl_wgl_membership/hsc_debug/run_wl_bmode_polarity_sensitivity.sbatch
 ```
 
-The script refuses to overwrite its output path. The completed run and its
+The script refuses to overwrite its output path. The historical sensitivity run and its
 interpretation are recorded in
 [`wl_bmode_polarity_sensitivity_2026-10-19.md`](wl_bmode_polarity_sensitivity_2026-10-19.md).
-The two scenarios are sensitivity bounds only; neither is a decoded catalog
-convention or a science measurement.
 
-The companion B-mode footprint diagnostic counts the two raw mask values by
-one-degree sky cell after the published source cuts and repeated-object
-deduplication. It does not infer mask polarity from shear. Its first Slurm
-attempt stopped on the export's comment-prefixed first CSV header field; the
-parser regression is fixed and the rerun completed successfully. Raw value 0
-is 3.45% of post-cut lens-source pairs and occurs only in 26 one-degree cells
-spanning RA 132–140°, Dec 1–5°. This is spatial localization, not a decoded
-catalog polarity or science measurement. The result is at
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_bmode_spatial_diagnostic_2026-10-19_02/`.
-See
-[`wl_bmode_polarity_sensitivity_2026-10-19.md`](wl_bmode_polarity_sensitivity_2026-10-19.md)
-for the run record.
+The coordinate validation exact-matches raw `b_mode_mask=0` to the published GAMA09H
+rectangle (RA 132.5–140°, Dec 1.6–5°) and raw 1 to positions outside it after the
+published shape and tomographic cuts. The audit records 77,021 inside-footprint pairs,
+zero outside, and does not use the observed shear to infer bit meaning. Using raw 0 as
+the excluded value, the calibrated cluster-only stack retained 2,153,004 lens-source
+pairs across 609 unique lenses. Tangential `DeltaSigma` declines from 161.5 ± 11.5 to
+15.3 ± 0.93 M_sun pc^-2 over 0.1–3 Mpc; quoted errors are independent-pair shape noise
+only. The 1.5–2.0 Mpc cross component is 3.1 ± 1.6 and needs null-test follow-up. These
+are preliminary cluster-only values: random subtraction, source overlap, photo-z
+uncertainty, and spatial covariance are absent, so `science_measurement=false`. Full
+checksums, counts, and the profile table are in
+[`wl_bmode_coordinate_validation_2026-10-19.md`](wl_bmode_coordinate_validation_2026-10-19.md);
+the exact output is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_cluster_stack_bmode0_2026-10-19_01/`.
 
 ### Random-control availability query (CAS count-only query complete)
 

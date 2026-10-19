@@ -1,7 +1,8 @@
 import pytest
 
 from audit_wl_bmode_spatial_distribution import (
-    EXPECTED_COLUMNS, grid_cell, normalize_shape_header, passes_published_source_cuts,
+    EXPECTED_COLUMNS, decode_mask_from_footprint, grid_cell, in_published_bmode_footprint,
+    normalize_shape_header, passes_published_source_cuts,
 )
 
 
@@ -12,6 +13,29 @@ def test_normalize_shape_header_accepts_export_comment_prefix():
 def test_normalize_shape_header_leaves_unmarked_or_other_fields_unchanged():
     assert normalize_shape_header(EXPECTED_COLUMNS) == EXPECTED_COLUMNS
     assert normalize_shape_header(["#other", *EXPECTED_COLUMNS[1:]])[0] == "#other"
+
+
+def test_published_bmode_footprint_uses_paper_rectangle_and_inclusive_edges():
+    assert in_published_bmode_footprint(132.5, 1.6)
+    assert in_published_bmode_footprint(140.0, 5.0)
+    assert in_published_bmode_footprint(135.0, 3.0)
+    assert not in_published_bmode_footprint(132.49, 3.0)
+    assert not in_published_bmode_footprint(135.0, 5.01)
+
+
+def test_published_bmode_footprint_rejects_invalid_coordinates():
+    with pytest.raises(ValueError, match="invalid sky position"):
+        in_published_bmode_footprint(360.0, 0.0)
+
+
+def test_decode_mask_from_exact_footprint_match_without_shear_values():
+    assert decode_mask_from_footprint({"inside": [10, 0], "outside": [0, 100]}) == 0
+    assert decode_mask_from_footprint({"inside": [0, 10], "outside": [100, 0]}) == 1
+
+
+def test_decode_mask_rejects_ambiguous_or_empty_spatial_mapping():
+    assert decode_mask_from_footprint({"inside": [10, 1], "outside": [0, 100]}) is None
+    assert decode_mask_from_footprint({"inside": [0, 0], "outside": [0, 0]}) is None
 
 
 def test_grid_cell_handles_ra_wrap_domain_and_dec_edges():

@@ -210,11 +210,11 @@ def run(args):
     }, ensure_ascii=False))
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rows", type=Path, required=True, help="completed shape-row export directory")
     parser.add_argument("--nz-sacc", type=Path, required=True, help="local HSC Y3 SACC file with wl_0..wl_3")
-    parser.add_argument("--b-mode-masked-value", type=int, required=True,
+    parser.add_argument("--b-mode-masked-value", dest="masked_value", type=int, required=True,
                         help="verified raw b_mode_mask value to exclude (0 or 1)")
     parser.add_argument("--radial-edges-mpc", type=float, nargs="+", required=True)
     parser.add_argument("--output", type=Path, required=True, help="new JSON output path; refuses overwrite")
@@ -222,7 +222,11 @@ def main():
     parser.add_argument("--plan-dir", type=Path, default=DEFAULT_PLAN)
     parser.add_argument("--h0", type=float, default=70.0)
     parser.add_argument("--omega-m", type=float, default=0.3)
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
     if len(args.radial_edges_mpc) < 2:
         parser.error("provide at least two radial edges")
     run(args)

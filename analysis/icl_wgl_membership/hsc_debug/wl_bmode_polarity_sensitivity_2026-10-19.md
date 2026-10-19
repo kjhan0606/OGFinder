@@ -90,8 +90,8 @@ At the one-degree coordinate-grid resolution, raw value 0 appears in 26 of
 cells contain only raw 0 and seven contain both values; all other occupied
 cells contain only raw 1. This is strong spatial localization in the approved
 800-lens export and is consistent with one value tracing a survey footprint or
-mask. The grid is not an area-corrected density map, and this correspondence
-does not establish which bit the catalog excludes. The output explicitly
+mask. The grid is not an area-corrected density map, and at that stage this correspondence
+did not establish which bit the catalog excludes. The output explicitly
 retains `b_mode_polarity_decoded=false`, `raw_value_meaning_inferred_from_shear=false`,
 and `science_measurement=false`.
 
@@ -102,3 +102,13 @@ random-position query before requesting approval for any row export.
 
 References: [HSC S19A shape-catalog documentation](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/);
 [HSC PDR3 available data](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/).
+
+## Historical status update
+
+The text above describes the state before the coordinate-to-footprint match. The subsequent
+[`wl_bmode_coordinate_validation_2026-10-19.md`](wl_bmode_coordinate_validation_2026-10-19.md)
+exact-matched raw value 0 to the published HSC Y3 excluded GAMA09H rectangle and raw value
+1 to outside positions, independently of the measured shear. A follow-up cluster-only
+calibrated stack using raw 0 as the masked value is documented there. That stack remains
+exploratory because random-lens subtraction, source-overlap and spatial covariance, and
+photo-z uncertainty are still missing.
