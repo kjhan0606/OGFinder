@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=wl-tomo-zsplit
+#SBATCH --job-name=wl-tomo-zsplit-cov
 #SBATCH --partition=a10
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -24,4 +24,4 @@ exec /home/kjhan/miniconda3/bin/python3 \
   --masked-value 0 \
   --cell-width-deg 5 \
   --radial-edges-mpc 0.1 0.2 0.4 0.7 1.0 1.5 2.0 3.0 \
-  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_01
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_lens_redshift_2026-10-20_02

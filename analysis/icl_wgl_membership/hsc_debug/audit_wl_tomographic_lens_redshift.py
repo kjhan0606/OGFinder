@@ -247,6 +247,7 @@ def lens_redshift_tomographic_jackknife(
         "profile_order": "lens_redshift_cohort lower_z then upper_z; source_zbin 1..4; radial bin; tangential and cross",
         "profile": profile,
         "tomographic_delta_sigma_consistency": consistency,
+        "covariance": covariance.tolist(),
         "covariance_shape": list(covariance.shape),
         "covariance_rank": int(np.linalg.matrix_rank(covariance)),
         "block_deletions": deletion_rows,
