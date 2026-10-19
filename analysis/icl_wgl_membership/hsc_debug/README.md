@@ -17,6 +17,13 @@
 세 영역의 제외 결과는 공분산이 아닌 영향도로 기록한다. 상세 결과는
 [ICL tract-region 평가](icl_hsc_tract_region_influence_assessment_2026-10-20.md)에 있다.
 
+위성–ICL 연관성 표본 94개에도 양 끝점 영역 삭제를 적용했다. 재현기는
+[`audit_satellite_icl_tract_region_influence.py`](audit_satellite_icl_tract_region_influence.py)이며,
+i2 partial Pearson이 전체 `0.293`에서 한 연결영역 제거 후 `0.048`로 변하고
+Spearman 부호도 바뀌는 영향도를 기록한다. 결과와 한계는
+[연관성 tract-region 평가](satellite_icl_tract_region_influence_assessment_2026-10-20.md)에
+있다.
+
 작업 디렉터리는 `/gpfs/kjhan/Astrafek/data` 이다. 다른 경로를 쓰려면 `ASTRAFEK_DATA` 를 둔다. OGFinder 위치는 `ASTRAFEX_OGF_ROOT` 이다.
 
 ```bash
