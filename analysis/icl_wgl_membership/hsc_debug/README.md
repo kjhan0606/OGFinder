@@ -938,11 +938,13 @@ successful batch status, poll time, and poll count atomically in the checkpoint.
 This code change applies only to a future invocation; the already-live PID
 1049265 continues running its previously loaded code and is left untouched.
 
-2026-10-20 06:53 KST에 `lageunha`에서 PID 1049265를 다시 확인했다. 프로세스는
-여전히 살아 있었고, 같은 시각 새 Astrafek 체크포인트 감사도 2/32 배치
+2026-10-20 06:59 KST에 `lageunha`에서 PID 1049265를 다시 확인했다. 프로세스는
+여전히 살아 있었고, 60초 대기 간격으로 재확인해도 같은 Astrafek 체크포인트 감사는 2/32 배치
 (33,514/780,191행)만 확인했다. 감사 요약 SHA-256은
 `d5072ee7cecd4ec4798892dc6d3be4acf1d916738e0ff65564666234a3ec8212`, 체크포인트
 SHA-256은 `84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`다.
+이번 감사 디렉터리는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-20_05/`다.
 이는 저장 체크포인트만 검증하며 살아 있는 프로세스의 CAS 작업 완료 여부는 보여주지
 않는다. 프로세스와 기존 CAS 요청은 그대로 두었고 재제출하지 않았다.
 
