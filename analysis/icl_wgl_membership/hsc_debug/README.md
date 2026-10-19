@@ -11,6 +11,12 @@
 있다. 세 연결 영역만으로 공분산을 추정하지 않으며, 무작위 중심 차감도
 대신하지 않는다.
 
+같은 연결요소 민감도를 783개 matched target-control ICL 프로파일에 적용한
+오프라인 감사는 [`audit_icl_tract_region_influence.py`](audit_icl_tract_region_influence.py)
+로 재현한다. 쌍별 프로파일 재집계가 저장 스택 평균과 일치하는지 확인하며,
+세 영역의 제외 결과는 공분산이 아닌 영향도로 기록한다. 상세 결과는
+[ICL tract-region 평가](icl_hsc_tract_region_influence_assessment_2026-10-20.md)에 있다.
+
 작업 디렉터리는 `/gpfs/kjhan/Astrafek/data` 이다. 다른 경로를 쓰려면 `ASTRAFEK_DATA` 를 둔다. OGFinder 위치는 `ASTRAFEX_OGF_ROOT` 이다.
 
 ```bash

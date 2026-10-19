@@ -22,6 +22,8 @@ Astrafek에는 HSC PDR3 영상·대조장·PSF 입력을 사용한 ICL 스택, �
 
 연결 target/control 블록 하나씩을 제외하는 추가 영향도 검사에서는 i2 `r`이 세 블록 폭 모두에서 양수였으나 `0.166–0.177`까지 낮아졌다. i는 2.5°와 10° 폭에서 한 블록 제외 시 부호가 바뀌었다. 이는 표본 내 단일 블록 영향 진단일 뿐 신뢰구간이나 검출 검정이 아니며, 기존 다중비교 결과를 바꾸지 않는다. 상세 결과와 영향 블록 ID는 [블록 제외 영향도 평가](satellite_icl_leave_one_block_out_assessment_2026-10-20.md)에 기록했다.
 
+같은 patch-QA 트랙 연결요소로 matched target–control ICL 프로파일도 점검했다. 783쌍 중 세 영역에 487, 244, 52쌍이 분포하고 1.6–3.0° 인접 기준에서 분할은 안정적이다. 가장 큰 영역을 제외하면 50–100 kpc 초과광은 i에서 1.8%, i2에서 9.2% 감소했고, 100–200 kpc는 i에서 10.2% 증가, i2에서 9.8% 감소했다. 200 kpc 바깥 저신호 프로파일은 영역 제외에 따라 부호가 바뀌는 고리가 있다. 50–200 kpc의 pair별 중앙 공통 픽셀 지원은 14.5–19.0%에 그친다. 이는 저지원 외곽광의 지역 민감도를 보여줄 뿐, 신뢰구간이나 ICL 검출 검정이 아니다. [ICL tract-region 영향도 평가](icl_hsc_tract_region_influence_assessment_2026-10-20.md)에 재현 스크립트, 데이터 매칭, 해시, 전체 고리 결과를 남겼다.
+
 은하수 소광을 픽셀별로 적용했을 때 기존 중심 소광 보정과의 ICL 차이는 사실상 0이었다. 반면 국소 평면 제거는 고정된 74쌍에서 i2 부분상관을 0.239에서 0.124로 낮추고 구간이 0을 포함하게 했다. 평면 주입 시험에서는 250 kpc 규모의 주입광 중 약 9–14%가 측정에서 빠졌지만, 해당 시험은 검출 마스크를 고정했고 상류 HSC sky 제거를 재현하지 않았다. 공개 확장 PSF 참조를 적용한 i 대조군 13개 시험에서는 단위 diffuse 주입의 중앙 21.5%가 ICL 측정 고리에 들어오고, 위성 외피는 35.3%가 들어왔다. 이 값은 특정 입력·마스크의 전달 민감도이지 관측값에 곱할 보정계수가 아니다.
 
 공분산 감사는 position별 PSF 주입 표본 57개(i 13, i2 44)의 표적·매칭 대조 coadd에서 9×9 단거리 잔차 커널을 측정하고 실제 signed aperture 가중치에 전파했다. 큰 top-hat 근사 분산 비는 표적 1.59, 대조장 1.54–1.55였다. 정확한 ICL 및 위성 가중치와 양쪽 ICL 영상의 분산을 사용하면 대각 분산만 쓴 경우보다 ICL 잡음 표준편차가 i에서 1.234배, i2에서 1.240배였고, 잡음만으로 계산한 ICL–위성 상관 중앙값은 각각 −0.0073, −0.00091이었다. 이는 해당 57개 프레임에 조건부인 단거리·정상 커널 민감도다. source Poisson 잡음, 상류 sky 전달, 위치별 완전 공분산은 포함하지 않으며 공간 블록 오차에 단순 곱하면 같은 변동을 중복 셀 수 있다. 따라서 관측 연관성을 보정하거나 검출 여부를 결정하는 수치로 사용하지 않는다.
@@ -63,7 +65,7 @@ HSC 문서는 `b_mode_mask`가 큰 B-mode 구역을 제거하는 데 쓰인다�
 실행기, Slurm 스크립트, 검증기, 요약 생성기는 `analysis/icl_wgl_membership/hsc_debug/`에 보관한다. 대형 HSC 파일과 실행 결과는 Git 밖의 `/gpfs/kjhan/Astrafek/data/`에 두고, 코드·SQL 계획·체크섬·요약을 저장소에 기록한다.
 
 - [표적–대조장 2-D ICL 스택](icl_2d_target_control_stack_README.md), [독립지원 민감도](icl_2d_independent_support_assessment_2026-10-19.md)
-- [ICL–위성 다중비교 검정](icl_satellite_familywise_2026-10-18.md), [반경별 블록 폭 민감도](icl_satellite_perbin_block_scale_assessment_2026-10-19.md)
+- [ICL–위성 다중비교 검정](icl_satellite_familywise_2026-10-18.md), [반경별 블록 폭 민감도](icl_satellite_perbin_block_scale_assessment_2026-10-19.md), [ICL tract-region 영향도](icl_hsc_tract_region_influence_assessment_2026-10-20.md)
 - [소광 민감도](icl_pixel_extinction_assessment_2026-10-19.md), [평면 주입 전달](icl_plane_injection_assessment_2026-10-19.md), [위치별 PSF 및 공동 주입](psf_convolved_joint_injection_assessment_2026-10-19.md), [coadd 잔차 공분산](icl_coadd_residual_covariance_assessment_2026-10-19.md), [ICL–위성 lag 공분산](satellite_icl_lag_covariance_assessment_2026-10-19.md), [표적·대조 공분산](satellite_icl_target_control_covariance_assessment_2026-10-19.md), [측정 잡음 전파](icl_satellite_measurement_noise_mc_assessment_2026-10-19.md), [PSF 파일 감사](psf_picker_batch_2026-10-19.md)
 - [CAMIRA 표본 확장 검토](camira_expansion_pool_assessment_2026-10-19.md), [B-mode 극성 좌표 검증과 calibrated stack](wl_bmode_coordinate_validation_2026-10-19.md), [표적 전용 약한렌즈 공분산](wl_cluster_spatial_jackknife_assessment_2026-10-19.md), [tract-region 영향도](wl_hsc_tract_region_influence_assessment_2026-10-20.md), [tomographic 일관성 평가](wl_tomographic_consistency_assessment_2026-10-20.md), [무작위 좌표 기하 파일럿](wl_random_coordinate_geometry_pilot_2026-10-20.md), [ICL 대조장 random 적합성 검사기](audit_wl_matched_control_centers.py)
 
