@@ -33,6 +33,15 @@ def close(a: float, b: float) -> bool:
     return math.isclose(float(a), float(b), rel_tol=1e-12, abs_tol=1e-14)
 
 
+def max_lag_distance_arcsec(kernel_shape: tuple[int, int], pixel_scale: float) -> float:
+    """Largest pixel-center separation represented by a finite lag kernel."""
+    if (len(kernel_shape) != 2 or any(size < 1 or size % 2 == 0 for size in kernel_shape)
+            or not math.isfinite(pixel_scale) or pixel_scale <= 0):
+        raise ValueError("an odd 2-D kernel and positive finite pixel scale are required")
+    half_y, half_x = ((size - 1) / 2 for size in kernel_shape)
+    return math.hypot(half_x, half_y) * pixel_scale
+
+
 def verify(run_dir: Path) -> dict:
     summary_path = run_dir / "summary.json"
     table_path = run_dir / "target_control_pixel_covariance.tsv"
@@ -72,6 +81,8 @@ def verify(run_dir: Path) -> dict:
     planned = {(str(r["target_cluster_id"]), str(r["coadd_header_filter"])): r
                for r in control_manifest["clusters"]}
     completed = {str(r["id"]): r for r in control_status["completed"]}
+    short_range_gaps = []
+    short_range_supports = []
     for row in rows:
         key = row["cluster_id"], row["filter"]
         plan = planned.get(key)
@@ -86,6 +97,14 @@ def verify(run_dir: Path) -> dict:
                 or float(row["target_control_center_separation_arcsec"])
                 <= float(row["minimum_separation_for_disjoint_300kpc_annuli_arcsec"])):
             raise ValueError(f"control annulus fails support/separation gate for {key}")
+        gap = (float(row["target_control_center_separation_arcsec"])
+               - float(row["minimum_separation_for_disjoint_300kpc_annuli_arcsec"]))
+        kernel_support = max_lag_distance_arcsec(
+            (9, 9), float(row["control_pixel_scale_arcsec"]))
+        if gap <= kernel_support:
+            raise ValueError(f"target/control apertures approach within 9x9 lag support for {key}")
+        short_range_gaps.append(gap)
+        short_range_supports.append(kernel_support)
 
         target = target_rows[key]
         target_diag = float(target["diagonal_var_icl_target_njy2_arcsec4"])
@@ -140,6 +159,16 @@ def verify(run_dir: Path) -> dict:
         "n_source_hashes_verified": len(summary["input_sha256"]),
         "n_rows_formula_verified": len(rows), "n_control_mappings_verified": len(rows),
         "n_disjoint_covered_apertures_verified": len(rows),
+        "finite_lag_target_control_separation": {
+            "kernel_shape_pixels": [9, 9],
+            "pairs_outside_finite_lag_covariance_support": len(short_range_gaps),
+            "minimum_annulus_boundary_gap_arcsec": min(short_range_gaps),
+            "median_annulus_boundary_gap_arcsec": float(np.median(short_range_gaps)),
+            "maximum_9x9_kernel_pixel_center_separation_arcsec": max(short_range_supports),
+            "minimum_gap_to_kernel_support_ratio": min(
+                gap / support for gap, support in zip(short_range_gaps, short_range_supports)),
+            "scope": "excludes cross-aperture pixel covariance within the measured 9x9 finite-lag kernel only; large-scale sky/calibration covariance remains unmeasured",
+        },
         "filter_summary_recomputed": summary_checks,
         "verifier_sha256": sha256(Path(__file__).resolve()),
     }

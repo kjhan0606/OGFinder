@@ -759,12 +759,19 @@ interpretation are in
 image's 200–300 kpc aperture variance to that target-side calculation. All 57
 control apertures pass the same 40% coverage floor and are disjoint from their
 target annuli. The total ICL sigma inflation remains about 24%; the normalized
-noise-only ICL–satellite covariance stays small. Target/control noise
-independence is assumed, not measured, and other major error terms remain
-outside the model. Results, row/table hashes, and limitations are in
+noise-only ICL–satellite covariance stays small. A subsequent geometry audit
+finds the nearest target/control annulus boundaries at least 297.497 arcsec
+apart, versus 0.9504 arcsec maximum separation in the measured 9×9 lag kernel.
+Thus the finite-lag model cannot couple pixel noise between these apertures;
+large-scale sky and calibration covariance remains unmeasured. Other major
+error terms remain outside the model. Results, row/table hashes, and
+limitations are in
 [`satellite_icl_target_control_covariance_assessment_2026-10-19.md`](satellite_icl_target_control_covariance_assessment_2026-10-19.md).
 The saved row table and summary can be independently checked with
 [`verify_satellite_icl_target_control_covariance.py`](verify_satellite_icl_target_control_covariance.py).
+The finite-lag geometry audit is saved as
+`finite_lag_separation_audit_2026-10-20.json` beside the verified covariance
+table (SHA-256 `55b8b22843316edff1acfde91c71fe579a9f66e1ccf9563f5453c39a77dc65da`).
 
 `propagate_satellite_icl_measurement_noise.py`는 공분산이 있는 동일 57쌍(i 13,
 i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각각 전파한다.

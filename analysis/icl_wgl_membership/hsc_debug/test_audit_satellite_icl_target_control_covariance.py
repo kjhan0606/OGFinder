@@ -4,6 +4,7 @@ import pytest
 from audit_satellite_icl_target_control_covariance import (
     annulus_weights, combine_variances, diagonal_weighted_variance,
 )
+from verify_satellite_icl_target_control_covariance import max_lag_distance_arcsec
 
 
 def test_annulus_weights_are_uniform_and_match_valid_coverage():
@@ -47,3 +48,10 @@ def test_diagonal_variance_rejects_nonfinite_weighted_pixels():
     variance = np.array([[4.0, np.inf]])
     with pytest.raises(ValueError):
         diagonal_weighted_variance(weights, variance, 1.0)
+
+
+def test_finite_lag_kernel_support_uses_corner_pixel_separation():
+    assert max_lag_distance_arcsec((9, 9), 0.168) == pytest.approx(
+        np.sqrt(32) * 0.168)
+    with pytest.raises(ValueError):
+        max_lag_distance_arcsec((8, 9), 0.168)

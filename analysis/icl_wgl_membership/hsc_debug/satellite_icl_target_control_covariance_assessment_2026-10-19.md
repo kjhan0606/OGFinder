@@ -63,13 +63,24 @@ directory.
 ## Interpretation and limits
 
 The target and matched-control noise terms are added as independent. Their
-annuli do not overlap, but the cross-image covariance is not directly measured;
-large-scale sky-subtraction residuals could still couple separated coadds.
-The lag kernel is a stationary local patch estimate rather than the exact
-position-dependent full covariance. The masks/detections and selected sample
-are fixed. Source Poisson noise, upstream sky transfer, PSF and calibration
-uncertainty, extinction, and astrophysical covariance remain excluded. Spatial
-block scatter may contain some of this noise, so multiplying the sigma factor
-into block errors could double-count it. This remains an exploratory
-noise-only audit with `science_measurement=false`, not a correction to the
-observed ICL–satellite relation or a final uncertainty estimate.
+annuli are separated by at least 297.497 arcsec across all 57 pairs; the largest
+pixel-center separation represented by the measured 9×9 lag kernel is 0.9504
+arcsec. The new independent geometry audit therefore excludes cross-aperture
+pixel covariance within that finite-lag model, with a minimum gap/support ratio
+of 313.0. It does not directly measure cross-image covariance on larger scales;
+sky-subtraction residuals, calibration, and other broad spatial terms could
+still couple separated coadds. The lag kernel is a stationary local patch
+estimate rather than the exact position-dependent full covariance. The
+masks/detections and selected sample are fixed. Source Poisson noise, upstream
+sky transfer, PSF and calibration uncertainty, extinction, and astrophysical
+covariance remain excluded. Spatial-block scatter may contain some of this
+noise, so multiplying the sigma factor into block errors could double-count
+it. This remains an exploratory noise-only audit with
+`science_measurement=false`, not a correction to the observed ICL–satellite
+relation or a final uncertainty estimate.
+
+The geometry extension is reproduced by
+[`verify_satellite_icl_target_control_covariance.py`](verify_satellite_icl_target_control_covariance.py)
+and its focused kernel-support test. The verifier output is
+`finite_lag_separation_audit_2026-10-20.json` in the run directory; its
+SHA-256 is `55b8b22843316edff1acfde91c71fe579a9f66e1ccf9563f5453c39a77dc65da`.
