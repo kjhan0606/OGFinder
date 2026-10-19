@@ -1000,3 +1000,5 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 ## ICL–위성 HSC 영역 고정효과 민감도 (2026-10-20)
 
 같은 94쌍에서 redshift·richness를 보정한 뒤 표적/대조 HSC 연결영역 지시변수를 추가했다. i2 부분상관은 `r=0.29264`에서 `0.29105`로 거의 유지됐고, i는 `0.07898`에서 `0.13860`으로 변했으나 26쌍뿐이다. 표본의 target/control endpoint가 모두 같은 근사 영역에 배정되어 두 영역 효과 열은 중복되므로 하나만 적합했다. 이는 영역 간 평균 오프셋에 대한 민감도이며 검출이나 공분산 추정이 아니다. 방법과 한계는 [`satellite_icl_region_fixed_effects_assessment_2026-10-20.md`](satellite_icl_region_fixed_effects_assessment_2026-10-20.md)에 있다.
+
+각 필터의 cluster 단위 leave-one-out에서는 i2 `r`이 68회 삭제 모두 양수였으나 `0.151–0.338`로 변했고, i는 26회 중 한 번 부호가 바뀌었다. 이는 선택된 표본의 영향도 범위이지 신뢰구간이 아니다. 은하단 ID별 결과와 제한은 [`satellite_icl_cluster_influence_assessment_2026-10-20.md`](satellite_icl_cluster_influence_assessment_2026-10-20.md)에 기록했다.
