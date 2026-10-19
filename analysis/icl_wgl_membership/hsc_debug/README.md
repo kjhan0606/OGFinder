@@ -661,7 +661,10 @@ interval endpoints: higher-redshift translations of 0.021–0.063 for bin 3 and
 0.038–0.062 for bin 4, using the central point and all four rectangle corners.
 The grid is a sensitivity envelope, not a joint posterior; the calibrated
 distribution download remains separately approval-gated. The reproducible
-Slurm runner writes a new `_02` result directory and preserves `_01`.
+Slurm runner writes a new `_02` result directory and preserves `_01`. After the
+run completes, [`validate_wl_published_nz_shift_grid.py`](validate_wl_published_nz_shift_grid.py)
+checks all five shift inputs, the saved SACC and baseline hashes, each 56×56
+covariance's rank and symmetry, and the recomputed radial significance envelope.
 
 The current S19A responsivity, object-level shear corrections, and HSC
 edge-selection coefficients were also checked against the HSC Y3 paper and its
