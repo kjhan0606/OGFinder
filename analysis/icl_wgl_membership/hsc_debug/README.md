@@ -362,6 +362,19 @@ bootstrap. It is a post hoc sensitivity analysis and keeps
 `science_measurement=false`. See
 [`camira_weighted_icl_association_2026-10-18.md`](camira_weighted_icl_association_2026-10-18.md).
 
+## Full-sample 2-D ICL target/control stack and support sensitivity (2026-10-19)
+
+The Astrafek 2-D stack uses the 800-cluster parent and 798 matched-control images;
+783 same-filter pairs remain (302 i, 481 i2). An independent-support sensitivity
+was completed for SEP/Kron mask factors K=2.5, 3.5, and 5.0, with all 40 filter/radial
+aggregates in each run independently verified against per-pair 25 kpc profiles.
+Same-pair changes versus common support vary with radius and reach 32.9% at K=5,
+i2, 175–200 kpc. This estimator comparison is exploratory, leaves
+`science_measurement=false`, and does not resolve target/control environment bias
+or ICL–satellite association significance. See
+[`icl_2d_target_control_stack_README.md`](icl_2d_target_control_stack_README.md)
+and [`icl_2d_independent_support_assessment_2026-10-19.md`](icl_2d_independent_support_assessment_2026-10-19.md).
+
 ## ICL annulus sample-selection audit (2026-10-18)
 
 `audit_icl_sample_selection.py` compares the 137-cluster K2.5/40% all-annulus sample

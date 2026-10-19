@@ -62,6 +62,11 @@ and output verifier are `run_icl_independent_support_sensitivity.sbatch` and
 effect of relaxing pixel intersection from the effect of admitting additional
 pairs; the alternate estimator remains a sensitivity because target/control
 masks may remove different source environments.
+All three full-sample runs passed independent verification (783 matched pairs:
+302 i and 481 i2). The bin-by-bin support gain and same-pair estimator shifts
+are in [`icl_2d_independent_support_assessment_2026-10-19.md`](icl_2d_independent_support_assessment_2026-10-19.md);
+the largest absolute shift over 50–200 kpc is 32.9% (K=5, i2, 175–200 kpc),
+so the alternate estimator is not a negligible numerical change.
 
 ## Interpretation limits
 
