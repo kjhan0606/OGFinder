@@ -483,18 +483,19 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
             arr["psf_shape12"][in_bin],
         )
         msel = selection_bin["m_sel"]
+        m = arr["m"][in_bin]
         if np.any((1.0 + m) * (1.0 + msel) <= 0):
             raise ValueError(f"radial bin {index} has a non-positive calibrated response")
-        gt = (e_t[in_bin] / (2.0 * responsivity) - c_t[in_bin]) / (1.0 + m)
-        gx = (e_x[in_bin] / (2.0 * responsivity) - c_x[in_bin]) / (1.0 + m)
         csel_t, csel_x = _to_tangential(
             phi[in_bin], np.full(np.count_nonzero(in_bin), selection_bin["c1_sel"]),
             np.full(np.count_nonzero(in_bin), selection_bin["c2_sel"]),
         )
+        gt = (e_t[in_bin] / (2.0 * responsivity) - c_t[in_bin]) / (1.0 + m)
+        gx = (e_x[in_bin] / (2.0 * responsivity) - c_x[in_bin]) / (1.0 + m)
         gt = (gt - csel_t) / (1.0 + msel)
         gx = (gx - csel_x) / (1.0 + msel)
-        # The catalog weight is inverse variance for distortion e; propagate the
-        # responsivity and multiplicative corrections into the shear weight.
+        # Corrected ellipticities have variance proportional to the inverse of
+        # the catalog weight times the squared per-source calibrated response.
         w_shear = w * (2.0 * responsivity * (1.0 + m) * (1.0 + msel)) ** 2
         mean_weight = float(np.sum(w_shear))
         mean_gt = float(np.sum(w_shear * gt) / mean_weight)
@@ -529,7 +530,8 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
         "calibration": {
             "shape_catalog": "S19A PDR3 re-Gaussianization",
             "responsivity": "per-radial-bin HSC responsivity from derived_rms_e weighted by shape_weight*SigmaCritInv^2",
-            "per_object_bias": "derived_shear_bias_m/c1/c2",
+            "per_object_bias": "derived_shear_bias_m/c1/c2 applied per source before inverse-variance stacking",
+            "multiplicative_correction": "per-source response corrected before stacking; corrected variance weights include the squared response",
             "selection_bias_method": "HSC edge-density prescription for R2>0.3 and magA10<25.5; weights=shape_weight*SigmaCritInv^2",
             "source_selection": "HSC Y3 cuts |e|<2, 0<=sigma_e<=0.4, R2>=0.3, and magA10<=25.5 applied before stacking",
             "photoz_geometry": "full P(z) integrated to mean SigmaCritInv for each lens-source pair",
