@@ -35,6 +35,14 @@ bash scripts/run_debug.sh
 이 한 건의 제품 출처 관문은 통과했으나 sky 잔류량·PSF·마스크·random·주입/회수
 검증과 12개 시범 영상은 미완료이다. 이 기록은 위의 초기 401 이력을 대체하지 않는다.
 
+2026-10-19 사용자 승인으로 기존 주입 위치 744곳의 HSC PDR3 `HSC-I`
+`coadd` 모델 PSF 코어를 추가 수신하고 좌표·FITS·정규화·중심 품질을
+검증했다. 절차는 `prepare_hsc_psf_picker_plan.py`와
+`audit_hsc_psf_picker_batch.py`, 결과와 한계는
+[`psf_picker_batch_2026-10-19.md`](psf_picker_batch_2026-10-19.md)에 있다.
+PSF 코어 입력은 준비됐지만 확장 날개와 영상 노이즈는 별도로 검증해야 하며,
+과학 측정은 수행하지 않았다.
+
 2026-10-12 수집 확장: 이후 12개 FITS 다운로드가 모두 완료됐으며, 파일 크기와
 SHA-256, FITS 구조와 WCS를 재검사했다. 이제 213개 후보 전체를 받도록
 `hsc_pilot.py prepare --all-selected`로 목록을 만들고 기존 `download_pilot.py`의
