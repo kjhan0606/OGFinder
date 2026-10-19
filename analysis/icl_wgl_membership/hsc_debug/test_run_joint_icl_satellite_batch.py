@@ -57,6 +57,30 @@ def test_summary_reports_filter_level_medians_and_keeps_exploratory_gate():
     result = summarize(records)
     assert result["i"]["n_clusters"] == 3
     response = result["i"]["responses"]["icl_response_to_diffuse_unit_injection"]
+    assert response["n_valid"] == 3
     assert response["median"] == 3.0
     assert response["q16"] == pytest.approx(1.64)
     assert response["q84"] == pytest.approx(4.36)
+
+
+def test_summary_keeps_valid_icl_rows_when_satellite_support_is_missing():
+    base = {
+        "icl_response_to_diffuse_unit_injection": 0.5,
+        "icl_plane_corrected_response_to_diffuse_unit_injection": 0.4,
+        "icl_response_to_all_satellite_envelopes": 0.2,
+        "icl_plane_corrected_response_to_all_satellite_envelopes": 0.1,
+        "satellite_response_to_smooth_diffuse": None,
+        "satellite_response_to_satellite_unit_injection": None,
+    }
+    result = summarize([
+        {"filter": "i2", "transfer_response": dict(base)},
+        {"filter": "i2", "transfer_response": {
+            **base, "satellite_response_to_smooth_diffuse": 0.03,
+            "satellite_response_to_satellite_unit_injection": 0.7,
+        }},
+    ])
+    responses = result["i2"]["responses"]
+    assert result["i2"]["n_clusters"] == 2
+    assert responses["icl_response_to_diffuse_unit_injection"]["n_valid"] == 2
+    assert responses["satellite_response_to_smooth_diffuse"]["n_valid"] == 1
+    assert responses["satellite_response_to_smooth_diffuse"]["median"] == pytest.approx(0.03)

@@ -4,6 +4,7 @@ import pytest
 from joint_icl_satellite_injection import (
     add_surface_brightness_injection,
     redetect_masks_and_targets,
+    satellite_outer_measurement,
     satellite_halo_template,
 )
 
@@ -42,6 +43,24 @@ def test_surface_brightness_injection_rejects_bad_units_or_shape():
         add_surface_brightness_injection(native, native, 0.0)
     with pytest.raises(ValueError):
         add_surface_brightness_injection(native, np.zeros((3, 3)), 1.0)
+
+
+def test_satellite_measurement_records_missing_support_without_losing_icl_frame(monkeypatch):
+    import joint_icl_satellite_injection as joint
+
+    monkeypatch.setattr(joint.satellite, "profile_at", lambda *args, **kwargs: None)
+    result = satellite_outer_measurement(
+        np.zeros((8, 8)), np.ones((8, 8)), np.zeros((8, 8), dtype=bool),
+        np.zeros((8, 8), dtype=np.int32), {}, None, None,
+        [({}, {"x": 4., "y": 4., "NUMBER": 1}, 100.)],
+        np.array([4., 4.]), 0.168, 1.0, 1.0)
+
+    assert result == {
+        "delta_sb_njy_arcsec2": None,
+        "n_satellites": 0,
+        "n_control_profiles": 0,
+        "status": "no_satellite_passed_minimum_support",
+    }
 
 
 def test_redetection_rebuilds_masks_and_recovers_injected_member():

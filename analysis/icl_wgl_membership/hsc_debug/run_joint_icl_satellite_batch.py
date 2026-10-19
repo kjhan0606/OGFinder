@@ -17,6 +17,7 @@ from joint_icl_satellite_injection import (
     DEFAULT_ICL_MASKS,
     DEFAULT_ICL_PAIRS,
     DEFAULT_SAT_PREP,
+    RUNTIME_CODE_SHA256_AT_IMPORT,
     run_frame,
     sha256,
 )
@@ -79,11 +80,15 @@ def summarize(records: list[dict]) -> dict:
                     "icl_plane_corrected_response_to_all_satellite_envelopes",
                     "satellite_response_to_smooth_diffuse",
                     "satellite_response_to_satellite_unit_injection"):
-            vals = [r["transfer_response"][key] for r in subset]
+            vals = [float(r["transfer_response"][key])
+                    for r in subset
+                    if r["transfer_response"].get(key) is not None
+                    and np.isfinite(float(r["transfer_response"][key]))]
             metrics[key] = {
-                "median": statistics.median(vals),
-                "q16": float(np.quantile(vals, 0.16)),
-                "q84": float(np.quantile(vals, 0.84)),
+                "n_valid": len(vals),
+                "median": statistics.median(vals) if vals else None,
+                "q16": float(np.quantile(vals, 0.16)) if vals else None,
+                "q84": float(np.quantile(vals, 0.84)) if vals else None,
             }
         by_filter[filt] = {"n_clusters": len(subset), "responses": metrics}
     return by_filter
@@ -130,6 +135,8 @@ def run_batch(data: Path, output_dir: Path,
                 "path": str(path),
                 "sha256": sha256(path),
                 "support": result["support"],
+                "support_status": result["support_status"],
+                "satellite_support_gaps": result["satellite_support_gaps"],
                 "icl_coverage_200_300": result["measurements_by_scenario"]["baseline"]["icl_coverage_200_300"],
                 "transfer_response": result["transfer_response"],
             })
@@ -173,6 +180,12 @@ def run_batch(data: Path, output_dir: Path,
         },
         "n_completed": len(records),
         "n_errors": len(errors),
+        "n_frames_with_satellite_support_gaps": sum(
+            bool(row["satellite_support_gaps"]) for row in records),
+        "satellite_support_gaps_by_scenario": {
+            scenario: sum(scenario in row["satellite_support_gaps"] for row in records)
+            for scenario in ("baseline", "icl_only", "satellite_only", "both")
+        },
         "by_filter": summarize(records),
         "records": records,
         "errors": errors,
@@ -181,9 +194,8 @@ def run_batch(data: Path, output_dir: Path,
             str(satellite_profiles_path): sha256(satellite_profiles_path),
         },
         "code_sha256": {
+            **RUNTIME_CODE_SHA256_AT_IMPORT,
             str(Path(__file__).resolve()): SCRIPT_SHA256_AT_IMPORT,
-            str(SINGLE_FRAME_SCRIPT.resolve()): SINGLE_FRAME_SHA256_AT_IMPORT,
-            str(POSITION_PSF_SCRIPT.resolve()): POSITION_PSF_SHA256_AT_IMPORT,
         },
         "elapsed_seconds": time.time() - started,
         "limitations": [

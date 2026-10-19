@@ -177,7 +177,12 @@ def main() -> int:
         ref = reference_by_pair.get(pair)
         if ref:
             for key in response_deltas:
-                value = float(row["transfer_response"][key]) - float(ref["transfer_response"][key])
+                current_value = row["transfer_response"].get(key)
+                reference_value = ref["transfer_response"].get(key)
+                if current_value is None or reference_value is None:
+                    deltas[key] = None
+                    continue
+                value = float(current_value) - float(reference_value)
                 if not np.isfinite(value):
                     raise ValueError(f"non-finite paired PSF response difference for {pair}/{key}")
                 response_deltas[key].append(value)

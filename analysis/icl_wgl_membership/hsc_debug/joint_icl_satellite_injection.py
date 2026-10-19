@@ -13,6 +13,7 @@ import argparse
 import ast
 import csv
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -50,6 +51,22 @@ def sha256(path: Path) -> str:
 SCRIPT_SHA256_AT_IMPORT = sha256(Path(__file__))
 POSITION_PSF_SCRIPT = Path(__file__).with_name("position_psf.py")
 POSITION_PSF_SHA256_AT_IMPORT = sha256(POSITION_PSF_SCRIPT)
+
+
+def runtime_code_hashes() -> dict[str, str]:
+    """Hash project sources that implement this injection measurement."""
+    paths = {
+        Path(__file__).resolve(), POSITION_PSF_SCRIPT.resolve(),
+        Path(satellite.__file__).resolve(), Path(prestack_core.__file__).resolve(),
+        Path(detection_pipeline.__file__).resolve(),
+        Path(satellite.validate_fits.__code__.co_filename).resolve(),
+        Path(satellite.nJy_factor.__code__.co_filename).resolve(),
+        Path(inspect.getsourcefile(detection_pipeline.Cosmology)).resolve(),
+    }
+    return {str(path): sha256(path) for path in sorted(paths)}
+
+
+RUNTIME_CODE_SHA256_AT_IMPORT = runtime_code_hashes()
 
 
 def read_tsv(path: Path) -> list[dict[str, str]]:
@@ -120,12 +137,18 @@ def satellite_outer_measurement(image: np.ndarray, variance: np.ndarray,
         control_values.append(float(np.mean(controls)))
         n_controlled += len(controls)
     if not target_values:
-        raise ValueError("no satellite profile passed fixed 50--75 kpc support")
+        return {
+            "delta_sb_njy_arcsec2": None,
+            "n_satellites": 0,
+            "n_control_profiles": 0,
+            "status": "no_satellite_passed_minimum_support",
+        }
     return {
         "delta_sb_njy_arcsec2": float(np.mean(np.asarray(target_values)
                                                 - np.asarray(control_values))),
         "n_satellites": len(target_values),
         "n_control_profiles": n_controlled,
+        "status": "supported",
     }
 
 
@@ -371,21 +394,44 @@ def run_frame(data: Path, ident: str, output: Path,
                               "icl_plane_corrected_200_300_njy_arcsec2": float(icl_result["corrected"][3] * conversion),
                               "satellite_delta_50_75_njy_arcsec2": sat_metric["delta_sb_njy_arcsec2"],
                               "satellite_support": {k: sat_metric[k] for k in
-                                                    ("n_satellites", "n_control_profiles")},
+                                                    ("n_satellites", "n_control_profiles", "status")},
                               "icl_coverage_200_300": float(icl_result["coverage"][3])}
 
     base_icl = measurements["baseline"]["icl_raw_200_300_njy_arcsec2"]
-    base_sat = measurements["baseline"]["satellite_delta_50_75_njy_arcsec2"]
     inc_icl = measurements["icl_only"]["icl_raw_200_300_njy_arcsec2"] - base_icl
-    inc_sat = measurements["satellite_only"]["satellite_delta_50_75_njy_arcsec2"] - base_sat
     icl_from_sat = measurements["satellite_only"]["icl_raw_200_300_njy_arcsec2"] - base_icl
-    sat_from_icl = measurements["icl_only"]["satellite_delta_50_75_njy_arcsec2"] - base_sat
     both_icl = measurements["both"]["icl_raw_200_300_njy_arcsec2"] - base_icl
-    both_sat = measurements["both"]["satellite_delta_50_75_njy_arcsec2"] - base_sat
+
+    def satellite_delta(scenario: str) -> float | None:
+        value = measurements[scenario]["satellite_delta_50_75_njy_arcsec2"]
+        return None if value is None else float(value)
+
+    def satellite_response(scenario: str, amplitude: float) -> float | None:
+        baseline = satellite_delta("baseline")
+        value = satellite_delta(scenario)
+        if baseline is None or value is None or amplitude == 0:
+            return None
+        return (value - baseline) / amplitude
+
+    sat_from_icl = satellite_response("icl_only", diffuse_amplitude)
+    inc_sat = satellite_response("satellite_only", satellite_amplitude)
+    both_sat = satellite_response("both", satellite_amplitude)
+    satellite_residual = (
+        None if both_sat is None or sat_from_icl is None or inc_sat is None
+        else (both_sat * satellite_amplitude
+              - sat_from_icl * diffuse_amplitude
+              - inc_sat * satellite_amplitude)
+    )
+    satellite_support_gaps = [
+        name for name, row in measurements.items()
+        if row["satellite_support"]["status"] != "supported"
+    ]
     result = {
         "schema": ("hsc-joint-icl-satellite-redetection-injection-v1" if rerun_detection_masks
                    else "hsc-joint-icl-satellite-fixed-mask-injection-v1"),
         "status": "complete",
+        "support_status": "partial_satellite_support" if satellite_support_gaps else "complete",
+        "satellite_support_gaps": satellite_support_gaps,
         "science_measurement": False,
         "observational_validation_passed": False,
         "flux_covariance_available": False,
@@ -425,10 +471,10 @@ def run_frame(data: Path, ident: str, output: Path,
                 (measurements["satellite_only"]["icl_plane_corrected_200_300_njy_arcsec2"]
                  - measurements["baseline"]["icl_plane_corrected_200_300_njy_arcsec2"])
                 / satellite_amplitude if satellite_amplitude else None),
-            "satellite_response_to_smooth_diffuse": sat_from_icl / diffuse_amplitude if diffuse_amplitude else None,
-            "satellite_response_to_satellite_unit_injection": inc_sat / satellite_amplitude if satellite_amplitude else None,
+            "satellite_response_to_smooth_diffuse": sat_from_icl,
+            "satellite_response_to_satellite_unit_injection": inc_sat,
             "both_minus_sum_residual_icl_njy_arcsec2": both_icl - (inc_icl + icl_from_sat),
-            "both_minus_sum_residual_satellite_njy_arcsec2": both_sat - (sat_from_icl + inc_sat),
+            "both_minus_sum_residual_satellite_njy_arcsec2": satellite_residual,
         },
         "measurements_by_scenario": measurements,
         "redetection_by_scenario": redetection_diagnostics,
@@ -442,10 +488,7 @@ def run_frame(data: Path, ident: str, output: Path,
             str(members_path): sha256(members_path), str(sat_mask_path): sha256(sat_mask_path),
             str(sat_prep_path): sha256(sat_prep_path), str(icl_pairs_path): sha256(icl_pairs_path),
         },
-        "code_sha256": {
-            str(Path(__file__).resolve()): SCRIPT_SHA256_AT_IMPORT,
-            str(POSITION_PSF_SCRIPT.resolve()): POSITION_PSF_SHA256_AT_IMPORT,
-        },
+        "code_sha256": RUNTIME_CODE_SHA256_AT_IMPORT,
         "limitations": [
             ("This is a support-selected, redetection-and-mask-response sensitivity, not a population calibration."
              if rerun_detection_masks else "Single-frame fixed-mask measurement-transfer pilot, not a population calibration."),
