@@ -8,7 +8,9 @@ from prepare_wl_random_shape_count_plan import prepare as prepare_count_plan
 from prepare_wl_random_shape_rows import (
     OUTPUT_COLUMNS, prepare, shape_rows_query,
 )
-from run_wl_random_shape_stack import verify_and_load_pairs
+from run_wl_random_shape_stack import (
+    validate_cluster_stack_compatibility, verify_and_load_pairs,
+)
 from submit_wl_random_shape_counts import sha
 from submit_wl_random_shape_rows import read_shape_rows, run, validate_plan
 
@@ -220,3 +222,23 @@ def test_stack_loader_requires_complete_hashed_rows_and_preserves_center_mapping
     assert np.all(pairs["b_mode_pass"])
     assert provenance["n_source_pairs"] == 4
     assert provenance["n_random_centers"] == 3
+
+
+def test_random_stack_accepts_existing_cluster_stack_provenance_and_rejects_mismatch():
+    payload = {
+        "schema": "hsc-s19a-cluster-lens-stack-run-v1",
+        "random_lens_subtraction_applied": False,
+        "spatial_block_covariance_applied": False,
+        "input": {
+            "n_z_sacc_sha256": "test-nz-hash", "masked_value": 0,
+            "radial_edges_mpc": [0.1, 0.2, 0.4],
+            "cosmology": {"H0_km_s_mpc": 70.0, "Omega_m": 0.3},
+        },
+    }
+    validate_cluster_stack_compatibility(
+        payload, "test-nz-hash", 0, [0.1, 0.2, 0.4], 70.0, 0.3,
+    )
+    with pytest.raises(ValueError, match="identical"):
+        validate_cluster_stack_compatibility(
+            payload, "test-nz-hash", 1, [0.1, 0.2, 0.4], 70.0, 0.3,
+        )

@@ -430,6 +430,10 @@ point estimate only; spatial-block covariance and photo-z uncertainty remain
 unpropagated, so the output keeps `science_measurement=false`. None of these
 shape-row requests or stacks has been run. Focused offline tests cover count
 binding, SQL scope, submission gates, mapping checks and existing stack math.
+The target/random provenance compatibility check also passes against the
+existing B-mode-zero cluster-only stack summary; it compares the exact stored
+`masked_value` and `H0_km_s_mpc` fields before allowing point-estimate
+subtraction.
 
 ## CAMIRA member-mass and weight sensitivity (2026-10-18)
 

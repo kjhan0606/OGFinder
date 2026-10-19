@@ -165,6 +165,21 @@ def verify_and_load_pairs(rows_dir, plan_dir, masked_value):
     }
 
 
+def validate_cluster_stack_compatibility(lens_payload, nz_sacc_sha256, masked_value,
+                                         radial_edges_mpc, h0, omega_m):
+    if (lens_payload.get("schema") != "hsc-s19a-cluster-lens-stack-run-v1"
+            or lens_payload.get("random_lens_subtraction_applied") is not False
+            or lens_payload.get("spatial_block_covariance_applied") is not False):
+        raise ValueError("target stack input is not the verified cluster-only exploratory product")
+    lens_input = lens_payload.get("input", {})
+    expected_cosmology = {"H0_km_s_mpc": float(h0), "Omega_m": float(omega_m)}
+    if (lens_input.get("n_z_sacc_sha256") != nz_sacc_sha256
+            or lens_input.get("masked_value") != int(masked_value)
+            or lens_input.get("radial_edges_mpc") != [float(x) for x in radial_edges_mpc]
+            or lens_input.get("cosmology") != expected_cosmology):
+        raise ValueError("target and random stacks do not use identical n(z), mask, bins, and cosmology")
+
+
 def run(args):
     if args.masked_value not in (0, 1):
         raise ValueError("--b-mode-masked-value must be 0 or 1, verified from the HSC catalog")
@@ -184,15 +199,10 @@ def run(args):
     if args.lens_stack is not None:
         lens_path = args.lens_stack.resolve()
         lens_payload = json.loads(lens_path.read_text(encoding="utf-8"))
-        if (lens_payload.get("random_lens_subtraction_applied") is not False
-                or lens_payload.get("spatial_block_covariance_applied") is not False):
-            raise ValueError("target stack input is not the verified cluster-only exploratory product")
-        lens_input = lens_payload.get("input", {})
-        if (lens_input.get("n_z_sacc_sha256") != sha(args.nz_sacc)
-                or lens_input.get("b_mode_masked_value") != int(args.masked_value)
-                or lens_input.get("radial_edges_mpc") != [float(x) for x in args.radial_edges_mpc]
-                or lens_input.get("cosmology") != {"H0_km_s_Mpc": args.h0, "Omega_m": args.omega_m}):
-            raise ValueError("target and random stacks do not use identical n(z), mask, bins, and cosmology")
+        validate_cluster_stack_compatibility(
+            lens_payload, sha(args.nz_sacc), args.masked_value,
+            args.radial_edges_mpc, args.h0, args.omega_m,
+        )
         target_stack = lens_payload.get("stack")
         subtracted = subtract_random_lens_profile(target_stack, random_stack)
         subtracted_profile = subtracted["profile"]
