@@ -491,3 +491,27 @@ full-aperture footprint checks, HSC-I depth/PSF matching, uniqueness and overlap
 checks, and spatial covariance validation before random centers can serve as
 random lenses. The count summary and per-batch checksums are stored outside Git
 under `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_count_plan_2026-10-19_02/cas_counts/`.
+
+#### Approved random-coordinate export and local geometry gate
+
+After the count-only result, the user approved exporting only the candidate
+coordinates needed for local random-lens screening. The immutable plan is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_coordinate_plan_2026-10-19_01/`.
+It asks for 780,191 candidate associations in 32 CAS batches, with exactly
+`lens_id, ra_deg, dec_deg`; it requests no object/source rows, shape fields,
+photo-z values, or images. On 2026-10-19 the live export checkpoint had 2/32
+batches complete (33,514 rows) and batch 002 submitted as CAS job 1062312. The
+checkpoint and batch hashes, rather than this progress note, are authoritative
+for completion.
+
+`screen_wl_random_control_coordinates.py` is the offline next step after that
+checkpoint is complete. It verifies each coordinate CSV against the approved
+per-lens counts and checksums, then audits overlap between each candidate's
+3-proper-Mpc aperture and every supplied CAMIRA cluster's 3-proper-Mpc
+aperture. It also flags exact repeated sky coordinates across lens-associated
+candidate rows. Its output is only a geometry-eligible pool: full-aperture HSC
+coverage, i-band mask completeness, HSC-I depth/PSF/sky matching, random-center
+selection, and spatial-block covariance remain separate gates. It is not a
+science measurement. The coordinate export was active when recorded; the
+offline screen has not been run. Any later HSC shape-row or image export needs
+its own explicit user approval.
