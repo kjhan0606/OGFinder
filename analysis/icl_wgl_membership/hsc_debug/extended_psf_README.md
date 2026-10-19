@@ -143,6 +143,30 @@ i2 필터는 491개 중 457개가 4개 이상이다. 후보 테이블은 모두
 요약은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_candidate_coverage_2026-10-19_01/summary.json`에
 있으며 `science_measurement=false`, `psf_approved=false`를 유지한다.
 
+### Gaia 근거 확장을 위한 오프라인 요청 계획
+
+기존 Gaia DR3 위치 대조는 569개 후보 위치에 73개 source 행을 반환했고,
+후속 영상 진단에서 네 마스크/배경 조합을 모두 통과한 별은 4개뿐이었다.
+따라서 800개 영상에서 얻은 전체 8,078개 morphology 후보 중 이전에 조회하지
+않은 7,509개 위치의 2초각 Gaia DR3 대조 계획을 Astrafek
+[`prepare_psf_gaia_full_sample_plan.py`](prepare_psf_gaia_full_sample_plan.py)로
+오프라인 생성했다. 이전 Gaia 요청과 같은 18개 astrometry·품질·변광·분류 열만
+요청하며 HSC 영상, shape 행, photo-z는 포함하지 않는다.
+
+계획은 748개 프레임의 새 후보를 포함하고 이전 요청 50개 프레임과 합쳐 798/800
+프레임에 후보를 둔다. 업로드 좌표 VOTable은 815,917바이트이며, 기존 대조의
+행률을 단순 외삽한 예상 응답은 약 963행/0.20 MB다. 이는 예상치일 뿐이며 기존
+TAP 실행기는 20,000행 제한에 닿으면 잘림 가능성을 이유로 실패하도록 구성돼 있다.
+입력 위치 목록 SHA-256은
+`8b0bb74973a003bea6b1efe673fbb37a755743f76d6dbf3b027505441bc0489a`, ADQL SHA-256은
+`488b7c71c209da3bf3487f4c0c8b4d2210f8ddb329d24af8dc8544c5c917d4db`다. 계획 파일은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/psf_gaia_full_sample_plan_2026-10-20_01/plan.json`
+에 있으며 `prepared_not_submitted`다. 외부 좌표 업로드나 Gaia 조회는 아직 하지
+않았다. 사용자 승인 후에만 기존 `match_psf_gaia.py`를 비동기 모드로 실행한다.
+현재 plan.json SHA-256은 `1a94d87ca338de95befc48500c8df69f5e8c0fef19af9d1d6623f789f49e9799`다.
+Gaia 매칭과 품질 검토를 통과해도 실제 별의 확장 날개·coadd epoch·밝은별 포화
+문제는 별도로 검증해야 하며 PSF 과학 승인이 자동으로 이뤄지지 않는다.
+
 ## 산출물과 다음 조건
 
 상위 경로: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13`.
