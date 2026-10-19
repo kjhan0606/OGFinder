@@ -7,6 +7,8 @@ import csv
 import hashlib
 import json
 from pathlib import Path
+import re
+import subprocess
 
 import numpy as np
 from astropy.io import fits
@@ -29,6 +31,53 @@ def read_tsv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(stream, delimiter="\t"))
 
 
+def resolve_mask_factor(summary: dict) -> float:
+    """Resolve the target/control mask factor, including repaired legacy JSON.
+
+    One historical 2.5 stack summary omitted the numeric ``mask_factor``.
+    Its immutable stack definition still records both the target mask HDU and
+    the matched-control Kron factor. Accept that fallback only when both
+    declarations agree exactly.
+    """
+    value = summary.get("mask_factor")
+    if value is not None:
+        factor = float(value)
+    else:
+        definition = str(summary.get("stack_definition", {}).get("mask", ""))
+        target = re.search(r"\bMASK_K(\d+)P(\d+)\b", definition)
+        control = re.search(r"\bKron\s+(\d+(?:\.\d+)?)\b", definition)
+        if target is None or control is None:
+            raise ValueError("summary has no numeric mask factor or recoverable mask definition")
+        target_factor = float(f"{target.group(1)}.{target.group(2)}")
+        control_factor = float(control.group(1))
+        if target_factor != control_factor:
+            raise ValueError("target and matched-control mask definitions disagree")
+        factor = target_factor
+    if factor not in (2.5, 3.5, 5.0):
+        raise ValueError(f"unsupported mask factor: {factor}")
+    return factor
+
+
+def git_version_matches(path: Path, expected_sha256: str, repo_root: Path) -> bool:
+    """Check whether an exact historical source version is retained in Git."""
+    try:
+        relative = path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except ValueError:
+        return False
+    commits = subprocess.run(
+        ["git", "-C", str(repo_root), "log", "--all", "--format=%H", "--", relative],
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    for commit in commits:
+        blob = subprocess.run(
+            ["git", "-C", str(repo_root), "show", f"{commit}:{relative}"],
+            capture_output=True,
+        )
+        if blob.returncode == 0 and hashlib.sha256(blob.stdout).hexdigest() == expected_sha256:
+            return True
+    return False
+
+
 def verify(sample: Path, work: Path) -> dict:
     summary_path = work / "summary.json"
     summary = read_json(summary_path)
@@ -37,7 +86,7 @@ def verify(sample: Path, work: Path) -> dict:
             "unexpected stack summary schema")
     require(summary.get("status") == "complete_exploratory", "stack is not complete")
     require(summary.get("science_measurement") is False, "science gate must remain false")
-    require(summary.get("mask_factor") in (2.5, 3.5, 5.0), "unsupported mask factor")
+    mask_factor = resolve_mask_factor(summary)
 
     sample_manifest = sample / "sample_manifest.json"
     mask_summary = sample / "prestack_cluster_masks_2026-10-16_01/summary.json"
@@ -115,8 +164,17 @@ def verify(sample: Path, work: Path) -> dict:
             require(required.issubset({h.name for h in hdus}), f"{band} FITS extensions are incomplete")
             require(hdus[0].header.get("SCIVAL") is False, f"{band} FITS science gate is not false")
             require(hdus[0].header.get("FILTER") == band, f"{band} FITS filter header mismatch")
-            require(float(hdus[0].header.get("MASKFAC", -1)) == float(summary["mask_factor"]),
-                    f"{band} FITS mask-factor header mismatch")
+            maskfac_header = hdus[0].header.get("MASKFAC")
+            if maskfac_header is not None:
+                require(float(maskfac_header) == mask_factor,
+                        f"{band} FITS mask-factor header mismatch")
+            else:
+                # The first 2.5 run predates MASKFAC; retain verification only
+                # when both its human-readable FITS card and summary definition
+                # identify the same factor.
+                mask_header = str(hdus[0].header.get("MASK", ""))
+                require(f"Kron-{mask_factor:g}" in mask_header,
+                        f"{band} FITS header does not identify the mask factor")
             target, control = np.asarray(hdus["TARGET"].data), np.asarray(hdus["CONTROL"].data)
             delta, count = np.asarray(hdus["DELTA"].data), np.asarray(hdus["NPAIR"].data)
             require(target.shape == control.shape == delta.shape == count.shape == (201, 201),
@@ -135,6 +193,8 @@ def verify(sample: Path, work: Path) -> dict:
                                 "covered_pixels": int(common.sum()),
                                 "max_delta_identity_residual": max_residual}
 
+    code_provenance = {}
+    repo_root = Path(__file__).resolve().parents[3]
     for name, expected_hash in summary.get("script_sha256", {}).items():
         path = Path(name)
         current_matches = path.is_file() and sha256(path) == expected_hash
@@ -144,8 +204,13 @@ def verify(sample: Path, work: Path) -> dict:
             and Path(summary.get("executed_script_snapshot", "")).is_file()
             and sha256(Path(summary["executed_script_snapshot"])) == expected_hash
         )
-        require(current_matches or snapshot_matches,
+        history_matches = not (current_matches or snapshot_matches) and git_version_matches(
+            path, expected_hash, repo_root)
+        require(current_matches or snapshot_matches or history_matches,
                 f"analysis script changed since run and no matching run snapshot exists: {path}")
+        code_provenance[name] = (
+            "current" if current_matches else "run_snapshot" if snapshot_matches else "git_history"
+        )
     if "serialization_correction" in summary:
         correction = summary["serialization_correction"]
         require(summary.get("science_measurement") is False
@@ -164,6 +229,7 @@ def verify(sample: Path, work: Path) -> dict:
         "n_input_controls": len(controls), "n_filter_mismatch_excluded": len(excluded),
         "n_eligible_pairs": len(eligible), "n_pair_rows": len(pair_rows),
         "n_stacked_radial_rows": len(radial_rows), "map_checks": map_checks,
+        "mask_factor": mask_factor, "code_provenance": code_provenance,
         "science_measurement": False,
         "input_images_rehashed": False,
         "note": "The processing script rehashed every input frame; this verifier independently rechecks manifests, outputs, maps, pairing and calculations without another full-image read.",

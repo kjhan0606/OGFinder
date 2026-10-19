@@ -388,6 +388,20 @@ or ICL–satellite association significance. See
 [`icl_2d_target_control_stack_README.md`](icl_2d_target_control_stack_README.md)
 and [`icl_2d_independent_support_assessment_2026-10-19.md`](icl_2d_independent_support_assessment_2026-10-19.md).
 
+On 2026-10-20, `verify_icl_target_control_2d_stack.py` independently rechecked
+the common-support K=2.5 stack and K=3.5/K=5.0 stacks: all three retain 783
+same-filter pairs, 40 radial rows, and 201×201 maps whose target-minus-control
+identity and pair counts agree. The audit resolves the omitted K=2.5 numeric
+factor from the summary definition and the mask in its archived run snapshot,
+then resolves K=3.5/K=5.0
+runner versions from Git history by exact SHA-256. Verification records are
+saved alongside each stack as `independent_verification_2026-10-20.json`.
+The verifier and regression tests are
+[`verify_icl_target_control_2d_stack.py`](verify_icl_target_control_2d_stack.py)
+and [`test_verify_icl_target_control_2d_stack.py`](test_verify_icl_target_control_2d_stack.py).
+These checks confirm product integrity and provenance; all three products
+remain exploratory with `science_measurement=false`.
+
 The fixed 94-row ICL–satellite association sample has also been compared under
 three independent-support mask factors using paired connected-sky-block
 resampling. The full supported-pair i2 estimate remains near partial r=0.29,
