@@ -698,3 +698,12 @@ term, full position-dependent covariance, source Poisson noise, PSF, and sky
 transfer remain outside this calculation. The row-level output, hashes, and
 interpretation are in
 [`satellite_icl_lag_covariance_assessment_2026-10-19.md`](satellite_icl_lag_covariance_assessment_2026-10-19.md).
+
+`audit_satellite_icl_target_control_covariance.py` adds the matched-control
+image's 200–300 kpc aperture variance to that target-side calculation. All 57
+control apertures pass the same 40% coverage floor and are disjoint from their
+target annuli. The total ICL sigma inflation remains about 24%; the normalized
+noise-only ICL–satellite covariance stays small. Target/control noise
+independence is assumed, not measured, and other major error terms remain
+outside the model. Results, row/table hashes, and limitations are in
+[`satellite_icl_target_control_covariance_assessment_2026-10-19.md`](satellite_icl_target_control_covariance_assessment_2026-10-19.md).
