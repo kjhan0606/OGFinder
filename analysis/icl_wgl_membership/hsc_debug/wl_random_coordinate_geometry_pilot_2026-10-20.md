@@ -51,17 +51,16 @@ random apertures, and spatial-block covariance have not been checked. No
 random-source shape or photo-z rows and no images were requested. Both
 `science_ready` and `science_measurement` remain false.
 
-The authenticated submitter remains alive. On 2026-10-20 16:57 KST, PID
-1049265 had been running for about 29 h 49 m. The checkpoint still showed
+The authenticated submitter remains alive. On 2026-10-20 04:45 KST, PID
+1049265 had been running for about 17 h 37 m. The checkpoint still showed
 2/32 batches complete and CAS job 1062312 submitted; its mtime remained at
-2026-10-19 11:07:53 KST. The checkpoint's `error_type=HTTPError` may be stale:
-the resume code preserves an earlier global error field when it writes
-`status=running`, and successful CAS status polls are not saved. The current
-CAS state is therefore unknown. Keep the live process and do not resubmit the
-batch. After a verified complete export, run the existing 780k-coordinate
-geometry screen and assess per-lens support before selecting controls. If the
-complete sample remains sparse, prepare a new exact coordinate plan with a
-wider search region and obtain separate approval before submitting it.
+2026-10-19 11:07:53 KST. The live process has the older submitter code loaded:
+it does not persist each successful CAS status poll, so the current CAS status
+is unknown. Keep the live process and do not resubmit the batch. After a
+verified complete export, run the existing 780k-coordinate geometry screen
+and assess per-lens support before selecting controls. If the complete sample
+remains sparse, prepare a new exact coordinate plan with a wider search region
+and obtain separate approval before submitting it.
 
 ## Provenance
 

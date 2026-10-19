@@ -857,19 +857,22 @@ random-center selection. See
 [`wl_random_coordinate_geometry_pilot_2026-10-20.md`](wl_random_coordinate_geometry_pilot_2026-10-20.md).
 The pilot note records batch 002 as submitted while its authenticated
 submitter was alive. A later SSH recheck on `lageunha` confirmed that
-submitter PID 1049265 remains live and polling the CAS job. The checkpoint is
-still at 2/32 complete with batch 002 submitted. Its ID 1062312 is an HSC CAS
+submitter PID 1049265 remains live; its older in-memory code does not persist
+successful CAS status polls. The checkpoint is still at 2/32 complete with
+batch 002 submitted. Its ID 1062312 is an HSC CAS
 job ID, not a Slurm job ID; do not query it with `squeue` or submit it again.
-The 2026-10-20 16:57 KST recheck found PID 1049265 alive after about 29 h 49 m.
+The 2026-10-20 04:45 KST recheck found PID 1049265 alive after about 17 h 37 m.
 The checkpoint remains at 2/32 batches complete (33,514 rows), with batch 002
 submitted. Its file modification time is still 2026-10-19 11:07:53 KST, five
-seconds after that process started. The `error_type=HTTPError` field is not
-reliable evidence of a current failure: when resuming, the submitter sets the
-top-level status to `running` but does not clear an older `error_type`. It also
-does not save each successful CAS status poll. The current CAS status and any
-progress after startup therefore remain unknown. Keep the live submitter and
-do not resubmit batch 002. Any later HSC shape-row or image export needs its
-own explicit user approval.
+seconds after that process started. The live process has the earlier submitter
+code loaded and does not persist successful CAS status polls, so its current
+status is unknown. Keep the live submitter and do not resubmit batch 002. Any
+later HSC shape-row or image export needs its own explicit user approval.
+
+On 2026-10-20, the offline tests for coordinate submission, completed-batch
+screening, full geometry screening, random-center selection, and count-plan
+preparation passed together (33 tests). They exercise planning and
+verification paths; they do not resolve the live CAS job status.
 
 The submitter now clears stale top-level errors on entry and stores each
 successful batch status, poll time, and poll count atomically in the checkpoint.
