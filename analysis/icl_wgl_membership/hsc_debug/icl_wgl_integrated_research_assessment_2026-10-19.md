@@ -64,6 +64,8 @@ redshift·richness 조정 순위 부분상관도 함께 확인했다. 전체 지
 
 같은 `r=0.293` 설계 근사를 가설적 검정 수 1·6·30과 효과 `r=0.2, 0.293, 0.4`로 확장했다. 단일 사전등록 검정이면 80% 검정력에 92개 블록이 필요해 현재 33개와 기존 후보 상한 84개 모두에 미달한다. 30개 family에서는 180개가 필요하다. 단일 검정도 효과가 `r=0.2`라면 196개가 필요하고, 84블록 상한에서 근사 검정력은 `0.437`이다. 반대로 탐색치 `r=0.293`을 실제 효과로 간주해도 84블록에서 단일 검정 검정력은 `0.765`에 그친다. 이 결과는 검정 수를 사후에 줄여 기존 분석을 정당화하지 않으며, 향후 하나의 주평가변수는 새로운 자료를 보기 전에 정해야 한다. 재현기 [`assess_icl_power_family_sensitivity.py`](assess_icl_power_family_sensitivity.py), 테스트 `test_assess_icl_power_family_sensitivity.py`, 입력 해시가 든 결과는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_power_family_sensitivity_2026-10-20_01/`에 있다. 요약 SHA-256은 `40a472ab0483fd3cccbb5ba0730f7207ba6773c343067eb9213c3adf7caa1883`; 스크립트 SHA-256은 `8279553f57c0c42733e747e760855a7f00f8e022f8a240278ef5424d1b1c8bf3`다. 모든 경우는 Fisher-z 근사이고 `science_measurement=false`다.
 
+후속 독립 표본을 위한 검토용 설계 후보는 i2 `icl_delta_200_300`과 `satellite_delta_50_75`의 단일 양방향 partial-Pearson 주검정, redshift/richness 조정, 그리고 보수적인 `r=0.2` 계획값에서 196 usable 연결블록을 제안한다. 반경·필터 선택과 추정량은 현재 탐색 결과에서 나온 것이므로 이 설계는 사전등록이 아니며 독립 표본에만 적용할 수 있다. 지원·매칭 탈락률, 경험 PSF 날개, diffuse+satellite 공동 주입 검증을 선행조건으로 기록했다. 문서 [`icl_satellite_confirmatory_replication_design_candidate_2026-10-20.md`](icl_satellite_confirmatory_replication_design_candidate_2026-10-20.md)는 연구자 검토용 후보일 뿐 `science_measurement=false` 상태를 바꾸지 않는다.
+
 **해석:** 양의 ICL–위성 관계는 흥미로운 가설이지만 검출로 보고할 수 없다. 다음 ICL 관문은 반경·필터·마스크·통계량을 분석 전에 고정하고, 실제 검출·마스크 재생성을 포함하는 diffuse+위성 공동 주입으로 sky·PSF 날개·마스크 누출 전달함수를 평가하는 것이다. 독립 통계력을 높이려면 단순히 기존 CAMIRA 선택을 완화하기보다 새 독립 하늘 영역과 완전도·렌즈 보정을 함께 설계해야 한다.
 
 ## 배경은하 약한렌즈

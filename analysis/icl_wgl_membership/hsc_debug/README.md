@@ -637,6 +637,12 @@ examined. The output and input hashes are in
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_power_family_sensitivity_2026-10-20_01/`.
 This Fisher-z design sensitivity does not estimate usable independent blocks or
 establish a detection; `science_measurement=false` remains in force.
+The prospective follow-up design candidate in
+[`icl_satellite_confirmatory_replication_design_candidate_2026-10-20.md`](icl_satellite_confirmatory_replication_design_candidate_2026-10-20.md)
+sets the current i2 200–300 kpc ICL / 50–75 kpc satellite observable pair as a
+reviewable candidate for an independent sample, and gives 196 usable blocks as
+the conservative `r=0.2`, one-test Fisher-z planning target. It is not approved
+or preregistered and cannot retroactively validate the current exploratory sample.
 
 `analyze_extinction_sensitivity_icl_satellite.py` applies center-based SFD extinction corrections
 separately to the saved ICL targets and matched controls, and compares them with a target-only
