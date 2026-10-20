@@ -22,7 +22,8 @@ The repository API directory listing was read as metadata only. It identifies
 the single star-masked Wide catalog as:
 
 - File: `camira_s23b_wide_sm.tbl`
-- URL: <https://raw.githubusercontent.com/oguri/cluster_catalogs/main/hsc_s23b_camira/camira_s23b_wide_sm.tbl>
+- Repository commit: `d80734b10bd823d13b9cd5292dadc77c9c05f683`
+- Pinned URL: <https://raw.githubusercontent.com/oguri/cluster_catalogs/d80734b10bd823d13b9cd5292dadc77c9c05f683/hsc_s23b_camira/camira_s23b_wide_sm.tbl>
 - Size: 827,339 bytes
 - Git blob SHA-1 from repository metadata: `066c2c8beca8f3a65186db7511fddca52d298908`
 - Repository README SHA-1: `2213d144376bd00ef91483ee4ea72e63dfe3206b`
