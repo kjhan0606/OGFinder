@@ -6,6 +6,8 @@
 
 현재 Astrafek 탐색 분석의 후보 주 비교는 HSC `i2`에서 ICL target-minus-control 평균광도 `icl_delta_200_300`과 위성 외곽광 target-minus-control 평균 `satellite_delta_50_75`의 관계다. redshift와 CAMIRA richness를 선형 조정한 partial Pearson 상관은 68개 cluster/filter 쌍, 33개 연결 target/control 공간블록에서 `r=0.293`이다. 일반 pair bootstrap은 0을 포함하고, 비모수 순위 결과도 0을 포함한다. 이 표본은 반경·필터·지원 선택을 탐색한 뒤 얻었으므로 확인 검정에 재사용할 수 없다.
 
+물리적 동기는 기존 관측연구와 연결된다. 170개 저적색이동 은하단의 BCG+ICL 분석은 diffuse-light 밝기와 적분 위성 밝기 사이의 양의 상관을 보고했다 ([Kluge et al. 2021](https://arxiv.org/abs/2011.12992)). HSC로 관측한 Abell 85에서는 약 75 kpc에서 BCG+ICL 표면광도 기울기가 완만해지고, 저자들은 약 `10^10 M☉` 위성의 stripping을 가능한 기원으로 논의했다 ([Montes et al. 2021](https://arxiv.org/abs/2101.08290)). 다만 두 연구 모두 현재 Astrafek의 200–300 kpc cluster ICL과 50–75 kpc 위성 외곽광의 쌍별 상관을 검증한 것은 아니다. 따라서 본 endpoint는 동기 있는 관측 proxy이지 직접적인 stripping 측정은 아니다. A85 연구가 밝은 별의 외곽 PSF를 별도 구성한 점은 현재 Astrafek의 미검증 PSF wing 관문과도 맞닿아 있다.
+
 후보풀 확장 검토에서 현재 S20A CAMIRA 발자국의 가장 넓은 오프라인 표본은 target 5도 셀 84개를 점유할 수 있었다. 각 셀을 하나의 연결블록으로 가정해도 상한은 84개이며 영상 지원과 대조장 검사를 거치면 usable block 수는 줄 수 있다. 따라서 동일 발자국에서 cluster 행만 추가하는 방법으로 충분한 확인 표본을 확보한다고 전제하지 않는다.
 
 ## 사전 고정할 후보 추정량
