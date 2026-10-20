@@ -29,11 +29,15 @@ the single star-masked Wide catalog as:
 - Repository README SHA-1: `2213d144376bd00ef91483ee4ea72e63dfe3206b`
 
 The README's displayed table uses a different filename spelling, so the API
-directory listing above is the filename and object identifier to verify if
-transfer is approved. No catalog bytes have been fetched or saved. User
-approval for this one file is pending. No other CAMIRA table, HSC image, shape
-row, random-source row, or photo-z distribution is included in this proposed
-transfer.
+directory listing above supplied the filename and object identifier. The user
+approved this one-file catalog-only transfer. The file was downloaded on
+`lageunha` to
+`/gpfs/kjhan/Astrafek/data/catalogue_s23b_camira_2026-10-20_01/` and verified
+at 827,339 bytes with the pinned Git blob SHA-1 above. Its SHA-256 is
+`5af057028feab7976cd3ed389a7246cbe73add8bbb96891101f0f692b1de4d71`.
+The adjacent manifest records the pinned URL, commit, hashes, timestamp, and
+scope. No other CAMIRA table, HSC image, shape row, random-source row, or
+photo-z distribution was fetched.
 
 ## Data-release compatibility check
 
@@ -59,28 +63,43 @@ Sources: [Oguri et al., S23B CAMIRA catalog paper](https://arxiv.org/abs/2512.13
 [official HSC PDR3 availability page](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/),
 and [official HSC-SSP release schedule](https://hsc.mtk.nao.ac.jp/ssp/data-release/).
 
-## Audit after approval
+## Catalog-only audit result
 
-1. Retrieve only the one file above; verify exact byte count and Git blob
-   identity before parsing.
-2. Inspect its actual delimiter, header, units, null conventions, coordinate,
-   redshift, richness, cluster-ID, and BCG fields. Preserve the raw table and
-   its checksum outside Git; keep the Astrafek importer and audit script in
-   this directory.
-3. Cross-match against the existing S20A catalog and the current 800-lens
-   sample using a spherical separation calculation. Report duplicate and new
-   cluster counts before any selection.
-4. Count candidates under the current fixed redshift, richness, BCG
-   spectroscopic, and image-quality cuts; separately show candidates before
-   those cuts so the loss is explicit.
-5. Recompute target and matched-control 5-degree cells with the existing
-   connected-pair-block definition. Report the resulting block count and a
-   cell-level upper bound; do not equate a cell count with independent
-   statistical information.
-6. Cross-check candidate positions against the already-held HSC PDR3 image,
-   mask, PSF, and depth inventory. The S23B catalog footprint and the S20A
-   image footprint are not interchangeable. Present any additional image
-   request as a separate, exact approval scope.
+The table has seven whitespace-separated columns, as stated in its header:
+ID, name, RA, Dec, cluster photometric redshift, richness, and BCG
+spectroscopic redshift (`-1` means unavailable). It contains 12,162 unique IDs.
+The audit uses unit-sphere nearest-neighbor separations, rather than assuming
+that IDs are stable across releases.
+
+- 4,492 S23B rows have an S20A CAMIRA position within 1 arcsec; 5,192 are
+  within 1 arcmin. The 1-arcsec threshold is the high-confidence duplicate
+  count; the wider radius is shown as a positional-neighbor sensitivity.
+- 607 S23B rows match one of the current 800 target positions within 1 arcsec
+  (661 within 1 arcmin). The existing target-image download manifest is
+  complete for 800/800 targets. Of the 607 close matches, 559 also satisfy
+  `0.30 <= z_cl < 0.55`, positive BCG spectroscopy, and
+  `|z_BCG-z_cl|/(1+z_cl) < 0.01`.
+- After the same redshift/BCG cut and 1-arcsec S20A duplicate removal, 1,440
+  catalog rows remain. A richness-ordered greedy selection with at least
+  6 arcmin from the existing 800 targets and previously added rows retains
+  1,333 candidates. These occupy 22 new 5-degree RA/Dec cells, for 100 such
+  cells including the current sample.
+- The 1,333-candidate pool is a catalog-level upper bound. Current validated
+  image manifests cover only the existing 800 targets. A catalog position
+  outside those targets is not evidence either for or against usable PDR3
+  image, mask, PSF, depth, or full-aperture support. No new candidate images
+  or matched controls were checked or downloaded. The connected target/control
+  block count cannot be computed before supported controls exist; 100 cells
+  are not 100 independent blocks.
+
+The one-time transfer is recorded in
+[`acquire_s23b_camira_catalog.py`](acquire_s23b_camira_catalog.py). Reproduce
+the offline audit from the saved table with
+[`audit_s23b_camira_catalog.py`](audit_s23b_camira_catalog.py). The audit
+summary and greedy candidate list are preserved outside Git at
+`/gpfs/kjhan/Astrafek/data/catalogue_s23b_camira_audit_2026-10-20_02/`.
+The scripts verify the exact acquisition manifest and refuse to overwrite
+existing outputs.
 
 All catalog-pool results must remain `science_measurement=false`. A positive
 candidate count is not an ICL stack, a weak-lensing stack, or a measurement of
