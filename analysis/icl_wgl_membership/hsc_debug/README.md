@@ -999,6 +999,14 @@ SHA-256은 `84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`다
 요청이 없어 특정 CAS 작업의 종료 오류라고 단정할 수 없다. CAS 상태 poll 시각은
 기록되어 있지 않다. 동일 프로세스와 제출 건을 유지했고 중복 제출하지 않았다.
 
+09:13 KST에 같은 승인 좌표 계획의 오프라인 checkpoint audit를 다시 실행했다.
+32개 중 기존 2개(33,514/780,191행)만 행 수·계획별 lens count·SHA-256이 일치했다.
+체크포인트 SHA-256은 앞선 감사와 동일한
+`84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`이고,
+이번 실행은 CAS에 연결하지 않았다. 보고서는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-20_10/`에
+있으며 JSON SHA-256은 `d5072ee7cecd4ec4798892dc6d3be4acf1d916738e0ff65564666234a3ec8212`다.
+
 ### Reuse test for the existing ICL matched-control centers
 
 The 798 already downloaded ICL matched-control positions were tested as a
