@@ -986,6 +986,13 @@ SHA-256은 `84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`다
 이는 저장 체크포인트만 검증하며 살아 있는 프로세스의 CAS 작업 완료 여부는 보여주지
 않는다. 프로세스와 기존 CAS 요청은 그대로 두었고 재제출하지 않았다.
 
+2026-10-20 09:08 KST 재확인에서도 PID 1049265는 살아 있었다(경과 21시간 59분,
+`hrtimer_nanosleep`). 체크포인트 시각은 여전히 2026-10-19 11:07:53 KST였고,
+2/32 배치(33,514/780,191행) 완료, batch 002 CAS 작업 `1062312` 제출 상태로
+변화가 없었다. 최상위 `error_type=HTTPError`가 저장되어 있으나 발생 시각과 대상
+요청이 없어 특정 CAS 작업의 종료 오류라고 단정할 수 없다. CAS 상태 poll 시각은
+기록되어 있지 않다. 동일 프로세스와 제출 건을 유지했고 중복 제출하지 않았다.
+
 ### Reuse test for the existing ICL matched-control centers
 
 The 798 already downloaded ICL matched-control positions were tested as a
