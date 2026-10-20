@@ -1007,6 +1007,14 @@ SHA-256은 `84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`다
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-20_10/`에
 있으며 JSON SHA-256은 `d5072ee7cecd4ec4798892dc6d3be4acf1d916738e0ff65564666234a3ec8212`다.
 
+2026-10-20 09:18 KST에 SSH로 다시 확인했을 때 같은 PID 1049265가 살아 있었고,
+프로세스는 60초 대기 호출(`hrtimer_nanosleep`) 중이었다. 체크포인트 수정 시각은
+여전히 2026-10-19 11:07:53 KST이며 batch 000·001만 완료(33,514/780,191행),
+batch 002는 CAS 작업 `1062312` 제출 상태였다. 최상위 `error_type=HTTPError`도
+남아 있지만 요청 시각과 응답이 없어 CAS 작업 상태를 판정할 수 없다. 이 확인은
+프로세스와 기존 로컬 체크포인트만 읽었으며 CAS에 재조회·재제출하지 않았다.
+프로세스가 살아 있어 종료하거나 같은 배치를 다시 제출하지 않는다.
+
 ### Reuse test for the existing ICL matched-control centers
 
 The 798 already downloaded ICL matched-control positions were tested as a

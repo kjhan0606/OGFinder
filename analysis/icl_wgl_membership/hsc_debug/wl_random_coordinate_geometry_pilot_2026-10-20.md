@@ -62,6 +62,14 @@ and assess per-lens support before selecting controls. If the complete sample
 remains sparse, prepare a new exact coordinate plan with a wider search region
 and obtain separate approval before submitting it.
 
+At 2026-10-20 09:18 KST, a further SSH check found the same PID alive after
+22 h 10 m in `hrtimer_nanosleep`. The checkpoint was unchanged: 2/32 batches
+complete (33,514/780,191 rows), batch 002 CAS job 1062312 submitted, and the
+top-level `HTTPError` marker still present. The checkpoint mtime remained
+2026-10-19 11:07:53 KST. This check did not query CAS, so the submitted job's
+actual server-side state remains unknown. No batch was resubmitted or process
+stopped.
+
 ## Provenance
 
 - Coordinate-plan SHA-256: `e8672433abdfe97c3f612c9327d9c449aa5c966b888702313bc15d4a95004827`.
