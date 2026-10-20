@@ -625,6 +625,19 @@ or a replacement for the connected-block maxT analysis. The reproducible
 report and JSON are at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_association_power_plan_2026-10-19_01/`.
 
+`assess_icl_power_family_sensitivity.py` extends that design approximation
+across 1, 6, or 30 hypothetical tests and `r=0.2, 0.293, 0.4`, comparing
+requirements with the current 33 connected blocks and the audited candidate
+pool upper bound of 84. For `r=0.293`, a single prospective primary test needs
+92 independent blocks and has approximate power 0.765 even at the 84-block
+upper bound; 30 tests need 180 blocks. At `r=0.2`, one test needs 196 blocks.
+The single-test scenario cannot be applied retroactively to the current
+exploratory analysis: any primary endpoint must be fixed before new data are
+examined. The output and input hashes are in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_power_family_sensitivity_2026-10-20_01/`.
+This Fisher-z design sensitivity does not estimate usable independent blocks or
+establish a detection; `science_measurement=false` remains in force.
+
 `analyze_extinction_sensitivity_icl_satellite.py` applies center-based SFD extinction corrections
 separately to the saved ICL targets and matched controls, and compares them with a target-only
 HSC PDR3 forced-source `a_i` sensitivity. It verifies the existing profile/catalogue hashes and
