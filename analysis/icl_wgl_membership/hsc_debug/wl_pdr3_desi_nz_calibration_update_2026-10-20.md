@@ -46,22 +46,27 @@ inspection found two scale-cut variants and their small sidecar metadata files:
 | `results/distributions/1_5_v_1p1/nz_res_metadata_1_5_v_1p1.json` | 2,492 bytes |
 | **Total** | **549,818 bytes** |
 
-These four files are the requested import scope; no files have been downloaded
-into Astrafek or the project data tree. The approval request is limited to these
-four author-published distribution products for comparing the fiducial 0.3–3
-Mpc/h cut with the 1–5 Mpc/h sensitivity cut. Do not retrieve HSC images, shape
-catalog rows, per-object photo-z data, or the repository's other derived files
-as part of this step. After approval, verify the NPZ schema and whether it
-contains posterior samples before implementing an importer; the GitHub README
-does not establish the internal array schema.
+The user approved exactly these four files on 2026-10-20. They were downloaded
+from the pinned commit into
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/desi_y3_hsc_nz_abc70af2_2026-10-20/`.
+The external-data manifest records the pinned URLs, exact byte counts, and
+SHA-256 values. No HSC images, shape rows, per-object photo-z data, or other
+repository files were fetched. Schema inspection found four bins on a shared
+1,000-point `z=0..3` grid, with mean/median and pointwise lower/upper curves,
+including magnification-corrected variants. The NPZ files do not contain
+posterior samples.
 
-After authorization, store the four files outside Git and add a manifest with
-source URL, pinned revision, file hashes, license notes, and schema checks. Extend
-the Astrafek loader only after confirming the published NPZ schema and whether it
-provides posterior samples. Compare the two scale cuts and the current SACC
-baseline on identical cluster/source pairs, with the same random-lens subtraction
-and paired spatial-block jackknife. Propagate redshift-distribution uncertainty
-through the pair-wise `Sigma_crit^{-1}` calculation. Keep
+The approved curves were compared to the SACC baseline with the same verified
+800-lens/source-row export and shared 5-degree equal-area spatial jackknife.
+Both DESI scale cuts were tested for mean and magnification-corrected mean; the
+published lower/upper curves were also recomputed as pointwise-envelope
+sensitivity profiles. The envelope curves are not joint posterior draws and do
+not supply a covariance. The full assessment and validation are documented in
+[`wl_desi_nz_distribution_sensitivity_assessment_2026-10-20.md`](wl_desi_nz_distribution_sensitivity_assessment_2026-10-20.md).
+The central curves change median `DeltaSigma` by +12.5–14.8% in source bin 1
+and −1–3.5% in bins 2–4. The 0.1–0.7 Mpc source-bin inconsistency is reduced
+but remains. The random-center shape export is unavailable, so this stage is
+cluster-only and cannot pass the science gate. Keep
 `science_measurement=false` until the random controls, source-overlap covariance,
 redshift calibration, and remaining shear-systematic gates pass.
 

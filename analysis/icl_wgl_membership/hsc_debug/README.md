@@ -4,6 +4,8 @@
 
 두 연구 갈래의 현재 표본, ICL–위성 연관성 검증, 표적 전용 weak-lensing 결과와 남은 과학 관문은 [통합 연구 평가](icl_wgl_integrated_research_assessment_2026-10-19.md)를 참조한다.
 
+2026-10-21에는 S20A·S23B CAMIRA 목록을 같은 `z_cl`·BCG 분광 기준으로 합친 오프라인 표본 상한을 계산했다. 6′ 최소 간격 뒤 1,620개 후보(22개 새 5° 셀)가 남지만 현재 joint-support yield를 적용하면 예상 i2 공통지원은 총 약 206행으로, 다중비교 표본력 시나리오의 323–804행보다 작다. 영상·마스크·PSF 지원은 미검증이다. 재현기는 [`audit_icl_cross_release_expansion.py`](audit_icl_cross_release_expansion.py), 결과와 해시는 [cross-release 표본 확장 평가](icl_cross_release_expansion_assessment_2026-10-21.md)에 있다.
+
 2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
 영향도 진단을 추가했다. 재현 명령은
 [`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),
@@ -786,12 +788,22 @@ catalog. Its authors publish calibrated distributions under
 It includes high-redshift tracers absent from the older HSC Y3 calibration and
 reports upward shifts in bins 3 and 4 relative to Rau+2022. See
 [`wl_pdr3_desi_nz_calibration_update_2026-10-20.md`](wl_pdr3_desi_nz_calibration_update_2026-10-20.md).
-Those result files have not been imported; obtain approval before downloading
-the four `_v_1p1` distribution/metadata files (549,818 bytes total) identified
-in the calibration note, then compare both published scale cuts to the SACC
-baseline with the same random-subtracted stack and spatial jackknife.
-While those files await approval, `audit_wl_published_nz_shift_sensitivity.py`
-tests a no-download approximation: it translates the local SACC source-bin 3
+The user approved exactly the four `_v_1p1` distribution/metadata files
+(549,818 bytes total). They are stored outside Git under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/desi_y3_hsc_nz_abc70af2_2026-10-20/`,
+with pinned commit, source URLs, byte counts, SHA-256 values, and schema recorded
+in `manifest.json`. Only these four files were fetched. Their NPZ schema contains
+mean/median and pointwise lower/upper curves for four bins, including
+magnification-corrected variants, but no posterior samples. The completed
+comparison reuses the verified SACC baseline and applies a matched 52-cell
+spatial jackknife to the four DESI mean curves. Median `DeltaSigma` shifts
+range from +12.5–14.8% in source bin 1 and −1–3.5% in bins 2–4. The 0.1–0.7 Mpc
+tomographic inconsistency becomes less extreme but remains; random-lens
+subtraction is unavailable. Detailed values, caveats, and hashes are in
+[`wl_desi_nz_distribution_sensitivity_assessment_2026-10-20.md`](wl_desi_nz_distribution_sensitivity_assessment_2026-10-20.md),
+with independent validator output in the GPFS result directory.
+`audit_wl_published_nz_shift_sensitivity.py` remains a no-download approximation:
+it translates the local SACC source-bin 3
 and 4 curves toward higher redshift by the paper's central mean shifts (+0.043
 and +0.050), renormalizes them, and repeats the same joint jackknife. The
 [paper's v3](https://arxiv.org/abs/2511.18133v3) reports these shifts relative
@@ -800,8 +812,11 @@ calibrated spline distributions or their uncertainty.
 The same Astrafek audit now also samples the published marginal 68% shift
 interval endpoints: higher-redshift translations of 0.021–0.063 for bin 3 and
 0.038–0.062 for bin 4, using the central point and all four rectangle corners.
-The grid is a sensitivity envelope, not a joint posterior; the calibrated
-distribution download remains separately approval-gated. The reproducible
+The grid is a sensitivity envelope, not a joint posterior. The author-published
+distribution comparison evaluates both scale cuts, the mean and
+magnification-corrected means with spatial jackknife, and the pointwise lower /
+upper curves as profile sensitivities. It does not treat those marginal curves
+as posterior samples. The reproducible
 Slurm runner writes a new `_02` result directory and preserves `_01`. After the
 run completes, [`validate_wl_published_nz_shift_grid.py`](validate_wl_published_nz_shift_grid.py)
 checks all five shift inputs, the saved SACC and baseline hashes, each 56×56
@@ -1181,8 +1196,44 @@ i2 44)의 ICL·위성 관측값에 diagonal 및 finite-lag 측정 잡음을 각�
 
 2026-10-20 전체 `hsc_debug` 테스트 스위트는 282개 테스트와 6개 하위 테스트를 모두 통과했다. 이는 재현 도구의 코드 검증이며 ICL·렌즈 신호의 과학 승인이나 랜덤 차감 관문을 대신하지 않는다.
 
+## 초기 20개 Gaia 별 우표의 프레임 가중 PSF 파일럿 (2026-10-20)
+
+초기 pilot은 20개 별 우표와 15개 HSC 프레임을 프레임 동등 가중 방사 프로필로 쌓았다. 네 설정 모두 48–96픽셀 외곽 평균이 음수였으나 이 결과는 뒤에 실행한 333개 stamp/227개 프레임의 확장 평가로 대체됐다. 확장 표본에서는 부호가 local-sky/source-mask 설정에 따라 달랐다. 자세한 확장 결과는 [프레임 가중 PSF 평가](empirical_psf_frame_weighted_stack_assessment_2026-10-20.md)에 있다. 두 결과 모두 `science_measurement=false`, `psf_approved=false`다.
+
 ## ICL–위성 독립 하늘표본 확장 가능성 (2026-10-20)
 
 `assess_icl_catalog_expansion_feasibility.py`는 기존 공간블록 power 계획과 CAMIRA 오프라인 후보 풀을 연결한다. 탐색 효과 시나리오 `r=0.293`, 30개 비교 보정 아래 80% 검정력에는 독립 연결 블록 180개가 필요하지만 현재는 33개다. 기존 S20A 카탈로그의 가장 넓은 후보 시나리오는 2,596개를 더할 수 있으나 새 target 5도 셀은 6개, 전체는 84개다. 현재 pair-block 구현은 target 셀을 공유하는 행을 연결하므로 84개는 연결 블록 수의 상한이고, 계획치보다 최소 96개 적다. 이 상한은 usable 또는 독립 블록을 보장하지 않는다. HSC 공식 PDR3 CAMIRA 목록도 PDR3(S20A) 기반 Wide/Deep/UD이며, 현재 입력은 이미 S20A Wide 별마스크 목록이다. 따라서 Wide 재조회는 새로운 독립 자료가 아니고, Deep/UD의 명목 면적(27+3.5 deg²)은 표본 보조에는 쓸 수 있어도 블록 부족을 채우지 못한다. 최신 실행 기록은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_catalog_expansion_feasibility_2026-10-20_04/`에 있다. 재현 방법과 공식 HSC 출처는 [`assess_icl_catalog_expansion_feasibility.py`](assess_icl_catalog_expansion_feasibility.py) 및 산출물 `assessment.md`에 기록했다. 모든 결과는 `science_measurement=false`다.
 
 S23B 최종연도 CAMIRA Wide 별마스크 표는 승인된 단일 파일만 수신했다. 크기는 827,339 bytes이고 Git blob SHA-1 `066c2c8beca8f3a65186db7511fddca52d298908`, SHA-256 `5af057028feab7976cd3ed389a7246cbe73add8bbb96891101f0f692b1de4d71`로 검증했다. 12,162행 중 4,492행이 S20A 카탈로그와 1초각 이내에서 겹쳤고, 기존 800개 영상 표본의 위치와 1초각 이내로 겹친 607행 중 559행이 현재 적색편이/BCG 분광 컷도 통과했다. 같은 컷과 S20A 중복 제거 뒤에는 1,440개 후보, 기존 표본과 신규 후보 사이 6분각 간격을 적용한 richness 우선 탐욕 선택에서는 1,333개 후보가 남았고, 새 5도 좌표 셀은 22개(기존과 합계 100개)였다. 단, 이미 검증된 PDR3 영상 manifest는 기존 표본 800개만 포함하며 새 위치의 coadd·mask·PSF·깊이·전체 aperture 및 matched-control 지원은 확인되지 않았다. 따라서 이 값은 목록 수준 상한이지 PDR3 영상 가능성 또는 독립 공분산 블록 수가 아니다. 전체 절차·해시는 [S23B CAMIRA 감사 결과](s23b_camira_catalog_audit_2026-10-20.md)에, 재현 스크립트는 [`acquire_s23b_camira_catalog.py`](acquire_s23b_camira_catalog.py) 및 [`audit_s23b_camira_catalog.py`](audit_s23b_camira_catalog.py)에 기록했다. 원본과 요약은 `/gpfs/kjhan/Astrafek/data/catalogue_s23b_camira_2026-10-20_01/`, 감사 표는 `/gpfs/kjhan/Astrafek/data/catalogue_s23b_camira_audit_2026-10-20_02/`에 있으며 모두 `science_measurement=false`다.
+
+2026-10-20 전체 Gaia 별 우표 프레임 가중 스택은 333개 stamp/227개 HSC-I 프레임에서 완료했다. 64–96픽셀 고리의 부호는 국소 배경 및 source-mask 선택에 따라 달랐고 양의 확장 PSF 날개는 검증되지 않았다. 원래 20-stamp 시험 결과는 보존하되, 전체 표본 평가를 현재 해석에 사용한다. 수치와 해시는 [프레임 가중 PSF 평가](empirical_psf_frame_weighted_stack_assessment_2026-10-20.md)의 확장 표본 절에 있다. `science_measurement=false`, `psf_approved=false`.
+
+같은 333개 별 우표에서 319개는 매칭 control의 같은 하위 필터 `i`/`i2`와 401×401 전체 footprint를 지원한다(217개 표적 프레임). 14개 후보는 하위 필터가 달라 제외했다. 이 WCS/header preflight는 영상 픽셀을 읽지 않았다. 다음 짝지은 control-profile 진단의 입력 지원 결과이며 PSF 날개나 ICL sky 보정은 아니다. 상세 방법·산출물·SHA-256은 [matched-control 지원 평가](empirical_psf_matched_control_support_assessment_2026-10-20.md)에 있다.
+
+2026-10-20 matched-control profile 진단은 같은 하위 필터의 319개 표적 별 우표(217 프레임)와 대응 대조장 위치를 세 가지 mask/coverage 설정으로 비교했다. 중심-source 제한을 외곽 링에 적용하지 않아도 가장 큰 outer-bin 표본은 i2 64–96픽셀의 12개 프레임뿐이며, 수치는 sky annulus 설정에 민감하다. 대조점은 별이 없는 placebo이고 target에는 ICL 곡률이 남으므로 이를 PSF wing으로 분리할 수 없다. 요약과 세 실행의 해시는 [matched-control profile 평가](empirical_psf_matched_control_profiles_assessment_2026-10-20.md)에 기록했다. `psf_approved=false`, `science_measurement=false`.
+
+Gaia↔HSC 후보 연결의 실제 관측 epoch를 확인하기 위해 기존 표적 coadd 227개 전체의 FITS header를 감사했다. 표준 date/MJD 카드가 0/227이어서 실제 epoch의 Gaia cross-match를 이 파일들만으로 확인할 수는 없다. PSF 우표 중심 자체는 Gaia 위치가 아니라 HSC 검출의 `X_IMAGE/Y_IMAGE`를 사용한다. 픽셀과 HSC 서비스는 접근하지 않았다. 재현 스크립트·해시는 [HSC coadd epoch 감사](empirical_psf_hsc_coadd_epoch_audit_2026-10-20.md)에 있다.
+
+같은 기존 333개 별 우표의 품질 감사에서 중심 12픽셀 안의 포화 비트는 0개, `BRIGHT_OBJECT` 겹침은 3개였다. 중심 마스크 개방률 99% 기준을 통과한 표본은 Kron 2.5에서 290개/201프레임, Kron 3.5에서 242개/179프레임이다. 그 중심 적격 표본도 48–96픽셀 고리의 개방률 중앙값이 각각 0.69–0.72 및 0.58–0.60이며, 다수에 검출 이웃이 있어 날개 스택 해석에 혼잡도·마스크 검증이 필요하다. 상세 수치·해시는 [별 우표 품질 감사](empirical_psf_star_stamp_quality_assessment_2026-10-20.md)에 기록했다. `psf_approved=false`, `science_measurement=false`.
+
+약한렌즈 random 중심 승인 count-only 결과 32개 배치를 모두 다시 검증해 800개 렌즈별 원시 후보 수를 요약했다. 각 렌즈는 계획한 200개보다 많은 364–1,443개(중앙값 1,000개)를 보유하지만, 이는 전체 CAMIRA aperture 중첩과 영상/형상 품질을 걸러내기 전 숫자다. 첫 50개 부분 기하 검사에서 6.35%만 통과해, 전체 geometry screen이 다음 병목이다. 고정된 표적 표본에서 후보 수와 렌즈 적색편이의 Spearman 상관은 0.595이며 유효 annulus 면적으로 나눈 후보 밀도에서는 0.080으로 줄었다. 입력 및 per-lens 산출물 해시는 [random 중심 후보 수 감사](wl_random_coordinate_candidate_count_assessment_2026-10-20.md)에 기록했다. 새 CAS 질의는 없고 `science_measurement=false`다.
+
+333개 Gaia 별 우표의 물리적 반경을 실제 227개 cluster frame의 적색편이에서 재계산했다. 현재 경험 PSF 프로필은 최대 96픽셀, 중앙 물리반경 약 88 kpc로 ICL 측정 200–300 kpc에 도달하지 않는다. 원본 401×401 우표의 inscribed circle도 200 kpc에 닿는 프레임은 52/227, 300 kpc는 0/227이다. 따라서 현재 경험 별 스택은 satellite 50–75 kpc 척도와 기하학적 겹침은 있지만 ICL 고리의 PSF wing을 직접 보정할 수 없다. 재현 절차와 체크섬은 [PSF 물리 반경 coverage 감사](empirical_psf_physical_radius_coverage_assessment_2026-10-20.md)에 있다. `psf_approved=false`, `science_measurement=false`.
+
+공개 HSC PDR3 확장 PSF 연구는 현재 별 우표의 반경 한계를 보완할 수 있는 `coadd/bg`용 5.6분각 모델을 제공한다. HSC 공식 처리문서는 비슷하지만 동일하지 않은 i/i2 노출이 공합성된다고 설명한다. Zenodo v4.0.0의 대칭·비대칭 HSC-I FITS 두 파일(합계 19,618,560 bytes)을 사용자 승인 범위로 수신해 크기·MD5·SHA-256을 검증했다. 두 4001×4001 모델은 총 광량을 거의 1로 정규화하며, z=0.30–0.55에서 200–300 kpc 고리에 점광원 광량의 0.222–0.242%가 들어간다. 독립 검증기가 원본 FITS와 aperture 수치를 재계산했다. 중심 43×43픽셀은 기존 744개 위치별 HSC PSF 코어 중앙값보다 FWHM이 21.5% 넓다. 1.5–3.3″ 중첩고리에서 public wing 대 위치별 core scale 중앙값은 0.739(5–95백분위 0.467–1.045), profile 잔차 RMS 중앙값은 12.6%였다. 따라서 hybrid 감도분석의 입력은 얻었지만 위치별 외곽 보정은 아직 승인되지 않았다. 6개 합성시험의 [`audit_public_extended_psf_reference.py`](audit_public_extended_psf_reference.py), 독립 검증기 [`validate_public_extended_psf_reference_audit.py`](validate_public_extended_psf_reference_audit.py), 코어 비교기 [`compare_public_extended_psf_to_picker_cores.py`](compare_public_extended_psf_to_picker_cores.py), 중첩 감사기 [`audit_public_psf_picker_core_overlap.py`](audit_public_psf_picker_core_overlap.py), 수치·한계는 [공개 확장 PSF 적합성 평가](extended_psf_public_reference_assessment_2026-10-21.md)에 기록했다. `psf_approved=false`, `science_measurement=false`다.
+
+## Random coordinate radial-yield audit (2026-10-20)
+
+첫 두 승인 좌표 batch의 50개 렌즈에서 inner exclusion 경계부터 30′까지 실제 query 폭은 7.14–8.76′(중앙값 8.10′)였다. 33,514 후보 중 2,129개(6.35%)가 CAMIRA aperture overlap·중복 제거 뒤 남았고 렌즈별 지원은 편중됐다. 이 결과는 첫 50개 비대표 pilot이며 random-center 승인이나 shape 반출 결과가 아니다. 보충 30–60′ 영역의 이상적 구면 면적은 현재 annulus의 중앙값 6.42배지만 HSC footprint/depth는 반영하지 않았다. 재현 스크립트와 산출물 hash는 [radial-yield 평가](wl_random_coordinate_radial_yield_assessment_2026-10-20.md)에 있다. 준비된 count-only 쿼리는 별도 승인 전 제출하지 않는다.
+
+## ICL–위성 표본수 계획 민감도 (2026-10-21)
+
+현재 800개 parent 은하단 중 joint ICL 200–300 kpc / 위성 50–75 kpc 지원은 i 26개, i2 68개다. 부분상관 가정치 0.10/0.20/0.293, redshift·richness 두 공변량, 168개 가족 Bonferroni 보정에서 80% 검정력에 필요한 독립 유효 행은 각각 2,849/536/323이다. 현재 joint-support 수율을 유지한다고 단순 외삽하면 i2 parent 규모는 약 33,518/6,306/3,800개이며, 설계효과 1.5에서는 약 50,283/9,459/5,706개다. `r=0.293`은 선택된 탐색 endpoint 점추정치라 보수적이지 않을 수 있다. 이 계산은 영상 지원·PSF/sky 체계오차를 해결하지 않으므로 추가 HSC 표본이 현재 측정을 자동으로 유효하게 만들지 않는다. 재현기·가정·제한은 [표본수 계획 평가](icl_sample_size_planning_assessment_2026-10-21.md)에 있다.
+
+같은 S23B 카탈로그 오프라인 감사의 신규 후보 상한 1,333개를 현재 표본에 더해도 총 2,133개다. 기존 i2 joint-support 수율을 적용한 기대 지원은 총 약 181행이어서 가족 보정 `r=0.293` 시나리오의 323행 목표에도 못 미친다. 후보는 PDR3 영상·매칭 대조 지원이 확인되지 않아 실제 usable 표본으로 세지 않았다. 계산 스크립트와 caveat는 [표본수 평가](icl_sample_size_planning_assessment_2026-10-21.md#현재-공개-후보-풀과의-비교-2026-10-21), 산출물은 `icl_s23b_expansion_feasibility_2026-10-21_02/summary.json`에 있다.
+
+로컬 S20A CAMIRA 부모 카탈로그에도 cluster photo-z만 쓰는 넓은 `0.20–0.70` 선택에서 2,596개 후보가 있지만, 5도 좌표 셀은 6개만 늘어난다. 현 i2 지원률을 적용한 총 기대 지원은 약 289행으로, 사후 효과 시나리오의 323행보다 작다. redshift 선택과 PDR3 이미지 지원이 달라 실제 확장 표본으로 인정하지 않았다. 상세는 [확장 표본수 평가](icl_sample_size_planning_assessment_2026-10-21.md#현재-공개-후보-풀과의-비교-2026-10-21)에 적었다.
+
+위 후보 2,596개의 local CAMIRA member 좌표를 130,148개 검증하고, 중심 및 1-Mpc 원주 8개 위치에 대한 PDR3 HSC-I mosaic/patch-QA metadata SQL 계획을 52개 배치로 생성했다. 총 23,364 probe positions이며 **CAS 제출은 하지 않았다**. 새 영상·source row·shape·photo-z는 요청하지 않는다. 기존 승인 좌표 CAS 프로세스가 끝나지 않아 겹치는 요청은 보류한다. 세부 열·입력 및 산출물 해시·한계는 [coverage query plan](icl_expansion_coverage_query_plan_2026-10-21.md)에 기록했다.
+
+가족 전체를 반경별로 검토하도록 [`plot_icl_satellite_family_matrix.py`](plot_icl_satellite_family_matrix.py)가 168개 hash-pinned 결과를 4패널로 그린다. 각 셀에 부분상관과 cluster 수를 표시하고 색상은 `−0.5…+0.5`로 고정했다. 168개 전체에서 Holm 또는 max-T `p<0.05`인 셀은 0개다. PNG/PDF와 입력·출력 해시는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_radial_family_plot_2026-10-21_01/plot_manifest.json`에 있다. 이 그림도 탐색 진단이며 `science_measurement=false`를 유지한다.

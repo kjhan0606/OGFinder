@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import pytest
+from astropy.cosmology import FlatLambdaCDM
 
 from screen_wl_random_control_coordinates import load_preflight_cosmology, screen_geometry
 
@@ -57,3 +58,28 @@ def test_load_preflight_cosmology_uses_hash_verified_source_manifest(tmp_path):
     sample_path.write_text(json.dumps({"h0": 68.0, "omega_m": 0.31}), encoding="utf-8")
     with pytest.raises(ValueError, match="checksum mismatch"):
         load_preflight_cosmology(preflight_dir)
+
+
+def test_overlap_uses_each_redshift_proper_radius_and_is_chunk_invariant():
+    h0, omega_m = 70.0, 0.3
+    cosmology = FlatLambdaCDM(H0=h0, Om0=omega_m, Tcmb0=0)
+    target_z, neighbor_z = 0.3, 0.65
+    target_radius = 3.0 / cosmology.angular_diameter_distance(target_z).value
+    neighbor_radius = 3.0 / cosmology.angular_diameter_distance(neighbor_z).value
+    radius_sum_deg = np.rad2deg(target_radius + neighbor_radius)
+    base_ra = 140.0
+    coordinates = [
+        {"lens_id": "L1", "ra_deg": base_ra + 0.99 * radius_sum_deg, "dec_deg": 0.0},
+        {"lens_id": "L1", "ra_deg": base_ra + 1.01 * radius_sum_deg, "dec_deg": 0.0},
+    ]
+    lenses = [{"lens_id": "L1", "z_lens": target_z}]
+    camira = np.array([[7.0, base_ra, 0.0, neighbor_z]])
+
+    one_row_chunks = screen_geometry(coordinates, lenses, camira, h0, omega_m, chunk_size=1)
+    one_chunk = screen_geometry(coordinates, lenses, camira, h0, omega_m, chunk_size=10)
+
+    assert one_row_chunks == one_chunk
+    assert one_row_chunks[0]["camira_3mpc_overlap_count"] == 1
+    assert not one_row_chunks[0]["geometry_candidate"]
+    assert one_row_chunks[1]["camira_3mpc_overlap_count"] == 0
+    assert one_row_chunks[1]["geometry_candidate"]

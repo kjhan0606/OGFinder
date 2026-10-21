@@ -16,4 +16,10 @@ Astrafek은 count query와 후속 coordinate query가 같은 고리 경계를 �
 
 보충 count 결과가 있어도 이는 후보 개수만 나타내며 random 중심 선택을 승인하지 않는다. 이후 좌표 반출은 별도 확인하고, 전체 CAMIRA 조리개 중첩·좌표 중복·image footprint·마스크·깊이·PSF·sky·소광·중심 간 중첩·공간 공분산을 검증해야 한다. Random shape 행 반출과 최종 차감 스택은 각각 정확한 범위와 전송량을 제시해 별도 승인을 받아야 한다. 이 계획은 `science_measurement=false`이며 어떤 weak-lensing 결과도 추가하지 않는다.
 
+2026-10-21 lageunha 재확인에서 기존 승인 좌표 제출기 PID `1049265`는 계속 살아 있었고 약 37시간째 대기 상태였다. `cas_coordinates/coordinate_status.json`은 2026-10-19 11:07:53에 마지막 기록됐으며 2/32 완료(33,514행), CAS 작업 `1062312`는 `submitted`, 상위 상태는 `running`, `error_type=HTTPError`였다. 체크포인트에 성공한 후속 status poll이 없어 CAS 작업의 완료/실패를 단정할 수 없다. 기존 제출을 유지하고 재제출하지 않았다.
+
 단위검사 10개 및 전체 `hsc_debug` 회귀검사 288개와 6개 하위 검사가 통과했다. 새 count-only plan은 계획 검사기로 800개 렌즈·32개 batch·두 출력 열임을 재확인했다.
+
+## 2026-10-20 radial-yield 근거
+
+기존 부분 파일럿 50개 렌즈에서 각 렌즈의 두 배 3-Mpc 제외경계부터 30′까지의 실제 쿼리 폭은 7.14–8.76′(중앙값 8.10′)뿐이었다. 따라서 후보 좌표가 inner 경계에서 10′ 이상 떨어진 구간에 없다는 점은 HSC 공백의 증거가 아니라 현 30′ 외곽 제한에서 예상되는 기하 결과다. 0–5′ shell은 19,920 raw/1,199 geometry-clean 좌표, 다음 shell은 렌즈별 실제 외곽 경계까지 13,594/930이다. 별도로 30–60′를 추가하면 이상적 구면 고리 면적은 현 조회 영역의 6.02–7.15배(중앙값 6.42배)다. 실제 HSC footprint·마스크·깊이는 이 면적 비율로 반영되지 않으며, 50개는 대표표본이 아니다. 재현 결과와 해시는 [radial-yield 평가](wl_random_coordinate_radial_yield_assessment_2026-10-20.md)에 있다. 이는 준비된 30–60′ count-only 계획을 시험할 근거를 보강하지만 CAS 제출이나 좌표·형상 자료 반출 승인은 아니다.

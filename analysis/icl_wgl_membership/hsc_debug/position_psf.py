@@ -180,6 +180,77 @@ def convolve_surface_brightness(template: np.ndarray, psf: np.ndarray) -> np.nda
     return fftconvolve(image, kernel, mode="same").astype(np.float32)
 
 
+def build_core_wing_hybrid_psf(local_core: np.ndarray, public_wing: np.ndarray,
+                               splice_radius_arcsec: float,
+                               blend_width_arcsec: float,
+                               wing_amplitude: float,
+                               pixel_scale_arcsec: float = 0.168
+                               ) -> tuple[np.ndarray, dict]:
+    """Join a position-specific PSF core to a public extended wing for sensitivity tests.
+
+    The local signed core is retained inside the transition annulus; a smooth
+    radial taper blends it into the scaled public model outside.  The returned
+    kernel is unit-sum normalized.  This is an exploratory model constructor,
+    not an observational PSF calibration or a correction to science images.
+    """
+    core = np.asarray(local_core, dtype=np.float64)
+    wing = np.asarray(public_wing, dtype=np.float64)
+    if core.ndim != 2 or wing.ndim != 2 or any(n % 2 != 1 for n in (*core.shape, *wing.shape)):
+        raise ValueError("local core and public wing must be odd-sized 2-D arrays")
+    if wing.shape[0] != wing.shape[1]:
+        raise ValueError("public wing must be square")
+    if core.shape[0] > wing.shape[0] or core.shape[1] > wing.shape[1]:
+        raise ValueError("public wing must be at least as large as the local core")
+    if not np.isfinite(core).all() or not np.isfinite(wing).all():
+        raise ValueError("PSF arrays must contain only finite values")
+    if not np.isfinite([splice_radius_arcsec, blend_width_arcsec,
+                        wing_amplitude, pixel_scale_arcsec]).all():
+        raise ValueError("hybrid parameters must be finite")
+    if splice_radius_arcsec <= 0 or blend_width_arcsec <= 0 or wing_amplitude <= 0 or pixel_scale_arcsec <= 0:
+        raise ValueError("splice radius, blend width, wing amplitude, and pixel scale must be positive")
+    if not np.isclose(core.sum(), 1.0, rtol=0.0, atol=1e-3):
+        raise ValueError("local core must retain its signed unit normalization")
+    if not np.isclose(wing.sum(), 1.0, rtol=0.0, atol=2e-5):
+        raise ValueError("public wing must retain its signed unit normalization")
+
+    n = wing.shape[0]
+    c = n // 2
+    half_y, half_x = core.shape[0] // 2, core.shape[1] // 2
+    core_padded = np.zeros_like(wing)
+    core_padded[c-half_y:c+half_y+1, c-half_x:c+half_x+1] = core
+    yy, xx = np.ogrid[-c:c+1, -c:c+1]
+    radius_arcsec = np.hypot(xx, yy) * pixel_scale_arcsec
+    inner = splice_radius_arcsec - blend_width_arcsec / 2.0
+    outer = splice_radius_arcsec + blend_width_arcsec / 2.0
+    if inner < 0 or outer > min(half_y, half_x) * pixel_scale_arcsec:
+        raise ValueError("splice transition must fit inside the local-core radius")
+    t = np.clip((radius_arcsec - inner) / blend_width_arcsec, 0.0, 1.0)
+    smooth = t * t * (3.0 - 2.0 * t)
+    core_weight = 1.0 - smooth
+    hybrid = core_weight * core_padded + (1.0 - core_weight) * wing_amplitude * wing
+    raw_sum = float(hybrid.sum(dtype=np.float64))
+    if not np.isfinite(raw_sum) or abs(raw_sum) < 1e-12:
+        raise ValueError("hybrid PSF has an invalid signed sum")
+    hybrid /= raw_sum
+    metadata = {
+        "splice_radius_arcsec": float(splice_radius_arcsec),
+        "blend_width_arcsec": float(blend_width_arcsec),
+        "wing_amplitude_pre_normalization": float(wing_amplitude),
+        "pixel_scale_arcsec": float(pixel_scale_arcsec),
+        "local_core_shape": list(core.shape),
+        "public_wing_shape": list(wing.shape),
+        "local_core_signed_sum": float(core.sum()),
+        "public_wing_signed_sum": float(wing.sum()),
+        "hybrid_signed_sum_before_normalization": raw_sum,
+        "hybrid_signed_sum": float(hybrid.sum(dtype=np.float64)),
+        "negative_pixels_preserved": bool(np.any(hybrid < 0)),
+        "status": "exploratory_core_wing_hybrid_sensitivity_only",
+        "psf_approved": False,
+        "science_measurement": False,
+    }
+    return hybrid.astype(np.float32), metadata
+
+
 def satellite_halos_with_psfs(shape: tuple[int, int], centers_xy: np.ndarray,
                               kpc_per_pixel: float, amplitude_at_50: float,
                               scale_kpc: float, psfs: list[np.ndarray],

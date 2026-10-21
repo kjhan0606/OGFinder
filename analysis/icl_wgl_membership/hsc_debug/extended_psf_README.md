@@ -237,7 +237,7 @@ G≤19는 26개, G≤20은 228개다. HSC 측 `wing_valid_fraction≥0.8`은 355
 Δt=−10…+10년 시나리오의 재대응 간격을 계산했다. 480개 모두 일곱 시나리오에서
 2 arcsec 연결 반경 안에 남았고, 최대 간격은 −10년 1.536 arcsec, +10년
 1.572 arcsec였다. 따라서 고유운동만으로 기존 2 arcsec 연결이 깨지는 후보는
-없지만, 이는 실제 coadd epoch 보정·변광·별 확정·PSF 승인과 다르다. 계산은
+없지만, 이는 실제 epoch별 Gaia cross-match·변광·별 확정·PSF 승인과 다르다. 계산은
 시차, 관점 가속, 쌍성 운동, HSC 중심 오차를 모델링하지 않았다. 원자료/후보
 표와 결과 해시는
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_gaia_epoch_sensitivity_2026-10-20_01/`
@@ -259,9 +259,15 @@ Gaia proper-motion 열 정의는 [공식 DR3 데이터 모델](https://gea.esac.
 [`summarize_empirical_psf_star_level.py`](summarize_empirical_psf_star_level.py),
 [`summarize_psf_gaia_epoch_sensitivity.py`](summarize_psf_gaia_epoch_sensitivity.py), Slurm 자원 설명은
 [`run_empirical_psf_gaia_full_sample.sbatch`](run_empirical_psf_gaia_full_sample.sbatch)에
-있다. Gaia 2016 위치의 HSC epoch 전파, 포화·고립도 판정, 영상 기반 wing 비교와
+있다. 실제 epoch별 Gaia↔HSC 후보 식별, 포화·고립도 판정, 영상 기반 wing 비교와
 프레임별 전달함수 검증은 여전히 남아 있다. 현재 `science_measurement=false`,
 `psf_approved=false`다.
+
+### 초기 20개 별 우표의 프레임 가중 프로필 파일럿 — 2026-10-20
+
+기존 20개 별 우표를 15개 HSC 프레임 단위로 먼저 평균한 뒤 프레임에 동등 가중해 다시 분석했다. Kron 2.5와 3.5 마스크, 120–150 및 160–190픽셀 배경 고리 설정 모두에서 48–96픽셀 net radial profile이 음수였다. 이는 채택한 국소 배경 차감 뒤 양의 확장 PSF wing 프로필이 나타나지 않았음을 뜻하지만, 실제 날개가 없다는 증거는 아니다. 두 배경 고리 모두 날개·ICL·미검출원·잔류 sky를 포함할 수 있다. 결과는 PSF 보정값으로 사용하지 않는다. 방법과 수치는 [프레임 가중 PSF 평가](empirical_psf_frame_weighted_stack_assessment_2026-10-20.md)에, 재현기는 `stack_empirical_psf_star_profiles.py`에 있으며 `science_measurement=false`, `psf_approved=false`를 유지한다.
+
+확장 Gaia-supported ledger의 333개 hash-verified stamp/227개 HSC-I 프레임은 별도 실행으로 평가했다. 64–96픽셀 고리의 네 설정 중 두 개가 0과 양립하고 하나는 양수, 하나는 음수여서 local sky와 source-mask 선택에 민감하다. 따라서 초기 20개 파일럿의 모두 음수 결과는 전체 표본 결론으로 사용하지 않는다. 확장 결과와 한계는 [같은 평가 노트의 expanded-sample 절](empirical_psf_frame_weighted_stack_assessment_2026-10-20.md)에 있으며, 출력은 계속 `science_measurement=false`, `psf_approved=false`다.
 
 ## 산출물과 다음 조건
 
@@ -274,11 +280,39 @@ Gaia proper-motion 열 정의는 [공식 DR3 데이터 모델](https://gea.esac.
 | `psf_support_2026-10-14_02` | 보유 영상과 별의 위치 조합, 복구 후보 표, 날짜/PSF ID 헤더 근거 |
 | `extended_psf_audit_2026-10-14_01` | 최종 독립 `audit.json` |
 
-실제 대조장 798개 실행 입력은 이전 `control_patches_2026-10-14_02`에 그대로 있다.
-현재 프로세스의 HSC 인증과 `control_download_01` 완료 자료가 없어 **대조 영상
-다운로드 수는 0개**다. 이번 공개 PSF 파일 확보와 대조장 영상 다운로드를 구분한다.
+HSC matched-control 영상은 2026-10-14 사용자 승인 뒤 `control_download_01`에
+798/798장, 총 42.1467 GiB 수신되어 있다. 2026-10-20에는 이 기존 표적·대조 영상
+자료만 사용해 Gaia 별 후보 333개의 같은 각거리 대조 위치를 WCS로 대응했다.
+319개 후보(217개 프레임)는 동일 하위 필터이고 401×401 픽셀 우표가 모두 대조장
+경계 안에 있었다. 14개 후보(10개 프레임)는 `i`/`i2` 하위 필터 불일치로 제외했다.
+이 preflight는 FITS header/WCS와 기존 우표만 확인했으며 원본 영상 픽셀을 읽거나
+새 HSC 자료를 받지 않았다. 보고서와 재현기 해시는
+[`matched-control 지원 평가`](empirical_psf_matched_control_support_assessment_2026-10-20.md)에 있다.
 
-다음 검증은 더 밝고 넓은 별 영상의 외곽과 위치별 PSF를 대조하고, 대조 영상에서
-배경·상관잡음·마스크 선택 효과를 분리하는 것이다. 공개 참조는 이후 합성 실험의
-명시적 모형으로 사용할 수 있지만 관측 보정을 승인한 것은 아니다.
+다음은 기존 global-sky 표적·대조장 픽셀의 국소 sky/마스크 잔차를 같은 반경에서
+비교하는 진단이다. 대조장 우표에는 중심 별이 없고 target 쪽 ICL 곡률도 남으므로
+그 차이를 PSF 날개로 단독 해석하지 않는다. 공개 참조는 합성 민감도 분석용 모형이며
+관측 보정을 승인한 것은 아니다. `science_measurement=false`, `psf_approved=false`,
+`reference_approved=false`를 유지한다.
 `science_measurement=false`, `psf_approved=false`, `reference_approved=false`를 유지한다.
+
+2026-10-20에 기존 matched-control 영상으로 paired source-masked profile 진단을 추가했다. 가장 좋은 외곽 구간도 12개 프레임이며 sky annulus·mask에 민감해 확장 PSF wing을 측정하거나 보정하지 못한다. 상세 결과와 재현 해시는 [matched-control profile 평가](empirical_psf_matched_control_profiles_assessment_2026-10-20.md)에 기록했다.
+
+기존 227개 Gaia 표적 coadd FITS를 header-only로 검사한 결과 표준 `DATE-*`/`MJD-*` 관측 epoch 카드가 없었다. PSF 우표는 Gaia 좌표가 아닌 HSC 검출 `X_IMAGE/Y_IMAGE`를 중심으로 자르므로 이 누락은 영상 중심정렬을 막지 않는다. 실제 epoch 부재는 Gaia 후보의 별 식별을 정확히 재검증하는 데 남는 제한이며, 기존 ±10년 시나리오에서는 480개 모두 2초각 이내였다. [epoch 감사 보고서](empirical_psf_hsc_coadd_epoch_audit_2026-10-20.md)에 체크섬과 범위를 기록했다.
+
+같은 333개 별 우표를 포화·밝은 천체 bit, 검출 이웃 및 Kron source-mask 지원으로 감사했다. 중심 12픽셀 내 saturation은 없고 `BRIGHT_OBJECT` 겹침은 3개였다. 중심 마스크 개방률 99%를 통과한 수는 Kron 2.5에서 290개, Kron 3.5에서 242개다. 이 subset에서도 다수 우표의 48–96픽셀 source-mask 개방률은 80% 미만이다. 따라서 외곽 wing은 간단히 쌓아 PSF로 해석할 수 없다. 정량표와 산출물 해시는 [별 우표 품질 감사](empirical_psf_star_stamp_quality_assessment_2026-10-20.md)에 있다. 이는 후보 선별 진단이며 `psf_approved=false`, `science_measurement=false`다.
+
+### 기존 full-frame target/control 영상의 300 kpc PSF-wing 파일럿 — 2026-10-20
+
+96픽셀 우표의 반경이 ICL 200–300 kpc보다 짧아, 이미 보유한 800개 표적 영상과
+798개 매칭 대조 영상에서 Gaia 별 중심 프로필을 full-frame으로 측정했다. 외곽장,
+양쪽 영상의 300 kpc 기하 지원, 동일 하위필터, HSC 검출 무결성, Kron 2.5 중심 개방률
+조건으로 18개 별/프레임 쌍을 선별했다. Gaia variability는 모두 `NOT_AVAILABLE`이며
+epoch 검증도 남아 있다.
+
+25 kpc 고리와 기존 두 국소 sky annulus 설정으로 864개 중복 없는 프로필 행을
+얻었다. 그러나 반경별 target-control 쌍은 최대 4개뿐이고 250–300 kpc에는 없으며,
+200–225 kpc에는 1쌍이다. 프레임 단위 재표집과 독립 산술 검증은 통과했지만 이 지원은
+ICL 외곽 PSF 보정이나 위성–ICL 분석에 부족하다. `_01`은 control 행 중복 버그가 있어
+사용하지 않으며 `_02`가 수정 결과다. 판정은 `science_measurement=false`,
+`psf_approved=false`다. 상세 방법·표본·해시는 [외곽장 PSF-wing 평가](empirical_psf_outer_field_wings_assessment_2026-10-20.md)에 있다.

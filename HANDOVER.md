@@ -803,8 +803,8 @@ HSC 진단은 288개 프레임, 333개 401×401 우표, 1,920개 방법 조합�
 중심/배경 분석 조건을 통과했다. 64–96픽셀 외곽 고리에서는 기하 지원을 통과한
 방법 프로필 274개 중 118개 양수·156개 0 이하였고, 후보별 묶음 113개의 지원
 설정 부호는 전체 양수 38, 전체 0 이하 58, 혼합 17이었다. 외곽 PSF 날개는
-검출/승인되지 않았다. Gaia 변광 분석 자료 부재, Gaia 위치의 coadd epoch 전파,
-영상별 포화·고립도 및 프레임 전달 검증이 남아 `science_measurement=false`,
+검출/승인되지 않았다. Gaia 변광 분석 자료 부재, 정확한 epoch별 Gaia↔HSC 후보
+식별, 영상별 포화·고립도 및 프레임 전달 검증이 남아 `science_measurement=false`,
 `psf_approved=false`다.
 
 Gaia DR3 `ref_epoch=2016.0` proper motion을 구면 접평면에서 ±10년까지 전파하는
@@ -825,6 +825,243 @@ Weak-lensing 대조장용 좌표 export 프로세스 PID 1049265는 2026-10-20 �
 002는 CAS job 1062312에 제출된 상태다. 프로세스를 재시작하지 않는다. Slurm
 제어기 DNS SRV 조회가 실패해 `squeue`와 새 `sbatch` 작업을 사용할 수 없다.
 
+### 2026-10-20 후속: 승인 shape 행과 렌즈 단계 재확인
+
+현재 GPFS의 authoritative shape-row run은 실패한 `_02` 시도가 아니라
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_shape_rows_export_2026-10-18_03/`이다.
+체크포인트와 요약을 다시 읽어 32/32 batch, 3,069,544 lens–source pair,
+909,833,598 bytes, 22개 승인 열, `credentials_saved=false`, 전체 photo-z PDF
+미포함, `science_measurement=false`를 확인했다. 각 배치의 SHA-256과 렌즈별
+count 대조는 체크포인트 및 `row_summary.json`에 기록되어 있다. 재조회나 추가
+반출은 하지 않았다.
+
+이 승인 행과 로컬 HSC Y3 SACC `n(z)`, 좌표로 검증한 raw B-mode mask 극성을 사용한
+cluster-only 약한렌즈 스택은 2,153,004 lens–source pair와 609개 렌즈를 포함한다.
+52-cell 연결 sky jackknife 및 source-bin 일관성 진단이 Astrafek 스크립트로
+저장되어 있다. 0.1–0.7 Mpc source-bin 간 차이가 남고 random 중심 차감 및 대응
+random-field 공분산은 아직 없으므로 해당 스택 역시 `science_measurement=false`다.
+수치와 해시는
+`analysis/icl_wgl_membership/hsc_debug/wl_tomographic_consistency_assessment_2026-10-20.md`
+및 `wl_source_reuse_covariance_validation_2026-10-20_02` 검증 산출물을 참조한다.
+
+random-control 좌표 내보내기 PID 1049265는 이번 확인에서도 `lageunha`에서 살아
+있었다(상태 `hrtimer_nanosleep`). 좌표 체크포인트는 batch 000·001 완료
+(33,514/780,191행), batch 002는 CAS job 1062312 제출 상태로 그대로다. 이 CAS
+job을 재제출하거나 살아 있는 프로세스를 재시작하지 않는다. 현재 output은 좌표
+내보내기뿐이며 random source shape 행은 포함하지 않는다. 다음 실행 단계는
+기존 좌표 체크포인트가 32/32가 된 뒤 행 수와 해시를 검증하고 전체 CAMIRA 조리개
+중첩·중복좌표·렌즈별 지원을 다시 screening하는 것이다. 이후 random shape count와
+shape-row 반출은 각각 실제 필터링된 중심 수·행 수·전송량을 확정해 별도 승인을
+받은 뒤 진행한다.
+
+2026-10-20 21:44 KST의 read-only SSH 재확인에서 PID 1049265는 34시간 37분째
+살아 있었고 `hrtimer_nanosleep` 상태였다. 표준입출력은 원격 `/dev/pts/0`에 연결돼
+있으며, 실행 중 메모리에 올라간 구버전 submitter는 CAS 상태를 확인한 뒤 60초
+주기로 대기한다. 저장된 `coordinate_status.json`은 여전히 2/32 배치이며 최상위
+`HTTPError` marker가 남아 있다. 성공 poll 시각을 저장하지 않는 구버전이므로
+서버 측 작업 상태는 체크포인트로 판별할 수 없다. 프로세스와 제출 배치를 유지하고
+중복 제출하지 않는다.
+
+### 2026-10-20 후속: 전체 Gaia PSF 스택 및 승인 DESI 적색이동 보정
+
+확장 Gaia ledger의 480 후보 중 hash-verified stamp 333개(227 프레임)를
+기존 800개 HSC-I 컷아웃으로부터 스택했다. 이 표본에서도 외곽 64–96픽셀은
+배경 annulus/source-mask 선택에 따라 부호가 달라져 확장 PSF 날개를 측정하지
+못했다. 표본 수 증가로 두 설정은 0과 양립하고 한 설정은 양의 평균을 보였으나,
+나머지 두 설정은 음수다. 국소 sky와 PSF 날개를 분리할 수 없어 `psf_approved=false`,
+`science_measurement=false`다. 권위 산출물은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_frame_weighted_full_gaia_2026-10-20_02/`
+이며 summary SHA-256은
+`0be06f1a827823bcd04ce23db4113dca1bd368e1a2b7205d0bab0ed76911a7ba`다.
+
+사용자가 DESI DR1/DR2 HSC PDR3 공개 보정 자료 4개만 다운로드하도록 승인했다.
+고정 commit `abc70af29910e49fce17a63ef3083160d515fb6c`의 두 scale-cut NPZ와
+JSON sidecar만 수신했고 총 549,818 bytes, 파일별 URL/크기/SHA-256은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/desi_y3_hsc_nz_abc70af2_2026-10-20/manifest.json`에
+있다. 4개 bin의 1,000점 `n(z)` mean/median와 점별 lower/upper, magnification
+corrected 곡선을 확인했다. joint posterior 샘플은 포함하지 않는다. 계산 재현기는
+`audit_wl_desi_nz_distribution_sensitivity.py`; SACC 기준과 두 scale-cut mean
+곡선의 동일 shape rows 및 5도 sky jackknife, 점별 envelope stack을 포함한다.
+random-lens shape rows가 없어 아직 cluster-only 진단이다. 결합 PSF/DESI Slurm job
+430248은 69분 계산 후 pointwise envelope 행에 없는 jackknife-error 열을 요구하는
+출력 조합 버그로 종료됐다. 승인된 기존 SACC 기준 summary가 3,069,544행 계획,
+각 배치 해시, SACC 해시, 5도 52셀, 반경 구간, 우주론과 정확히 일치함을 확인해
+재사용하도록 고쳤다. 반복 렌즈 적색편이의 `Sigma_crit^{-1}` 적분도 lens-z/bin별
+한 번만 계산하도록 최적화했다. 회귀검사 356개와 subtest 6개가 통과했다. DESI만
+계산하는 Slurm job 430481은 37분 41초 만에 완료했고 독립 validator도 통과했다.
+기존 SACC stack과 비교해 DESI central curve는 7개 반경 median `DeltaSigma`를
+source bin 1에서 +12.5–14.8%, bins 2–4에서 약 −1–3.5% 바꿨다. 네 central
+model의 52셀/56×56 covariance는 rank 51이고 상대 비대칭은 4.1e-17 이하이다.
+0.1–0.7 Mpc의 내부 토모그래피 불일치는 낮아지지만 계속 남았다(세 radial raw
+4-bin p 범위 약 4.4e-8–1.2e-3). random lens subtraction이 없으므로 모두
+cluster-only diagnostic이며 `science_measurement=false`다. 정량표와 해시는
+[`wl_desi_nz_distribution_sensitivity_assessment_2026-10-20.md`](analysis/icl_wgl_membership/hsc_debug/wl_desi_nz_distribution_sensitivity_assessment_2026-10-20.md)
+및 GPFS의 `spatial_jackknife_2026-10-20_01/summary.json`, `validation.json`에 있다.
+
+### 2026-10-20 후속: 초기 20개 별 우표 PSF 파일럿 (확장 표본으로 대체)
+
+초기 파일럿에서 승인된 기존 HSC 별 우표 20개(15개 프레임)를 Astrafek 재현 스크립트
+`analysis/icl_wgl_membership/hsc_debug/stack_empirical_psf_star_profiles.py`로
+프로필 스택했다. Kron 2.5/3.5와 120–150/160–190픽셀 배경 설정 모두 48–96픽셀
+외곽 net profile이 음수였다. 따라서 현 국소 sky estimator와 별 표본으로는
+양의 확장 PSF 날개를 측정하거나 보정할 수 없다. 이는 날개가 없다는 검출이
+아니며 배경·ICL 혼입과 epoch 문제도 남는다. 결과는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_frame_weighted_stack_2026-10-20_02/`
+및 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_frame_weighted_stack_assessment_2026-10-20.md`에
+해시와 함께 기록했다. 이 파일럿은 333개 stamp/227개 프레임의 확장 표본 평가에
+의해 해석상 대체됐다. 확장 결과와 해시는 위 절에 기록했다. 두 결과 모두
+`science_measurement=false`, `psf_approved=false` 상태를 유지한다.
+
+### 2026-10-20 후속: Gaia PSF 별 우표의 matched-control WCS 지원
+
+확장 Gaia ledger의 333개 별 우표(227개 표적 프레임) 각각에 대해 표적 은하단 중심
+기준 east/north 각거리 오프셋을 기존 매칭 대조장 중심에 옮겨 WCS 대응을 확인했다.
+319개 후보(217개 표적 프레임)는 같은 하위 필터 `i` 또는 `i2`였고 401×401 전체
+control 우표가 영상 안에 들어왔다. 14개 후보(10개 프레임)는 target/control 하위
+필터가 달라 제외했다. 검사기는 영상 헤더와 기존 star stamp만 읽고 coadd science
+픽셀·새 HSC 자료는 읽지 않았다. Astrafek 재현기
+`audit_empirical_psf_matched_control_support.py`와 테스트
+`test_audit_empirical_psf_matched_control_support.py` 3개가 있다. 산출물은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_matched_control_support_2026-10-20_01/`에
+있으며 summary SHA-256은 `a6d80adbfe8d01e466930dc68d44355287124b1b5ad8d8221a0c025f4cd7346f`,
+행 표 SHA-256은 `fc255bf0704ddfd43e817e6b21e4a66f28c593e6748fda50976be12558f5da15`다.
+이는 다음 대조장 잔차 profile의 입력 지원만 확인한다. PSF wing 보정 및
+`science_measurement`는 승인되지 않았다. 상세는
+`analysis/icl_wgl_membership/hsc_debug/empirical_psf_matched_control_support_assessment_2026-10-20.md`를
+참조한다.
+
+후속 paired profile은 기존 표적·대조 영상만 사용해 같은 필터 319개 별 위치(217 프레임)를 세 mask/coverage 설정으로 평가했다. outer-ring 중심 mask 조건을 조정한 뒤에도 최대 지원은 i2 64–96픽셀 구간의 12 프레임이며, sky annulus에 민감하다. control 위치는 별 없는 placebo이고 target에는 ICL 곡률이 남아 PSF wing을 분리할 수 없다. `_03` summary SHA-256은 `7478c905a4e46c0c82f3fe569e4ee1b4cfb53280c9acb635267bc4188a98cd5b`다. 방법·상태별 제외·모든 실행 해시는 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_matched_control_profiles_assessment_2026-10-20.md`에 있다. `psf_approved=false`, `science_measurement=false`.
+
+2026-10-20 22:04 KST read-only 원격 재확인: lageunha PID 1049265는 `Ss+`로 살아 있으며 누적 경과는 34시간 55분이다. 승인된 `wl_random_point_coordinate_plan_2026-10-19_01` 체크포인트는 `running`, 32개 중 2개 완료(33,514/780,191 예상 좌표), batch `002`는 CAS job `1062312` 제출 상태다. 기존 `HTTPError` 표시는 여전히 요청/시각이 특정되지 않아 terminal 실패로 판단하지 않았다. 재제출·프로세스 재시작은 하지 않았다. 이어질 전체 기하 스크리너는 승인된 좌표 32/32와 계획 해시 검증 뒤에만 실행한다.
+
+전체 좌표 기하 스크리너 회귀검사를 보강해 target과 CAMIRA 이웃의 각각의 적색편이에서 계산한 proper-3-Mpc 각반경 합으로 교차/비교차 지점을 검증하고, chunk 크기 1과 10에서 결과 동일성을 확인했다. 좌표 체크포인트 감사기와 함께 focused test 7개가 통과했으며, 실제 전체 좌표 자료가 도착하기 전에는 기하 스크리닝을 실행하지 않는다.
+
+Gaia↔HSC 후보 연결의 epoch 범위를 점검하려고 기존 333개 별 우표의 227개 target coadd FITS header를 조사했다. `DATE-OBS`/`DATE-*`/`MJD-*` 키는 0/227이다. 단, PSF 우표 중심은 Gaia가 아닌 HSC 검출의 `X_IMAGE/Y_IMAGE`이므로 이 누락이 영상 중심정렬을 막지 않는다. ±2/5/10년 Gaia 이동 결과는 실제 epoch 확인이 아닌 cross-match 민감도이며, 480개 모두 2초각 내에 남았다. 명확화한 Astrafek header-only 검사기는 `analysis/icl_wgl_membership/hsc_debug/audit_empirical_psf_hsc_coadd_epochs.py`, 테스트 3개, 상세·체크섬은 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_hsc_coadd_epoch_audit_2026-10-20.md`에 있다. `_02` 요약 SHA-256은 `fb5ff0c7b87d1d17bdeb42ef824980b3a50eb7c7f0a487d7449b1fd9fe88d93c`이며 픽셀과 HSC 서비스는 읽지 않았다. `psf_approved=false`, `science_measurement=false`를 유지한다.
+
+같은 333개 별 우표에 대해 HSC 포화/`BRIGHT_OBJECT` 비트, 검출 이웃, Kron source-mask 지지율을 추가 점검했다. 중심 12픽셀 내 포화는 0/333, 밝은천체 비트는 3/333이고, 12픽셀 이웃 검출은 없다. 중심 source-mask 개방률 99% 기준을 통과한 수는 Kron 2.5에서 290개/201프레임, Kron 3.5에서 242개/179프레임이다. 하지만 48픽셀 내 이웃은 317개, 96픽셀 내 이웃은 333개다. 중심 적격 subset에서도 48–64 및 64–96픽셀 개방률 중앙값은 Kron 2.5에서 0.718/0.694, Kron 3.5에서 0.605/0.579로 외곽 날개 측정에 강한 마스크·혼잡도 통제가 필요하다. 검사기 `analysis/icl_wgl_membership/hsc_debug/audit_empirical_psf_star_stamp_quality.py`, 관련 테스트 3개 통과. 결과는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_star_stamp_quality_audit_2026-10-20_02/`에 있고 summary SHA-256은 `bdb176c6ede927369e0c9b37bbc9ec88b0e1ba607bce89dfbab18795fe925bc0`, 행 표 SHA-256은 `ca2b908c717358ca0c3bb581da87ad717af6206b40ef0c6333d462a80ed48187`이다. 중심부 후보 진단이며 `psf_approved=false`, `science_measurement=false`를 유지한다. 해석과 한계는 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_star_stamp_quality_assessment_2026-10-20.md`에 있다.
+
+### 2026-10-20 후속: weak-lensing random 후보 count 전량 감사
+
+이미 승인·수신된 count-only 표의 32개 CSV 해시와 800개 렌즈별 row를 좌표 SQL 계획에 대조했다. 30 arcmin 외곽 및 각 렌즈의 두 배 proper-3-Mpc 제외반경 안에서 HSC quality-filtered random 표본은 총 780,191개였다. 렌즈별 count는 364–1,443(중앙값 1,000)이고 전 렌즈가 계획한 200개를 넘는다. 유효 고리 면적으로 나눈 점밀도 중앙값은 0.566 arcmin⁻²다. raw count와 렌즈 적색편이의 고정표본 Spearman `rho=0.595`는 면적 정규화 뒤 `rho=0.080`으로 줄어, count의 z 의존 대부분이 각도 제외면적과 연결됨을 시사한다. 이는 중첩 제거 전 후보 가용성으로 shape 지원이나 최종 random pool을 보장하지 않는다. 전체 결과·입력 해시는 `analysis/icl_wgl_membership/hsc_debug/wl_random_coordinate_candidate_count_assessment_2026-10-20.md` 및 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_candidate_count_audit_2026-10-20_02/`에 있다. 검사기 `audit_wl_random_coordinate_candidate_counts.py`, 테스트 2개 통과. CAS 추가 요청·좌표 반출은 없었다.
+
+현재 read-only lageunha 확인에서 PID 1049265는 여전히 살아 있음(`Ss+`, 경과 1일 11시간 32분)이며 좌표 체크포인트는 `running`, 완료 2/32, 33,514/780,191행, batch `random_coordinates_002` CAS job `1062312` 제출 상태다. 최상위 `HTTPError` 표시는 남아 있고 checkpoint mtime은 바뀌지 않았다. 서버 job의 terminal 상태를 확인하지 못했으므로 살아 있는 프로세스를 재시작하거나 batch를 재제출하지 않는다. 남은 전체 기하 스크리닝은 기존 export가 끝나고 32개 batch의 row count·SHA 검증을 통과한 뒤 수행한다.
+
+### 2026-10-20 후속: 경험 PSF radial coverage와 ICL annulus
+
+기존 333개 Gaia 별 우표/227 프레임의 표적 적색편이와 HSC 픽셀 scale을 사용해 경험 PSF 스택의 radial extent를 proper kpc로 환산했다. 실제 stack은 96픽셀까지이며 물리반경 중앙값 88.4 kpc (q10–q90 76.8–101.4 kpc)다. ICL 분석의 200–300 kpc annulus에는 227개 frame 중 하나도 닿지 않는다. 전체 우표의 circular-inscribed radius도 중앙값 184.1 kpc여서 200 kpc까지 닿는 프레임은 52개, 300 kpc는 0개다. 반면 96픽셀 endpoint는 75 kpc 이상을 덮는 stamp 316/333개로 satellite 외곽 분석과 일부 기하 중첩은 있다. 이것은 측정 PSF가 아니라 coverage audit다. 재현기 `analysis/icl_wgl_membership/hsc_debug/audit_empirical_psf_physical_radius_coverage.py`, 테스트 2개 통과. output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_physical_radius_audit_2026-10-20_01/`; summary SHA-256 `6d88022648930be6fd6f5f6785d66271cb399b1f6c4107dd7305453fead5d872`, table SHA-256 `b1b4cfee369a20939dbf3b6b040ff4a08b7efb4239e155829f65fc1bd99a1f32`. 상세 범위와 입력 provenance는 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_physical_radius_coverage_assessment_2026-10-20.md`에 있다. PSF 보정과 `science_measurement`는 승인되지 않았다.
+
+### 2026-10-20 후속: full-frame outer-field PSF-wing 파일럿
+
+기존 333개 hash-verified Gaia 별 우표 중 18개가 target/control 양쪽에서 300 kpc 기하 지원, 동일 하위필터, 800 kpc 외곽장, 중심 Kron 2.5 개방률 조건을 통과했다. 이미 승인·다운로드된 800 target 및 798 control HSC 영상만 읽었다. Slurm job 430734는 18쌍의 25 kpc profile을 처리해 중복 없는 864행과 24개 frame-equal paired stack bin을 만들었다.
+
+독립 검증에서 profile arithmetic·SHA-256이 일치했다. 하지만 radial bin별 paired support는 최대 4쌍이며 250–300 kpc에는 없고 200–225 kpc는 1쌍이다. `_01`에는 control profile 중복 버그가 있었으므로 사용하지 않는다. 수정된 `_02`도 PSF 보정 또는 ICL 과학 측정으로 쓸 수 없다: `science_measurement=false`, `psf_approved=false`. 핵심 산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_outer_field_wings_2026-10-20_02/`이며 summary SHA-256 `c8085c8a7459a34ab03e551de6d2d37cccf637a80156bff4f70ba61b0dc46369`, validation SHA-256 `c70a144aae21922044d14a230404c8633a7d9be755580b976d7752a0fad860f6`이다. 재현기·실패 원인과 후속 기준은 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_outer_field_wings_assessment_2026-10-20.md`에 있다.
+
+### 2026-10-20 후속: random coordinate radial-yield
+
+이미 승인된 첫 2/32 coordinate batch(50개 계획 순서 렌즈, 33,514행)만 사용해 inner 2×proper-3-Mpc 경계에서 거리에 따른 geometry-clean 후보수를 나눴다. 30′ outer limit은 각 렌즈에 7.14–8.76′(중앙값 8.10′)의 annulus 폭만 남긴다. 0–5′에서 1,199/19,920, 남은 shell에서 930/13,594가 geometry-clean이며 총 2,129(6.35%)다. 기존 50개는 비대표 표본이다. 30–60′ 추가 고리의 이상적 spherical area는 현재 검색 고리의 6.02–7.15배(중앙값 6.42배)이지만 HSC coverage·depth를 반영한 것은 아니다. 보충 count-only CAS 계획은 아직 제출하지 않았다. output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_radial_yield_audit_2026-10-20_03/`, summary SHA-256 `cd5a30122a2beb2ad875dec3f59bbca35286ee0862cbc1473d021cbb240402ad`. Astrafek 재현기와 해석은 `analysis/icl_wgl_membership/hsc_debug/wl_random_coordinate_radial_yield_assessment_2026-10-20.md`에 있다. `science_ready=false`, `science_measurement=false`.
+
+### 2026-10-20 후속: random-coordinate export live audit
+
+이번 read-only lageunha 확인에서 PID 1049265는 살아 있었다(`Ss+`, elapsed 약 1일 11시간 59분). 기존 체크포인트는 `running`; `random_coordinates_000`·`001` complete, `002`는 CAS job 1062312 submitted이며 top-level `HTTPError` marker가 남아 있다. `audit_wl_random_coordinate_checkpoint.py`로 저장된 CSV 2개를 count plan별 33,514/33,514행 및 SHA-256과 대조해 검증했다. 새 CAS 요청·중복 제출은 하지 않았고, 해당 batch의 실제 CAS terminal state는 여전히 모른다. checkpoint audit `_11`은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-20_11/`에 기록했다.
+
+### 2026-10-20 후속: ICL×위성 반경 교차 지원
+
+기존 800개 HSC full-sample 프로필의 여섯 ICL 고리(50–500 kpc)와 일곱 위성 고리(5–75 kpc)의 exact cluster/filter 교집합 84개를 작성·해시 검증했다. 가장 큰 지원은 ICL 100–150 kpc × 위성 5–10 kpc로 i 78개, i2 150개지만 위성 내부 구조를 뜻한다. 관심 외곽 조합인 ICL 200–300 kpc × 위성 50–75 kpc는 i 26개, i2 68개이며, 400–500 kpc × 50–75 kpc는 21/57개다. 최대 지원 조합으로 과학 질문을 바꾸지 않았다. 이번 단계는 지원 감사뿐이며 상관·유의성·선택 보정을 하지 않았다. 이 표본도 미검증 PSF 날개·sky 전달 때문에 `science_measurement=false`다. 재현기 `analysis/icl_wgl_membership/hsc_debug/audit_icl_satellite_radial_support_matrix.py`, 테스트 3개 통과; 보고서 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_radial_support_matrix_assessment_2026-10-20.md`. 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_radial_support_matrix_2026-10-20_01/`, summary SHA-256 `7d00bc9fad2e9066cc152c2485c3f5c301637594ac6acd37212cea1264204126`, 84행 table SHA-256 `1ee4f8e4a9c682296c64781d82cb74a31267acc1952b4814b643aa3b779be32d`.
+
+### 2026-10-20 후속: 전체 ICL×위성 반경 가족 검정
+
+상기 84개 반경/필터 조합의 exact 프로필 교집합과 추출된 대조장 좌표를 사용했다. 420개 고유 표적/대조 cluster-filter 쌍을 공통 5도 공간블록에 배정했고, 각 셀의 `satellite ΔSB ~ ICL ΔSB + z + richness` 부분상관을 CR1 공간블록 t 통계와 함께 계산했다. 84개 셀 전부 10개 행·8개 블록 최소기준을 통과했다. 모든 셀에 공통 Webb 6점 wild-cluster bootstrap 5,000회를 적용해 Holm 및 max-T 완전귀무 가족조정을 수행했다.
+
+미보정 `p<0.05` 8개가 있었으나 Holm 조정 최소 p는 0.588, max-T 조정 최소 p는 0.156으로 84개 중 어느 것도 보정 후 유의하지 않았다. 후보 ICL 200–300 kpc × 위성 50–75 kpc의 i2는 `r=0.293`, 68쌍/25블록, `p_raw=0.0288`이지만 `p_Holm=1.000`, `p_maxT=0.987`; i는 `r=0.079`, 26쌍/9블록, `p_raw=0.621`이다. 표본별 지원 차이와 필터 불일치가 남고 PSF 날개·sky 전달·완전도 미해결이어서 탐색 결과이며 `science_measurement=false`다. 상세·한계는 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_radial_matrix_familywise_assessment_2026-10-20.md` 및 재현기 `analyze_icl_satellite_radial_matrix_familywise.py`에 기록했다. 회귀검사 6개와 독립 계수·p조정·해시 검증을 통과했다. 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_radial_matrix_familywise_2026-10-20_01/`; summary SHA-256 `9e4bf2e8369c2c7b3de025a51eafc74538b560b9c42a9cf2fc68de49e1a8ccfb`, association TSV SHA-256 `99ae3afd7a8845de9fb668cb415dcc2b7f8edded60bba550e2d69b5765014b0d`, max-T null TSV SHA-256 `2fcfe2a763d33a1ee12255c35dc77e5623dfdcf5121f4283597629d3368f4c19`.
+
+### 2026-10-20 후속: CAMIRA 위성 가중을 포함한 168개 가족 민감도
+
+기존 hash-verified member-weighted 프로필의 CAMIRA 열 8 `weight`를 사용해 84개 반경/필터 equal-satellite 분석과 CAMIRA-weighted 분석을 같은 168개 검정 가족으로 결합했다. 두 estimator는 모든 셀에서 동일한 cluster/filter 행과 공간블록을 유지했다. 각 클러스터 안에서만 CAMIRA weight를 적용하고 cluster는 동일 가중했다. 5,000회 공통 Webb wild-cluster bootstrap의 max-T와 Holm 보정 후 유의한 셀은 0개였다(17개 원시 `p<0.05`, 최소 Holm `1.000`, 최소 max-T `0.255`). ICL 200–300 × 위성 50–75 kpc의 i2는 equal `r=0.293`, weighted `r=0.241` (둘 다 68쌍/25블록); 원시 p는 각각 `0.030`과 `0.055`지만 168개 보정 후 둘 다 `p_Holm=1.000`, `p_maxT≥0.999`다. CAMIRA weight는 독립 불편 확률이 아니며 효과 차이에 별도 추론을 하지 않았다. PSF·sky·완전도 문제가 남아 `science_measurement=false`다. 재현기, 독립 validator, 결과·제한은 `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_weighted_radial_matrix_familywise.py`, `validate_icl_satellite_weighted_radial_matrix_familywise.py`, `icl_satellite_weighted_radial_matrix_familywise_assessment_2026-10-20.md`에 있다. 테스트 8개 및 168행/5,000 null·Holm/max-T·입력/출력 해시 독립 검증 통과. Slurm 430809는 4분 16초, max RSS 57,896 KB, stderr 0으로 종료했다. 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_weighted_radial_matrix_familywise_2026-10-20_01/`, summary SHA-256 `0a337df80fda6fb92f178d251e09347f27012f5cc53f088fd967311b31ef8068`, 결과표 SHA-256 `6e6c37a44823ab0d6ac5f1795af87f4d47cc3dda1f65b0872ea9e622828142e7`, max-T null SHA-256 `04386baebe37577b40b96d2c859f9202e5cdc73b5eaf01b7ed6c1cc6b53e56a5`.
+
+같은 200–300 × 50–75 kpc endpoint에서 equal 대비 CAMIRA-weighted 상관 변화량을 같은 cluster/filter 지원과 연결 5도 공간블록으로 10,000회 paired bootstrap했다. i: Δr=−0.003, 95% 구간 [−0.225, 0.092] (26개/9블록); i2: Δr=−0.052, [−0.139, 0.061] (68개/25블록). 두 구간 모두 0을 포함하며, 선택된 탐색 endpoint에 대한 민감도이지 독립 유의성 검정이 아니다. 분석 및 입력과 bootstrap 재계산 검증은 `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_weighting_contrast.py`, `icl_satellite_weighted_radial_matrix_familywise_assessment_2026-10-20.md`에 기록했다. 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_weighting_contrast_2026-10-20_01/`; summary SHA-256 `b1a07b7cd46c8a2dc8fd562663a3297ba1d4f46c3a0b25df9ab35f9b56ffc699`, 결과표 SHA-256 `992bf7e7883b3b21babf88d6ba73c0d54e52d1e2ed8b1a7ff2ed07b294d0a012`. `science_measurement=false` 유지.
+
+2026-10-20 cluster-only weak-lensing cross-shear null을 반경/source-bin별로 분해했다. 전체 28성분 χ²=74.75/28 (p=3.93×10⁻⁶)와 일치하지만 어떤 단일 반경 가족도 Holm 후 유의하지 않다(최소 p=0.102); source-bin family도 모두 비유의(최소 p=0.310)이며, 28개 개별 성분 family의 최소 Holm p=0.966이다. 현 요약통계에서 null 오염의 위치를 특정하지 못했다. 재현기·테스트·결과 SHA는 `analysis/icl_wgl_membership/hsc_debug/wl_tomographic_consistency_assessment_2026-10-20.md`에 있고, JSON은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_cross_shear_null_decomposition_2026-10-20_01/`에 있다. 추가 CAS 조회 없음. `science_measurement=false` 유지.
+
+2026-10-21 PSF support sweep은 outer 600 kpc 기준 91개 star/control 쌍, 78프레임을 찾았다. 첫 `_01` stack에서 `i`/`i2` 필터 혼합 오류를 발견해 이를 제외하고 필터별 `_02` 48셀 집계만 사용한다. 독립 검증기가 프로필 4,368행과 10,000회 frame-bootstrap을 재현했다. `i` 29쌍/25프레임, `i2` 62쌍/53프레임이다. 엄격 지지 기준에서 `i`의 50–75 kpc 표본은 0, `i2`는 4–6프레임이고, 200–300 kpc `i2` 지원은 0이다. mask 지지 완화에도 bin당 독립 프레임 최대 1–6개뿐이라 PSF 보정은 불가하다. 보고서 `analysis/icl_wgl_membership/hsc_debug/empirical_psf_outer_frame_bootstrap_assessment_2026-10-21.md`; 권위 산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/empirical_psf_outer_field_wings_frame_bootstrap_2026-10-20_02/`, summary SHA `556fe0e828a5f2b0ff1600c4e4f2449147e9b383a115d3757eb4b5ea18faa388`, validation SHA `844337eb4fa89f72648ec1d660f57cc89208df2fa3ff9b44f15b406a3116da6f`. `psf_approved=false`, `science_measurement=false`.
+
+### 2026-10-21 재연결 후 read-only 확인
+
+2026-10-21 01:59 KST `lageunha` read-only 확인에서 승인된 random-center coordinate export PID 1049265가 여전히 살아 있었다(`Ss+`, elapsed 1일 14:48:55). 체크포인트는 `running`, mtime `2026-10-19 11:07:53 +0900`, 크기 936 bytes다. `random_coordinates_000`/`001`은 완료(총 33,514행), `002`는 CAS job `1062312` 제출 상태이며 최상위 `HTTPError` marker가 남아 있다. 이후 batch는 제출하지 않았고 PID를 재시작/종료하지 않았다. 완료된 32개 batch의 row/hash 검증 뒤에만 전체 기하 스크리닝을 진행한다.
+
+같은 확인에서 target/control manifest(800/798개)를 다시 읽어 1,598개 고유 중심 중 승인 PSF 코어가 있는 위치 56개, 미포함 위치 1,542개라는 기존 오프라인 계획을 확인했다. 계획 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_picker_target_control_centers_plan_2026-10-21_01/psf_picker_plan.json`은 `prepared_not_submitted`; `pdr3_wide`, `coadd`, `HSC-I` 중심 모델 PSF 1,542개만 요청하며 image/shape/photo-z는 요청하지 않는다. 좌표 목록 SHA-256은 `78bb8b426ad3aa99df68d757b8981e0893517c9e246667aa15d0c891d071d99c`, mapping SHA-256은 `4c2f060f350b65fc93dbb0a8b7c12421517b9be54ddba09c866b08a401dc0212`다. 이전 PSF 파일 크기 분포로 계산한 예상량은 평균 27.6 MiB, 중앙값/관측 최대 기준 29.6 MiB였다. 사용자가 2026-10-21에 이 1,542개 범위만 승인했다. HSC PDR3 문서상 i/i2 visit은 하나의 HSC-I coadd로 합쳐지므로 요청 band는 HSC-I로 유지하되, 분석 진단의 i/i2 표본은 계속 분리한다.
+
+승인 후 기존과 동일한 공식 HSC PDR3 PSF Picker `downloadPsf.py`를 재사용했다. 내려받은 원본은 SHA-256 `17cee33a86de87a77f3f800049b3fdb056f2e0c50b96c2b8cf7e80c1f62f2298`로 앞선 성공 실행과 일치한다. 요청은 좌표목록 방식으로 `rerun=pdr3_wide`, `type=coadd`, `filter=HSC-I`, centered stamp만 받았으며 정상 종료(exit 0)했다. 데이터는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_picker_target_control_centers_download_2026-10-21_01/`에 보존했다. 승인된 1,542개 FITS가 좌표·매핑 해시와 일대일 대응하고 누락·중복·추가 파일은 0개다. 총 29,269,440 bytes이며 크기는 17,280–20,160 bytes, 형상은 43×43 911개, 43×41 242개, 41×43 266개, 41×41 123개다. 모든 픽셀은 유한하고 전체 합은 0.9999999999999986–1.0000000000000018, 양의 광량 중심의 최대 편차는 0.2761 pixel이다. 음수 픽셀 699,893개를 포함한 원본 부호를 보존해야 한다. 파일별 SHA-256 및 좌표·FITS 검증 manifest는 같은 폴더의 `psf_picker_audit.json`; SHA-256 `b6079bd47f5dd0a716a5841fc7c1cca01f96a857a4cbd7a4d8d9132b4856e6b4`다. 감사기는 `audit_hsc_psf_picker_target_control_batch.py`로 저장하고 3개 테스트를 통과시켰다. 이 스크립트로 실제 1,542개 전체를 다시 감사해 기존 manifest와 바이트 단위로 같은 해시를 얻었다. 재현 실행은 기존 파일을 덮어쓰지 않도록 `psf_picker_audit_reproducible.json`에 기록했으며 SHA-256도 동일하다. 기존 승인 PSF 56개와 합쳐 800 target + 798 matched-control 중심 1,598곳 모두에 모델 PSF 코어가 확보됐다. 그러나 이는 중심 코어 입력의 완전성만 확인한 것으로 PSF 날개·영상별 하늘 전달·주입회수 성능은 검증하지 않았다. `psf_approved=false`, `science_measurement=false`를 유지한다. 영상·shape·photo-z는 받지 않았고 자격정보도 저장하지 않았다. 이 다운로드는 실행 중인 random-coordinate CAS 작업을 건드리지 않았다.
+
+공개 확장 HSC-i PSF 대칭·비대칭 FITS 2개(각 9,809,280 bytes, 합계 18.71 MiB)는 이미 사용자 승인 후 수신되어 Zenodo 체크섬과 독립 재검증을 마쳤다. 직전 대화에서 이 자료가 아직 미수신인 것처럼 말한 것은 부정확했다. 기존 위치별 PSF-picker 744 코어도 이미 수신됐다. 다만 두 종류 모두 PSF/하늘 전달을 과학적으로 승인하지 않았으며 `psf_approved=false`, `science_measurement=false`를 유지한다. 세부 결과는 `analysis/icl_wgl_membership/hsc_debug/extended_psf_public_reference_assessment_2026-10-21.md`에 있다.
+
+### 2026-10-21 전체 target/control 위치별 PSF 코어 및 ICL 의존성
+
+신규 재현 감사기 `audit_hsc_psf_picker_target_control_batch.py`를 저장하고 테스트했다. 기존 감사 manifest와 공식 도구 해시 `17cee33a…f2298`를 확인한 1,542개 수신 PSF에서 이 스크립트를 다시 실행해 바이트 단위로 동일한 audit SHA를 재현했다. 감사 테스트와 새 target/control 연결 테스트를 합쳐 9개가 통과했다. 신규 1,542개와 기존 승인 위치 PSF 중 target/control 중심과 겹치는 56개를 합쳐 1,598개 중심을 `analyze_hsc_target_control_psf_cores.py`로 분석했다. 중심 table은 1,598행, paired table은 798행이며 800 target 중 control이 없는 것은 2개다. target-control 장축 moment FWHM 차이 중앙값은 −0.0070 arcsec, q16–q84는 −0.0572–+0.0392 arcsec, 중앙 절대차는 0.0319 arcsec다. 해당 요약 SHA는 `cb9244c39e5608932434eec8eb0e7aca0a50ebac585cd769a19f996937843bb0`이다.
+
+이 코어 차이가 기존 ICL 200–300 kpc 초과광과 함께 변하는지 공통 면적 40% 통과 137쌍(44 i, 93 i2)에서 추가 진단했다. 적색편이·풍부도·공통 피복률을 조정한 partial r은 i `0.154`, i2 `0.038`; 중앙 마스크 flag까지 넣으면 i `0.016`, i2 `0.036`이다. 5,000회 연결 5° 공간블록 bootstrap에서 여섯 모델의 모든 2.5–97.5 percentile 범위가 0을 포함한다. 독립 validator가 6개 점추정, 총 30,000개 재표집 상관, leave-one-block-out 범위를 재현했다. 보고서는 `analysis/icl_wgl_membership/hsc_debug/icl_psf_core_mismatch_full_sample_assessment_2026-10-21.md`; 분석·독립검증 코드는 `analyze_full_sample_icl_psf_core_dependence.py`, `validate_full_sample_icl_psf_core_dependence.py`다. 결과 요약 SHA-256은 `f67019b8cb6f3c096b45e8640d489022db19f2b1d29f7b4db1ab89441936c34e`, joined table SHA-256은 `d6e0f0b669e3eb2c0f7a57c37669260da4ad17216daaf66fda2c60af7223fcf5`다. Slurm controller DNS 실패로 이 137행 단일 CPU 작업은 로그인 노드에서 약 6초에 끝냈다. 코어가 target-control 중앙값에서 비슷해 보인다는 결과는 확장 PSF 날개나 하늘 전달 검증을 뜻하지 않으므로 `psf_approved=false`, `science_measurement=false`다.
+
+weak-lensing random-control-coordinate export는 재확인 당시 PID 1049265가 살아 있었으나 체크포인트 mtime은 계속 `2026-10-19 11:07:53 KST`였다. CAS job `1062310`, `1062311` 두 개는 33,514행으로 완료되어 있고 `1062312`는 체크포인트에서 `submitted`로 남아 있다. Astrafek에 추가한 read-only `check_wl_cas_job_status.py`로 CAS에 딱 한 번 상태를 조회한 결과 `1062312`는 실제 `running`이었다. 이 상태 조회는 `query_submitted=false`, `rows_downloaded=false`이며 자격정보를 저장하지 않았다. `audit_wl_random_coordinate_checkpoint.py`도 다시 실행해 2/32 배치, 33,514/780,191행과 파일 해시를 확인했다. 새 audit `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-21_01/checkpoint_audit.json` SHA-256은 `d5072ee7cecd4ec4798892dc6d3be4acf1d916738e0ff65564666234a3ec8212`, checkpoint SHA-256은 `84cccc6443ec8d2fc8bee1611ab6b9b57a3aabdc90978fcdfc558151d2bb92b2`다. 활성 submitter를 중단·재시작하지 않았고 같은 CAS 쿼리를 재제출하지 않았다. 저장된 완료분과 결합하기 전에는 기존 작업의 terminal status 및 체크포인트 갱신을 확인해야 한다. 상태조회기 테스트 2개 통과.
+
+### 2026-10-21 확장 피복 계획 및 CAS 좌표 작업 재확인
+
+lageunha에서 승인된 `submit_icl_expansion_coverage_metadata.py --check`를 실행했다. 기존 저장 plan의 체크섬·SQL 구조·열 제한이 모두 통과했고, 후보 2,596개·probe 23,364개·배치 52개를 확인했다. 이 계획은 PDR3 `mosaic`/`skymap`/`patch_qa` 메타데이터만 반환하며 image, object/source rows, shape, 개별 photo-z 요청 플래그가 모두 false다. 이 검사는 네트워크 요청을 하지 않았고 아직 `prepared_not_submitted` 상태다.
+
+같은 read-only 확인에서 weak-lensing 좌표 export PID 1049265가 `lageunha`에서 계속 살아 있었다(`Ss+`, `hrtime`, elapsed 1일 15:56). `cas_coordinates/coordinate_status.json`은 2026-10-19 11:07 KST 이후 갱신되지 않았으며 32개 중 2개 완료(33,514/780,191행), CAS job 1062312 제출 상태, `error_type=HTTPError`를 기록한다. 현재 `squeue`는 Slurm controller DNS SRV 조회 오류로 상태를 가져오지 못했다. 이 확인에서는 HSC CAS job 상태를 새로 조회하지 않았고 좌표 worker를 종료·재시작하거나 새 CAS 쿼리를 제출하지 않았다. 다음 단계는 기존 worker/job의 권위 있는 terminal 상태를 확인한 뒤, 이미 승인된 피복 메타데이터 52개 batch를 기존 HSC 세션에서 순차 실행하는 것이다.
+
+### 2026-10-21 전체 표적·대조 PSF 코어/공개 확장 PSF 비교
+
+새 Astrafek 분석기 `analyze_public_psf_target_control_overlap.py`로 800개 표적과 798개 대조장의 모델 PSF 코어 1,598개를 공개 HSC-I 확장 PSF와 1.5–3.3 arcsec에서 비교했다. target filter는 기존 검증 스택, control filter는 해당 대조장의 실제 `coadd_header_filter`에서 가져왔다. 동일 filter 쌍은 i 302개, i2 481개(총 783개); 다른 filter 15쌍은 paired 통계에서 제외됐다. 2개 target에는 control이 없다.
+
+전 창 진폭 scale 중앙값(i target/control, i2 target/control)은 0.713/0.740, 0.787/0.797이다. 중앙 scale은 inner 1.5–2.4에서 outer 2.4–3.3 arcsec로 각각 0.731→0.520, 0.754→0.560, 0.803→0.555, 0.817→0.572로 감소한다. full-window 모양 잔차 RMS 중앙값은 11.7–12.8%다. same-filter target-minus-control scale 차이 중앙값은 i −0.0239 (302쌍, q16–q84 −0.1294…0.0644), i2 −0.0033 (481쌍, −0.1181…0.0988)이다. 이는 위치별 분포/민감도이지 보정계수나 추론 검정이 아니다. 한 진폭으로 public wing을 접합할 수 있다는 증거가 없으며 200–300 kpc wing 및 sky 전달은 계속 미검증이다.
+
+초기 `_01` 실행은 control에 target filter를 상속하여 paired 결과에 사용하지 않는다. 실제 control filter를 조인한 `_02`만 권위 출력이다. 독립 FITS 재계산기가 1,598개 전체의 네 fit window, 동일-filter 783쌍, 15 mismatch를 재현했다. 7개 focused test와 syntax/whitespace 검사 통과. 분석기 `analysis/icl_wgl_membership/hsc_debug/analyze_public_psf_target_control_overlap.py`, 독립 검증기 `validate_public_psf_target_control_overlap.py`, 상세 보고서 `extended_psf_target_control_overlap_assessment_2026-10-21.md`. GPFS 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/extended_psf_target_control_overlap_2026-10-21_02/`; summary SHA-256 `8ba338cf139ab469d1c21a10f4401ea3d6a86e3dd402ea07bc49ca512be2e6d8`, position TSV `ffe0a557d47694f73156b8f084d22f5977d658bb1b6932fe1cb5400dba22c62a`, paired TSV `b6276e52678abc91499ce56a65acbaec0ceaa055599aa56fbecb2a6be1686556`, validation JSON `add0ce56323fe32564147f6ab9ec91d05d8ee3d2810f62c69494ac1b38b607ec`. `psf_approved=false`, `science_measurement=false` 유지. 후속은 기존 image mask에서 splice radius·진폭별 점광원/diffuse injection recovery다.
+
+### 2026-10-21 `i` 필터 공개 PSF 주입회수
+
+Astrafek `extended_psf_injection.py`로 동일 필터 PSF 지원과 K2.5/40% ICL 지원을 만족하는 13개 `i` 프레임에서 HSC-I 대칭·비대칭 public PSF를 각각 주입 민감도에 사용했다. 두 run 모두 13/13, error 0, 각각 약 68초. 독립 `validate_extended_psf_injection_batch.py`가 저장 응답을 재계산했고 최대 산술 오차는 0이다. 기존 public PSF는 새 승인 위치의 동일 byte file(SHA `8897af…2d85`)임을 확인했다.
+
+대칭 모델 회수 중앙값/프레임 범위: smooth diffuse→ICL 200–300 kpc `0.215` (`−2.734…0.271`), 위성 외곽광→ICL `0.353` (`0.024…1.269`), diffuse→위성 50–75 kpc `−0.039` (`−0.915…4.324`), 위성 외곽광→위성 `0.294` (`−3.024…1.895`). 13개 표본은 선택된 지원 집합이며 quantile은 모집단 CI가 아니다. 비대칭−대칭 paired 모델 차이는 네 응답에서 최대 절댓값 `4.77×10⁻⁷`; 동일한 공개 별 표본을 쓰므로 독립 검증은 아니다. 음수와 넓은 분산 때문에 scalar recovery correction을 적용하지 않는다. 실제 science coadd는 수정하지 않았고 source photon noise/coadd covariance는 추가하지 않았다. `science_measurement=false`, `psf_approved=false`.
+
+결과 보고서 `analysis/icl_wgl_membership/hsc_debug/extended_psf_i_injection_recovery_assessment_2026-10-21.md`. symmetric run `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_extended_psf_i_sensitivity_2026-10-21_01/` summary SHA `e9853c6626cace7b630d6db17e3d9a8587a26007d726b884801608f2719be228`, validation SHA `aa1c1b3fd80f044d76f66a25ca2da19517b90c2e511ef48d3d2c3033b43df2d1`. asymmetric run `icl_extended_psf_i_asymmetric_sensitivity_2026-10-21_01/` summary SHA `dd3f40c56c55840a6a268eb9192cfaf7acede0183a138951df978bf63f882527`, validation SHA `b62255417a19e069bbb53879b002bde3932a40d10a98cf2f3f8cba80db382aa8`. Filter-aware paired comparison `variant_comparison_filter_aware.json` SHA `9281dca86f14aaa4ce7e63537b021e2ce861e1c3663f5b4a17b7ff86f5fba575`; earlier `variant_comparison.json` is retained but superseded. Comparator `compare_extended_psf_injection_variants.py`를 i/i2 필터 선택형으로 일반화; focused test 8개 통과. 다음은 여러 splice 반경·진폭의 real-mask 주입과 더 넓은 local wing 검증이다.
+
+
+### 2026-10-21 고정 마스크 주입 민감도 검증 및 Slurm 위치
+
+`icl_extended_psf_i_fixed_masks_2026-10-21_01/`의 13개 프레임을 독립 validator로 다시 계산했다. 13/13 완료, 오류 0, 저장 산술 최대 오차 0이다. 고정 baseline mask에서 diffuse→ICL 회수 중앙값은 0.22495 (q16–q84 0.22175–0.22717), diffuse→위성 50–75 kpc는 0.00062 (−0.01161–0.01260)다. 위성-envelope→ICL은 0.494 (0.165–0.713), 위성-envelope→위성은 0.278 (−0.174–0.509)으로 여전히 분산이 크다. 재탐지−고정마스크 diffuse→ICL 차이는 중앙값 −0.0115지만 최솟값 −2.955이며 diffuse→위성은 범위 −0.900–4.326이다. 따라서 일부 프레임의 극단값은 재탐지/마스크 선택에 민감하다. 이는 합성 주입 민감도일 뿐 PSF 보정이나 과학 측정이 아니다. 보고서 `extended_psf_i_injection_recovery_assessment_2026-10-21.md`에 추가했다. 결과 SHA-256: summary `a732fbc5fdaf41932f5685a329143f8d794f543885b5a5c0917ea321c3c264c5`, validation `2bcd49fa584c18e2415be56ed4fa75fa4894f2762b839ec9cdf689b2147c0b45`. 관련 focused pytest 11개 통과.
+
+운영 위치를 확인했다. Slurm 작업의 조회·제출은 syntax에서 한다. 단, 1062312는 Slurm job ID가 아니라 HSC CAS job ID이므로 `squeue`/`sacct` 조회 결과는 이 CAS 요청의 상태 증거가 아니다. lageunha 좌표 exporter PID 1049265는 계속 살아 있으며 checkpoint는 2/32 배치, 33,514/780,191행, 마지막 갱신은 2026-10-19 11:07 KST다. CAS 상태를 별도 인증 조회하지 않았고, 프로세스를 종료·재시작하거나 요청을 재제출하지 않았다.
+
+
+### 2026-10-21 공개 PSF 주입의 재탐지 영향도
+
+Astrafek `audit_extended_psf_injection_reselection_influence.py`와 독립 focused tests 2개를 추가했다. 13개 `i` 프레임의 입력 파일 해시, summary-to-frame 응답값, redetection−fixed-mask 산술을 대조하고 프레임별 지원 변화와 leave-one-frame-out 중앙값을 기록한다. 가장 큰 재탐지 outlier는 cluster 4982다. baseline에서 matched satellite 4개/control 16개였으나 diffuse-only·joint injection에서 2개/8개로 감소했고 ICL 200–300 kpc coverage는 0.5395에서 0.4982로 떨어졌다. 이 프레임의 diffuse→ICL 재탐지−고정마스크 응답차는 −2.955, diffuse→위성은 +4.326이다. cluster 4982 제외 시 diffuse→ICL 재탐지 median은 0.2150→0.2181, 고정마스크 median은 0.22495→0.22522로 유지되지만 satellite-envelope→satellite median은 0.294→0.218로 변한다. 선택된 13프레임의 기술적 leave-one-out일 뿐 모집단 추론이 아니다. 보고서 `extended_psf_i_injection_recovery_assessment_2026-10-21.md`; 산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_extended_psf_i_reselection_influence_2026-10-21_01/reselection_influence_audit.json` SHA-256 `09dc009995b8dc8bbbc29cff0b392812f47b5351e399c57c943a26d8a56cee29`, 도구 SHA-256 `6b9f2a1e9f9f97dcbc1c27a21e1383524a42aed8a023c5a8b5fe086c8129ccad`. `science_measurement=false`, `psf_approved=false` 유지.
+
+기존 random-control 좌표 exporter PID 1049265를 60초 간격 재확인했다. lageunha에서 여전히 `hrtimer_nanosleep`이며 checkpoint는 2026-10-19 11:07:53 KST 그대로(2/32 배치, 33,514/780,191행; batch 002 CAS 1062312 `submitted`)다. CAS 재조회·재제출·프로세스 재시작은 하지 않았다. 1062312는 Slurm ID가 아니라 HSC CAS ID이며 Slurm 작업은 syntax에서 조회·제출한다.
+
+### 2026-10-21 위치별 PSF 코어/공개 날개 하이브리드 구성기
+
+`position_psf.py`에 signed local core와 public extended wing을 smooth radial taper로 결합하는 `build_core_wing_hybrid_psf`를 추가했다. 연결 반경, 전이 폭, public wing 진폭을 입력받고 signed kernel의 합을 1로 정규화한다. 단위 정규화·음수 픽셀 보존·중앙 core 보존 및 잘못된 grid 입력 거부를 `test_position_psf.py` 7개로 검증했으며 모두 통과했다. `py_compile`, `git diff --check`도 통과. 실제 영상/주입 계산에는 아직 적용하지 않았고 새 HSC 요청도 없다. 상태는 계속 `psf_approved=false`, `science_measurement=false`다. 재현/설계 기록은 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_psf_design_2026-10-21.md`. 후속은 overlap에서 측정한 0.52–0.82 범위를 포함하는 진폭 grid와 1.8/2.4/3.0 arcsec 연결 반경을 사전 등록해, 먼저 i-band 표적/대조 real-mask에서 점광원과 diffuse injection을 분리해 파일럿 실행하는 것이다. i2는 HSC-I proxy 민감도로 분리 표기한다.
+
+### 2026-10-21 i2 확장 PSF 프록시/위치별 코어 주입 민감도 비교
+
+이미 완료된 HSC-I public symmetric/asymmetric proxy 주입을 위치별 PSF core 주입의 동일 44개 `i2` 프레임과 paired 비교했다. 기존 배치 각각 44/44 프레임, 오류 0이고 저장 응답을 독립 재계산한 최대 산술 차이도 0이다. 프레임·지원·주입 규격을 맞춘 재현 감사기 `audit_extended_psf_core_vs_wide.py`에 `i2` 선택 경로를 추가했고 focused tests 3개가 통과했다. 산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_extended_psf_i2_proxy_variant_comparison_2026-10-21_01/core_vs_wide_audit.json`, SHA-256 `ba1287493d5d3db4d8050f601ac982a659e1ca8588c024c90d8a7814c30e0f97`; 감사기 SHA-256 `8d08096c9d4babab32aa61fc6bef34d710267e65873c7cc1296ac3c36009f625`.
+
+Diffuse→ICL 200–300 kpc 회수율 중앙값은 local core `0.2245`, public proxy `0.2235`, paired 차이 `−0.00036` (q16–q84 `−0.00092–0.00093`)였다. Satellite-envelope→ICL 중앙값은 `0.4904`와 `0.4849`, paired 차이 `0.00846` (`−0.00773–0.02847`)였다. 반면 satellite 50–75 kpc 회수 분산은 두 모델에서 매우 컸다. Satellite-envelope→satellite paired 차이의 q16–q84는 `−0.191–0.081`, 전체 범위는 `−3.551–0.377`이다. 대칭·비대칭 public PSF 모델 차이는 최대 `9.5×10⁻⁷`로 수치 정밀도 수준이며, 두 모델은 같은 별 표본을 써 독립 검증이 아니다. HSC-I public PSF는 i2 전용 보정이 아니므로 프록시 민감도에 한정하고 회수율 보정이나 과학 측정으로 승격하지 않는다. 보고서 `analysis/icl_wgl_membership/hsc_debug/extended_psf_i2_proxy_core_comparison_assessment_2026-10-21.md`; `science_measurement=false`, `psf_approved=false` 유지. 다음 ICL gate는 기존에 설계한 multi-radius/amplitude local-core/public-wing hybrid 점광원·diffuse real-mask 주입 파일럿이다.
+
+### 2026-10-21 위치별 하이브리드 위성 PSF 경로 및 i-band 파일럿 실행
+
+하이브리드 주입에서 위성 envelope에 은하단 중심 PSF 코어를 재사용하던 것을 수정했다. 확산 ICL에는 중심 위치 코어+public wing hybrid를, 각 위성 envelope에는 해당 위성 위치 코어+같은 wing을 적용한다. 결과 파일과 독립 validator는 각 위성 코어의 filename/SHA, 정규화, wing parameters, 승인 플래그를 확인한다. `test_position_psf.py`, `test_extended_psf_injection.py`, `test_validate_extended_psf_injection_batch.py`, 새 grid 테스트를 포함한 focused test 22개 통과했다.
+
+미리 고정한 12개 조합은 splice 1.8/2.4/3.0 arcsec, blend 0.6 arcsec, wing amplitude 0.50/0.65/0.80/1.00이다. 중앙 규모인 cluster 1056 (선택된 i 프레임 중 10개 위성 중심)에서 diffuse/satellite real-mask 주입을 먼저 시험한다. 재시작 가능한 `run_core_wing_hybrid_grid.py`, CPU-only `run_core_wing_hybrid_i_pilot.sbatch`, 사전 계획 `core_wing_hybrid_i_pilot_plan_2026-10-21.md`를 추가했다. 출력 요약/재검증기 `summarize_core_wing_hybrid_grid.py`와 incomplete-state 거부 테스트도 추가했다. `syntax`에는 `normal` 파티션이 없어 `a10`으로 자원을 조정했다. job `432792`는 `syntax`의 `syn04`에서 실행 중이며 마지막 확인에서 12개 중 2개 설정이 완료됐다(1 CPU, 32 GB, GPU 요청 없음; 4시간 제한). 첫 두 설정은 독립 산술검증 오차 0이었다. 결과 루트 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_core_wing_hybrid_i_pilot_cluster1056_2026-10-21_01/`. terminal status와 산출물 validator를 확인한 뒤 결과를 기록한다. 이 pilot은 단독 point-source wing injection을 포함하지 않으므로 그 검증은 여전히 남아 있다. 모든 과학·PSF 승인 플래그는 false다.
+
+
+### 2026-10-21 추가: position-specific hybrid 단일 프레임/점광원 진단 완료
+
+`lageunha`에서 사전 정의한 단일 프레임 cluster 1056의 새 고유 출력 경로로 splice 2.4 arcsec, blend 0.6 arcsec, wing amplitude 0.65를 실행했다. 앞서 기록한 syntax Slurm array(job 432792)와는 별도 실행이다. 이번에는 Slurm 명령을 실행하지 않았다. 1/1 프레임, 10개 satellite 위치 코어, elapsed 12.12초, 오류 0으로 완료했다. 독립 validator는 모든 저장 응답을 재계산해 최대 오차 0, `validated_exploratory_transfer_only`를 반환했다.
+
+고정 mask 응답은 diffuse→ICL 0.230718, 위성 envelope→ICL 0.506852, diffuse→satellite −0.012496, satellite envelope→satellite 0.314188이다. 동일 cluster의 기존 public PSF fixed-mask 값과 차이는 각각 약 +0.000105, −0.000554, −0.000093, −0.012785다. 별도 noiseless unit point-source 진단에서 50–100 kpc annulus의 mask coverage/마스크 내 flux fraction은 46.3%/0.001996, 200–300 kpc는 55.4%/0.000834다. 이는 단일 프레임 민감도 진단이며 Poisson noise, coadd covariance, sky transfer, 관측원 제거를 반영하지 않는다.
+
+결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_hybrid_psf_i_pilot_2026-10-21_r2p4_a0p65_perpos_point_01/`; `summary.json` SHA-256 `8a2fa26dd197aae9f29fafaaaac7e91afeab0bcc9c1d2299b2a73704a367d16e`, `cluster_1056.json` `ddb650883c7e664fb9c026d28a83768c195d7b5ccaa867b6b5c58d8048666711`, `validation.json` `d547fba7bfbae4869f48c6946a316190c860afe4dd711b301c2205e55d03c568`. focused tests 23개 통과; `py_compile`, array script `bash -n`, `git diff --check` 통과. 설계와 다음 grid 단계는 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_psf_design_2026-10-21.md`. 해당 결과도 `psf_approved=false`, `science_measurement=false`다.
 ## 2026-10-21 ICL 주입 응답의 마스크 재선택 분리
 
 ### 고정 마스크와 재검출 비교

@@ -137,28 +137,34 @@ def tomographic_nz_lensing_efficiency(lens_redshift, source_redshift_bin,
         raise ValueError("every calibrated n(z) must have positive finite integral")
     normalized = nz / norms[:, None]
     chi_grid = np.asarray(cosmology.comoving(z), dtype=float)
-    chi_l = np.asarray(cosmology.comoving(zl), dtype=float)
+    unique_lens_z, lens_index = np.unique(zl, return_inverse=True)
+    chi_l = np.asarray(cosmology.comoving(unique_lens_z), dtype=float)
     if not np.all(np.isfinite(chi_grid)) or not np.all(np.isfinite(chi_l)):
         raise ValueError("cosmology does not cover the lens and n(z) redshift ranges")
     beta = np.zeros(len(zl), dtype=float)
-    chunk_size = 65536
-    for start in range(0, len(zl), chunk_size):
-        stop = min(start + chunk_size, len(zl))
-        z_l = zl[start:stop, None]
-        chi_l_chunk = chi_l[start:stop, None]
-        for bin_index in range(1, nz.shape[0] + 1):
-            selected = bins[start:stop] == bin_index
-            if not np.any(selected):
-                continue
-            efficiency = np.divide(
-                chi_grid[None, :] - chi_l_chunk[selected], chi_grid[None, :],
-                out=np.zeros((int(np.count_nonzero(selected)), len(z)), dtype=float),
-                where=(z[None, :] > z_l[selected]) & (chi_grid[None, :] > 0),
-            )
-            beta[start:stop][selected] = _trapz(
-                normalized[bin_index - 1][None, :] * np.clip(efficiency, 0.0, 1.0),
-                z, axis=1,
-            )
+    # Lens redshifts repeat for every source around a cluster. Integrate once
+    # per unique lens-redshift/source-bin combination, then map back to pairs.
+    # This preserves pair-wise Sigma_crit geometry while avoiding a dense
+    # [millions of pairs, redshift-grid] calculation in spatial jackknifes.
+    for bin_index in range(1, nz.shape[0] + 1):
+        selected = bins == bin_index
+        if not np.any(selected):
+            continue
+        used_lens_indices = np.unique(lens_index[selected])
+        z_l = unique_lens_z[used_lens_indices, None]
+        chi_l_used = chi_l[used_lens_indices, None]
+        efficiency = np.divide(
+            chi_grid[None, :] - chi_l_used, chi_grid[None, :],
+            out=np.zeros((len(used_lens_indices), len(z)), dtype=float),
+            where=(z[None, :] > z_l) & (chi_grid[None, :] > 0),
+        )
+        beta_by_lens = _trapz(
+            normalized[bin_index - 1][None, :] * np.clip(efficiency, 0.0, 1.0),
+            z, axis=1,
+        )
+        inverse_lookup = np.full(len(unique_lens_z), -1, dtype=np.int64)
+        inverse_lookup[used_lens_indices] = np.arange(len(used_lens_indices))
+        beta[selected] = beta_by_lens[inverse_lookup[lens_index[selected]]]
     return beta
 
 

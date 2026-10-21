@@ -71,3 +71,11 @@ raw B-mode 값 0을 제외했고 기존 좌표-영역 검증을 따른다. 최�
 `cluster − random` 차이의 공분산을 계산해야 한다.
 
 모든 결과에는 `science_measurement=false`가 유지된다.
+
+## 후속: cross-shear null 반경·source-bin 분해
+
+전체 28성분 cross-shear null(χ²=74.75, dof=28, p=3.93×10⁻⁶)을 저장 covariance와 profile에서 독립 재구성하고, 반경 shell별 4-source-bin joint test와 source-bin별 7-shell joint test를 계산했다. 가장 낮은 shell별 원시 p는 1.5–2.0 Mpc의 0.0145였으나, 7개 반경 가족 Holm 보정 후 0.102였다. source-bin별 최소 p는 bin 2의 0.0775이며 4-bin 보정 후 0.310이다. 28개 개별 cross component의 최대 표준화 잔차는 2.11이고 28개 Holm 최소 p는 0.966이다.
+
+따라서 이 진단에서는 단일 반경·source bin·profile 성분이 전체 결합 null 불일치를 보정 후 주도한다고 확인되지 않았다. 전체 joint signal은 유지되지만 원인은 특정하지 못한다. random-lens 차감, source 선택/shape 보정과 관측 footprint 기반 공분산을 확보하기 전에는 물리 신호로 해석하지 않는다. 이미 저장된 tomographic summary만 사용했고 추가 CAS 조회·자료 반출은 없었다.
+
+Astrafek 재현기 [`audit_wl_cross_shear_null_decomposition.py`](audit_wl_cross_shear_null_decomposition.py), 테스트 3개 통과. 출력은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_cross_shear_null_decomposition_2026-10-20_01/cross_shear_null_decomposition.json`; SHA-256 `94eb784e4a48e989c5ae0590a6049b2be289ae7544db9f2490c95a1ffc975e90`. 입력 summary SHA-256 `39b967e91d27ba3ebe1f05f24779245afff2fa197077469c8227d4d5efcfa643`, 분석기 SHA-256 `a8e424813afe90782a8224cc53baabd7993f6ae51d2d33e715762b62abc7dc46`다. `science_measurement=false` 유지.

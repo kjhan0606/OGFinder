@@ -18,6 +18,7 @@ import numpy as np
 DEFAULT_DATA = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
 DEFAULT_CORE = DEFAULT_DATA / "joint_icl_satellite_psf_redetection_2026-10-19_02"
 DEFAULT_WIDE = DEFAULT_DATA / "icl_extended_psf_symmetric_2026-10-19_01"
+DEFAULT_WIDE_I2_PROXY = DEFAULT_DATA / "icl_extended_psf_i2_proxy_symmetric_2026-10-21_01"
 METRICS = (
     "icl_response_to_diffuse_unit_injection",
     "icl_response_to_all_satellite_envelopes",
@@ -55,7 +56,7 @@ def quantiles(values) -> dict:
     }
 
 
-def load_batch(root: Path, expected_frames: int, kind: str, *, i_band_only=False) -> tuple[dict, dict]:
+def load_batch(root: Path, expected_frames: int, kind: str, *, filter_name: str) -> tuple[dict, dict]:
     root = Path(root).resolve()
     summary_path = root / "summary.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
@@ -76,7 +77,7 @@ def load_batch(root: Path, expected_frames: int, kind: str, *, i_band_only=False
                 or record.get("observational_validation_passed") is not False
                 or record.get("flux_covariance_available") is not False):
             raise ValueError(f"{kind} frame has unexpected band or science flags")
-        if i_band_only and str(record.get("filter")).lower() != "i":
+        if str(record.get("filter")).lower() != filter_name:
             continue
         ident = str(record["cluster_id"])
         if ident in records:
@@ -85,11 +86,17 @@ def load_batch(root: Path, expected_frames: int, kind: str, *, i_band_only=False
     return summary, records
 
 
-def audit(core_dir: Path, wide_dir: Path) -> dict:
-    core_summary, core = load_batch(core_dir, 57, "position-dependent core", i_band_only=True)
-    wide_summary, wide = load_batch(wide_dir, 13, "public wide reference", i_band_only=True)
-    if len(wide) != 13 or not set(wide).issubset(core):
-        raise ValueError("wide-reference frames do not match a unique 13-frame core subset")
+def audit(core_dir: Path, wide_dir: Path, *, filter_name: str = "i") -> dict:
+    if filter_name not in ("i", "i2"):
+        raise ValueError("filter_name must be i or i2")
+    expected_wide_frames = {"i": 13, "i2": 44}[filter_name]
+    core_summary, core = load_batch(
+        core_dir, 57, "position-dependent core", filter_name=filter_name)
+    wide_summary, wide = load_batch(
+        wide_dir, expected_wide_frames, "public wide reference", filter_name=filter_name)
+    if len(wide) != expected_wide_frames or not set(wide).issubset(core):
+        raise ValueError(
+            f"wide-reference frames do not match a unique {expected_wide_frames}-frame {filter_name} core subset")
     ids = sorted(wide, key=int)
     for ident in ids:
         a, b = core[ident], wide[ident]
@@ -116,7 +123,8 @@ def audit(core_dir: Path, wide_dir: Path) -> dict:
         "science_measurement": False,
         "observational_validation_passed": False,
         "flux_covariance_available": False,
-        "n_matched_i_band_frames": len(ids),
+        "frame_filter": filter_name,
+        "n_matched_frames": len(ids),
         "matched_cluster_ids": ids,
         "summary_sha256": {
             "position_dependent_core": sha256(Path(core_dir) / "summary.json"),
@@ -133,7 +141,8 @@ def audit(core_dir: Path, wide_dir: Path) -> dict:
         "paired_public_reference_minus_position_core": paired,
         "limitations": [
             "public wide reference is not matched to frame position, epoch, or seeing; differences are a model sensitivity, not a target-specific wing correction",
-            "comparison covers only the 13 support-selected i-band frames; it does not test i2",
+            f"comparison covers only the {len(ids)} support-selected {filter_name}-band frames",
+            "for i2, the HSC-I public model is a proxy sensitivity, not an i2-specific calibration",
             "only synthetic light is convolved; injected-source photon noise, coadd covariance, and upstream sky transfer are omitted",
             "16th–84th percentiles describe frame-to-frame spread, not confidence intervals",
         ],
@@ -143,20 +152,23 @@ def audit(core_dir: Path, wide_dir: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core-dir", type=Path, default=DEFAULT_CORE)
-    parser.add_argument("--wide-dir", type=Path, default=DEFAULT_WIDE)
+    parser.add_argument("--wide-dir", type=Path)
+    parser.add_argument("--filter", choices=("i", "i2"), default="i")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     output = args.output.resolve()
     if output.exists():
         parser.error(f"refusing to overwrite {output}")
-    result = audit(args.core_dir, args.wide_dir)
+    wide_dir = args.wide_dir or (DEFAULT_WIDE if args.filter == "i" else DEFAULT_WIDE_I2_PROXY)
+    result = audit(args.core_dir, wide_dir, filter_name=args.filter)
     result["audit_script_sha256"] = sha256(Path(__file__))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n",
                       encoding="utf-8")
     print(json.dumps({
         "status": result["status"],
-        "matched_frames": result["n_matched_i_band_frames"],
+        "filter": result["frame_filter"],
+        "matched_frames": result["n_matched_frames"],
         "science_measurement": False,
         "output": str(output),
         "output_sha256": sha256(output),

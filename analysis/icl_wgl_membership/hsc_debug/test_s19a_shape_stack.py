@@ -279,6 +279,33 @@ def test_tomographic_nz_efficiency_matches_pdf_and_excludes_bin_zero(cosmo):
         tomographic_nz_lensing_efficiency([0.3], [5], z, np.tile(nz, (4, 1)), cosmo)
 
 
+def test_tomographic_nz_efficiency_matches_pairwise_reference_with_repeated_lenses(cosmo):
+    z = np.linspace(0.0, 2.5, 501)
+    nz = np.vstack([
+        np.exp(-0.5 * ((z - mean) / 0.22) ** 2)
+        for mean in (0.55, 0.9, 1.25, 1.65)
+    ])
+    zl = np.repeat(np.array([0.18, 0.31, 0.47, 0.62]), (80, 120, 100, 100))
+    bins = np.tile(np.array([0, 1, 2, 3, 4]), 80)
+    zl = np.resize(zl, len(bins))
+    measured = tomographic_nz_lensing_efficiency(zl, bins, z, nz, cosmo)
+    chi_grid = cosmo.comoving(z)
+    expected = np.zeros(len(zl))
+    for index, (lens_z, source_bin) in enumerate(zip(zl, bins)):
+        if source_bin == 0:
+            continue
+        curve = nz[source_bin - 1]
+        curve = curve / np.trapezoid(curve, z)
+        chi_l = cosmo.comoving(lens_z)
+        efficiency = np.divide(
+            chi_grid - chi_l, chi_grid,
+            out=np.zeros_like(chi_grid),
+            where=(z > lens_z) & (chi_grid > 0),
+        )
+        expected[index] = np.trapezoid(curve * np.clip(efficiency, 0.0, 1.0), z)
+    np.testing.assert_allclose(measured, expected, rtol=1e-13, atol=1e-14)
+
+
 def test_bmode_polarity_sensitivity_keeps_both_hypotheses(cosmo):
     pairs, _source_ids, z_pdf, _pdf, edges, _injected = _synthetic_catalog(cosmo)
     pairs["source_zbin"] = np.ones(len(pairs["object_id"]), dtype=int)
