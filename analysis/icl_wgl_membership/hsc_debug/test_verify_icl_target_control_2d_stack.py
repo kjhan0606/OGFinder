@@ -3,7 +3,8 @@ import subprocess
 
 import pytest
 
-from verify_icl_target_control_2d_stack import git_version_matches, resolve_mask_factor
+from verify_icl_target_control_2d_stack import (candidate_audit_pairs, git_version_matches,
+                                               resolve_mask_factor)
 
 
 @pytest.mark.parametrize("factor, extension", [
@@ -53,3 +54,30 @@ def test_matches_archived_source_from_git_history(tmp_path):
 
     assert git_version_matches(source, hashlib.sha256(original).hexdigest(), repo)
     assert not git_version_matches(source, "0" * 64, repo)
+
+
+def test_independently_reconstructs_candidate_control_pairs():
+    audit = {
+        "schema": "astrafek-s23b-candidate-existing-cutout-support-v1",
+        "status": "header_wcs_audit_complete", "science_measurement": False,
+        "hsc_query_submitted": False, "data_downloaded": False,
+        "image_pixels_read": False, "n_candidates": 1333,
+        "candidate_table_sha256": "1b59ca9941849fa7970c43c6e0374db6587716fc4ae5d71b11f84a245ebe6b2c",
+        "target": {"n_images": 800, "n_images_with_candidate_centers": 0,
+                   "n_unique_candidates_inside": 0, "matches": []},
+        "matched_controls": {
+            "inputs_sha256": {"manifest": "m" * 64, "download_status": "s" * 64},
+            "n_images": 798, "n_images_with_candidate_centers": 1,
+            "matches": [{"target_cluster_id": "t1", "frame_id": "c1", "filter": "i",
+                         "n_candidate_centers_inside": 1,
+                         "candidates": [{"candidate_id": "42"}]}],
+            "n_unique_candidates_inside": 1,
+        },
+    }
+    controls = {"t1": {"id": "c1", "coadd_header_filter": "i"}}
+    assert candidate_audit_pairs(audit, controls, "m" * 64, "s" * 64) == {
+        "t1": ("c1", "i", ["42"])
+    }
+    audit["matched_controls"]["inputs_sha256"]["manifest"] = "x" * 64
+    with pytest.raises(ValueError, match="checksums"):
+        candidate_audit_pairs(audit, controls, "m" * 64, "s" * 64)

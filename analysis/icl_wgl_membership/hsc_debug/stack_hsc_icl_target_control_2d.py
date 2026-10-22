@@ -66,6 +66,87 @@ def read_json(path: Path) -> dict:
         return json.load(stream)
 
 
+def candidate_control_exclusions(audit: dict, controls_by_target: dict,
+                                 control_manifest_sha: str,
+                                 control_status_sha: str) -> list[dict]:
+    """Validate a header/WCS audit and return its exact control-pair exclusions."""
+    if (audit.get("schema") != "astrafek-s23b-candidate-existing-cutout-support-v1"
+            or audit.get("status") != "header_wcs_audit_complete"
+            or audit.get("science_measurement") is not False
+            or audit.get("hsc_query_submitted") is not False
+            or audit.get("data_downloaded") is not False
+            or audit.get("image_pixels_read") is not False
+            or audit.get("n_candidates") != 1333
+            or audit.get("candidate_table_sha256")
+            != "1b59ca9941849fa7970c43c6e0374db6587716fc4ae5d71b11f84a245ebe6b2c"):
+        raise ValueError("candidate-control audit schema, scope, or pinned input is invalid")
+    target_result = audit.get("target", {})
+    if (target_result.get("n_images") != 800
+            or target_result.get("n_images_with_candidate_centers") != 0
+            or target_result.get("n_unique_candidates_inside") != 0
+            or target_result.get("matches") != []):
+        raise ValueError("target cutout candidate overlaps must be reviewed separately")
+    controls_result = audit.get("matched_controls", {})
+    hashes = controls_result.get("inputs_sha256", {})
+    if (hashes.get("manifest") != control_manifest_sha
+            or hashes.get("download_status") != control_status_sha):
+        raise ValueError("candidate-control audit was made from different control inputs")
+    matches = controls_result.get("matches")
+    if (not isinstance(matches, list)
+            or controls_result.get("n_images") != 798
+            or controls_result.get("n_images_with_candidate_centers") != len(matches)
+            or controls_result.get("n_unique_candidates_inside")
+            != len({str(c.get("candidate_id")) for row in matches
+                    for c in row.get("candidates", [])})):
+        raise ValueError("candidate-control audit match counts are inconsistent")
+    exclusions = []
+    seen_pairs, seen_candidate_ids = set(), set()
+    for match in matches:
+        target_id = str(match.get("target_cluster_id", ""))
+        control_id = str(match.get("frame_id", ""))
+        pair = (target_id, control_id)
+        control = controls_by_target.get(target_id)
+        if (not target_id or not control_id or pair in seen_pairs or control is None
+                or str(control.get("id")) != control_id
+                or str(control.get("coadd_header_filter", "")).lower() != match.get("filter")):
+            raise ValueError("candidate-control audit has an unknown or duplicate matched pair")
+        candidates = match.get("candidates")
+        candidate_ids = [str(row.get("candidate_id", "")) for row in candidates or []]
+        if (not candidates or len(set(candidate_ids)) != len(candidate_ids)
+                or not all(candidate_ids) or match.get("n_candidate_centers_inside") != len(candidates)):
+            raise ValueError("candidate-control audit contains malformed candidate matches")
+        seen_pairs.add(pair)
+        seen_candidate_ids.update(candidate_ids)
+        exclusions.append({
+            "target_id": target_id, "control_id": control_id,
+            "reason": "s23b_candidate_center_inside_matched_control",
+            "filter": str(match["filter"]), "candidate_ids": candidate_ids,
+            "candidate_redshifts": [float(row["z"]) for row in candidates],
+            "candidate_richness": [float(row["richness"]) for row in candidates],
+        })
+    if len(seen_candidate_ids) != controls_result.get("n_unique_candidates_inside"):
+        raise ValueError("candidate-control audit unique candidate count is inconsistent")
+    return exclusions
+
+
+def split_candidate_exclusions(exclusions: list[dict], target_filters: dict[str, str]):
+    """Separate new eligible-pair exclusions from pairs already filter-rejected."""
+    eligible, already_filter_excluded = [], []
+    for row in exclusions:
+        target_id = row["target_id"]
+        if target_id not in target_filters:
+            raise ValueError(f"candidate-control audit references unknown target {target_id}")
+        target_filter = target_filters[target_id].strip().lower()
+        if target_filter == row["filter"]:
+            eligible.append(row)
+        else:
+            already_filter_excluded.append({
+                **row, "reason": "already_excluded_target_control_filter_mismatch",
+                "target_filter": target_filter,
+            })
+    return eligible, already_filter_excluded
+
+
 def read_tsv(path: Path) -> list[dict[str, str]]:
     with Path(path).open(encoding="utf-8", newline="") as stream:
         return list(csv.DictReader(stream, delimiter="\t"))
@@ -378,13 +459,14 @@ def save_band_fits(path: Path, band: str, kpc: np.ndarray, maps: dict,
                 [float(np.min(delta[finite])), float(np.max(delta[finite]))] if finite.any() else None}
 
 
-def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: float = 2.5) -> dict:
+def run(sample: Path, work: Path, kpc_max: float, n_side: int,
+        mask_factor: float = 2.5,
+        exclude_candidate_control_audit: Path | None = None) -> dict:
     if mask_factor not in MASK_FACTORS:
         raise ValueError(f"mask factor must be one of {MASK_FACTORS}")
     mask_hdu = mask_hdu_name(mask_factor)
     if work.exists():
         raise FileExistsError(f"refusing to overwrite existing work directory: {work}")
-    work.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     sample_manifest_path = sample / "sample_manifest.json"
     target_mask_dir = sample / "prestack_cluster_masks_2026-10-16_01"
@@ -428,6 +510,28 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: floa
             or controls_doc.get("controls_ready_for_science") is not False):
         raise ValueError("input research gates are not explicitly false")
 
+    candidate_audit_matches = []
+    candidate_exclusions = []
+    candidate_already_filter_excluded = []
+    candidate_audit_sha = None
+    if exclude_candidate_control_audit is not None:
+        exclude_candidate_control_audit = exclude_candidate_control_audit.resolve()
+        if not exclude_candidate_control_audit.is_file():
+            raise FileNotFoundError(exclude_candidate_control_audit)
+        candidate_audit_sha = sha256(exclude_candidate_control_audit)
+        candidate_audit_matches = candidate_control_exclusions(
+            read_json(exclude_candidate_control_audit), controls_by_target,
+            control_manifest_sha, control_status_sha,
+        )
+        target_filters = {ident: str(row["primary_filter"])
+                          for ident, row in mask_by_id.items()}
+        candidate_exclusions, candidate_already_filter_excluded = split_candidate_exclusions(
+            candidate_audit_matches, target_filters)
+    candidate_exclusion_by_target = {row["target_id"]: row for row in candidate_exclusions}
+    if len(candidate_exclusion_by_target) != len(candidate_exclusions):
+        raise ValueError("candidate-control audit repeats a target pair")
+    work.mkdir(parents=True, exist_ok=False)
+
     cosmology_values = {"H0": float(sample_doc["h0"]), "Om0": float(sample_doc["omega_m"])}
     if (cosmology_values["H0"] != float(controls_doc["h0"])
             or cosmology_values["Om0"] != float(controls_doc["omega_m"])):
@@ -459,6 +563,11 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: floa
                                "reason": "target_control_primary_filter_mismatch",
                                "target_filter": target_band, "control_filter": control_band})
             continue
+        candidate_exclusion = candidate_exclusion_by_target.get(ident)
+        if candidate_exclusion is not None:
+            if candidate_exclusion["control_id"] != control_id or candidate_exclusion["filter"] != control_band:
+                raise ValueError(f"{ident}: candidate-control exclusion does not match the eligible pair")
+            continue
         try:
             pair, maps = process_pair(
                 target, mask_by_id[ident], mask_summary, control, download_row,
@@ -483,7 +592,7 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: floa
             write_json(work / "progress.json", progress)
             print(f"Stacked {index}/{len(targets)} targets; pairs={len(pair_rows)}; bands={counts}", flush=True)
 
-    expected_eligible = len(controls_doc["clusters"]) - len(exclusions)
+    expected_eligible = len(controls_doc["clusters"]) - len(exclusions) - len(candidate_exclusions)
     if errors or len(pair_rows) != expected_eligible or sum(counts.values()) != expected_eligible:
         raise ValueError(f"incomplete target-control stack: {len(pair_rows)}/{expected_eligible} eligible pairs, errors={len(errors)}")
     if any(counts[band] == 0 for band in FILTERS):
@@ -519,6 +628,15 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: floa
         "n_matched_controls_available": len(controls_doc["clusters"]),
         "n_pairs_excluded_filter_mismatch": len(exclusions),
         "filter_mismatch_exclusions": exclusions,
+        "n_pairs_excluded_s23b_candidate_control": len(candidate_exclusions),
+        "s23b_candidate_control_exclusions": candidate_exclusions,
+        "n_candidate_controls_already_filter_excluded": len(candidate_already_filter_excluded),
+        "candidate_controls_already_filter_excluded": candidate_already_filter_excluded,
+        "n_candidate_control_audit_matches": len(candidate_audit_matches),
+        "candidate_control_audit": ({"path": str(exclude_candidate_control_audit),
+                                      "sha256": candidate_audit_sha,
+                                      "schema": "astrafek-s23b-candidate-existing-cutout-support-v1"}
+                                     if exclude_candidate_control_audit is not None else None),
         "n_pairs_stacked": len(pair_rows), "n_by_filter": counts,
         "mask_factor": float(mask_factor),
         "grid": {"coordinate": "proper_kpc", "kpc_max": kpc_max,
@@ -540,6 +658,8 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: floa
             str(target_mask_records_path): sha256(target_mask_records_path),
             str(control_manifest_path): control_manifest_sha,
             str(control_status_path): control_status_sha,
+            **({str(exclude_candidate_control_audit): candidate_audit_sha}
+               if exclude_candidate_control_audit is not None else {}),
             **{row["target_image"]: row["target_image_sha256"] for row in pair_rows},
             **{row["target_mask"]: row["target_mask_sha256"] for row in pair_rows},
             **{row["control_image"]: row["control_image_sha256"] for row in pair_rows},
@@ -549,6 +669,8 @@ def run(sample: Path, work: Path, kpc_max: float, n_side: int, mask_factor: floa
         "science_measurement": False,
         "limitations": [
             "Exploratory HSC-I-family stack; i and i2 are reported separately.",
+            ("Seven matched-control pairs with centers from the pinned S23B candidate list were excluded; this is a lower-bound metadata flag, not proof of diffuse-light contamination."
+             if candidate_exclusions else "No S23B candidate-control exclusion audit was applied."),
             "No extinction correction, residual sky-transfer correction, or PSF-core homogenization is applied.",
             "PSF Picker cores do not constrain extended wings; the stack does not establish a diffuse ICL detection.",
             "Between-pair SEM is not the full uncertainty: it omits correlated coadd noise, sky, PSF, calibration, and astrophysical covariance.",
@@ -573,13 +695,16 @@ def main(argv=None) -> int:
     parser.add_argument("--kpc-max", type=float, default=500.0)
     parser.add_argument("--n-side", type=int, default=201)
     parser.add_argument("--mask-factor", type=float, choices=MASK_FACTORS, default=2.5)
+    parser.add_argument("--exclude-candidate-control-audit", type=Path,
+                        help="validated existing-cutout WCS audit; exclude matched controls containing pinned S23B candidate centers")
     args = parser.parse_args(argv)
     if not os.environ.get("SLURM_JOB_ID"):
         parser.error("run the full 800-pair image stack inside a Slurm allocation")
     if not np.isfinite(args.kpc_max) or args.kpc_max <= 0 or args.n_side < 3:
         parser.error("grid size must be positive and n-side at least 3")
     work = args.work or DEFAULT_WORKS[args.mask_factor]
-    run(args.sample.resolve(), work.resolve(), args.kpc_max, args.n_side, args.mask_factor)
+    run(args.sample.resolve(), work.resolve(), args.kpc_max, args.n_side,
+        args.mask_factor, args.exclude_candidate_control_audit)
     return 0
 
 

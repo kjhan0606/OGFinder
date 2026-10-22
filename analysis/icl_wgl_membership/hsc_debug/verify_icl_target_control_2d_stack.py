@@ -58,6 +58,59 @@ def resolve_mask_factor(summary: dict) -> float:
     return factor
 
 
+def candidate_audit_pairs(audit: dict, controls_by_target: dict,
+                         control_manifest_sha: str, control_status_sha: str) -> dict[str, tuple[str, str, list[str]]]:
+    """Independently reconstruct the audited candidate/control pair exclusions."""
+    require = lambda test, message: (_ for _ in ()).throw(ValueError(message)) if not test else None
+    require(audit.get("schema") == "astrafek-s23b-candidate-existing-cutout-support-v1"
+            and audit.get("status") == "header_wcs_audit_complete"
+            and audit.get("science_measurement") is False
+            and audit.get("hsc_query_submitted") is False
+            and audit.get("data_downloaded") is False
+            and audit.get("image_pixels_read") is False,
+            "candidate-control audit schema or scope is invalid")
+    require(audit.get("n_candidates") == 1333
+            and audit.get("candidate_table_sha256")
+            == "1b59ca9941849fa7970c43c6e0374db6587716fc4ae5d71b11f84a245ebe6b2c",
+            "candidate-control audit does not use the pinned S23B table")
+    target = audit.get("target", {})
+    require(target.get("n_images") == 800
+            and target.get("n_images_with_candidate_centers") == 0
+            and target.get("n_unique_candidates_inside") == 0
+            and target.get("matches") == [],
+            "target candidate overlaps are outside this control-only sensitivity audit")
+    control_result = audit.get("matched_controls", {})
+    hashes = control_result.get("inputs_sha256", {})
+    require(hashes.get("manifest") == control_manifest_sha
+            and hashes.get("download_status") == control_status_sha,
+            "candidate-control audit input checksums differ from the stack inputs")
+    matches = control_result.get("matches")
+    require(isinstance(matches, list) and control_result.get("n_images") == 798
+            and control_result.get("n_images_with_candidate_centers") == len(matches),
+            "candidate-control audit match counts are inconsistent")
+    excluded = {}
+    all_candidates = set()
+    for match in matches:
+        target_id = str(match.get("target_cluster_id", ""))
+        control_id = str(match.get("frame_id", ""))
+        control = controls_by_target.get(target_id)
+        candidates = match.get("candidates")
+        candidate_ids = [str(row.get("candidate_id", "")) for row in candidates or []]
+        require(target_id not in excluded and bool(target_id) and bool(control_id)
+                and control is not None and str(control.get("id")) == control_id
+                and str(control.get("coadd_header_filter", "")).lower() == match.get("filter"),
+                "candidate-control audit references an unknown or duplicate matched pair")
+        require(bool(candidate_ids) and all(candidate_ids)
+                and len(set(candidate_ids)) == len(candidate_ids)
+                and match.get("n_candidate_centers_inside") == len(candidate_ids),
+                "candidate-control audit candidate rows are malformed")
+        excluded[target_id] = (control_id, str(match["filter"]), candidate_ids)
+        all_candidates.update(candidate_ids)
+    require(control_result.get("n_unique_candidates_inside") == len(all_candidates),
+            "candidate-control audit unique candidate count is inconsistent")
+    return excluded
+
+
 def git_version_matches(path: Path, expected_sha256: str, repo_root: Path) -> bool:
     """Check whether an exact historical source version is retained in Git."""
     try:
@@ -108,6 +161,8 @@ def verify(sample: Path, work: Path) -> dict:
             "matched-control downloads are incomplete")
 
     target_by_id = {str(row["id"]): row for row in targets}
+    controls_by_target = {str(row["target_cluster_id"]): row for row in controls}
+    require(len(controls_by_target) == len(controls), "matched-control target mapping is duplicated")
     eligible = {}
     excluded = []
     for control in controls:
@@ -126,6 +181,63 @@ def verify(sample: Path, work: Path) -> dict:
     require(observed_excluded == set(excluded), "filter-mismatch exclusions differ from input metadata")
     require(summary.get("n_pairs_excluded_filter_mismatch") == len(excluded),
             "filter-mismatch count is wrong")
+
+    audit_ref = summary.get("candidate_control_audit")
+    if audit_ref is None:
+        candidate_audit_excluded = {}
+    else:
+        audit_path = Path(audit_ref["path"])
+        require(audit_ref.get("schema") == "astrafek-s23b-candidate-existing-cutout-support-v1"
+                and audit_path.is_file()
+                and sha256(audit_path) == audit_ref.get("sha256")
+                and summary["input_sha256"].get(str(audit_path)) == audit_ref.get("sha256"),
+                "candidate-control audit checksum or provenance is invalid")
+        audit = read_json(audit_path)
+        candidate_audit_excluded = candidate_audit_pairs(
+            audit, controls_by_target, sha256(control_manifest), sha256(control_status))
+    filter_excluded_by_target = {row[0]: row for row in excluded}
+    candidate_excluded = {tid: pair for tid, pair in candidate_audit_excluded.items()
+                          if tid not in filter_excluded_by_target}
+    candidate_already_filter_excluded = {
+        tid: pair for tid, pair in candidate_audit_excluded.items()
+        if tid in filter_excluded_by_target
+    }
+    for tid, (control_id, band, _) in candidate_already_filter_excluded.items():
+        observed_filter = filter_excluded_by_target[tid]
+        require(observed_filter[1] == control_id and observed_filter[2] != band,
+                "candidate-control audit overlaps an inconsistent filter exclusion")
+    observed_candidate = {}
+    for row in summary.get("s23b_candidate_control_exclusions", []):
+        tid = str(row.get("target_id", ""))
+        require(tid not in observed_candidate, "candidate-control exclusion target is duplicated")
+        observed_candidate[tid] = (str(row.get("control_id", "")), str(row.get("filter", "")),
+                                   [str(value) for value in row.get("candidate_ids", [])])
+    require(observed_candidate == candidate_excluded,
+            "stack candidate-control exclusions differ from independent audit reconstruction")
+    require(summary.get("n_pairs_excluded_s23b_candidate_control", 0) == len(candidate_excluded),
+            "candidate-control exclusion count is wrong")
+    observed_already_filter_excluded = {}
+    for row in summary.get("candidate_controls_already_filter_excluded", []):
+        tid = str(row.get("target_id", ""))
+        require(tid not in observed_already_filter_excluded,
+                "already-filter-excluded candidate control is duplicated")
+        observed_already_filter_excluded[tid] = (
+            str(row.get("control_id", "")), str(row.get("filter", "")),
+            [str(value) for value in row.get("candidate_ids", [])])
+    expected_already_filter_excluded = {
+        tid: (control_id, band, candidate_ids)
+        for tid, (control_id, band, candidate_ids) in candidate_already_filter_excluded.items()
+    }
+    require(observed_already_filter_excluded == expected_already_filter_excluded
+            and summary.get("n_candidate_controls_already_filter_excluded", 0)
+            == len(expected_already_filter_excluded)
+            and summary.get("n_candidate_control_audit_matches", 0)
+            == len(candidate_audit_excluded),
+            "already-filter-excluded candidate controls differ from the audit")
+    for tid, (control_id, band, candidate_ids) in candidate_excluded.items():
+        require(tid in eligible and eligible[tid] == (control_id, band),
+                "candidate-control exclusion does not map to an otherwise eligible pair")
+        del eligible[tid]
     require(summary.get("n_pairs_stacked") == len(eligible), "eligible pair count is wrong")
 
     pair_path = work / "paired_radial_profiles.tsv"
@@ -227,6 +339,7 @@ def verify(sample: Path, work: Path) -> dict:
         "status": "verified",
         "summary_sha256": sha256(summary_path),
         "n_input_controls": len(controls), "n_filter_mismatch_excluded": len(excluded),
+        "n_s23b_candidate_control_excluded": len(candidate_excluded),
         "n_eligible_pairs": len(eligible), "n_pair_rows": len(pair_rows),
         "n_stacked_radial_rows": len(radial_rows), "map_checks": map_checks,
         "mask_factor": mask_factor, "code_provenance": code_provenance,

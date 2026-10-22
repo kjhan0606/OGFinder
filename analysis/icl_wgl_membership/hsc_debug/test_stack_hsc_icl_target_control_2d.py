@@ -81,3 +81,51 @@ def test_mask_factor_selects_matching_target_mask_extension():
         "MASK_K2P5", "MASK_K3P5", "MASK_K5P0"]
     with pytest.raises(ValueError):
         stack.mask_hdu_name(4.0)
+
+
+def test_candidate_control_audit_resolves_only_exact_verified_pairs():
+    audit = {
+        "schema": "astrafek-s23b-candidate-existing-cutout-support-v1",
+        "status": "header_wcs_audit_complete", "science_measurement": False,
+        "hsc_query_submitted": False, "data_downloaded": False,
+        "image_pixels_read": False, "n_candidates": 1333,
+        "candidate_table_sha256": "1b59ca9941849fa7970c43c6e0374db6587716fc4ae5d71b11f84a245ebe6b2c",
+        "target": {"n_images": 800, "n_images_with_candidate_centers": 0,
+                   "n_unique_candidates_inside": 0, "matches": []},
+        "matched_controls": {
+            "inputs_sha256": {"manifest": "m" * 64, "download_status": "s" * 64},
+            "n_images": 798, "n_images_with_candidate_centers": 1,
+            "n_unique_candidates_inside": 1,
+            "matches": [{"target_cluster_id": "t1", "frame_id": "c1", "filter": "i",
+                         "n_candidate_centers_inside": 1,
+                         "candidates": [{"candidate_id": "42", "z": 0.4, "richness": 17.0}]}],
+        },
+    }
+    controls = {"t1": {"id": "c1", "coadd_header_filter": "i"}}
+    result = stack.candidate_control_exclusions(audit, controls, "m" * 64, "s" * 64)
+    assert result == [{
+        "target_id": "t1", "control_id": "c1",
+        "reason": "s23b_candidate_center_inside_matched_control",
+        "filter": "i", "candidate_ids": ["42"],
+        "candidate_redshifts": [0.4], "candidate_richness": [17.0],
+    }]
+
+    audit["matched_controls"]["matches"][0]["frame_id"] = "wrong"
+    with pytest.raises(ValueError, match="unknown or duplicate"):
+        stack.candidate_control_exclusions(audit, controls, "m" * 64, "s" * 64)
+
+
+def test_candidate_control_pairs_already_rejected_for_filter_mismatch_are_not_double_counted():
+    matches = [
+        {"target_id": "eligible", "control_id": "c1", "filter": "i",
+         "candidate_ids": ["101"]},
+        {"target_id": "mismatch", "control_id": "c2", "filter": "i",
+         "candidate_ids": ["102"]},
+    ]
+    newly_excluded, already_excluded = stack.split_candidate_exclusions(
+        matches, {"eligible": "i", "mismatch": "i2"})
+    assert [row["target_id"] for row in newly_excluded] == ["eligible"]
+    assert already_excluded[0]["target_id"] == "mismatch"
+    assert already_excluded[0]["reason"] == "already_excluded_target_control_filter_mismatch"
+    with pytest.raises(ValueError, match="unknown target"):
+        stack.split_candidate_exclusions(matches, {"eligible": "i"})

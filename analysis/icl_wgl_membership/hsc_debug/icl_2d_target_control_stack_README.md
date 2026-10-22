@@ -77,6 +77,28 @@ so the alternate estimator is not a negligible numerical change.
 
 ## Interpretation limits
 
+For a control-contamination sensitivity, pass
+`--exclude-candidate-control-audit <summary.json>` using the pinned
+`astrafek-s23b-candidate-existing-cutout-support-v1` WCS audit. The stacker
+checks the audit scope and hash, target/control manifest hashes, exact
+target-to-control mapping, and candidate IDs before omitting the matched
+control pair. Candidate overlaps that the baseline already rejects for a
+target/control filter mismatch are recorded separately and are not counted
+twice. The verifier reconstructs both sets from that audit and the manifests.
+Keep this result in a new work directory; it is directly comparable with the
+783-pair baseline but remains exploratory. The audit only
+locates candidate centers in existing cutouts: it does not establish that a
+candidate is detected in the coadd or that its diffuse light biases the
+control level.
+
+After independently verifying both summaries, run
+`compare_icl_s23b_control_exclusion.py` with the baseline and alternate work
+directories plus each verifier JSON. It checks both verification hashes,
+requires the expected 783→777 pair change, and writes per-annulus differences
+and area-weighted means over 50–200 and 200–300 kpc. Those differences are
+descriptive because the alternate sample is a subset of the baseline; the
+comparison does not estimate their covariance or a significance.
+
 The output is marked `science_measurement=false`. It does not apply extinction,
 residual sky-transfer correction, or PSF-core homogenization; the available
 position-dependent PSF stamps do not constrain extended wings. The pixelwise

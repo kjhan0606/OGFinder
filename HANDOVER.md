@@ -1192,3 +1192,29 @@ PDR3 제품이다. 그러므로 넓은 영상 footprint를 곧바로 weak-lensin
 block을 로컬 매니페스트로 교차검사하도록
 `analysis/icl_wgl_membership/hsc_debug/hsc_independent_footprint_expansion_plan_2026-10-22.md`
 에 게이트를 작성했다. 이 문서를 위해 외부 서비스 조회나 신규 데이터 요청은 하지 않았다.
+
+### 2026-10-22 후속: S23B 대조장 후보 오염 민감도
+
+고정된 1,333개 추가 CAMIRA 후보표를 이미 받은 HSC 영상 800개 target과 798개
+matched-control의 FITS WCS에만 대조했다. 새로운 영상·카탈로그를 받지 않았고,
+픽셀값을 읽지 않았다. target 영상에서 후보 중심은 0개, 대조장 영상 7개에서 서로
+다른 후보 중심 7개가 나왔다(필터별 i 3개, i2 4개). 이 결과는 대조장 기준선에
+후보 은하단의 확산광이 들어갈 가능성을 표시할 뿐, 검출이나 실제 ICL 광량 오염을
+증명하지 않는다. 오프라인 감사 요약은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_existing_cutout_support_2026-10-22_01/summary.json`
+(SHA-256 `071377813fcfbf15f298a5d48f3e7a3f0b74f60899d88c46eafb7d5bb58ffebb`)이다.
+
+`stack_hsc_icl_target_control_2d.py`에 `--exclude-candidate-control-audit` 입력을
+추가했다. 스태커는 후보표 고정 해시, 감사 범위·상태, control manifest/status
+해시, target-control 대응, 후보 ID를 검증한다. 후보 7개 중 1개 control은 기존
+필터 불일치로 baseline에서 이미 빠져 있어 중복 제외하지 않고, eligible한 나머지
+6쌍만 별도 제외한다. 따라서 baseline 783쌍에서 777쌍을 남기는 비교다. 독립
+verifier는 감사 JSON과 원 manifest로 두 제외 집합을 재구성해 pair table을 검사한다.
+첫 Slurm job 434536은 위 중복 제외를 거부하며 출력 생성 전에 종료됐다. 코드를
+수정한 뒤 전체 493개 테스트와 하위 검사 6개가 통과했다. 민감도 실행은 별도 경로
+`icl_2d_s23b_control_exclusion_2026-10-22_01`에서 Slurm job 434537로 실행 중이며,
+120/800 target 처리 시점에 로그 오류는 없었다. 결과 완료 및 독립 검증은 아직
+미확인이다. 비교 도구 `compare_icl_s23b_control_exclusion.py`는 두 검증된 프로파일의
+annulus 차이와 50–200, 200–300 kpc 면적 가중 평균을 기록하며, 공분산을 계산하지
+않는 기술적 민감도로 표시한다. 원래 783쌍 스택은 수정하지 않았으며, 새 영상
+반출이나 CAS 조회는 없다.
