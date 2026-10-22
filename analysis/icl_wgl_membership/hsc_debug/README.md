@@ -986,16 +986,16 @@ status is unknown. Keep the live submitter and do not resubmit batch 002. Any
 later HSC shape-row or image export needs its own explicit user approval.
 
 The Astrafek audit [`audit_wl_random_coordinate_checkpoint.py`](audit_wl_random_coordinate_checkpoint.py)
-now verifies every completed coordinate CSV against the immutable count plan,
+verifies every completed coordinate CSV against the immutable count plan,
 per-lens candidate totals, row schema, and checkpoint SHA-256 without contacting
-CAS or inferring process liveness. Its 2026-10-20 run independently verified
-2/32 batches (33,514/780,191 coordinate rows); both saved files matched their
-recorded byte lengths and hashes, and the remaining 30 batches were still
-incomplete. The report is
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_coordinate_checkpoint_audit_2026-10-20_02/`.
-The remote process was separately confirmed alive as PID 1049265 during this
-check. No CAS request was made, and the output retains
-`science_measurement=false`.
+CAS or inferring process liveness. The 2026-10-20 audit verified 2/32 batches;
+the 2026-10-22 recheck again verified the same 33,514/780,191 coordinate rows.
+The former authenticated submitter PID 1049265 is now absent on `lageunha`,
+but HSC CAS job 1062312's last persisted status is still `running`, so its
+current state is unknown. Do not resubmit that job or start remaining batches
+until its authenticated CAS status is checked. The dated audit and exact hashes
+are in [`wl_random_coordinate_recheck_2026-10-22.md`](wl_random_coordinate_recheck_2026-10-22.md).
+No CAS request was made, and `science_measurement=false` remains in force.
 
 On 2026-10-20, the offline tests for coordinate submission, completed-batch
 screening, full geometry screening, random-center selection, and count-plan
