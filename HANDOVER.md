@@ -1165,12 +1165,19 @@ count-only 결과, 행 수, checkpoint SHA-256에 대조했다. 15,879행 및 17
 33,514행이 모두 통과했고 기존 파일 해시도 일치한다. 승인 계획의 전체 예상은
 780,191개 coordinate row다.
 
-배치 `_002`는 CAS job `1062312`로 `submitted` 기록이며 결과 CSV는 없다. 해당 CAS
-작업의 terminal 상태는 조회되지 않았으므로 재제출하거나 export를 재시작하지 않았다.
-나머지 29개 배치는 아직 제출되지 않았다. 오프라인 감사 결과는
+배치 `_002`는 CAS job `1062312`로 `submitted` 기록이며 결과 CSV는 없다. 기존 계획과
+같은 제출기를 재개해 CAS 상태를 다섯 차례 확인했으며 매번 `running`이었다. 이때 다른
+exporter 프로세스는 없었다. 세션 종료 후 원격 polling process를 남기지 않도록 로컬
+poller를 Ctrl-C로 중단했으며, checkpoint는 `interrupted`, job `_002`는 여전히
+`submitted`와 마지막 CAS 상태 `running`으로 보존됐다. CAS query를 재제출하지 않았고
+새 CSV도 다운로드하지 않았다. 나머지 29개 배치는 아직 제출되지 않았다. 오프라인
+부분 감사 결과는
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_coordinate_plan_2026-10-19_01/cas_coordinates/coordinate_partial_audit_2026-10-22.json`
 (SHA-256 `29c24052e09eca4102dcd2837ebdcba701087208767b82ebbe55384218b4d327`)이다.
-감사기는 HSC에 연결하지 않으며 제출·다운로드·과학 측정을 하지 않는다는 것을
-3개 단위시험으로 검증했다. 다음 export 단계 전에 기존 job `1062312`의 CAS 상태를
-확인해야 한다. Random-lens subtraction 및 spatial-block covariance가 없으므로 weak
-lensing 결과는 계속 `science_measurement=false`다.
+checkpoint가 `interrupted`인 시점의 감사는 같은 경로의
+`coordinate_partial_audit_2026-10-22_02.json` (SHA-256
+`06aa349317e3fc7e7da017be36fadbadf01893cfb8e288b5e024a4c55960b049`)이다. 감사기는
+HSC에 연결하지 않으며 제출·다운로드·과학 측정을 하지 않는다는 것을 3개 단위시험과
+실제 부분 결과로 검증했다. 다음 실행은 job `1062312`의 CAS 상태가 완료 또는 오류로
+바뀌었는지 확인한 뒤 같은 checkpoint에서 이어간다. Random-lens subtraction 및
+spatial-block covariance가 없으므로 weak-lensing 결과는 계속 `science_measurement=false`다.
