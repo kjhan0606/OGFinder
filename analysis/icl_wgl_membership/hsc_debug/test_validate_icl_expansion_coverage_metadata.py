@@ -11,9 +11,9 @@ def make_probes(candidate_id="10"):
     ]
 
 
-def make_row(probe_id, *, depth="26.0", seeing="0.7", imeas="true", idet="true"):
+def make_row(probe_id, *, candidate_id="10", depth="26.0", seeing="0.7", imeas="true", idet="true"):
     return {
-        "candidate_id": "10", "probe_id": probe_id, "skymap_id": f"map-{probe_id}",
+        "candidate_id": candidate_id, "probe_id": probe_id, "skymap_id": f"map-{probe_id}",
         "tract": "100", "patch": "4,4", "band": "HSC-I", "naxis1": "4200",
         "naxis2": "4200", "seeing": "0.8", "zeropt": "27.0",
         "imag_psf_depth": depth, "iseeing": seeing,
@@ -45,6 +45,21 @@ def test_aggregate_counts_missing_probes_as_uncovered():
     assert result["all_nine_probes_covered"] is False
     assert result["probe_coverage_fraction"] == pytest.approx(8 / 9)
     assert result["idet_bkgd_exists_true_fraction"] == 1.0
+
+
+def test_aggregate_accepts_release_prefixed_s23b_candidate_key():
+    candidate_id = "S23B:10"
+    probes = make_probes(candidate_id)
+    rows = {
+        (candidate_id, row["probe_id"]): [make_row(row["probe_id"], candidate_id=candidate_id)]
+        for row in probes
+    }
+    result = aggregate_candidates(
+        [{"candidate_id": candidate_id, "ra_deg": "12.3", "dec_deg": "4.5",
+          "z_cl": "0.4", "richness": "20"}], probes, rows,
+    )[0]
+    assert result["candidate_id"] == candidate_id
+    assert result["all_nine_probes_covered"] is True
 
 
 def test_aggregate_rejects_incomplete_or_duplicate_probe_inventory():

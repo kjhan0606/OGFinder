@@ -10,6 +10,8 @@
 
 이 1,333개 후보의 PDR3 HSC-I 영상 패치 가능성을 검사하기 위해 중심과 proper 1-Mpc 원주 8점을 대상으로 27개 batch metadata-only SQL을 준비했다(총 11,997 probe, CAS 미제출). 이 별도 S23B query 범위는 승인 대기이며 기존 2,596개 S20A 계획과 합쳐서 취급하지 않는다. [S23B coverage metadata 계획](icl_s23b_coverage_metadata_plan_2026-10-22.md)
 
+공통 제출기 `submit_icl_expansion_coverage_metadata.py --check --plan <plan-dir>`는 양쪽 계획을 오프라인 검증한다. S23B `--submit`은 승인한 JSON의 정확한 SHA-256이 별도로 주어지지 않으면 거부한다. metadata 반환 후 기존 9점 화면기는 S23B의 `S23B:<catalog_id>` 키도 허용한다.
+
 2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
 영향도 진단을 추가했다. 재현 명령은
 [`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),

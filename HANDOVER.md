@@ -1260,7 +1260,10 @@ allowlist를 검증했고 focused tests 2개가 통과했다. 계획 JSON SHA-25
 제한과 재현 명령은
 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_coverage_metadata_plan_2026-10-22.md`에
 있다. 새 S23B CAS 조회는 사용자의 해당 정확한 범위 승인 후에만 진행하며, 이 계획은
-이미지 다운로드를 승인하지 않는다.
+이미지 다운로드를 승인하지 않는다. 공통 submitter는 두 계획 모두 `--check`로 검사하며,
+S23B 제출에는 정확한 계획 SHA-256을 `--approved-plan-sha256`으로 다시 전달하도록
+가드했다. coverage 후처리기도 `S23B:` release-prefixed ID를 지원한다. 변경 후 focused
+submitter/plan/aggregation 검사 10개가 통과했다.
 
 ### 2026-10-22 후속: S23B ICL–위성 후보의 좌표·공간 셀 장부
 

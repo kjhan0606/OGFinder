@@ -20,10 +20,14 @@ CAS가 반환하도록 준비한 14개 열은 `candidate_id`, `probe_id`, `skyma
 - `coverage_query_plan.json` SHA-256: `e615ee7c2414109af6d3c156104d71766355d3b4e2a5dba3636a0142995557d7`
 - 29개 artifact hash와 27개 SQL의 query allowlist를 재검증했다. 준비기 결과는 `prepared_pending_user_approval`, `cas_query_submitted=false`, `data_downloaded=false`다.
 
+공통 제출기의 오프라인 `--check`는 기존 S20A 계획과 이 S23B 계획 모두에서 SQL·probe·열 범위·파일 해시를 확인한다. S23B는 추가로 계획 JSON SHA-256을 고정하고, 실제 제출 시 동일한 해시를 `--approved-plan-sha256`으로 지정해야 한다. 결과 후처리기는 S23B release-prefixed ID를 보존해 9점 coverage screen을 낸다.
+
 계획 생성 명령:
 
 ```bash
 python3 analysis/icl_wgl_membership/hsc_debug/prepare_s23b_icl_coverage_plan.py
 ```
+
+검증은 `submit_icl_expansion_coverage_metadata.py --check --plan <위 산출 디렉터리>`다. 위 hash를 승인한 뒤 실제 조회할 때만 `--submit --approved-plan-sha256 e615ee7c2414109af6d3c156104d71766355d3b4e2a5dba3636a0142995557d7`을 추가한다. 제출기는 lageunha interactive 세션을 요구하며 비밀번호를 화면에 출력하지 않는다.
 
 CAS 제출은 사용자의 이 정확한 1,333-candidate / 11,997-probe / 14-column metadata 범위 승인 후에만 진행한다. 이미지 다운로드는 이 승인의 범위에 포함되지 않는다.

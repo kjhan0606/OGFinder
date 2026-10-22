@@ -7,6 +7,7 @@ patch coverage metadata; it never requests images, object rows, shapes, or photo
 from __future__ import annotations
 
 import argparse
+import csv
 import getpass
 import json
 import os
@@ -36,6 +37,7 @@ FORBIDDEN_SQL = (
     "PDR3_WIDE.FORCED", "PDR3_WIDE.MERGED", "PDR3_WIDE.RAW",
     "PDR3_WIDE.RANDOM", "PDR3_WIDE.COADD", "FITS", "IMAGE",
 )
+EXPECTED_S23B_PLAN_SHA256 = "e615ee7c2414109af6d3c156104d71766355d3b4e2a5dba3636a0142995557d7"
 
 
 def validate_result(path: Path, batch: dict, allowed_probes: set[tuple[str, str]]) -> int:
@@ -84,14 +86,39 @@ def validate_result(path: Path, batch: dict, allowed_probes: set[tuple[str, str]
 def validate_plan(plan_dir: Path):
     plan_path = plan_dir / "coverage_query_plan.json"
     manifest = json.loads(plan_path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != "astrafek-icl-pdr3-coverage-query-plan-v1":
+    schema = manifest.get("schema")
+    if schema not in {
+        "astrafek-icl-pdr3-coverage-query-plan-v1",
+        "astrafek-s23b-pdr3-coverage-query-plan-v1",
+    }:
         raise ValueError("Unexpected coverage-plan schema")
-    if manifest.get("status") != "prepared_not_submitted" or manifest.get("cas_query_submitted") is not False:
-        raise ValueError("Coverage plan is not in reviewed prepared state")
-    if any(manifest.get(key) is not False for key in (
-        "science_measurement", "images_downloaded", "shapes_downloaded", "photoz_rows_requested"
-    )):
-        raise ValueError("Coverage plan flags data outside the approved scope")
+    plan_sha = sha(plan_path)
+    if schema == "astrafek-icl-pdr3-coverage-query-plan-v1":
+        if manifest.get("status") != "prepared_not_submitted" or manifest.get("cas_query_submitted") is not False:
+            raise ValueError("Coverage plan is not in reviewed prepared state")
+        if any(manifest.get(key) is not False for key in (
+            "science_measurement", "images_downloaded", "shapes_downloaded", "photoz_rows_requested"
+        )):
+            raise ValueError("Coverage plan flags data outside the approved scope")
+        expected_batches, expected_candidates, expected_probes = 52, 2596, 23364
+        expected_candidate_prefix = None
+    else:
+        if (plan_sha != EXPECTED_S23B_PLAN_SHA256
+                or manifest.get("status") != "prepared_pending_user_approval"
+                or manifest.get("user_approval_required_before_submission") is not True
+                or manifest.get("cas_query_submitted") is not False):
+            raise ValueError("S23B plan differs from the exact scope pending user approval")
+        if any(manifest.get(key) is not False for key in (
+            "science_measurement", "data_downloaded", "images_downloaded",
+            "shape_or_photoz_rows_requested",
+        )):
+            raise ValueError("S23B plan flags data outside its metadata-only scope")
+        expected_batches, expected_candidates, expected_probes = 27, 1333, 11997
+        expected_candidate_prefix = "S23B:"
+        prior = manifest.get("prior_approved_plan", {})
+        if (prior.get("sha256") != "9da220c05f1f24c409a602fcc4ddffc8cbd5bc33f459d335cc8587f1cd235006"
+                or prior.get("cas_query_submitted") is not False):
+            raise ValueError("S23B plan no longer references the separately prepared S20A plan")
     coverage = manifest.get("coverage_test", {})
     if coverage.get("output_columns") != OUTPUT_COLUMNS:
         raise ValueError("Coverage plan output columns differ from approved schema")
@@ -102,16 +129,29 @@ def validate_plan(plan_dir: Path):
         if path.resolve().parent != plan_dir.resolve() or not path.is_file() or sha(path) != expected_hash:
             raise ValueError(f"Prepared plan artifact is missing or changed: {path.name}")
     batches = manifest.get("batches", [])
-    if len(batches) != 52 or manifest.get("n_candidates") != 2596 or manifest.get("n_probes") != 23364:
+    if (len(batches) != expected_batches
+            or manifest.get("n_candidates") != expected_candidates
+            or manifest.get("n_probes") != expected_probes):
         raise ValueError("Coverage plan dimensions differ from the approved request")
+    centers_path = plan_dir / "candidate_centers.tsv"
+    expected_center_key = "id" if expected_candidate_prefix is None else "candidate_id"
+    with centers_path.open(encoding="utf-8", newline="") as stream:
+        centers = list(csv.DictReader(stream, delimiter="\t"))
+    center_ids = [str(row[expected_center_key]) for row in centers]
+    if len(center_ids) != expected_candidates or len(set(center_ids)) != expected_candidates:
+        raise ValueError("Candidate-center inventory is incomplete or duplicated")
+    if expected_candidate_prefix is not None and any(not ident.startswith(expected_candidate_prefix) for ident in center_ids):
+        raise ValueError("S23B candidate IDs are not release-prefixed")
     expected_probe_path = plan_dir / "coverage_probes.tsv"
     allowed_probes = set()
-    import csv
     with expected_probe_path.open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream, delimiter="\t"):
             allowed_probes.add((str(row["candidate_id"]), str(row["probe_id"])))
-    if len(allowed_probes) != 23364:
+    if len(allowed_probes) != expected_probes:
         raise ValueError("Coverage probe inventory is incomplete or duplicated")
+    if {candidate_id for candidate_id, _ in allowed_probes} != set(center_ids):
+        raise ValueError("Probe and candidate-center inventories disagree")
+    batch_candidate_total = batch_probe_total = 0
     for index, batch in enumerate(batches):
         sql_path = Path(batch["path"])
         if sql_path.resolve().parent != plan_dir.resolve() or sql_path.name != f"coverage_mosaic_{index:03d}.sql":
@@ -129,11 +169,33 @@ def validate_plan(plan_dir: Path):
             raise ValueError(f"Unexpected source, geometry, or band in {sql_path.name}")
         if sql.count("SELECT P.CANDIDATE_ID") != 1 or sql.count("FROM PROBES AS P") != 1:
             raise ValueError(f"Unexpected query shape in {sql_path.name}")
+        if expected_candidate_prefix is not None and "S23B:" not in sql:
+            raise ValueError(f"S23B batch omits release-prefixed IDs: {sql_path.name}")
         if batch.get("expected_rows") is not None:
             raise ValueError("Coverage plan unexpectedly pins a result-row count")
-    if len(allowed_probes) != manifest["n_probes"]:
+        batch_candidate_total += int(batch.get("n_candidates", 0))
+        batch_probe_total += int(batch.get("n_probe_points", 0))
+        if expected_candidate_prefix is not None:
+            batch_probe_pairs = {
+                pair for pair in allowed_probes if f"('{pair[0]}', '{pair[1]}',".upper() in sql
+            }
+            if len(batch_probe_pairs) != int(batch.get("n_probe_points", -1)):
+                raise ValueError(f"S23B SQL/probe inventory mismatch: {sql_path.name}")
+    if (len(allowed_probes) != manifest["n_probes"]
+            or batch_candidate_total != expected_candidates
+            or batch_probe_total != expected_probes):
         raise ValueError("Probe count disagrees with the coverage plan")
-    return manifest, batches, allowed_probes, sha(plan_path)
+    return manifest, batches, allowed_probes, plan_sha
+
+
+def check_submission_authorization(schema: str, plan_sha: str,
+                                   approved_plan_sha256: str | None) -> None:
+    """Require a fresh, exact-hash user approval for the separately scoped S23B query."""
+    if schema == "astrafek-s23b-pdr3-coverage-query-plan-v1":
+        if approved_plan_sha256 != plan_sha:
+            raise ValueError("S23B submission requires approval of this exact plan SHA-256")
+    elif approved_plan_sha256 is not None and approved_plan_sha256 != plan_sha:
+        raise ValueError("approval hash does not match the selected metadata plan")
 
 
 def status_with_retry(client, job_id):
@@ -206,10 +268,17 @@ def main(argv=None):
     parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
     parser.add_argument("--check", action="store_true", help="verify the approved offline plan only")
     parser.add_argument("--submit", action="store_true", help="submit the approved metadata batches")
+    parser.add_argument("--approved-plan-sha256", help="required exact plan hash for newly scoped S23B submissions")
     args = parser.parse_args(argv)
     if args.check == args.submit:
         parser.error("select exactly one of --check or --submit")
     manifest, batches, allowed_probes, plan_sha = validate_plan(args.plan.resolve())
+    if args.submit or args.approved_plan_sha256 is not None:
+        try:
+            check_submission_authorization(
+                manifest.get("schema", ""), plan_sha, args.approved_plan_sha256)
+        except ValueError as error:
+            parser.error(str(error))
     results = args.plan.resolve() / "cas_coverage_metadata"
     print(json.dumps({"plan_status": manifest["status"], "candidates": manifest["n_candidates"],
         "probes": manifest["n_probes"], "batches": len(batches), "columns": OUTPUT_COLUMNS,

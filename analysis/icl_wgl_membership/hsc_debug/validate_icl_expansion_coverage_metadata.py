@@ -39,7 +39,11 @@ def aggregate_candidates(candidates, probes, rows_by_probe):
         probes_by_candidate.setdefault(str(probe["candidate_id"]), []).append(probe)
     result = []
     for candidate in candidates:
-        candidate_id = str(candidate["id"])
+        # The original S20A pool stores its key as ``id``; the release-specific
+        # S23B plan uses ``candidate_id`` to avoid cross-release ID collisions.
+        candidate_id = str(candidate.get("id", candidate.get("candidate_id", "")))
+        if not candidate_id:
+            raise ValueError("Candidate inventory has no release-qualified ID")
         candidate_probes = probes_by_candidate.get(candidate_id, [])
         if len(candidate_probes) != 9 or {row["probe_id"] for row in candidate_probes} != {
             "center", *(f"r1Mpc_pa{angle:03d}" for angle in range(0, 360, 45))
