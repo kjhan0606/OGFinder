@@ -1154,3 +1154,23 @@ Weak-lensing 대조장용 좌표 export 프로세스 PID 1049265는 2026-10-20 �
 4. ICL 및 위성 공동 분석의 전체 표본 마스크·광량 누출·공분산·주입 회수를 계속 검증한다.
 5. 관측 weak-lensing 스택과 최종 과학 해석은 별도 검증을 마친 뒤 진행한다.
    이 인수인계 커밋에는 `HANDOVER.md`만 포함한다.
+
+### 2026-10-22 후속: weak-lensing random-control 좌표 export 중간 감사
+
+`syntax`에서 `lageunha`를 read-only 확인했을 때 이전 export PID 1049265는 더 이상
+존재하지 않았다. 기존 HSC CAS checkpoint는 여전히 `running`으로 표시되지만, 승인된
+32개 배치 중 `random_coordinates_000`과 `_001`만 완료되어 있었다. 이 두 CSV를
+Astrafek 재현 감사기 `audit_wl_random_coordinate_partial_export.py`로 렌즈별
+count-only 결과, 행 수, checkpoint SHA-256에 대조했다. 15,879행 및 17,635행, 총
+33,514행이 모두 통과했고 기존 파일 해시도 일치한다. 승인 계획의 전체 예상은
+780,191개 coordinate row다.
+
+배치 `_002`는 CAS job `1062312`로 `submitted` 기록이며 결과 CSV는 없다. 해당 CAS
+작업의 terminal 상태는 조회되지 않았으므로 재제출하거나 export를 재시작하지 않았다.
+나머지 29개 배치는 아직 제출되지 않았다. 오프라인 감사 결과는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_point_coordinate_plan_2026-10-19_01/cas_coordinates/coordinate_partial_audit_2026-10-22.json`
+(SHA-256 `29c24052e09eca4102dcd2837ebdcba701087208767b82ebbe55384218b4d327`)이다.
+감사기는 HSC에 연결하지 않으며 제출·다운로드·과학 측정을 하지 않는다는 것을
+3개 단위시험으로 검증했다. 다음 export 단계 전에 기존 job `1062312`의 CAS 상태를
+확인해야 한다. Random-lens subtraction 및 spatial-block covariance가 없으므로 weak
+lensing 결과는 계속 `science_measurement=false`다.
