@@ -1040,7 +1040,7 @@ Astrafek `audit_extended_psf_injection_reselection_influence.py`와 독립 focus
 
 ### 2026-10-21 위치별 PSF 코어/공개 날개 하이브리드 구성기
 
-`position_psf.py`에 signed local core와 public extended wing을 smooth radial taper로 결합하는 `build_core_wing_hybrid_psf`를 추가했다. 연결 반경, 전이 폭, public wing 진폭을 입력받고 signed kernel의 합을 1로 정규화한다. 단위 정규화·음수 픽셀 보존·중앙 core 보존 및 잘못된 grid 입력 거부를 `test_position_psf.py` 7개로 검증했으며 모두 통과했다. `py_compile`, `git diff --check`도 통과. 실제 영상/주입 계산에는 아직 적용하지 않았고 새 HSC 요청도 없다. 상태는 계속 `psf_approved=false`, `science_measurement=false`다. 재현/설계 기록은 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_psf_design_2026-10-21.md`. 후속은 overlap에서 측정한 0.52–0.82 범위를 포함하는 진폭 grid와 1.8/2.4/3.0 arcsec 연결 반경을 사전 등록해, 먼저 i-band 표적/대조 real-mask에서 점광원과 diffuse injection을 분리해 파일럿 실행하는 것이다. i2는 HSC-I proxy 민감도로 분리 표기한다.
+`position_psf.py`의 `build_core_wing_hybrid_psf`는 signed local core와 public extended wing을 smooth radial taper로 결합해 단위 정규화한다. 중앙 코어·음수 픽셀 보존 및 범위 검사를 단위시험으로 확인했다. 이 커널은 synthetic-light transfer 민감도 시험에 적용됐으나 observed coadd를 수정하지 않았고 새 HSC 요청도 없다. 결과는 `psf_approved=false`, `science_measurement=false`다. 재현 및 제한은 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_psf_design_2026-10-21.md`에 있다.
 
 ### 2026-10-21 i2 확장 PSF 프록시/위치별 코어 주입 민감도 비교
 
@@ -1052,7 +1052,7 @@ Diffuse→ICL 200–300 kpc 회수율 중앙값은 local core `0.2245`, public p
 
 하이브리드 주입에서 위성 envelope에 은하단 중심 PSF 코어를 재사용하던 것을 수정했다. 확산 ICL에는 중심 위치 코어+public wing hybrid를, 각 위성 envelope에는 해당 위성 위치 코어+같은 wing을 적용한다. 결과 파일과 독립 validator는 각 위성 코어의 filename/SHA, 정규화, wing parameters, 승인 플래그를 확인한다. `test_position_psf.py`, `test_extended_psf_injection.py`, `test_validate_extended_psf_injection_batch.py`, 새 grid 테스트를 포함한 focused test 22개 통과했다.
 
-미리 고정한 12개 조합은 splice 1.8/2.4/3.0 arcsec, blend 0.6 arcsec, wing amplitude 0.50/0.65/0.80/1.00이다. 중앙 규모인 cluster 1056 (선택된 i 프레임 중 10개 위성 중심)에서 diffuse/satellite real-mask 주입을 먼저 시험한다. 재시작 가능한 `run_core_wing_hybrid_grid.py`, CPU-only `run_core_wing_hybrid_i_pilot.sbatch`, 사전 계획 `core_wing_hybrid_i_pilot_plan_2026-10-21.md`를 추가했다. 출력 요약/재검증기 `summarize_core_wing_hybrid_grid.py`와 incomplete-state 거부 테스트도 추가했다. `syntax`에는 `normal` 파티션이 없어 `a10`으로 자원을 조정했다. job `432792`는 `syntax`의 `syn04`에서 실행 중이며 마지막 확인에서 12개 중 2개 설정이 완료됐다(1 CPU, 32 GB, GPU 요청 없음; 4시간 제한). 첫 두 설정은 독립 산술검증 오차 0이었다. 결과 루트 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_core_wing_hybrid_i_pilot_cluster1056_2026-10-21_01/`. terminal status와 산출물 validator를 확인한 뒤 결과를 기록한다. 이 pilot은 단독 point-source wing injection을 포함하지 않으므로 그 검증은 여전히 남아 있다. 모든 과학·PSF 승인 플래그는 false다.
+미리 고정한 12개 조합은 splice 1.8/2.4/3.0 arcsec, blend 0.6 arcsec, wing amplitude 0.50/0.65/0.80/1.00이다. cluster 1056의 10개 위성 위치를 이용한 grid job `432792`는 syntax `syn04`에서 13m58s 만에 정상 완료됐다(1 CPU, 32 GB, GPU 미요청; peak RSS 2,866,960 KiB). 12/12 설정과 독립 response 산술 검증이 통과했고 최대 오차는 0이다. Diffuse→ICL 응답은 grid에서 0.22111–0.22128로 안정적이었지만 위성 외곽광→위성은 mask 재탐지 시 0.09297–0.16836, 고정 mask에서 0.31063–0.32470이었다. 단일 cluster라 모집단 범위는 아니다. 재현 보고서 `core_wing_hybrid_i_pilot_assessment_2026-10-21.md`; `grid_audit.json` SHA-256 `18606dcd49e8b918186eda6158e2209f2755a76b767806756e3571d7b4990ee1`. 다음은 13개 supported i 프레임의 frame-to-frame 민감도다. 이 grid에는 point source model profile이 포함되지 않았고 별도 noiseless point-source mask diagnostic만 cluster 1056에서 수행됐다(아래 절). 모든 과학·PSF 승인 플래그는 false다.
 
 
 ### 2026-10-21 추가: position-specific hybrid 단일 프레임/점광원 진단 완료
@@ -1062,6 +1062,18 @@ Diffuse→ICL 200–300 kpc 회수율 중앙값은 local core `0.2245`, public p
 고정 mask 응답은 diffuse→ICL 0.230718, 위성 envelope→ICL 0.506852, diffuse→satellite −0.012496, satellite envelope→satellite 0.314188이다. 동일 cluster의 기존 public PSF fixed-mask 값과 차이는 각각 약 +0.000105, −0.000554, −0.000093, −0.012785다. 별도 noiseless unit point-source 진단에서 50–100 kpc annulus의 mask coverage/마스크 내 flux fraction은 46.3%/0.001996, 200–300 kpc는 55.4%/0.000834다. 이는 단일 프레임 민감도 진단이며 Poisson noise, coadd covariance, sky transfer, 관측원 제거를 반영하지 않는다.
 
 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_hybrid_psf_i_pilot_2026-10-21_r2p4_a0p65_perpos_point_01/`; `summary.json` SHA-256 `8a2fa26dd197aae9f29fafaaaac7e91afeab0bcc9c1d2299b2a73704a367d16e`, `cluster_1056.json` `ddb650883c7e664fb9c026d28a83768c195d7b5ccaa867b6b5c58d8048666711`, `validation.json` `d547fba7bfbae4869f48c6946a316190c860afe4dd711b301c2205e55d03c568`. focused tests 23개 통과; `py_compile`, array script `bash -n`, `git diff --check` 통과. 설계와 다음 grid 단계는 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_psf_design_2026-10-21.md`. 해당 결과도 `psf_approved=false`, `science_measurement=false`다.
+
+2026-10-22 `validate_extended_psf_injection_batch.py`로 위 단일 hybrid+point-profile batch를 독립 재검증했다. 출력 `validation_repro_2026-10-22.json`은 기존 검증과 동일 SHA-256 `d547fba7bfbae4869f48c6946a316190c860afe4dd711b301c2205e55d03c568`, 1/1 프레임, 최대 응답 산술 오차 0이다.
+
+### 2026-10-22 supported i 프레임 전체 hybrid 민감도 grid 실행 중
+
+2026-10-21 cluster 1056 단일 프레임에서 12개 PSF 모델 grid가 끝난 뒤, 13개 supported `i` 프레임으로 동일한 frozen grid를 확대했다. 프레임별 결과에는 redetection/fixed-mask diffuse·satellite 응답과 별도의 noiseless unit point-source profile/mask transmission이 포함된다. 재현 가능한 `--all-supported` driver, updated point-profile grid summarizer, CPU-only Slurm wrapper, 범위 문서 `core_wing_hybrid_i_supported_plan_2026-10-22.md`를 추가했다. 관련 grid/summarizer/validator focused test 14개 통과.
+
+Slurm job `432803`은 `syntax`의 `a10`/`syn04`에서 2:07:02 만에 정상 완료했다(1 CPU, 32 GB, GPU 미요청, peak RSS 4,363,184 KiB). 12개 설정×13 프레임=156개 frame record, 오류 0, 각 저장 응답의 독립 재계산 최대 오차 0이다. 점광원 profile은 별도 noiseless unit source 모델을 saved masks에 통과시킨 것으로 source detection/noise 회수가 아니며 독립 FITS 재구성은 하지 않았다.
+
+중앙 `r2.4_a0.65` 모델에서 fixed-mask diffuse→ICL median 0.2251 (q16–q84 0.2219–0.2272), redetection median 0.2141이며 12개 모델 medians의 envelope는 각각 0.2250–0.2252 및 0.2141–0.2150이다. Satellite envelope→ICL redetection−fixed paired median은 −0.1022이고 PSF grid에 따른 median 범위는 −0.1045…−0.0825다. Satellite envelope→satellite paired 차이는 중앙 모델 median −0.0536이나 q16–q84 −0.3158…+0.2065, 전체 범위 −3.0894…+2.1677 (cluster 430 및 4982 극단)으로 단일 보정값을 쓸 수 없다. Point source 유효 flux fraction은 중앙 모델 median 50–100 kpc 0.00259, 200–300 kpc 0.000957다. 결과는 과학 측정·PSF 승인 또는 ICL–위성 상관의 증거가 아니다.
+
+독립 Astrafek 요약은 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_i_supported_assessment_2026-10-22.md`. v2 audit은 12 configuration 전체가 동일한 13개 고유 cluster ID를 썼는지도 확인한다. `grid_audit_v2.json` SHA-256 `c0545e9f36c1b0d47589744abfcf21264461e8bf467f6f63fd379436ee35ba2c`, checkpoint SHA-256 `91f5aed2dbff64fd5ae07290c30b8f77b69fde15535c881d1822352ba25747b6`. 최초 `grid_audit.json`도 보존했다. 출력 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_core_wing_hybrid_i_supported13_2026-10-22_01/`. 다음 단계는 matched-control sky/PSF-wing leakage와 pixel/noise response를 관련 물리반경까지 검증하는 것이며, 현재 응답 중앙값을 보정값으로 사용하지 않는다. `science_measurement=false`, `psf_approved=false` 유지.
 ## 2026-10-21 ICL 주입 응답의 마스크 재선택 분리
 
 ### 고정 마스크와 재검출 비교

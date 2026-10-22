@@ -51,12 +51,17 @@ The result is
 `ddb650883c7e664fb9c026d28a83768c195d7b5ccaa867b6b5c58d8048666711`, and
 `d547fba7bfbae4869f48c6946a316190c860afe4dd711b301c2205e55d03c568`.
 
-## Next execution gate
+## Follow-up gate
 
-Run the predeclared 12-point splice-radius/amplitude grid on the same pilot
-frame, with point-source diagnostics kept separate from diffuse/envelope
-injections. Compare both fixed-mask and redetection outputs, and independently
-validate every frame before broadening to supported i-band frames. Keep i2 as
-a separately labeled HSC-I proxy sensitivity. Report sky transfer and coadd
-noise limitations independently; neither this one-frame run nor the grid can
-approve a PSF or turn on science measurements.
+The same-frame 12-model grid and the 13 supported-`i`-frame extension are
+complete and independently validated. Results for the first are in
+[`core_wing_hybrid_i_pilot_assessment_2026-10-21.md`](core_wing_hybrid_i_pilot_assessment_2026-10-21.md);
+the multi-frame results are in
+[`core_wing_hybrid_i_supported_assessment_2026-10-22.md`](core_wing_hybrid_i_supported_assessment_2026-10-22.md).
+The separate noiseless point-source profiles pass through saved masks, but do
+not account for observed-source subtraction, realistic source noise, coadd
+covariance, or sky transfer. The 13 frames test sensitivity within the
+PSF-supported subset, not the 800-cluster population. Next, validate pixel,
+noise, and sky response on matched controls before treating any response as a
+science correction. Keep i2 as a separately labeled HSC-I proxy sensitivity;
+none of these grids approves a PSF or turns on science measurements.
