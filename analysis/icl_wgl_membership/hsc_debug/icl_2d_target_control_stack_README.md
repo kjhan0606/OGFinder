@@ -109,6 +109,8 @@ The 2026-10-22 results are recorded in
 [`icl_s23b_control_exclusion_assessment_2026-10-22.md`](icl_s23b_control_exclusion_assessment_2026-10-22.md)
 and the comparison JSON is
 `icl_s23b_control_exclusion_comparison_2026-10-22_01/comparison.json`.
+`audit_s23b_candidate_overlap_association_support.py` checks whether any flagged
+control overlap enters the separately saved ICL–satellite association sample.
 
 The output is marked `science_measurement=false`. It does not apply extinction,
 residual sky-transfer correction, or PSF-core homogenization; the available

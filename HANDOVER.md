@@ -1226,3 +1226,16 @@ i +1.321%, i2 −1.867% 이동했다. 개별 annulus의 최대 상대 이동은 
 해시는 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_control_exclusion_assessment_2026-10-22.md`
 에 기록했다. 이 결과는 계속 exploratory이며 `science_measurement=false`; baseline
 783쌍 스택은 보존됐다. 영상 반출이나 CAS 조회는 없다.
+
+추가로 새 연관표 중첩 감사기를 포함한 전체 494개 테스트와 하위 검사 6개가
+통과했다. 7개 WCS 후보 겹침을 저장된 ICL 200–300 kpc 지원표, 위성 50–75 kpc
+프로파일표, 94행 ICL–위성 결합표에 해시 검증 후 대조했다. 6개 신규 제외 control은
+모두 94행에 없다. 그중 target 4803/i2는 ICL 지원만 있고 위성 프로파일이 없고,
+target 4749/i2는 위성 프로파일 1개만 있고 ICL 지원이 없다. 나머지 4개에는 어느
+쪽 지원도 없다. 따라서 이 6개 후보 control flag는 기존 결합 상관표 행을 제거하지
+않는다. 재현 감사기
+`analysis/icl_wgl_membership/hsc_debug/audit_s23b_candidate_overlap_association_support.py`
+의 결과는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_association_overlap_2026-10-22_03/summary.json`
+(SHA-256 `51c979d9bfe698fbd94036579b0b82997c57cb0d535e20f54fa69495a459b532`)이다.
+분석 스크립트 SHA-256은 `f43d3057253132a8308e259ab1f6c6d200849f1ce62d1e0f8ced95d8714781ce`다.
+이는 저장된 표만 읽으며 새 영상·측광·연관 적합을 수행하지 않는다.

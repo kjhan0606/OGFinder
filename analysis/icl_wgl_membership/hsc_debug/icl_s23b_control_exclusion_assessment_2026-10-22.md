@@ -49,6 +49,26 @@ interact with the coadd background subtraction. No uncertainty or significance
 for the *difference* is reported: the alternate stack is a subset of the
 baseline, and their covariance has not been estimated.
 
+## Overlap with the ICL–satellite association sample
+
+A second provenance audit joined all seven WCS flags to the saved ICL
+200–300 kpc support table, 50–75 kpc satellite-profile table, and 94-row
+ICL–satellite association table. None of the six newly excluded pairs is in the
+94-row association sample. Of those six, target 4803 (`i2`) has an ICL
+200–300 kpc support row but no retained 50–75 kpc satellite profile; target
+4749 (`i2`) has one 50–75 kpc satellite-profile row but no ICL support row.
+The other four have neither support row. The seventh WCS flag (target 1746)
+was already a filter-mismatch exclusion. Thus these WCS flags do not remove any
+existing ICL–satellite correlation row; this says nothing about contamination
+among the other controls or the full-sample association's remaining systematics.
+
+The hash-checked, table-only overlap audit is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_association_overlap_2026-10-22_03/summary.json`
+(SHA-256 `51c979d9bfe698fbd94036579b0b82997c57cb0d535e20f54fa69495a459b532`). The
+Astrafek script SHA-256 is
+`f43d3057253132a8308e259ab1f6c6d200849f1ce62d1e0f8ced95d8714781ce`. It read no
+images and performed no new association fit.
+
 ## Reproduction and limits
 
 The WCS audit read FITS headers only. The stack itself read existing FITS data
@@ -56,7 +76,10 @@ and wrote to a new directory; it requested no data from HSC and left the
 baseline untouched. Reproduce the stack with
 `run_icl_s23b_control_exclusion_sensitivity.sbatch`, verify it with
 `verify_icl_target_control_2d_stack.py`, then use
-`compare_icl_s23b_control_exclusion.py` to create the comparison JSON.
+`compare_icl_s23b_control_exclusion.py` to create the comparison JSON. Run
+`audit_s23b_candidate_overlap_association_support.py` to cross-check flagged
+controls against the saved ICL and satellite support tables and the 94-row
+association table.
 
 The run directories and provenance are:
 
