@@ -12,6 +12,8 @@
 
 공통 제출기 `submit_icl_expansion_coverage_metadata.py --check --plan <plan-dir>`는 양쪽 계획을 오프라인 검증한다. S23B `--submit`은 승인한 JSON의 정확한 SHA-256이 별도로 주어지지 않으면 거부한다. metadata 반환 후 기존 9점 화면기는 S23B의 `S23B:<catalog_id>` 키도 허용한다.
 
+별도 검정력 관문은 기존 탐색 표본을 독립 재현에 중복 사용하지 않고 S23B가 제공할 수 있는 새 target 셀 상한을 계산한다. 최대 67개 S23B 셀은 r=0.293 가정의 단일 고정 endpoint 80% 목표(92 block)에도 약 25개 부족하다. [S23B 독립 재현 표본력 평가](icl_s23b_replication_power_gate_2026-10-22.md)
+
 2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
 영향도 진단을 추가했다. 재현 명령은
 [`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),

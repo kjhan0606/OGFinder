@@ -1285,3 +1285,17 @@ submitter/plan/aggregation 검사 10개가 통과했다.
 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_spatial_candidate_ledger_2026-10-22.md`에
 기록했다. 단위시험 2개를 통과했다. HSC 질의·다운로드·픽셀 판독은 없고
 `science_measurement=false`를 유지한다.
+
+### 2026-10-22 후속: S23B 독립 재현 표본력 관문
+
+S23B candidate pool을 기존 exploratory discovery 표본과 단순 합산해 검정력을 과장하지
+않도록 해시 고정 장부에서 재현 표본력 상한을 계산했다. 기존 i2 연관표의 33 target
+셀 밖에서 S23B는 최대 67개 새 target 셀을 제공한다. 단일 사전고정 i2 endpoint에서
+양측 α=0.05, partial r=0.293을 가정한 Fisher-z 근사 80% 목표는 92 independent blocks로,
+S23B 단독 67개 target-cell 상한의 power는 0.662, 최소 25개 block이 부족하다. r=0.20이면
+196개가 필요해 최소 129개 부족하다. 기존 discovery 33셀을 더한 100은 독립 재현 표본으로
+셈할 수 없다. 영상·마스크·위성·control 필터링과 block 병합은 이 상한을 더 줄일 수 있다.
+계산기 `analysis/icl_wgl_membership/hsc_debug/assess_s23b_replication_power.py` 및
+평가 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_replication_power_gate_2026-10-22.md`,
+focused tests 5개를 추가했다. 새 HSC 요청이나 science measurement는 없고
+`science_measurement=false`를 유지한다.
