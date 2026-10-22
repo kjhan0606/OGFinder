@@ -1286,6 +1286,21 @@ submitter/plan/aggregation 검사 10개가 통과했다.
 기록했다. 단위시험 2개를 통과했다. HSC 질의·다운로드·픽셀 판독은 없고
 `science_measurement=false`를 유지한다.
 
+### 2026-10-22 후속: S20A·S23B 후보 footprint 합집합
+
+기존 승인 S20A wide-redshift candidate plan과 S23B selection-compatible ledger를
+좌표 격자에서 합쳤다. 기존 i2 discovery 33 target 셀 기준 S20A pool은 51개 새 셀,
+S23B는 67개 새 셀, 둘의 합집합은 69개 새 셀(총 candidate 셀 102개)이다. 따라서
+S20A 계획은 S23B에 새 셀을 2개만 더하며, 추가 표본은 BCG spectroscopic selection도
+달라진다. r=0.293 단일 고정 endpoint 80% 표본력 92 blocks에 union 상한은 23개 부족하고,
+30비교 조정 180 blocks에는 discovery 33셀을 더해도 78개 부족하다. 이는 실제 usable/
+independent block이 아닌 기하 상한이다. 계산기
+`analysis/icl_wgl_membership/hsc_debug/assess_icl_cross_release_replication_capacity.py`,
+평가 `analysis/icl_wgl_membership/hsc_debug/icl_cross_release_replication_capacity_2026-10-22.md`,
+focused tests 2개를 추가했다. S20A metadata query도 이 부족을 해결하지 않는다는 점을
+확인했으며, 다른 wide-area footprint/candidate source가 필요하다. 새 HSC 요청은 없고
+`science_measurement=false`다.
+
 ### 2026-10-22 후속: S23B 독립 재현 표본력 관문
 
 S23B candidate pool을 기존 exploratory discovery 표본과 단순 합산해 검정력을 과장하지

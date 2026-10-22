@@ -14,6 +14,8 @@
 
 별도 검정력 관문은 기존 탐색 표본을 독립 재현에 중복 사용하지 않고 S23B가 제공할 수 있는 새 target 셀 상한을 계산한다. 최대 67개 S23B 셀은 r=0.293 가정의 단일 고정 endpoint 80% 목표(92 block)에도 약 25개 부족하다. [S23B 독립 재현 표본력 평가](icl_s23b_replication_power_gate_2026-10-22.md)
 
+미제출 S20A broad-redshift 후보 2,596개는 discovery 밖 51셀을 차지하지만 S23B와의 합집합에 단 2셀만 더해 총 69개 새 target 셀이다. 따라서 기존 S20A metadata 계획을 실행해도 독립 footprint 부족을 해소하지 못한다. [cross-release 표본력 상한](icl_cross_release_replication_capacity_2026-10-22.md)
+
 2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
 영향도 진단을 추가했다. 재현 명령은
 [`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),
