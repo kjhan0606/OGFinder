@@ -1210,11 +1210,19 @@ matched-control의 FITS WCS에만 대조했다. 새로운 영상·카탈로그�
 필터 불일치로 baseline에서 이미 빠져 있어 중복 제외하지 않고, eligible한 나머지
 6쌍만 별도 제외한다. 따라서 baseline 783쌍에서 777쌍을 남기는 비교다. 독립
 verifier는 감사 JSON과 원 manifest로 두 제외 집합을 재구성해 pair table을 검사한다.
-첫 Slurm job 434536은 위 중복 제외를 거부하며 출력 생성 전에 종료됐다. 코드를
-수정한 뒤 전체 493개 테스트와 하위 검사 6개가 통과했다. 민감도 실행은 별도 경로
-`icl_2d_s23b_control_exclusion_2026-10-22_01`에서 Slurm job 434537로 실행 중이며,
-120/800 target 처리 시점에 로그 오류는 없었다. 결과 완료 및 독립 검증은 아직
-미확인이다. 비교 도구 `compare_icl_s23b_control_exclusion.py`는 두 검증된 프로파일의
-annulus 차이와 50–200, 200–300 kpc 면적 가중 평균을 기록하며, 공분산을 계산하지
-않는 기술적 민감도로 표시한다. 원래 783쌍 스택은 수정하지 않았으며, 새 영상
-반출이나 CAS 조회는 없다.
+첫 Slurm job 434536은 위 중복 제외를 거부하며 출력 생성 전에 종료됐다. 중복 제외를
+분리한 뒤 전체 493개 테스트와 하위 검사 6개가 통과했고, 작업 434537은 19분 10초에
+완료됐다. 독립 verifier는 798개 입력 control 중 15개 필터 불일치와 6개 추가 후보
+겹침 제외, 777개 pair 행, 40개 radial 행, 두 201×201 map을 검증했다. map은 40,401
+pixel을 모두 덮고 `DELTA - (TARGET - CONTROL)` 최대 잔차는 i 0.00391, i2
+0.00098 nJy/arcsec²다. 검증 JSON SHA-256은
+`f0fb9a4ba6e9048366e481507c73074cebb88cccd6bb87cfa842963bb69535ca`다.
+
+검증 baseline 대비 50–200 kpc 면적 가중 평균은 i +0.357%, i2 −0.020%, 200–300 kpc는
+i +1.321%, i2 −1.867% 이동했다. 개별 annulus의 최대 상대 이동은 i 250–275 kpc에서
+2.633%, i2 200–225 kpc에서 4.611%다. 따라서 여섯 대조장의 제외는 넓은 구간 평균을
+크게 바꾸지 않지만 일부 outer annulus에는 수 퍼센트 변화를 준다. 필터별 이동 부호도
+다르며, 이 subset 민감도는 차이의 공분산이나 유의도를 제공하지 않는다. 상세 수치와
+해시는 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_control_exclusion_assessment_2026-10-22.md`
+에 기록했다. 이 결과는 계속 exploratory이며 `science_measurement=false`; baseline
+783쌍 스택은 보존됐다. 영상 반출이나 CAS 조회는 없다.

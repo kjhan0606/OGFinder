@@ -99,6 +99,17 @@ and area-weighted means over 50–200 and 200–300 kpc. Those differences are
 descriptive because the alternate sample is a subset of the baseline; the
 comparison does not estimate their covariance or a significance.
 
+For the 2026-10-22 run, the baseline is
+`icl_2d_matched_stack_2026-10-19_02/` with
+`independent_verification_2026-10-20.json`; the alternate run is
+`icl_2d_s23b_control_exclusion_2026-10-22_01/` with its newly written
+`independent_verification.json`. Save the comparison JSON in a new directory
+under `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`, not in Git.
+The 2026-10-22 results are recorded in
+[`icl_s23b_control_exclusion_assessment_2026-10-22.md`](icl_s23b_control_exclusion_assessment_2026-10-22.md)
+and the comparison JSON is
+`icl_s23b_control_exclusion_comparison_2026-10-22_01/comparison.json`.
+
 The output is marked `science_measurement=false`. It does not apply extinction,
 residual sky-transfer correction, or PSF-core homogenization; the available
 position-dependent PSF stamps do not constrain extended wings. The pixelwise
