@@ -1239,3 +1239,24 @@ target 4749/i2는 위성 프로파일 1개만 있고 ICL 지원이 없다. 나�
 (SHA-256 `51c979d9bfe698fbd94036579b0b82997c57cb0d535e20f54fa69495a459b532`)이다.
 분석 스크립트 SHA-256은 `f43d3057253132a8308e259ab1f6c6d200849f1ce62d1e0f8ced95d8714781ce`다.
 이는 저장된 표만 읽으며 새 영상·측광·연관 적합을 수행하지 않는다.
+
+### 2026-10-22 후속: S23B ICL–위성 후보의 좌표·공간 셀 장부
+
+기존 S23B 후보 1,333개를 현재 800개 표본의 좌표 및 실제 ICL–위성 분석의
+94행(i 26, i2 68)과 비교하는 오프라인 장부기
+`analysis/icl_wgl_membership/hsc_debug/build_s23b_spatial_candidate_ledger.py`를
+추가하고 실제 자료로 실행했다. 서로 다른 CAMIRA 릴리스의 숫자 ID를 결합 키로
+사용하지 않고 좌표를 비교했다. 후보는 100개의 5도 RA/Dec 셀에 있으며 현재 parent
+800개 표본과 1초각 이내 좌표 일치는 0개다. 연관표에는 i 13개, i2 33개 target 셀이
+있고 후보는 이 중첩을 제외한 셀을 각각 87개, 67개 차지한다. 따라서 i2는 카탈로그
+기하 상한으로 현재 33개 target 셀에서 최대 100개까지 확장 가능하다. 이 수치는 독립
+공분산 블록이나 usable 표본이 아니며, nominal 92셀 설계선은 기하 상한으로 넘을 수
+있어도 보수 180셀 설계선에는 80개가 모자란다. 신규 영상 coadd, mask, depth, PSF,
+위성 완전도, shape 및 matched-control 지원은 미검증이다. 기존 target 영상 WCS에는
+후보 중심이 없고 matched-control 영상에는 7개가 있어 오염 확인 후보로 남긴다.
+재현 결과 TSV SHA-256 `ab8df9fce1435d1d9eca15f742f43356cbd430b2159852a14d9b67963d83b775`,
+요약 JSON SHA-256 `f6ac867881d8184d02a580e9a18540b7513a90f530e51e6cdf04205db535e8d1`이다.
+세부 방법과 입력 해시는
+`analysis/icl_wgl_membership/hsc_debug/icl_s23b_spatial_candidate_ledger_2026-10-22.md`에
+기록했다. 단위시험 2개를 통과했다. HSC 질의·다운로드·픽셀 판독은 없고
+`science_measurement=false`를 유지한다.

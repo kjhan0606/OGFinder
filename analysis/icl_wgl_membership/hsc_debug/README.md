@@ -6,6 +6,8 @@
 
 2026-10-21에는 S20A·S23B CAMIRA 목록을 같은 `z_cl`·BCG 분광 기준으로 합친 오프라인 표본 상한을 계산했다. 6′ 최소 간격 뒤 1,620개 후보(22개 새 5° 셀)가 남지만 현재 joint-support yield를 적용하면 예상 i2 공통지원은 총 약 206행으로, 다중비교 표본력 시나리오의 323–804행보다 작다. 영상·마스크·PSF 지원은 미검증이다. 재현기는 [`audit_icl_cross_release_expansion.py`](audit_icl_cross_release_expansion.py), 결과와 해시는 [cross-release 표본 확장 평가](icl_cross_release_expansion_assessment_2026-10-21.md)에 있다.
 
+2026-10-22에는 S23B 후보 1,333개를 현재 parent와 ICL–위성 결합표에 좌표 기반으로 연결해 행별 지원 장부를 만들었다. i2 표본 33개 target 셀에서 최대 67개 새 후보 셀을 더할 수 있어 총 100개 셀이 기하 상한이지만, 보수 180-block 설계 목표와 영상·대조장·PSF·위성 완전도 검증을 충족하지 않는다. 재현기와 결과 해시는 [S23B 공간 후보 장부](icl_s23b_spatial_candidate_ledger_2026-10-22.md)에 있다.
+
 2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
 영향도 진단을 추가했다. 재현 명령은
 [`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),
