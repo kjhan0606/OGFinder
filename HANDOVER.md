@@ -1181,3 +1181,14 @@ HSC에 연결하지 않으며 제출·다운로드·과학 측정을 하지 않�
 실제 부분 결과로 검증했다. 다음 실행은 job `1062312`의 CAS 상태가 완료 또는 오류로
 바뀌었는지 확인한 뒤 같은 checkpoint에서 이어간다. Random-lens subtraction 및
 spatial-block covariance가 없으므로 weak-lensing 결과는 계속 `science_measurement=false`다.
+
+### 2026-10-22 후속: 독립 footprint 표본 확장 게이트
+
+800개 parent와 33개 i2 spatial block은 현재 ICL–위성 검정력 목표에 부족하다.
+공식 HSC 자료 설명상 PDR3 CAMIRA는 S20A 기반이며, HSCLA2020은 훨씬 넓은 PI 관측을
+포함하지만 다중 필터 영역은 성기고 별도 데이터 릴리스다. S19A shape catalog는 별도
+PDR3 제품이다. 그러므로 넓은 영상 footprint를 곧바로 weak-lensing 표본으로 세지 않는다.
+새 요청 전에 기존 CAMIRA 후보, coadd/control/mask 지원, S19A shape footprint, 독립 sky
+block을 로컬 매니페스트로 교차검사하도록
+`analysis/icl_wgl_membership/hsc_debug/hsc_independent_footprint_expansion_plan_2026-10-22.md`
+에 게이트를 작성했다. 이 문서를 위해 외부 서비스 조회나 신규 데이터 요청은 하지 않았다.
