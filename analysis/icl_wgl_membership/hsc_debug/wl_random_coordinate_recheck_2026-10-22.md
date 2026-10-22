@@ -17,10 +17,17 @@ whether HSC CAS job `1062312` is still running, complete, or failed.
 
 ## Decision
 
-Do not resubmit batch `002` or start batches `003`–`031` until the existing CAS
-job is checked through the authenticated HSC status endpoint. No HSC query or
-data transfer was made during this recheck. The original user-approved scope
-remains limited to the 800-lens random-coordinate columns
+The preceding unauthenticated process check could not determine the remote
+CAS state. On the next authorized run, the same Astrafek submitter resumed from
+the existing checkpoint and authenticated against the HSC status endpoint.
+At `2026-10-22T08:59:08Z`, CAS again reported batch `002` as `running` (nine
+persisted polls). The submitter did not resubmit batch `002`. At that poll, no
+new batch had yet been submitted and no new coordinate file had been written.
+The same approved submitter remains active and will continue the existing plan
+when batch `002` reaches a terminal state.
+
+The original user-approved scope remains limited to the 800-lens
+random-coordinate columns
 `lens_id, ra_deg, dec_deg`; no source rows, shapes, photo-z values, or images
 are included. Random-lens subtraction and weak-lensing science measurement
 remain incomplete.
