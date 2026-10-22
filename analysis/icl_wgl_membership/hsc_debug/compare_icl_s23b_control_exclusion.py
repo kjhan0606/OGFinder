@@ -82,7 +82,8 @@ def compare(baseline_work: Path, baseline_verification: Path,
             alternate_work: Path, alternate_verification: Path) -> dict:
     base, base_v, base_rows = verified_summary(baseline_work, baseline_verification)
     alt, alt_v, alt_rows = verified_summary(alternate_work, alternate_verification)
-    if (base.get("mask_factor") != alt.get("mask_factor")
+    if (base_v.get("mask_factor") != alt_v.get("mask_factor")
+            or base_v.get("mask_factor") != 2.5
             or base["grid"] != alt["grid"]
             or base.get("n_pairs_stacked") != 783
             or alt.get("n_pairs_stacked") != 777
