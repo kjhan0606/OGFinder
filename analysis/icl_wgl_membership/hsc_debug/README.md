@@ -8,6 +8,8 @@
 
 2026-10-22에는 S23B 후보 1,333개를 현재 parent와 ICL–위성 결합표에 좌표 기반으로 연결해 행별 지원 장부를 만들었다. i2 표본 33개 target 셀에서 최대 67개 새 후보 셀을 더할 수 있어 총 100개 셀이 기하 상한이지만, 보수 180-block 설계 목표와 영상·대조장·PSF·위성 완전도 검증을 충족하지 않는다. 재현기와 결과 해시는 [S23B 공간 후보 장부](icl_s23b_spatial_candidate_ledger_2026-10-22.md)에 있다.
 
+이 1,333개 후보의 PDR3 HSC-I 영상 패치 가능성을 검사하기 위해 중심과 proper 1-Mpc 원주 8점을 대상으로 27개 batch metadata-only SQL을 준비했다(총 11,997 probe, CAS 미제출). 이 별도 S23B query 범위는 승인 대기이며 기존 2,596개 S20A 계획과 합쳐서 취급하지 않는다. [S23B coverage metadata 계획](icl_s23b_coverage_metadata_plan_2026-10-22.md)
+
 2026-10-20에는 HSC patch-QA 트랙 연결요소를 하나씩 제외하는 약한렌즈
 영향도 진단을 추가했다. 재현 명령은
 [`run_wl_hsc_tract_region_influence.sbatch`](run_wl_hsc_tract_region_influence.sbatch),

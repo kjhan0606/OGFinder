@@ -1240,6 +1240,28 @@ target 4749/i2는 위성 프로파일 1개만 있고 ICL 지원이 없다. 나�
 분석 스크립트 SHA-256은 `f43d3057253132a8308e259ab1f6c6d200849f1ce62d1e0f8ced95d8714781ce`다.
 이는 저장된 표만 읽으며 새 영상·측광·연관 적합을 수행하지 않는다.
 
+### 2026-10-22 후속: S23B 후보 HSC-I metadata coverage 조회안
+
+앞선 S23B 공간 장부는 i2 결합표 밖의 후보 target 5도 셀이 최대 67개라고 보였지만,
+새 후보들의 실제 HSC 영상 지원은 확인되지 않았다. 이를 확인할 PDR3 Wide metadata-only
+계획을 `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_icl_coverage_plan.py`로
+준비했다. S23B 후보 1,333개 각각에 중심과 proper 1,000 kpc 원주 8점을 놓아 총
+11,997 위치를 27개 SQL 배치로 검사한다. 열은 candidate/probe key, skymap/tract/patch,
+HSC-I mosaic 크기·seeing·zeropoint, i-band patch QA depth/seeing 및 image-product
+flag 등 14개로 고정했다. 각 probe 최대 4 patch라는 상한으로 예상 metadata 출력은
+47,988행이며 영상, mask pixels, object/source rows, shape, photo-z, PSF FITS는 요청하지
+않는다.
+
+기존 2,596-candidate S20A 계획은 별도 승인 scope이며 저장 manifest는 여전히
+`prepared_not_submitted`다. 이 새 S23B 계획도 `prepared_pending_user_approval`이며
+CAS에 연결하거나 질의하지 않았다. SQL 27개 및 총 29개 artifact hash와 metadata-only
+allowlist를 검증했고 focused tests 2개가 통과했다. 계획 JSON SHA-256은
+`e615ee7c2414109af6d3c156104d71766355d3b4e2a5dba3636a0142995557d7`이다. 상세 범위,
+제한과 재현 명령은
+`analysis/icl_wgl_membership/hsc_debug/icl_s23b_coverage_metadata_plan_2026-10-22.md`에
+있다. 새 S23B CAS 조회는 사용자의 해당 정확한 범위 승인 후에만 진행하며, 이 계획은
+이미지 다운로드를 승인하지 않는다.
+
 ### 2026-10-22 후속: S23B ICL–위성 후보의 좌표·공간 셀 장부
 
 기존 S23B 후보 1,333개를 현재 800개 표본의 좌표 및 실제 ICL–위성 분석의
