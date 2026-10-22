@@ -38,3 +38,15 @@ def test_grid_spec_selects_all_supported_frames_without_relabeling_filter():
     assert result["n_frames"] == 13
     with pytest.raises(ValueError, match="omitted"):
         grid_spec("1056", "i", all_supported=True)
+
+
+def test_i2_all_supported_grid_pins_full_position_psf_supported_sample():
+    result = grid_spec(None, "i2", all_supported=True)
+
+    assert result["cluster_id"] is None
+    assert result["scope"] == "all_supported_frames"
+    assert result["n_frames"] == 44
+    assert result["filter"] == "i2"
+    assert result["n_configurations"] == 12
+    assert result["science_measurement"] is False
+    assert result["psf_approved"] is False
