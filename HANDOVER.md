@@ -1307,7 +1307,7 @@ sky-free는 아니다. 이번 감사는 제품 선택만 확인했고 diffuse IC
 `science_measurement=false` 유지. 상세는
 `analysis/icl_wgl_membership/hsc_debug/icl_hsc_sky_product_provenance_assessment_2026-11-03.md`.
 
-### 2026-11-03 후속: 전체 표적–대조장 외곽 residual 진단 실행 중
+### 2026-11-03 후속: 전체 표적–대조장 외곽 residual 진단 완료
 
 783개 same-filter matched target/control pair의 기존 global-sky coadd/bg 영상에서
 600–900 kpc 타일 통계를 같은 64-pixel plane-fit 방식으로 비교하는 Astrafek 도구
@@ -1319,10 +1319,24 @@ outer-residual 진단값을 공변량으로 넣은 부분상관 민감도도 계
 
 기술 사전실행에서 i2 target 2269 / matched control `control_2269_43150080429003818`은
 각각 156/291 유효 타일을 만들었고 단위·마스크 경로가 정상 동작했다. 이는 한 쌍의 입력
-검증이지 과학 결과가 아니다. 전체 계산은 syntax Slurm job 448403, CPU 1개·16 GiB,
-출력 경로 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`
-`icl_target_control_outer_sky_2026-11-03_01/`로 제출되어 현재 실행 중이다. 신규 HSC 접속,
-질의, 다운로드는 없다. 완료 후 결과 감사와 한계 기록을 보강한다. `science_measurement=false`.
+검증이지 과학 결과가 아니다. 전체 계산은 syntax Slurm job 448403, CPU 1개·16 GiB로
+26:08에 정상 종료했다. 783쌍( i 302, i2 481), 총 1,566 frame row, connected 5도 block
+38개다. target-control 600–900 kpc plane intercept median 차이는 i −0.055
+[q16,q84 −3.942,+3.816], i2 −0.370 [−4.863,+3.596] nJy/arcsec²다. 타일 잔차 MAD/명목
+평균 sigma 중앙값은 양쪽 이미지 모두 약 3.0–3.2다. 이것은 실제 외곽광·PSF·cirrus·잔류
+천체와 마스크를 포함할 수 있는 진단량이지 순수 sky나 보정 배율은 아니다. 파일은
+`icl_target_control_outer_sky_2026-11-03_01/`에 있다. 신규 HSC 접속·질의·다운로드는 없다.
+
+처음에는 74개 ICL–위성 연관 표본에 전체 783쌍 그래프의 연결 block label을 재사용해
+연관 표본의 공간 영역이 일부 합쳐지는 문제가 발견됐다(초기 요약의 i2 20, i 8 block).
+pair/frame 영상 진단은 유효하지만 초기 bootstrap 구간은 폐기했다. 표본 내부에서 filter별
+block을 다시 계산하자 i2 53쌍/28 block, i 21쌍/13 block이다. 수정 partial r은 i2 기준
+0.239→0.252, 차이 +0.013 [−0.034,+0.111]; i 0.112→0.107, 차이 −0.005
+[−0.137,+0.106]이다(각각 5,000 block resample). 차이 구간은 0을 포함하고 outer
+intercept가 물리적 cluster light를 포함할 수 있으므로 보정·검출로 해석하지 않는다.
+정정 결과와 독립 검증은
+`analysis/icl_wgl_membership/hsc_debug/icl_target_control_outer_sky_assessment_2026-11-03.md`에
+기록했다. 원·수정 산출물 모두 `science_measurement=false`.
 완료 산출물용 독립 결과 검증기
 `analysis/icl_wgl_membership/hsc_debug/verify_icl_target_control_outer_sky.py`도 추가했다.
 저장 manifest에서 same-filter pair 선택·좌표를 대조하고 plane 차분, 연결블록,

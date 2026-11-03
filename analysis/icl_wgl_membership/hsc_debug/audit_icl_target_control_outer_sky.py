@@ -271,6 +271,7 @@ def run(sample: Path, output: Path, replicas: int, seed: int) -> dict:
     association_rows = read_tsv(ASSOCIATION_TABLE)
     by_key = {(str(r["cluster_id"]), str(r["filter"])): r for r in association_rows}
     association_by_filter = {}
+    association_block_meta = {}
     for band in ("i2", "i"):
         merged = []
         for pair in pair_rows:
@@ -285,12 +286,32 @@ def run(sample: Path, output: Path, replicas: int, seed: int) -> dict:
                 "satellite_delta_center_sfd_njy_arcsec2": float(assoc["satellite_delta_center_sfd_njy_arcsec2"]),
                 "z": float(assoc["z"]), "richness": float(assoc["richness"]),
                 "outer_plane_delta_njy_arcsec2": float(pair["target_minus_control_plane_constant_njy_arcsec2"]),
-                "connected_5deg_block": pair["connected_5deg_block"],
+                "target_ra_deg": float(pair["target_ra_deg"]),
+                "target_dec_deg": float(pair["target_dec_deg"]),
+                "control_ra_deg": float(pair["control_ra_deg"]),
+                "control_dec_deg": float(pair["control_dec_deg"]),
             })
         if merged:
+            # Define the covariance partition on the actual association sample
+            # within this filter. The full 783-pair graph can bridge otherwise
+            # separate association regions through unrelated clusters.
+            target_coords = [{"ra_deg": r["target_ra_deg"], "dec_deg": r["target_dec_deg"]}
+                             for r in merged]
+            control_coords = [{"ra_deg": r["control_ra_deg"], "dec_deg": r["control_dec_deg"]}
+                              for r in merged]
+            _, assoc_labels, n_target_cells_assoc, n_control_cells_assoc, n_blocks_assoc, max_assoc = \
+                pair_block_labels(target_coords, control_coords, np.ones(len(merged), dtype=bool))
+            for row, label in zip(merged, assoc_labels):
+                row["connected_5deg_block"] = str(label)
+            association_block_meta[band] = {
+                "target_cells": n_target_cells_assoc, "control_cells": n_control_cells_assoc,
+                "connected_blocks": n_blocks_assoc, "largest_block_pairs": max_assoc,
+                "scope": "recomputed within the fixed ICL-satellite association subset for this filter",
+            }
             association_by_filter[band] = block_bootstrap_association(
                 merged, np.asarray([r["connected_5deg_block"] for r in merged]), replicas,
                 seed + (0 if band == "i2" else 1))
+            association_by_filter[band]["spatial_block_assignment"] = association_block_meta[band]
 
     write_tsv(output / "frame_outer_sky_diagnostics.tsv", frame_rows)
     write_tsv(output / "paired_outer_sky_diagnostics.tsv", pair_rows)
@@ -317,6 +338,7 @@ def run(sample: Path, output: Path, replicas: int, seed: int) -> dict:
                                            "connected_blocks": n_blocks, "largest_block_pairs": max_block,
                                            "rule": "connected pairs sharing either endpoint's equal-area 5-degree sky cell"},
         "association_outer_residual_sensitivity_by_filter": association_by_filter,
+        "association_spatial_blocks_by_filter": association_block_meta,
         "input_sha256": hashes,
         "image_content_rehashed": False,
         "image_content_integrity": "current file sizes matched completed download records; recorded image SHA-256 values were inherited from prior verified acquisitions, not recomputed here",

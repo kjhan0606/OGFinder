@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 import math
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -47,6 +48,21 @@ def audit(work: Path) -> dict:
     input_hashes_match = {}
     for raw_path, expected in hashes.items():
         path = Path(raw_path)
+        if path.name == "audit_icl_target_control_outer_sky.py":
+            # The initial 783-pair job was run from this pinned commit. The
+            # analysis source was subsequently corrected to scope bootstrap
+            # blocks to the 74-pair association sample; verify the historical
+            # source from git rather than comparing it to the corrected file.
+            commit = "07ef9b5d6cb8cfa08d4cf8f32f2569277100ed7d"
+            repo = Path(__file__).resolve().parents[3]
+            relative = "analysis/icl_wgl_membership/hsc_debug/audit_icl_target_control_outer_sky.py"
+            proc = subprocess.run(["git", "-C", str(repo), "show", f"{commit}:{relative}"],
+                                  check=True, capture_output=True)
+            actual = hashlib.sha256(proc.stdout).hexdigest()
+            input_hashes_match[raw_path] = actual == expected
+            if actual != expected:
+                raise ValueError("historical analyzer code hash differs from the run provenance")
+            continue
         if not path.is_file():
             raise FileNotFoundError(path)
         actual = sha256(path)
@@ -183,11 +199,14 @@ def audit(work: Path) -> dict:
         "association_bootstrap_replay": association_results,
         "input_sha256_rechecked": input_hashes_match,
         "image_content_rehashed": False,
+        "historical_analysis_code_commit": "07ef9b5d6cb8cfa08d4cf8f32f2569277100ed7d",
+        "legacy_association_bootstrap_replayed_as_recorded": True,
         "pair_table_sha256": sha256(pair_path),
         "frame_table_sha256": sha256(frame_path),
         "summary_sha256": sha256(summary_path),
         "limitations": [
-            "This validates saved-table arithmetic, membership, block labels, and deterministic bootstrap replay; it does not re-open or independently remeasure every science image.",
+            "This validates saved-table arithmetic, membership, full-sample block labels, and the historical deterministic bootstrap as recorded; it does not re-open or independently remeasure every science image.",
+            "The historical association bootstrap inherited connected blocks from all 783 ICL pairs and is superseded for association uncertainty by the separately reblocked 74-pair replay.",
             "Outer-annulus intercepts are diagnostic residual indicators, not pure sky values or a validated correction.",
             "The source science gate remains false.",
         ],

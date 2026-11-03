@@ -656,3 +656,23 @@ Spearman 공간 구간은 0을 포함한다. 작은 중심 적격·i 표본도 �
 좌표 결합 94/94, 입력 및 결과 해시, 테스트 3개를 확인했다. 세부 결과와 한계는
 [공간 블록 평가](hsc_debug/satellite_icl_spatial_block_assessment_2026-10-19.md) 및
 `sample_800_2026-10-13/satellite_icl_spatial_blocks_2026-10-20_02/`에 기록했다.
+
+### 2026-11-03 약중력 random-center 지원 관문
+
+이미 승인된 random 좌표와 기존 렌즈별 shape-count 계획을 재사용해, CAMIRA 중심과
+3 proper-Mpc aperture가 겹치지 않는 중심 중 lens-specific 재사용을 허용하는 표본을
+평가했다. 620개 렌즈에 중심 5개씩, 총 3,100개 lens–center 연결과 3,020개 고유 좌표를
+선정했다. 77개 좌표는 여러 렌즈에 공유되므로 최종 공분산에서 공유 위치를 보존해야 한다.
+각 중심의 HSC S19A shape 객체 수만 `COUNT(DISTINCT object_id)`로 집계하는 124개 SQL
+배치(배치당 최대 25개)를 만들고 해시·열·집계 표현을 오프라인에서 대조했다. 결과 계획은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`
+`wl_random_shape_count_plan_lens_reuse_2026-11-03_01/`에 있으며 총 SQL 크기는 1,069,022
+bytes다. shape 값·source 행·photo-z·영상은 반환하지 않는다. 이 집계는 기존 800개 렌즈
+count 승인과 다른 데이터 반출 범위이므로 사용자 명시 승인이 아직 필요하며, HSC CAS에
+연결하거나 질의를 제출하지 않았다. count 결과가 확보되더라도 random shape-row export와
+cluster-minus-random stack은 별도 지원·전송량·공분산 검증 뒤 진행한다. 약중력 결과는 계속
+cluster-only 진단이고 `science_measurement=false`다. 상세한 재사용 민감도는
+[`wl_random_coordinate_reuse_assessment_2026-11-03.md`](hsc_debug/wl_random_coordinate_reuse_assessment_2026-11-03.md),
+격자 크기별 잭나이프 민감도는
+[`wl_spatial_jackknife_cell_scale_assessment_2026-11-03.md`](hsc_debug/wl_spatial_jackknife_cell_scale_assessment_2026-11-03.md)에
+정리했다.
