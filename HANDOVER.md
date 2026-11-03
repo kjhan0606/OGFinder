@@ -1471,3 +1471,33 @@ rank 7, nominal `p=3.95e-15`이나 공분산과 approximate sky blocks에 민감
 상세 평가 `analysis/icl_wgl_membership/hsc_debug/wl_richness_split_assessment_2026-11-03.md`,
 계산기 `analysis/icl_wgl_membership/hsc_debug/audit_wl_richness_split.py`; 요약 JSON SHA-256
 `20f28c5cdec8a8a6ca9d3041bfcdad352999d1a6e4b3e809eb6bc5e6e1827a33`이다.
+
+### 2026-11-03 후속: ICL–위성 공분산 지원범위 정정과 공유 고리 민감도
+
+기존 63쌍 공분산 실행은 `prestack_flux_profiles` 137행 공통-stack table을 ICL 지원 입력으로
+사용해 고정 74쌍 연관표본 중 22쌍을 빼고 그 표본 밖 11쌍을 넣었다. 이는 annulus별 지원표
+범위에 맞지 않아 이전 63쌍 평가는 역사적 subset 결과로 표시하고 새 실행으로 교체했다.
+지원 선택기의 기본 입력을 `icl_annulus_support_2026-10-18_01`로 수정했다. 실제 200–300 kpc
+지원표 224 pair를 40% ICL coverage로 선별하고, 위성 50–75 kpc 양쪽 60% coverage와 대조점
+3개 기준을 적용하자 94 pairs/235 profiles가 선정됐다(26 i, 68 i2). 고정된 74 association
+pairs(21 i, 53 i2)는 모두 포함되고 누락은 0이며, 바깥 추가 지원 pair는 20개다.
+
+실제 마스크 유효 픽셀을 비교한 206개 association 위성 profile 중 140개(68%)가 ICL ring과
+공유 pixel을 가진다(29/41 i, 111/165 i2). 지원 위성 target 50–75 kpc pixel 합집합을
+200–300 kpc target ICL ring에서 제외해도 paired 측정값을 직접 재구성했다. 5,000회 연결
+5도 블록 재표집에서 i2 공통 coverage 표본은 52개가 남고 부분상관이 0.217에서 0.176으로
+낮아진다. 짝지은 변화 95% 구간은 [−0.065, −0.018]이다. 전체 filter subset 53개에서 0.234→
+0.193, 변화 구간 [−0.064, −0.021]이다. 이는 동일 픽셀 재사용이 관측 관계 일부를 만들 수
+있음을 보여주는 aperture-exclusion 민감도이지 correction/detection은 아니다. ICL coverage
+40% 아래로 내려가는 쌍이 filter별 하나씩 있어 공통지원 재분석을 함께 기록했다.
+
+표적+matched-control 분산을 포함한 94행 공분산은 독립 formula/provenance 검증을 통과했고,
+새 exact-support verifier는 output pair set이 independently recomputed 94개와 같으며 74개
+association pair를 전부 덮음을 확인했다. 분석은 기존 HSC 컷아웃만 썼고 신규 query/download는
+없다. 상세 보고서는 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_full_support_overlap_assessment_2026-11-03.md`,
+지원범위 검증기 `verify_satellite_icl_covariance_support_scope.py`, noise-error 진단기
+`assess_icl_satellite_pixel_noise_bias.py`, shared-shell 민감도기
+`measure_icl_satellite_overlap_sensitivity.py`다. 최신 sensitivity summary SHA-256
+`733433f2495ef4cf1592d7885a9845de57c726b6b64a2fdf93ca91514a0260e9`; 모든 산출물은
+`science_measurement=false`를 유지한다. 다음 ICL 단계는 위성-shell 제외 profile을 포함한
+joint injection/recovery와 큰 규모 sky·PSF wing 공간 블록 공분산이다.

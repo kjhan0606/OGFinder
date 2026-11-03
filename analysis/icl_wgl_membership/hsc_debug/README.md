@@ -585,13 +585,16 @@ bootstrap intervals. The result is filter-dependent and remains exploratory; see
 and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_center_quality_sensitivity_2026-10-18_02/`.
 
 `audit_satellite_icl_pixel_overlap.py` refines the circular-annulus geometry check by measuring
-the actual shared valid pixels in the saved K2.5 ICL and SEP/Kron satellite masks. It can run on
-one or more matched clusters with `--cluster-id`; the complete supported sample is 63 clusters
-and 162 satellite profiles. It reads existing images only and keeps
-`science_measurement=false`. See
+the actual shared valid pixels in the saved K2.5 ICL and SEP/Kron satellite masks. Its support
+input is the per-annulus ICL table, not the smaller common-stack table. With this scope it covers
+94 cluster/filter pairs and 235 satellite profiles; the fixed 74-pair association sample is fully
+contained. It can run on one or more matched clusters with `--cluster-id`, reads existing images
+only, and keeps `science_measurement=false`. See
 [`satellite_icl_pixel_overlap_2026-10-18.md`](satellite_icl_pixel_overlap_2026-10-18.md) and
-the hash-recorded output at
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_pixel_overlap_2026-10-18_02/`.
+the corrected full-support and shared-pixel sensitivity assessment
+[`icl_satellite_full_support_overlap_assessment_2026-11-03.md`](icl_satellite_full_support_overlap_assessment_2026-11-03.md).
+The 94-pair output is at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_icl_pixel_overlap_2026-11-03_01/`.
 
 `audit_satellite_icl_shared_pixel_covariance.py` reconstructs the accepted 50–75 kpc satellite
 target and azimuthal-control annuli, then contracts their signed equal-satellite weights with
@@ -1141,6 +1144,15 @@ term, full position-dependent covariance, source Poisson noise, PSF, and sky
 transfer remain outside this calculation. The row-level output, hashes, and
 interpretation are in
 [`satellite_icl_lag_covariance_assessment_2026-10-19.md`](satellite_icl_lag_covariance_assessment_2026-10-19.md).
+
+The 2026-11-03 63-pair extension is a historical subset because it used the
+137-row common-stack table to select per-annulus support. The corrected full-support rerun covers
+94 pairs and all 74 fixed association pairs. Actual masks show shared valid ICL/satellite pixels
+in 140/206 association profiles. Excluding the union of the shared satellite target-shell pixels
+reduces the i2 redshift/richness-adjusted partial correlation from 0.217 to 0.176 in the common
+coverage sample; the paired 95% block-bootstrap change is [−0.065, −0.018]. This is a strong
+measurement-overlap sensitivity, not a causal correction or science detection; details and hashes
+are in [`icl_satellite_full_support_overlap_assessment_2026-11-03.md`](icl_satellite_full_support_overlap_assessment_2026-11-03.md).
 
 `audit_satellite_icl_target_control_covariance.py` adds the matched-control
 image's 200–300 kpc aperture variance to that target-side calculation. All 57

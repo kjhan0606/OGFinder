@@ -1,5 +1,13 @@
 # Expanded matched-control ICL–satellite pixel-noise covariance — 2026-11-03
 
+> **Superseded for the full annulus-supported sample:** this 63-pair run used the
+> 137-row common-stack table as its ICL support input. The corrected annulus-specific
+> support table contains 224 supported cluster/filter pairs; rerunning against it
+> yields 94 covariance pairs and includes all 74 pairs in the fixed ICL–satellite
+> association sample. Keep this document as the historical subset result; use
+> [`icl_satellite_full_support_overlap_assessment_2026-11-03.md`](icl_satellite_full_support_overlap_assessment_2026-11-03.md)
+> for the corrected scope and current interpretation.
+
 ## Sample and method
 
 Astrafek expanded the target/control pixel-noise covariance audit from 57 to 63

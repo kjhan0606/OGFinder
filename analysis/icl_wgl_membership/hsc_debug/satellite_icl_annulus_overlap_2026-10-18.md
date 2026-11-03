@@ -1,5 +1,10 @@
 # ICL–위성 외곽 고리 기하학적 중첩 진단
 
+> **역사적 표본 범위:** 이 보고서는 137쌍 common-stack table에서 선정한 63개 cluster/filter
+> 쌍과 162개 satellite profile의 이상 원형 고리 기하를 요약한다. 전체 annulus별 지원표를
+> 사용한 현재 결과는 94쌍/235 profile이며, 실제 마스크 pixel overlap과 ICL 상관 민감도는
+> [`icl_satellite_full_support_overlap_assessment_2026-11-03.md`](icl_satellite_full_support_overlap_assessment_2026-11-03.md)에 있다.
+
 **상태:** 지원 기하만 진단; `science_measurement=false`, `flux_covariance_available=false`
 
 ## 질문과 정의
