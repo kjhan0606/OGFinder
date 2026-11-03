@@ -1323,6 +1323,11 @@ outer-residual 진단값을 공변량으로 넣은 부분상관 민감도도 계
 출력 경로 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`
 `icl_target_control_outer_sky_2026-11-03_01/`로 제출되어 현재 실행 중이다. 신규 HSC 접속,
 질의, 다운로드는 없다. 완료 후 결과 감사와 한계 기록을 보강한다. `science_measurement=false`.
+완료 산출물용 독립 결과 검증기
+`analysis/icl_wgl_membership/hsc_debug/verify_icl_target_control_outer_sky.py`도 추가했다.
+저장 manifest에서 same-filter pair 선택·좌표를 대조하고 plane 차분, 연결블록,
+deterministic bootstrap을 재계산한다. 정적 컴파일 및 diff 검사는 통과했으며 실제 산출물
+대조는 Slurm 계산 완료 후 수행한다. 검증기 commit은 `45c7408a9`다.
 
 ### 2026-11-03 후속: 약중력 공간 잭나이프 격자 크기 민감도
 
