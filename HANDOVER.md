@@ -1286,6 +1286,27 @@ submitter/plan/aggregation 검사 10개가 통과했다.
 기록했다. 단위시험 2개를 통과했다. HSC 질의·다운로드·픽셀 판독은 없고
 `science_measurement=false`를 유지한다.
 
+### 2026-11-03 후속: 전체 ICL 영상 sky 제품 출처 감사
+
+현재 HSC 자료가 ICL에 적절한 global-sky 제품인지 전체 매니페스트와 완료기록에서
+다시 확인했다. Astrafek 재현 감사기 `audit_icl_sky_product_provenance.py`가 표적
+800개와 matched-control 798개 전부 `sky=global-sky`, `product=coadd/bg`,
+`product_reviewed=true`임을 검사했다. 파일 1,598개가 모두 존재하고 완료기록의 바이트
+크기와 일치한다. 이번 확인에서 파일 전체 SHA나 픽셀은 다시 읽지 않았다. 결과는
+GPFS의 `icl_sky_product_provenance_2026-11-03_01/summary.json` (SHA-256
+`235c4f5cedd9506eb874c9cfe0ac09507a71b1a5f729b1816779b63da4f2c839`)이다.
+
+HSC PDR3 공식 처리 설명에서 `deepCoadd/` patch는 global-sky coadd, `deepCoadd-results/`
+의 `calexp`는 source detection/측광용 local-sky 제품으로 구분된다. 저장된 cutout manifest도
+`coadd/bg`를 aggressive background subtraction 이전 `deepCoadd` 제품으로 기록한다. 따라서
+현재 ICL 스택은 확장광에 맞는 global-sky 쪽을 사용하고 있으며 local-sky calexp를 쓰지는
+않는다. 그러나 global-sky도 노출별 sky 배경 및 잔류 local pattern 처리 후의 coadd이므로
+sky-free는 아니다. 이번 감사는 제품 선택만 확인했고 diffuse ICL의 upstream transfer는
+측정하지 않았다. 다음 sky 관문은 현재 global-sky 자료에서 target-control 공간 잔류와
+고정 ICL/위성 가중치의 공분산을 검증하는 것이다. 관련 테스트 3개 통과; 과학 상태는
+`science_measurement=false` 유지. 상세는
+`analysis/icl_wgl_membership/hsc_debug/icl_hsc_sky_product_provenance_assessment_2026-11-03.md`.
+
 ### 2026-10-22 후속: S20A·S23B 후보 footprint 합집합
 
 기존 승인 S20A wide-redshift candidate plan과 S23B selection-compatible ledger를
