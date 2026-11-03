@@ -1314,3 +1314,40 @@ S23B 단독 67개 target-cell 상한의 power는 0.662, 최소 25개 block이 �
 평가 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_replication_power_gate_2026-10-22.md`,
 focused tests 5개를 추가했다. 새 HSC 요청이나 science measurement는 없고
 `science_measurement=false`를 유지한다.
+
+### 2026-11-03 후속: weak-lensing 대조 중심 기하 검사 및 좌표 재사용 민감도
+
+기존에 승인된 random-coordinate export가 32/32 배치, 780,191행까지 완료된 것을
+`coordinate_status.json`에서 확인했다. export는 800개 렌즈와 `lens_id, ra_deg,
+dec_deg` 세 열만 포함한다. syntax Slurm job 448283이 기존 CAMIRA S20A 카탈로그와
+렌즈 적색편이를 사용한 오프라인 3 proper-Mpc 겹침 검사를 31초 만에 정상 완료했다.
+기하 표 780,191행 및 렌즈별 800행 집계가 summary와 재계산상 일치한다. summary는
+`full_aperture_footprint_verified=false`, `hsc_i_depth_psf_sky_matched=false`,
+`science_measurement=false`다.
+
+원래 screen은 random coordinate가 전체 렌즈 연결표에서 단 한 번만 나타나야 후보로
+인정했다. 이는 겹침 검사를 각 lens-coordinate 쌍에 적용해도 되는 상황에서 다른 렌즈의
+중복을 함께 버리는 과도하게 보수적인 선택 규칙일 수 있다. 재현 감사기
+`audit_wl_random_coordinate_reuse.py`는 원래 전역 고유 기준과 렌즈별 겹침 판정 기준을
+비교한다. 원 기준은 68,352 후보/544 렌즈(5개 이상은 483렌즈)다. 렌즈 간 같은 위치를
+재사용하되 각 렌즈 안 중복은 배제하면 95,847개 연결/667 렌즈(5개 이상 620, 10개 이상
+577)가 남는다. 이는 82,366개 고유 좌표이며 11,514개 좌표가 여러 렌즈에 공유되고 최대
+5개 렌즈가 같은 지점을 사용한다. 재사용은 별도 독립 표본이 아니므로 최종 추정에서는
+공유 위치를 공간 블록 공분산에 넣어야 한다.
+
+예비 count-only 계획을 위해 렌즈별 기하 후보가 5개 이상인 620개 렌즈에서 SHA-256 순위로
+렌즈당 5개, 총 3,100개 중심을 선택했다(3,020개 고유 위치; 77개 위치가 여러 선택 렌즈에
+공유). HSC S19A의 shape catalog 세 테이블에서 각 3 proper-Mpc 원뿔 안 `COUNT(DISTINCT
+object_id)` 정수만 반환하도록 25개씩 124 SQL batch를 생성했다. 열은
+`random_center_id, matched_lens_id, n_shape_sources`로 제한된다. 계획은 GPFS의
+`wl_random_shape_count_plan_lens_reuse_2026-11-03_01`에 `prepared_not_submitted` 상태로
+있으며 HSC CAS 연결/제출은 하지 않았다. source rows, shape, photo-z, 이미지, 새 좌표는
+포함하지 않는다. 이는 target 렌즈에 이미 받은 count-only 승인과 별개의 random-center
+범위이므로 사용자 명시 승인 전 제출하지 않는다. 계획 SHA-256은
+`18aeb1e831d847818b2a671dfe5f75c3122c38637c91b9abbd8fabff5faae625`이다.
+재현·한계는 `analysis/icl_wgl_membership/hsc_debug/wl_random_coordinate_reuse_assessment_2026-11-03.md`에,
+수정기 및 단위시험은 같은 폴더의 `prepare_wl_random_centers.py`,
+`test_prepare_wl_random_centers.py`에 기록했다. 관련 audit, selector, shape-count plan 및
+submitter focused tests 30개 통과. 무작위 대조장은
+아직 full-aperture coverage, mask/depth/PSF/sky matching, shape selection, spatial covariance를
+통과하지 않았으므로 weak-lensing 결과는 계속 `science_measurement=false`다.

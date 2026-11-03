@@ -29,10 +29,15 @@ def _integer(value, field):
     return parsed
 
 
-def deterministic_select(candidates, redshifts, per_lens, seed):
-    """Choose up to N geometry-clean coordinates per lens, without replacement."""
+def deterministic_select(candidates, redshifts, per_lens, seed, *,
+                         reuse_scope="global", min_candidates=1):
+    """Choose deterministic candidates without replacement at the chosen scope."""
     if not isinstance(per_lens, int) or per_lens < 1:
         raise ValueError("per_lens must be a positive integer")
+    if not isinstance(min_candidates, int) or not 1 <= min_candidates <= per_lens:
+        raise ValueError("min_candidates must be between one and per_lens")
+    if reuse_scope not in ("global", "lens"):
+        raise ValueError("reuse_scope must be 'global' or 'lens'")
     if not str(seed):
         raise ValueError("seed must be non-empty")
     groups = {}
@@ -44,7 +49,7 @@ def deterministic_select(candidates, redshifts, per_lens, seed):
         ra, dec = float(source["ra_deg"]), float(source["dec_deg"])
         if not (0 <= ra < 360 and -90 <= dec <= 90):
             raise ValueError("invalid candidate coordinates")
-        position = (ra, dec)
+        position = ((lens_id, ra, dec) if reuse_scope == "lens" else (ra, dec))
         if position in seen_positions:
             raise ValueError("geometry-clean candidate pool contains duplicate coordinates")
         seen_positions.add(position)
@@ -55,7 +60,7 @@ def deterministic_select(candidates, redshifts, per_lens, seed):
     chosen, per_lens_counts = [], {}
     for lens_id in sorted(redshifts):
         ranked = sorted(groups.get(lens_id, []))
-        take = ranked[:per_lens]
+        take = ranked[:per_lens] if len(ranked) >= min_candidates else []
         per_lens_counts[lens_id] = {"available": len(ranked), "selected": len(take)}
         for rank, ra, dec in take:
             center_material = f"{lens_id}\0{ra:.12f}\0{dec:.12f}".encode()
@@ -71,7 +76,8 @@ def deterministic_select(candidates, redshifts, per_lens, seed):
     return chosen, per_lens_counts
 
 
-def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str):
+def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str,
+            reuse_scope="global", min_candidates=1):
     geometry_dir, output = Path(geometry_dir).resolve(), Path(output).resolve()
     if output.exists():
         raise FileExistsError(f"refusing to overwrite {output}")
@@ -132,22 +138,31 @@ def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str):
     candidates, seen_geometry = [], {lens_id: 0 for lens_id in redshifts}
     with candidate_path.open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream, delimiter="\t"):
-            if row["geometry_candidate"] != "True":
-                continue
             if row.get("science_ready") != "False":
-                raise ValueError("geometry candidate must remain explicitly non-science-ready")
+                raise ValueError("geometry candidates must remain explicitly non-science-ready")
+            if reuse_scope == "global":
+                eligible = row["geometry_candidate"] == "True"
+            else:
+                eligible = _integer(row["camira_3mpc_overlap_count"], "CAMIRA overlap count") == 0
+            if not eligible:
+                continue
             lens_id = str(row["lens_id"])
             if lens_id not in redshifts:
                 raise ValueError(f"geometry candidate references unknown lens {lens_id}")
             candidates.append({"lens_id": lens_id, "ra_deg": row["ra_deg"], "dec_deg": row["dec_deg"]})
             seen_geometry[lens_id] += 1
     for lens_id in redshifts:
-        if seen_geometry[lens_id] != raw_counts.get(lens_id, {}).get("available", 0):
+        expected_geometry = (raw_counts.get(lens_id, {}).get("available", 0)
+                             if reuse_scope == "global" else None)
+        if expected_geometry is not None and seen_geometry[lens_id] != expected_geometry:
             raise ValueError(f"per-lens geometry count mismatch for {lens_id}")
-    if len(candidates) != summary.get("n_geometry_candidates"):
+    if reuse_scope == "global" and len(candidates) != summary.get("n_geometry_candidates"):
         raise ValueError("geometry candidate total mismatch")
 
-    centers, counts = deterministic_select(candidates, redshifts, per_lens, seed)
+    centers, counts = deterministic_select(
+        candidates, redshifts, per_lens, seed,
+        reuse_scope=reuse_scope, min_candidates=min_candidates,
+    )
     if not centers:
         raise ValueError("geometry screen yielded no selectable centers")
     count_manifest = json.loads(
@@ -163,6 +178,10 @@ def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str):
         "selection": {
             "method": "lowest SHA-256 ranks per matched lens; coordinates selected without replacement",
             "seed": str(seed), "requested_per_lens": per_lens,
+            "minimum_candidates_per_lens": min_candidates,
+            "reuse_scope": reuse_scope,
+            "candidate_policy": ("original globally unique geometry_candidate flag" if reuse_scope == "global"
+                                 else "zero CAMIRA 3-Mpc aperture overlap for each lens-coordinate pair; coordinate reuse across distinct matched lenses allowed"),
             "n_matched_lenses": len(redshifts), "n_random_centers": len(centers),
             "per_lens_counts": counts,
         },
@@ -190,6 +209,12 @@ def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str):
         "n_geometry_candidates": len(candidates), "n_random_centers": len(centers),
         "n_matched_lenses_with_selected_centers": sum(v["selected"] > 0 for v in counts.values()),
         "requested_per_lens": per_lens, "seed": str(seed),
+        "minimum_candidates_per_lens": min_candidates,
+        "reuse_scope": reuse_scope,
+        "n_unique_sky_positions": len({(row["ra_deg"], row["dec_deg"]) for row in centers}),
+        "n_positions_shared_across_lenses": sum(
+            len(lens_set) > 1 for lens_set in _position_lenses(centers).values()
+        ),
         "manifest": str(manifest_path), "manifest_sha256": sha(manifest_path),
         "science_measurement": False, "science_ready": False,
         "hsc_query_submitted": False, "hsc_data_returned": False,
@@ -198,15 +223,27 @@ def prepare(geometry_dir: Path, output: Path, *, per_lens: int, seed: str):
     return result
 
 
+def _position_lenses(centers):
+    positions = {}
+    for row in centers:
+        positions.setdefault((row["ra_deg"], row["dec_deg"]), set()).add(row["matched_lens_id"])
+    return positions
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--geometry", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--per-lens", type=int, required=True,
                         help="maximum selected centers per target lens; must be chosen explicitly")
+    parser.add_argument("--min-candidates", type=int, default=1,
+                        help="require this many geometry candidates before selecting a lens")
+    parser.add_argument("--reuse-scope", choices=("global", "lens"), default="global",
+                        help="whether an exact sky coordinate may serve different matched lenses")
     parser.add_argument("--seed", required=True, help="recorded deterministic selection seed")
     args = parser.parse_args()
-    result = prepare(args.geometry, args.work, per_lens=args.per_lens, seed=args.seed)
+    result = prepare(args.geometry, args.work, per_lens=args.per_lens, seed=args.seed,
+                     reuse_scope=args.reuse_scope, min_candidates=args.min_candidates)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

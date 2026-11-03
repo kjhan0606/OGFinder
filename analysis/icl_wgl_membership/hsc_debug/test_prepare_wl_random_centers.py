@@ -31,6 +31,40 @@ def test_selection_is_balanced_bounded_and_reproducible():
     assert len({row["random_center_id"] for row in selected}) == len(selected)
 
 
+def test_lens_scope_allows_cross_lens_reuse_but_keeps_each_lens_unique():
+    rows = [
+        {"lens_id": "L1", "ra_deg": 10.0, "dec_deg": 1.0},
+        {"lens_id": "L1", "ra_deg": 11.0, "dec_deg": 1.0},
+        {"lens_id": "L2", "ra_deg": 10.0, "dec_deg": 1.0},
+    ]
+    redshifts = {"L1": 0.3, "L2": 0.4, "L3": 0.5}
+
+    selected, counts = deterministic_select(
+        rows, redshifts, 2, "reuse-seed", reuse_scope="lens", min_candidates=2,
+    )
+
+    assert len(selected) == 2
+    assert {row["matched_lens_id"] for row in selected} == {"L1"}
+    assert counts["L1"] == {"available": 2, "selected": 2}
+    assert counts["L2"] == {"available": 1, "selected": 0}
+    assert counts["L3"] == {"available": 0, "selected": 0}
+
+
+def test_lens_scope_rejects_duplicate_pair_but_allows_same_position_for_other_lens():
+    rows = [
+        {"lens_id": "L1", "ra_deg": 10.0, "dec_deg": 1.0},
+        {"lens_id": "L2", "ra_deg": 10.0, "dec_deg": 1.0},
+    ]
+    selected, _ = deterministic_select(
+        rows, {"L1": 0.3, "L2": 0.4}, 1, "reuse-seed", reuse_scope="lens",
+    )
+    assert len(selected) == 2
+    assert len({row["random_center_id"] for row in selected}) == 2
+    with pytest.raises(ValueError, match="duplicate coordinates"):
+        deterministic_select(rows + [rows[0]], {"L1": 0.3, "L2": 0.4}, 2,
+                             "reuse-seed", reuse_scope="lens")
+
+
 def test_selection_rejects_unknown_lenses_invalid_coordinates_and_duplicates():
     redshifts = {"L1": 0.3}
     with pytest.raises(ValueError, match="unknown matched lens"):
