@@ -1448,3 +1448,26 @@ full-sample completeness는 아직 포함하지 않았다. 다음 ICL 관문은 
 estimator를 통과시키는 noise-aware injection과 공간블록 불확실도이며,
 `science_measurement=false`, `psf_approved=false`,
 `observational_validation_passed=false`, `flux_covariance_available=false`를 유지한다.
+
+### 2026-11-03 후속: 약중력 CAMIRA 풍부도 분할 진단
+
+기존 800-lens shape-row export를 재검증하고, HSC profile을 보기 전에 부모 sample manifest의
+CAMIRA 풍부도와 lens ID로 표본을 400개씩 균형 분할했다(경계 20.490/20.498). 동일한 HSC Y3
+`n(z)`, raw B-mode 제외값 0, 7개 반경 bin 및 5도 equal-area 잭나이프를 사용해 공통 52개
+공간 셀을 삭제할 때마다 양쪽 stack과 보정을 다시 계산했다. lageunha에서 CPU로 실행했고
+신규 HSC 접속·쿼리·다운로드는 없었다.
+
+사용된 lens는 저풍부도 299개/1,043,918쌍, 고풍부도 310개/1,109,086쌍이다. 상위−하위
+`DeltaSigma`는 0.1–0.2 Mpc에서 `15.13 ± 21.71`, 0.2–0.4에서 `41.58 ± 12.26`,
+0.4–0.7에서 `35.38 ± 8.71`, 0.7–1.0에서 `27.92 ± 6.76`, 1.0–1.5에서
+`15.32 ± 4.88`, 1.5–2.0에서 `17.23 ± 3.56`, 2.0–3.0 Mpc에서 `9.25 ± 2.12`
+이며 단위는 `10^12 M_sun Mpc^-2`다. 조건부 Gaussian 7-bin 차이 진단은 `chi2=82.66`,
+rank 7, nominal `p=3.95e-15`이나 공분산과 approximate sky blocks에 민감하므로 검출
+유의도로 해석하지 않는다. 그룹별 부모 적색편이 중앙값은 0.442와 0.427이다. 랜덤 중심
+차감, redshift/selection 보정, shear·`n(z)` 불확실도, reduced shear 및 검증된 survey-region
+공분산이 빠져 있어 `science_measurement=false`다. random-center count-only 쿼리도 이 실행에서
+제출하지 않았다.
+
+상세 평가 `analysis/icl_wgl_membership/hsc_debug/wl_richness_split_assessment_2026-11-03.md`,
+계산기 `analysis/icl_wgl_membership/hsc_debug/audit_wl_richness_split.py`; 요약 JSON SHA-256
+`20f28c5cdec8a8a6ca9d3041bfcdad352999d1a6e4b3e809eb6bc5e6e1827a33`이다.
