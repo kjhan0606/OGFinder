@@ -1307,6 +1307,23 @@ sky-free는 아니다. 이번 감사는 제품 선택만 확인했고 diffuse IC
 `science_measurement=false` 유지. 상세는
 `analysis/icl_wgl_membership/hsc_debug/icl_hsc_sky_product_provenance_assessment_2026-11-03.md`.
 
+### 2026-11-03 후속: 전체 표적–대조장 외곽 residual 진단 실행 중
+
+783개 same-filter matched target/control pair의 기존 global-sky coadd/bg 영상에서
+600–900 kpc 타일 통계를 같은 64-pixel plane-fit 방식으로 비교하는 Astrafek 도구
+`analysis/icl_wgl_membership/hsc_debug/audit_icl_target_control_outer_sky.py`를 추가했다.
+표적은 저장된 K=2.5 mask, 대조장은 기존 SEP/Kron-2.5 절차를 쓰며 입력 파일은 변경하지
+않는다. 이 고리는 표적 외곽 ICL/은하광·PSF 날개·cirrus를 포함할 수 있으므로 intercept를
+순수 하늘로 보거나 측광에서 빼지 않는다. 결과는 기존 74개 ICL–위성 표본에서 그 paired
+outer-residual 진단값을 공변량으로 넣은 부분상관 민감도도 계산한다.
+
+기술 사전실행에서 i2 target 2269 / matched control `control_2269_43150080429003818`은
+각각 156/291 유효 타일을 만들었고 단위·마스크 경로가 정상 동작했다. 이는 한 쌍의 입력
+검증이지 과학 결과가 아니다. 전체 계산은 syntax Slurm job 448403, CPU 1개·16 GiB,
+출력 경로 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`
+`icl_target_control_outer_sky_2026-11-03_01/`로 제출되어 현재 실행 중이다. 신규 HSC 접속,
+질의, 다운로드는 없다. 완료 후 결과 감사와 한계 기록을 보강한다. `science_measurement=false`.
+
 ### 2026-11-03 후속: 약중력 공간 잭나이프 격자 크기 민감도
 
 기존 800 렌즈 HSC Y3 형상 행과 SACC `n(z)`를 재사용해 equal-area 공간 잭나이프를
