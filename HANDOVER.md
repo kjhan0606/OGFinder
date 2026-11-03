@@ -1351,3 +1351,27 @@ object_id)` 정수만 반환하도록 25개씩 124 SQL batch를 생성했다. �
 submitter focused tests 30개 통과. 무작위 대조장은
 아직 full-aperture coverage, mask/depth/PSF/sky matching, shape selection, spatial covariance를
 통과하지 않았으므로 weak-lensing 결과는 계속 `science_measurement=false`다.
+
+### 2026-11-03 후속: supported i2 hybrid-PSF grid 독립 검증
+
+Slurm job 434556의 i2 44프레임×12 splice configuration 완료 상태를 재확인했다.
+Astrafek 독립 summarizer가 총 528 frame-model 기록의 응답 산술을 다시 계산했으며,
+모든 configuration이 동일한 44 cluster ID를 사용하고 최대 산술 차이는 0이었다.
+검증 결과는 GPFS의 `icl_core_wing_hybrid_i2_supported44_2026-10-22_01/grid_audit_repro_2026-11-03.json`
+(SHA-256 `eaf08ddc0cbaec3243f3e13935bdd5c960b1acdf450f682ca94f44fcbce13712`)에 있다.
+
+고정 마스크 smooth-diffuse→ICL 중앙 회수율은 PSF grid 전역에서 0.225702–0.225874로
+매우 안정적이다. 반면 redetection satellite-envelope→satellite 응답은 대표 설정의
+q16–q84가 −0.613–1.187, 전체 범위 −5.92–10.78로 극단적이다. 위성광→ICL redetection
+중앙값도 고정 마스크보다 0.088–0.110 낮다. 따라서 마스크 재선택이 위성 관련 전달을
+크게 바꾸며 scalar 보정은 불가하다. 200–300 kpc annulus mask coverage 중앙값은 0.620이고,
+별도 noiseless 1 nJy 점광원 모델의 unmasked-annulus 광량 비율은 0.000724–0.001411이다.
+이는 위치/epoch가 맞지 않는 공개 HSC-I wing proxy와 선택된 44프레임에 대한 합성 주입
+진단이지 실제 i2 wing 측정이 아니다.
+
+평가와 재현 조건은 `analysis/icl_wgl_membership/hsc_debug/core_wing_hybrid_i2_supported_assessment_2026-11-03.md`에
+기록했다. source Poisson noise, coadd covariance, real sky transfer, matched-control residual,
+full-sample completeness는 아직 포함하지 않았다. 다음 ICL 관문은 target/control 동일 마스크·sky
+estimator를 통과시키는 noise-aware injection과 공간블록 불확실도이며,
+`science_measurement=false`, `psf_approved=false`,
+`observational_validation_passed=false`, `flux_covariance_available=false`를 유지한다.
