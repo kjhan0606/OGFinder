@@ -242,8 +242,9 @@ def load_matched_controls(metadata: dict, control_manifest_path: Path,
             "mask_exclude_bits": list(control["bad_mask"]["exclude_bits"])
                 + list(control["bright_star_mask"]["exclude_bits"]),
         })
-    if len(matched) != 57:
-        raise ValueError(f"expected 57 matched controls; got {len(matched)}")
+    expected = len(metadata.get("frame_headers", []))
+    if expected < 1 or len(matched) != expected:
+        raise ValueError(f"expected {expected} matched controls; got {len(matched)}")
     return matched
 
 

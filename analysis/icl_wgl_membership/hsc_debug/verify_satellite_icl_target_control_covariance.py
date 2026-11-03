@@ -48,11 +48,12 @@ def verify(run_dir: Path) -> dict:
     summary_path = run_dir / "summary.json"
     table_path = run_dir / "target_control_pixel_covariance.tsv"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    expected_pairs = int(summary.get("selection", {}).get("n_requested_pairs", 0))
     if (summary.get("schema") != "hsc-icl-satellite-target-control-pixel-covariance-v1"
             or summary.get("status") != "complete_exploratory"
             or summary.get("science_measurement") is not False
-            or summary.get("selection", {}).get("n_requested_pairs") != 57
-            or summary.get("selection", {}).get("n_completed_pairs") != 57
+            or expected_pairs < 1
+            or summary.get("selection", {}).get("n_completed_pairs") != expected_pairs
             or summary.get("selection", {}).get("n_errors") != 0):
         raise ValueError("run summary is incomplete or has an unexpected science status")
     if sha256(table_path) != summary.get("output_sha256", {}).get(str(table_path)):
@@ -61,20 +62,31 @@ def verify(run_dir: Path) -> dict:
         if sha256(Path(raw_path)) != expected:
             raise ValueError(f"source checksum mismatch: {raw_path}")
 
-    target_summary_path = ROOT / "satellite_icl_lag_covariance_2026-10-19_01/summary.json"
-    target_table_path = ROOT / "satellite_icl_lag_covariance_2026-10-19_01/pair_pixel_covariance.tsv"
+    target_summary_path = Path(summary.get(
+        "target_covariance_summary_path",
+        ROOT / "satellite_icl_lag_covariance_2026-10-19_01/summary.json"))
+    target_table_path = Path(summary.get(
+        "target_covariance_table_path",
+        ROOT / "satellite_icl_lag_covariance_2026-10-19_01/pair_pixel_covariance.tsv"))
     target_summary = json.loads(target_summary_path.read_text(encoding="utf-8"))
     if sha256(target_summary_path) != summary.get("target_covariance_summary_sha256"):
         raise ValueError("target covariance summary checksum mismatch")
     if sha256(target_table_path) != summary.get("target_covariance_table_sha256"):
         raise ValueError("target covariance table checksum mismatch")
+    for raw_path, expected in target_summary.get("input_sha256", {}).items():
+        if sha256(Path(raw_path)) != expected:
+            raise ValueError(f"target covariance source checksum mismatch: {raw_path}")
     target_rows = {(r["cluster_id"], r["filter"]): r for r in read_tsv(target_table_path)}
     rows = read_tsv(table_path)
     keys = [(r["cluster_id"], r["filter"]) for r in rows]
-    if len(rows) != 57 or len(set(keys)) != 57 or set(keys) != set(target_rows):
-        raise ValueError("combined rows do not match the 57 unique target covariance pairs")
-    if sum(r["filter"] == "i" for r in rows) != 13 or sum(r["filter"] == "i2" for r in rows) != 44:
-        raise ValueError("filter counts differ from the audited support sample")
+    if len(rows) != expected_pairs or len(set(keys)) != expected_pairs or set(keys) != set(target_rows):
+        raise ValueError("combined rows do not match the unique target covariance support")
+    for band in ("i", "i2"):
+        actual = sum(r["filter"] == band for r in rows)
+        claimed = summary.get("by_filter", {}).get(band, {}).get("n_pairs")
+        target_claimed = target_summary.get("lag_covariance_by_filter", {}).get(band, {}).get("n_cluster_filter_pairs")
+        if actual != claimed or actual != target_claimed:
+            raise ValueError(f"filter count differs from the target covariance support for {band}")
 
     sample_manifest_path = ROOT / "sample_manifest.json"
     sample_manifest = json.loads(sample_manifest_path.read_text(encoding="utf-8"))

@@ -29,12 +29,12 @@ from validate_control_images import nJy_factor
 
 
 ROOT = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
-DEFAULT_TARGET_COVARIANCE = ROOT / "satellite_icl_lag_covariance_2026-10-19_01"
-DEFAULT_LAG_DIR = ROOT / "icl_coadd_noise_correlation_2026-10-19_04"
+DEFAULT_TARGET_COVARIANCE = ROOT / "satellite_icl_lag_covariance_2026-11-03_01"
+DEFAULT_LAG_DIR = ROOT / "icl_coadd_noise_correlation_full_2026-11-03_01"
 DEFAULT_CONTROL_MANIFEST = ROOT / "control_download_01/download_manifest.json"
 DEFAULT_CONTROL_STATUS = ROOT / "control_download_01/download_status.json"
-DEFAULT_METADATA = ROOT / "icl_coadd_noise_metadata_2026-10-19_01/summary.json"
-DEFAULT_OUTPUT = ROOT / "satellite_icl_target_control_covariance_2026-10-19_01"
+DEFAULT_METADATA = DEFAULT_LAG_DIR / "summary.json"
+DEFAULT_OUTPUT = ROOT / "satellite_icl_target_control_covariance_2026-11-03_01"
 INNER_KPC, OUTER_KPC, COVERAGE_FLOOR = 200.0, 300.0, 0.40
 
 
@@ -56,22 +56,48 @@ def kernel_bank(lag_dir: Path, role: str) -> tuple[dict, dict]:
         raise ValueError("role must be target or matched_control")
     summary_path, table_path = lag_dir / "summary.json", lag_dir / "lag_correlation.tsv"
     summary = json.loads(summary_path.read_text())
-    if (summary.get("schema") != "astrafek-hsc-coadd-noise-correlation-v1"
-            or summary.get("status") != "complete_exploratory"
-            or summary.get("science_measurement") is not False
-            or summary.get("n_target_frames") != 57
-            or summary.get("n_matched_control_frames") != 57):
-        raise ValueError("expected the audited matched 57-frame target/control lag-kernel run")
-    if sha256(table_path) != summary.get("lag_results_sha256"):
+    schema = summary.get("schema")
+    verification_path = None
+    if schema == "astrafek-hsc-coadd-noise-correlation-v1":
+        if (summary.get("status") != "complete_exploratory"
+                or summary.get("science_measurement") is not False
+                or summary.get("n_target_frames") != 57
+                or summary.get("n_matched_control_frames") != 57):
+            raise ValueError("legacy lag audit is incomplete or not exploratory")
+        expected_table_hash, expected_role_keys = summary.get("lag_results_sha256"), 57
+    elif schema == "astrafek-icl-full-sample-coadd-residual-covariance-v1":
+        verification_path = lag_dir / "independent_audit.json"
+        if not verification_path.is_file():
+            raise FileNotFoundError(verification_path)
+        verification = json.loads(verification_path.read_text(encoding="utf-8"))
+        if (summary.get("status") != "complete_exploratory"
+                or summary.get("science_measurement") is not False
+                or summary.get("sample", {}).get("same_filter_pairs") != 783
+                or verification.get("status") != "verified"
+                or verification.get("science_measurement") is not False
+                or verification.get("n_frame_rows") != 1566
+                or verification.get("n_lag_rows") != 1566 * 81
+                or verification.get("input_acquisition_hashes_matched") is not True
+                or verification.get("frame_and_lag_arithmetic_reproduced") is not True
+                or sha256(summary_path) != verification.get("summary_sha256")):
+            raise ValueError("full-sample lag audit lacks its verified provenance")
+        expected_table_hash = summary.get("output_sha256", {}).get(str(table_path))
+        expected_role_keys = 783
+    else:
+        raise ValueError(f"unexpected coadd lag-kernel schema: {schema}")
+    if sha256(table_path) != expected_table_hash:
         raise ValueError("lag-correlation table checksum mismatch")
-    for raw_path, expected in summary.get("input_sha256", {}).items():
-        if sha256(Path(raw_path)) != expected:
-            raise ValueError(f"lag-kernel source checksum mismatch: {raw_path}")
-    source_script = Path(__file__).with_name("estimate_hsc_coadd_noise_correlation.py")
-    if sha256(source_script) != summary.get("analysis_script_sha256"):
-        raise ValueError("lag-kernel source code differs from its audited version")
+    if schema == "astrafek-hsc-coadd-noise-correlation-v1":
+        for raw_path, expected in summary.get("input_sha256", {}).items():
+            if sha256(Path(raw_path)) != expected:
+                raise ValueError(f"lag-kernel source checksum mismatch: {raw_path}")
+        source_script = Path(__file__).with_name("estimate_hsc_coadd_noise_correlation.py")
+        if sha256(source_script) != summary.get("analysis_script_sha256"):
+            raise ValueError("lag-kernel source code differs from its audited version")
 
-    width = int(summary["max_lag_pixels"])
+    width = int(summary.get("max_lag_pixels", summary.get("method", {}).get("max_lag_pixels", -1)))
+    if width < 0:
+        raise ValueError("lag audit does not record a valid maximum lag")
     grouped: dict[tuple[str, str], dict[tuple[int, int], float]] = {}
     for row in read_tsv(table_path):
         if row["role"] != role:
@@ -82,8 +108,8 @@ def kernel_bank(lag_dir: Path, role: str) -> tuple[dict, dict]:
         if not math.isfinite(value) or lag in grouped.setdefault(key, {}):
             raise ValueError(f"invalid or duplicate {role} lag for {key}: {lag}")
         grouped[key][lag] = value
-    if len(grouped) != 57:
-        raise ValueError(f"expected 57 {role} lag kernels, got {len(grouped)}")
+    if len(grouped) != expected_role_keys:
+        raise ValueError(f"expected {expected_role_keys} {role} lag kernels, got {len(grouped)}")
     expected_lags = {(dy, dx) for dy in range(-width, width + 1)
                      for dx in range(-width, width + 1)}
     kernels = {}
@@ -95,11 +121,15 @@ def kernel_bank(lag_dir: Path, role: str) -> tuple[dict, dict]:
             kernel[dy + width, dx + width] = 0.5 * (
                 values[(dy, dx)] + values[(-dy, -dx)])
         kernels[key] = kernel
-    return kernels, {
+    provenance = {
         "summary_path": str(summary_path.resolve()), "summary_sha256": sha256(summary_path),
         "lag_table_path": str(table_path.resolve()), "lag_table_sha256": sha256(table_path),
-        "role": role,
+        "role": role, "schema": schema, "n_role_kernels": len(kernels),
     }
+    if verification_path is not None:
+        provenance["independent_audit_path"] = str(verification_path.resolve())
+        provenance["independent_audit_sha256"] = sha256(verification_path)
+    return kernels, provenance
 
 
 def annulus_weights(shape: tuple[int, int], center_xy: tuple[float, float],
@@ -182,19 +212,44 @@ def run(target_covariance_dir: Path, lag_dir: Path, metadata_path: Path,
         if sha256(Path(raw_path)) != expected:
             raise ValueError(f"target/satellite covariance source checksum mismatch: {raw_path}")
     target_rows = read_tsv(target_table_path)
-    if len(target_rows) != 57 or len({(r["cluster_id"], r["filter"]) for r in target_rows}) != 57:
-        raise ValueError("expected exactly 57 unique target/satellite covariance pairs")
+    expected_pairs = int(target_summary.get("selection", {}).get("n_cluster_filter_pairs", 0))
+    if (expected_pairs < 1 or len(target_rows) != expected_pairs
+            or len({(r["cluster_id"], r["filter"]) for r in target_rows}) != expected_pairs):
+        raise ValueError("target/satellite covariance pair table is incomplete or duplicated")
     target_summary_sha = sha256(target_summary_path)
 
     metadata = json.loads(metadata_path.read_text())
-    if (metadata.get("schema") != "astrafek-icl-coadd-noise-metadata-audit-v1"
-            or metadata.get("status") != "verified_metadata_only"
-            or metadata.get("science_measurement") is not False
-            or metadata.get("n_frames") != 57):
-        raise ValueError("expected the checksum-audited 57-frame target metadata")
-    controls = load_matched_controls(metadata, control_manifest_path, control_status_path)
+    metadata_schema = metadata.get("schema")
+    if metadata_schema == "astrafek-icl-full-sample-coadd-residual-covariance-v1":
+        metadata_verification_path = metadata_path.parent / "independent_audit.json"
+        if not metadata_verification_path.is_file():
+            raise FileNotFoundError(metadata_verification_path)
+        metadata_verification = json.loads(metadata_verification_path.read_text(encoding="utf-8"))
+        if (metadata.get("status") != "complete_exploratory"
+                or metadata.get("science_measurement") is not False
+                or metadata.get("sample", {}).get("same_filter_pairs") != 783
+                or metadata_verification.get("status") != "verified"
+                or metadata_verification.get("science_measurement") is not False
+                or metadata_verification.get("n_frame_rows") != 1566
+                or metadata_verification.get("input_acquisition_hashes_matched") is not True
+                or sha256(metadata_path) != metadata_verification.get("summary_sha256")):
+            raise ValueError("full-sample target metadata lacks a matching independent audit")
+        metadata_for_controls = {"frame_headers": [
+            {"cluster_id": str(row["cluster_id"]), "filter": str(row["filter"])}
+            for row in target_rows
+        ]}
+    elif metadata_schema == "astrafek-icl-coadd-noise-metadata-audit-v1":
+        if (metadata.get("status") != "verified_metadata_only"
+                or metadata.get("science_measurement") is not False
+                or metadata.get("n_frames") != expected_pairs):
+            raise ValueError("legacy target metadata is incomplete or mismatched")
+        metadata_for_controls = metadata
+        metadata_verification_path = None
+    else:
+        raise ValueError(f"unexpected target metadata schema: {metadata_schema}")
+    controls = load_matched_controls(metadata_for_controls, control_manifest_path, control_status_path)
     control_by_key = {(r["cluster_id"], r["filter"]): r for r in controls}
-    if len(control_by_key) != 57:
+    if len(control_by_key) != expected_pairs:
         raise ValueError("matched-control image mapping is not one-to-one")
     control_manifest = json.loads(control_manifest_path.read_text())
     control_rows = {(str(r["target_cluster_id"]), str(r["coadd_header_filter"])): r
@@ -213,13 +268,19 @@ def run(target_covariance_dir: Path, lag_dir: Path, metadata_path: Path,
         raise ValueError("target and matched-control lag-kernel pairs differ")
 
     lag_rows = read_tsv(lag_dir / "lag_correlation.tsv")
-    max_lag = int(json.loads((lag_dir / "summary.json").read_text())["max_lag_pixels"])
+    lag_summary = json.loads((lag_dir / "summary.json").read_text())
+    max_lag = int(lag_summary.get("max_lag_pixels", lag_summary.get("method", {}).get("max_lag_pixels", -1)))
+    if max_lag < 0:
+        raise ValueError("lag-kernel audit does not record its maximum lag")
     expected_kernel_rows = (2 * max_lag + 1) ** 2
+    patch_counts: dict[tuple[str, str], list[int]] = {}
+    for row in lag_rows:
+        if row["role"] == "matched_control":
+            patch_counts.setdefault((str(row["cluster_id"]), str(row["filter"])), []).append(
+                int(row["n_patches"]))
     control_patch_counts = {}
     for ident, filt in control_kernels:
-        counts = [int(r["n_patches"]) for r in lag_rows
-                  if r["role"] == "matched_control" and r["cluster_id"] == ident
-                  and r["filter"] == filt]
+        counts = patch_counts.get((ident, filt), [])
         if len(counts) != expected_kernel_rows:
             raise ValueError(f"incomplete matched-control patch counts for {ident}/{filt}")
         control_patch_counts[(ident, filt)] = float(np.median(counts))
@@ -231,7 +292,7 @@ def run(target_covariance_dir: Path, lag_dir: Path, metadata_path: Path,
     for index, row in enumerate(sorted(target_rows, key=lambda x: (int(x["cluster_id"]), x["filter"])), 1):
         ident, filt = str(row["cluster_id"]), str(row["filter"])
         key = ident, filt
-        print(f"[{index}/57] target+control ICL aperture noise {ident} {filt}", flush=True)
+        print(f"[{index}/{len(target_rows)}] target+control ICL aperture noise {ident} {filt}", flush=True)
         try:
             control = control_by_key.get(key)
             planned = control_rows.get(key)
@@ -364,10 +425,14 @@ def run(target_covariance_dir: Path, lag_dir: Path, metadata_path: Path,
                     Path(__file__).with_name("estimate_hsc_coadd_noise_correlation.py"),
                     Path(__file__).with_name("audit_satellite_icl_shared_pixel_covariance.py"),
                     Path(__file__).with_name("validate_control_images.py")]
+    if metadata_verification_path is not None:
+        source_paths.append(metadata_verification_path)
     summary = {
         "schema": "hsc-icl-satellite-target-control-pixel-covariance-v1",
         "status": "complete_exploratory" if not errors else "partial_exploratory",
         "science_measurement": False,
+        "target_covariance_summary_path": str(target_summary_path.resolve()),
+        "target_covariance_table_path": str(target_table_path.resolve()),
         "target_covariance_summary_sha256": target_summary_sha,
         "target_covariance_table_sha256": sha256(target_table_path),
         "lag_kernel_provenance": [target_kernel_provenance, control_kernel_provenance],

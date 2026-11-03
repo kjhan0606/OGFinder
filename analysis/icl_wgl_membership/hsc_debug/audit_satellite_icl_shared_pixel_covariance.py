@@ -121,20 +121,44 @@ def load_lag_covariance(directory: Path) -> tuple[dict, dict]:
     summary_path = directory / "summary.json"
     table_path = directory / "lag_correlation.tsv"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    if (summary.get("schema") != "astrafek-hsc-coadd-noise-correlation-v1"
-            or summary.get("status") != "complete_exploratory"
-            or summary.get("science_measurement") is not False
-            or summary.get("n_target_frames") != 57
-            or summary.get("n_matched_control_frames") != 57):
-        raise ValueError("expected the audited matched 57-frame target/control lag kernel")
-    if sha256(table_path) != summary.get("lag_results_sha256"):
+    schema = summary.get("schema")
+    if schema == "astrafek-hsc-coadd-noise-correlation-v1":
+        if (summary.get("status") != "complete_exploratory"
+                or summary.get("science_measurement") is not False
+                or summary.get("n_target_frames") != 57
+                or summary.get("n_matched_control_frames") != 57):
+            raise ValueError("legacy lag audit is incomplete or not exploratory")
+        expected_table_hash = summary.get("lag_results_sha256")
+        expected_role_keys = 57
+    elif schema == "astrafek-icl-full-sample-coadd-residual-covariance-v1":
+        verification_path = directory / "independent_audit.json"
+        if not verification_path.is_file():
+            raise FileNotFoundError(verification_path)
+        verification = json.loads(verification_path.read_text(encoding="utf-8"))
+        if (summary.get("status") != "complete_exploratory"
+                or summary.get("science_measurement") is not False
+                or summary.get("sample", {}).get("same_filter_pairs") != 783
+                or verification.get("status") != "verified"
+                or verification.get("science_measurement") is not False
+                or verification.get("n_frame_rows") != 1566
+                or verification.get("n_lag_rows") != 1566 * 81
+                or verification.get("input_acquisition_hashes_matched") is not True
+                or verification.get("frame_and_lag_arithmetic_reproduced") is not True
+                or sha256(summary_path) != verification.get("summary_sha256")):
+            raise ValueError("full-sample lag audit lacks its verified provenance")
+        expected_table_hash = summary.get("output_sha256", {}).get(str(table_path))
+        expected_role_keys = 783
+    else:
+        raise ValueError(f"unexpected coadd lag-kernel schema: {schema}")
+    if sha256(table_path) != expected_table_hash:
         raise ValueError("lag-correlation table checksum mismatch")
-    for path, expected in summary.get("input_sha256", {}).items():
-        if sha256(Path(path)) != expected:
-            raise ValueError(f"lag-kernel input checksum mismatch: {path}")
-    analysis_script = Path(__file__).with_name("estimate_hsc_coadd_noise_correlation.py")
-    if sha256(analysis_script) != summary.get("analysis_script_sha256"):
-        raise ValueError("lag-kernel analysis script changed after measurement")
+    if schema == "astrafek-hsc-coadd-noise-correlation-v1":
+        for path, expected in summary.get("input_sha256", {}).items():
+            if sha256(Path(path)) != expected:
+                raise ValueError(f"lag-kernel input checksum mismatch: {path}")
+        analysis_script = Path(__file__).with_name("estimate_hsc_coadd_noise_correlation.py")
+        if sha256(analysis_script) != summary.get("analysis_script_sha256"):
+            raise ValueError("lag-kernel analysis script changed after measurement")
     grouped: dict[tuple[str, str], dict[tuple[int, int], float]] = {}
     for row in read_tsv(table_path):
         if row["role"] != "target":
@@ -145,9 +169,11 @@ def load_lag_covariance(directory: Path) -> tuple[dict, dict]:
         if not math.isfinite(value) or lag in grouped.setdefault(key, {}):
             raise ValueError(f"invalid or duplicate lag covariance for {key} {lag}")
         grouped[key][lag] = value
-    if len(grouped) != 57:
-        raise ValueError(f"expected 57 target kernels, got {len(grouped)}")
-    width = int(summary["max_lag_pixels"])
+    if len(grouped) != expected_role_keys:
+        raise ValueError(f"expected {expected_role_keys} target kernels, got {len(grouped)}")
+    width = int(summary.get("max_lag_pixels", summary.get("method", {}).get("max_lag_pixels", -1)))
+    if width < 0:
+        raise ValueError("lag audit does not record a valid maximum lag")
     expected_lags = {(dy, dx) for dy in range(-width, width + 1)
                      for dx in range(-width, width + 1)}
     kernels = {}
@@ -161,7 +187,12 @@ def load_lag_covariance(directory: Path) -> tuple[dict, dict]:
     provenance = {"summary_path": str(summary_path.resolve()),
                   "summary_sha256": sha256(summary_path),
                   "lag_table_path": str(table_path.resolve()),
-                  "lag_table_sha256": sha256(table_path)}
+                  "lag_table_sha256": sha256(table_path),
+                  "schema": schema,
+                  "n_target_kernels": len(kernels)}
+    if schema == "astrafek-icl-full-sample-coadd-residual-covariance-v1":
+        provenance["independent_audit_path"] = str(verification_path.resolve())
+        provenance["independent_audit_sha256"] = sha256(verification_path)
     return kernels, provenance
 
 
@@ -369,8 +400,10 @@ def run(data: Path, masks_dir: Path, prep_dir: Path, profile_dir: Path,
         lag_kernels, lag_provenance = load_lag_covariance(lag_covariance_dir)
         supported_keys = {(ident, primary_filter[ident]) for ident in grouped}
         selected_kernel_keys = supported_keys & set(lag_kernels)
-        if len(selected_kernel_keys) != 57:
-            raise ValueError(f"expected exactly 57 supported target/kernel pairs; got {len(selected_kernel_keys)}")
+        if selected_kernel_keys != supported_keys:
+            missing = sorted(supported_keys - selected_kernel_keys)
+            extra = sorted(selected_kernel_keys - supported_keys)
+            raise ValueError(f"target lag kernels do not cover the full selected support; missing={missing}, extra={extra}")
         grouped = {ident: rows for ident, rows in grouped.items()
                    if (ident, primary_filter[ident]) in selected_kernel_keys}
     icl_pairs = {(r["id"], r["filter"]): r for r in read_tsv(icl_pairs_path)}
