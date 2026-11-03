@@ -1307,6 +1307,22 @@ sky-free는 아니다. 이번 감사는 제품 선택만 확인했고 diffuse IC
 `science_measurement=false` 유지. 상세는
 `analysis/icl_wgl_membership/hsc_debug/icl_hsc_sky_product_provenance_assessment_2026-11-03.md`.
 
+### 2026-11-03 후속: 약중력 공간 잭나이프 격자 크기 민감도
+
+기존 800 렌즈 HSC Y3 형상 행과 SACC `n(z)`를 재사용해 equal-area 공간 잭나이프를
+2.5도·5도·7.5도 셀 크기에서 비교했다. CPU-only Slurm 작업 448324/448323은 `syntax`에서
+각각 28:54/7:09에 정상 종료했다. 2.5도·5도·7.5도 결과는 점유 셀 156/52/36개, 사용
+lens-source 쌍 2,153,004개로 동일했다. 중심 `DeltaSigma` 프로파일도 모두 같았고, 대각선
+잭나이프 오차는 5도 대비 2.5도에서 0.829–1.167배, 7.5도에서 0.878–1.177배였다. 교차성분
+null 진단은 각각 chi2/dof=7.10/7, 9.30/7, 6.21/7 (p=0.418, 0.232, 0.515)다.
+
+따라서 중심 프로파일은 이 격자 변화에 안정적이지만 대각 오차는 약 18%까지 변한다. 격자
+셀은 HSC tract/독립 필드가 아니므로 이 비교는 근사 공분산 진단이고 paired
+cluster-minus-random 공분산을 대체하지 않는다. raw B-mode 제외값 0, 고정 fiducial `n(z)`,
+미적용 reduced-shear 및 랜덤 차감 등 기존 제한을 유지한다. random-center shape-count 신규
+집계 쿼리는 별도 명시 승인 대기 상태이고 제출하지 않았다. 과학상태 `science_measurement=false`.
+상세 결과와 checksum은 `analysis/icl_wgl_membership/hsc_debug/wl_spatial_jackknife_cell_scale_assessment_2026-11-03.md`.
+
 ### 2026-10-22 후속: S20A·S23B 후보 footprint 합집합
 
 기존 승인 S20A wide-redshift candidate plan과 S23B selection-compatible ledger를
