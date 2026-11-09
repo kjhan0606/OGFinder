@@ -164,6 +164,15 @@ def verify_and_load_pairs(rows_dir, plan_dir, masked_value):
         "n_source_pairs": observed_total,
         "n_random_centers": len(centers),
         "n_matched_lenses": manifest["n_matched_lenses"],
+        "matched_lens_ids": sorted({str(center["matched_lens_id"]) for center in centers}),
+        "random_center_matched_lens_ids": {
+            str(center["random_center_id"]): str(center["matched_lens_id"])
+            for center in centers
+        },
+        "random_center_expected_source_counts": {
+            str(center["random_center_id"]): int(counts[str(center["random_center_id"])]["n_shape_sources"])
+            for center in centers
+        },
         "b_mode_masked_value": int(masked_value),
     }
 
@@ -189,17 +198,25 @@ def verify_saved_cluster_profile(saved_stack, recomputed_profile):
     if not isinstance(saved, list) or len(saved) != len(recomputed_profile):
         raise ValueError("saved cluster profile has an unexpected radial-bin layout")
     for index, (saved_row, recomputed_row) in enumerate(zip(saved, recomputed_profile)):
+        recomputed_t = recomputed_row.get(
+            "lens_delta_sigma_msun_mpc2",
+            recomputed_row.get("delta_sigma_weak_msun_mpc2"),
+        )
+        recomputed_x = recomputed_row.get(
+            "lens_cross_delta_sigma_msun_mpc2",
+            recomputed_row.get("cross_delta_sigma_weak_msun_mpc2"),
+        )
         if (saved_row.get("r_min_mpc") != recomputed_row["r_min_mpc"]
                 or saved_row.get("r_max_mpc") != recomputed_row["r_max_mpc"]
                 or saved_row.get("delta_sigma_weak_msun_mpc2") is None
                 or saved_row.get("cross_delta_sigma_weak_msun_mpc2") is None
                 or not np.isclose(
                     saved_row["delta_sigma_weak_msun_mpc2"],
-                    recomputed_row["lens_delta_sigma_msun_mpc2"], rtol=1e-10, atol=1e-12,
+                    recomputed_t, rtol=1e-10, atol=1e-12,
                 )
                 or not np.isclose(
                     saved_row["cross_delta_sigma_weak_msun_mpc2"],
-                    recomputed_row["lens_cross_delta_sigma_msun_mpc2"], rtol=1e-10, atol=1e-12,
+                    recomputed_x, rtol=1e-10, atol=1e-12,
                 )):
             raise ValueError(f"verified target source rows do not reproduce saved radial bin {index}")
 
@@ -227,6 +244,8 @@ def run(args):
     )
     subtracted_profile = None
     paired_jackknife = None
+    matched_random_stack = None
+    matched_sample = None
     target_stack_sha = None
     lens_row_provenance = None
     if args.lens_stack is not None:
@@ -246,33 +265,114 @@ def run(args):
         if (lens_row_provenance["row_plan_sha256"] != lens_input.get("row_plan_sha256")
                 or lens_row_provenance["masked_value"] != int(args.masked_value)):
             raise ValueError("verified cluster source rows do not match the stored target stack provenance")
+
+        # First reproduce the published 800-lens target stack, then restrict
+        # both the cluster and random estimators to the exact lenses that have
+        # five eligible random centers.  The random plan currently covers only
+        # 620 of the 800 clusters; subtracting its profile from all 800 lenses
+        # would mix different lens samples and bias the comparison.
+        full_lens_stack = stack_s19a_tomographic_pairs(
+            lens_pairs, z_nz, nz_by_bin, args.radial_edges_mpc, cosmology,
+        )
+        verify_saved_cluster_profile(target_stack, full_lens_stack["profile"])
+        matched_lens_ids = set(provenance["matched_lens_ids"])
+        available_lens_ids = {str(value) for value in np.unique(lens_pairs["lens_id"])}
+        if len(matched_lens_ids) != int(provenance["n_matched_lenses"]):
+            raise ValueError("random-center matched-lens IDs do not match the approved random-center plan")
+        center_to_lens = provenance["random_center_matched_lens_ids"]
+        center_expected_counts = provenance["random_center_expected_source_counts"]
+        random_support_lens_ids = {
+            center_to_lens[center_id]
+            for center_id, n_sources in center_expected_counts.items()
+            if int(n_sources) > 0
+        }
+        common_lens_ids = matched_lens_ids & available_lens_ids & random_support_lens_ids
+        no_shape_pair_lens_ids = matched_lens_ids - available_lens_ids
+        no_random_source_lens_ids = matched_lens_ids - random_support_lens_ids
+        if not common_lens_ids:
+            raise ValueError("no random-center matched lens has source rows in the verified cluster export")
+        subset_mask = np.isin(lens_pairs["lens_id"].astype(str), list(common_lens_ids))
+        matched_lens_pairs = {name: values[subset_mask] for name, values in lens_pairs.items()}
+        observed_matched_ids = {str(value) for value in np.unique(matched_lens_pairs["lens_id"])}
+        if observed_matched_ids != common_lens_ids:
+            raise ValueError("matched cluster source rows do not contain exactly the common-support lens IDs")
+
+        matched_center_ids = {
+            center_id for center_id, lens_id in center_to_lens.items()
+            if lens_id in common_lens_ids
+        }
+        matched_center_counts = Counter(
+            lens_id for lens_id in center_to_lens.values() if lens_id in common_lens_ids
+        )
+        if (len(matched_center_counts) != len(common_lens_ids)
+                or set(matched_center_counts.values()) != {5}):
+            raise ValueError("every common-support lens must have exactly five matched random centers")
+        random_subset_mask = np.isin(pairs["lens_id"].astype(str), list(matched_center_ids))
+        matched_random_pairs = {
+            name: values[random_subset_mask] for name, values in pairs.items()
+        }
+        observed_center_ids = {str(value) for value in np.unique(matched_random_pairs["lens_id"])}
+        expected_center_ids_with_rows = {
+            center_id for center_id in matched_center_ids
+            if int(center_expected_counts[center_id]) > 0
+        }
+        if observed_center_ids != expected_center_ids_with_rows:
+            raise ValueError("random source rows do not match the count-only positive-support centers")
+        matched_random_stack = stack_s19a_tomographic_pairs(
+            matched_random_pairs, z_nz, nz_by_bin, args.radial_edges_mpc, cosmology,
+        )
+        matched_lens_stack = stack_s19a_tomographic_pairs(
+            matched_lens_pairs, z_nz, nz_by_bin, args.radial_edges_mpc, cosmology,
+        )
         lens_lens_blocks = equal_area_block_ids(
-            lens_pairs["lens_ra_deg"], lens_pairs["lens_dec_deg"],
+            matched_lens_pairs["lens_ra_deg"], matched_lens_pairs["lens_dec_deg"],
             cell_width_deg=args.block_width_deg,
         )
         lens_source_blocks = equal_area_block_ids(
-            lens_pairs["source_ra_deg"], lens_pairs["source_dec_deg"],
+            matched_lens_pairs["source_ra_deg"], matched_lens_pairs["source_dec_deg"],
             cell_width_deg=args.block_width_deg,
         )
         random_lens_blocks = equal_area_block_ids(
-            pairs["lens_ra_deg"], pairs["lens_dec_deg"],
+            matched_random_pairs["lens_ra_deg"], matched_random_pairs["lens_dec_deg"],
             cell_width_deg=args.block_width_deg,
         )
         random_source_blocks = equal_area_block_ids(
-            pairs["source_ra_deg"], pairs["source_dec_deg"],
+            matched_random_pairs["source_ra_deg"], matched_random_pairs["source_dec_deg"],
             cell_width_deg=args.block_width_deg,
         )
         paired_jackknife = paired_tomographic_endpoint_jackknife(
-            lens_pairs, pairs, lens_lens_blocks, lens_source_blocks,
+            matched_lens_pairs, matched_random_pairs,
+            lens_lens_blocks, lens_source_blocks,
             random_lens_blocks, random_source_blocks, z_nz, nz_by_bin,
             args.radial_edges_mpc, cosmology,
             block_method=(f"matched delete-one equal-area sky cells; "
                           f"RA/sin(Dec) width {args.block_width_deg:g} deg"),
         )
-        verify_saved_cluster_profile(target_stack, paired_jackknife["profile"])
-        subtracted = subtract_random_lens_profile(target_stack, random_stack)
+        verify_saved_cluster_profile(matched_lens_stack, paired_jackknife["profile"])
+        subtracted = subtract_random_lens_profile(matched_lens_stack, matched_random_stack)
         subtracted_profile = subtracted["profile"]
         target_stack_sha = sha(lens_path)
+        matched_sample = {
+            "n_selected_matched_lenses": len(matched_lens_ids),
+            "n_common_shape_support_lenses": len(common_lens_ids),
+            "n_selected_lenses_without_cluster_shape_pairs": len(no_shape_pair_lens_ids),
+            "n_selected_lenses_without_random_shape_pairs": len(no_random_source_lens_ids),
+            "n_selected_lenses_without_common_support": len(matched_lens_ids - common_lens_ids),
+            "n_random_centers_per_common_lens": next(iter(matched_center_counts.values())),
+            "n_random_centers_in_common_support": len(matched_center_ids),
+            "n_random_centers_with_shape_pairs_in_common_support": len(expected_center_ids_with_rows),
+            "n_random_centers_without_shape_pairs_in_common_support": len(matched_center_ids - expected_center_ids_with_rows),
+            "common_lens_ids_sha256": hashlib.sha256(
+                "\n".join(sorted(common_lens_ids)).encode("utf-8")
+            ).hexdigest(),
+            "no_shape_pair_lens_ids_sha256": hashlib.sha256(
+                "\n".join(sorted(no_shape_pair_lens_ids)).encode("utf-8")
+            ).hexdigest(),
+            "no_random_shape_pair_lens_ids_sha256": hashlib.sha256(
+                "\n".join(sorted(no_random_source_lens_ids)).encode("utf-8")
+            ).hexdigest(),
+            "random_subtraction_sample": "cluster and random profiles restricted to identical matched lenses with at least one verified cluster source pair",
+        }
 
     payload = {
         "schema": "hsc-s19a-random-center-stack-run-v1",
@@ -290,9 +390,22 @@ def run(args):
             "target_stack_path": str(args.lens_stack.resolve()) if args.lens_stack else None,
             "target_stack_sha256": target_stack_sha,
             "lens_row_plan_sha256": lens_row_provenance["row_plan_sha256"] if lens_row_provenance else None,
+            "matched_lens_ids_sha256": hashlib.sha256(
+                "\n".join(provenance["matched_lens_ids"]).encode("utf-8")
+            ).hexdigest() if lens_row_provenance else None,
+            "n_matched_lenses_in_cluster_and_random_stacks": (
+                matched_sample["n_common_shape_support_lenses"] if lens_row_provenance else None
+            ),
+            "matched_sample": matched_sample,
+            "matched_random_source_pairs": (
+                int(matched_random_stack["counts"]["input_pairs"])
+                if matched_random_stack is not None else None
+            ),
+            "full_target_lens_count": target_stack.get("counts", {}).get("n_lenses") if args.lens_stack else None,
             "block_width_deg": args.block_width_deg if paired_jackknife else None,
         },
         "random_stack": random_stack,
+        "matched_random_stack": matched_random_stack,
         "random_subtracted_profile": subtracted_profile,
         "paired_spatial_jackknife": paired_jackknife,
         "limitations": [
@@ -310,6 +423,9 @@ def run(args):
         "random_centers": provenance["n_random_centers"],
         "source_pairs": provenance["n_source_pairs"],
         "used_pairs": random_stack["counts"]["used_pairs"],
+        "common_support_lenses": matched_sample["n_common_shape_support_lenses"] if matched_sample else None,
+        "common_support_random_centers": matched_sample["n_random_centers_in_common_support"] if matched_sample else None,
+        "common_support_random_pairs": matched_random_stack["counts"]["input_pairs"] if matched_random_stack else None,
         "random_subtraction": args.lens_stack is not None,
         "output": str(output),
     }, ensure_ascii=False))

@@ -27,13 +27,14 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class Cas:
-    def __init__(self, user, password):
+    def __init__(self, user, password, api_url=API):
         self.credential = dict(account_name=user, password=password)
+        self.api_url = api_url.rstrip('/') + '/'
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def post(self, action, **fields):
         data = dict(fields, credential=self.credential, clientVersion=20190514.1)
-        request = urllib.request.Request(API+action, json.dumps(data).encode(),
+        request = urllib.request.Request(self.api_url+action, json.dumps(data).encode(),
                                          {'Content-Type': 'application/json'})
         return self.opener.open(request, timeout=120)
 

@@ -153,11 +153,9 @@ def render_query(probes: list[dict]) -> str:
         "       m.naxis1, m.naxis2, m.seeing, m.zeropt,\n"
         "       q.imag_psf_depth, q.iseeing, q.imeas_exists, q.idet_bkgd_exists\n"
         "FROM probes AS p\n"
-        "JOIN pdr3_wide.mosaic AS m\n"
-        "JOIN public.skymap AS s USING (skymap_id)\n"
+        "JOIN pdr3_wide.mosaic AS m ON m.band = 'HSC-I'\n"
         "LEFT JOIN pdr3_wide.patch_qa AS q USING (skymap_id)\n"
-        "WHERE m.band = 'HSC-I'\n"
-        "  AND patch_contains(s.patch_area, s.wcs, p.ra_deg, p.dec_deg)\n"
+        "WHERE m.areacube && radec_to_coord(p.ra_deg, p.dec_deg)\n"
         "ORDER BY p.candidate_id, p.probe_id, m.skymap_id;\n"
     )
 

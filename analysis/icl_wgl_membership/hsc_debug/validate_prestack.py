@@ -42,7 +42,8 @@ def process(frame, target, record, base, cosmo, out):
     center = info['center_pixel_xy']; scale = info['pixel_scale_arcsec']
     kpp = cosmo.kpc_proper_per_arcmin(frame['z']).value*scale/60
     geom = geometry(image.shape, center, kpp)
-    _, masks, _, detections, detection = control_masks(image, variance, bits, center, scale)
+    _, masks, _, detections, detection = control_masks(
+        image, variance, bits, center, scale, info["mask_planes"])
     measured = [surface_result(measure(image, variance, mask, geom, center, kpp), factor) for mask in masks]
     payload = vectors(measured)
     payload.update(mask_bits=np.packbits(np.array(masks), axis=-1, bitorder='little'),
@@ -55,7 +56,8 @@ def process(frame, target, record, base, cosmo, out):
             model = diffuse_model(geom[0], geom[1], hscale, q, amplitude)
             native_model = model/factor
             added = image.astype(float)+native_model
-            _, after_masks, _, _, after_info = control_masks(added, variance, bits, center, scale)
+            _, after_masks, _, _, after_info = control_masks(
+                added, variance, bits, center, scale, info["mask_planes"])
             # Geometry truth has no source exclusions; no cosmological dimming/extinction applied.
             bins = geom[3]; good = bins >= 0
             truth = np.bincount(bins[good], weights=model[good], minlength=6)/np.bincount(bins[good], minlength=6)

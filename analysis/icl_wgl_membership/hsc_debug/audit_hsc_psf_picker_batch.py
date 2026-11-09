@@ -26,26 +26,64 @@ def main() -> int:
     parser.add_argument("--plan-dir", type=Path, required=True)
     parser.add_argument("--download-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--plan-name", default="psf_picker_plan.json",
+                        help="request plan filename; defaults to the original 744-position plan")
+    parser.add_argument("--approved-plan-sha256",
+                        help="required for a supported-pairs request; must match the explicitly approved plan")
     args = parser.parse_args()
-    plan_path = args.plan_dir / "psf_picker_plan.json"
+    plan_path = args.plan_dir / args.plan_name
     mapping_path = args.plan_dir / "position_mapping.json"
     coordinate_path = args.plan_dir / "psf_picker_coordinates.txt"
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
-    if plan.get("schema") != "astrafek-hsc-psf-picker-injection-plan-v1":
-        raise ValueError("unexpected PSF Picker plan schema")
-    if plan.get("status") != "prepared_not_submitted" or plan.get("user_approved_requests") != 744:
-        raise ValueError("plan approval scope is not the approved 744-position request")
+    schema = plan.get("schema")
+    if schema == "astrafek-hsc-psf-picker-injection-plan-v1":
+        expected_count = int(plan.get("user_approved_requests", -1))
+        if plan.get("status") != "prepared_not_submitted" or expected_count != 744:
+            raise ValueError("plan approval scope is not the approved 744-position request")
+    elif schema == "astrafek-icl-supported-pairs-psf-request-plan-v1":
+        expected_count = int(plan.get("n_requests_remaining", -1))
+        if (plan.get("status") != "prepared_not_submitted"
+                or plan.get("requires_explicit_user_approval") is not True
+                or expected_count != 2005):
+            raise ValueError("supported-pairs plan is not the exact 2,005-position prepared request")
+        if args.approved_plan_sha256 != sha256(plan_path):
+            raise ValueError("the supplied explicit approval SHA-256 does not match the exact plan")
+    elif schema == "astrafek-s23b-camira-member-profile-psf-plan-v1":
+        expected_count = int(plan.get("n_unique_member_positions", -1))
+        if (plan.get("status") != "prepared_not_submitted"
+                or plan.get("requires_explicit_user_approval") is not True
+                or plan.get("network_submitted") is not False
+                or plan.get("science_measurement") is not False
+                or expected_count != 427):
+            raise ValueError("S23B member-profile plan is not the prepared 427-position request")
+        if args.approved_plan_sha256 != sha256(plan_path):
+            raise ValueError("the supplied explicit approval SHA-256 does not match the exact plan")
+        if not isinstance(plan.get("max_total_bytes_for_review"), int):
+            raise ValueError("S23B member-profile plan has no integer transfer-size cap")
+    else:
+        raise ValueError(f"unsupported PSF Picker plan schema: {schema}")
+    request = plan.get("request", plan)
+    if (request.get("rerun") != "pdr3_wide" or request.get("type") != "coadd"
+            or request.get("filter") != "HSC-I"
+            or request.get("centered", plan.get("centered")) is not True):
+        raise ValueError("PSF Picker plan is outside the centered PDR3 Wide HSC-I coadd scope")
+    if (plan.get("images_requested") is not False
+            or plan.get("coadd_images_requested", False) is not False
+            or plan.get("shape_rows_requested") is not False
+            or plan.get("photoz_requested") is not False
+            or plan.get("credentials_saved") is True):
+        raise ValueError("PSF Picker plan includes out-of-scope data or credential storage")
     if sha256(coordinate_path) != plan.get("coordinate_list_sha256"):
         raise ValueError("coordinate-list checksum differs from the approved plan")
     if sha256(mapping_path) != plan.get("position_mapping_sha256"):
         raise ValueError("position mapping checksum differs from the approved plan")
-    if len(mapping) != 744:
-        raise ValueError("position mapping does not contain exactly 744 requests")
+    if len(mapping) != expected_count:
+        raise ValueError(f"position mapping does not contain exactly {expected_count} requests")
 
     expected = {(round(float(row["ra_deg"]), 9), round(float(row["dec_deg"]), 9)): row
                 for row in mapping}
-    if len(expected) != 744:
+    if len(expected) != expected_count:
         raise ValueError("position mapping contains duplicate coordinates")
     lines = coordinate_path.read_text(encoding="ascii").splitlines()
     if not lines or lines[0].strip() != "#? ra dec":
@@ -56,8 +94,9 @@ def main() -> int:
         if len(cols) != 2:
             raise ValueError("coordinate list has a malformed row")
         coordinates.append((round(float(cols[0]), 9), round(float(cols[1]), 9)))
-    if len(coordinates) != 744 or set(coordinates) != set(expected):
-        raise ValueError("coordinate list and mapping do not contain the same 744 positions")
+    if (len(coordinates) != expected_count or len(set(coordinates)) != expected_count
+            or set(coordinates) != set(expected)):
+        raise ValueError(f"coordinate list and mapping do not contain the same {expected_count} positions")
 
     file_re = re.compile(r"^psf_(\d+)_(\d+)_(\d+)_(-?\d+\.\d+)_([+-]?\d+\.\d+)_(HSC-I)\.fits$")
     entries = list(args.download_dir.iterdir())
@@ -73,8 +112,8 @@ def main() -> int:
     ):
         raise ValueError("download directory contains a non-FITS or non-file entry")
     fits_entries = [path for path in entries if path.suffix.lower() == ".fits"]
-    if len(fits_entries) != 744:
-        raise ValueError(f"expected 744 FITS outputs, found {len(fits_entries)}")
+    if len(fits_entries) != expected_count:
+        raise ValueError(f"expected {expected_count} FITS outputs, found {len(fits_entries)}")
     found = {}
     records = []
     shapes = Counter()
@@ -129,11 +168,17 @@ def main() -> int:
             "filter": filter_name,
             "ra_deg_filename": ra,
             "dec_deg_filename": dec,
-            "cluster_ids": sorted({str(r["cluster_id"]) for r in row["roles"]}),
-            "roles": sorted({str(r["role"]) for r in row["roles"]}),
+            "cluster_ids": sorted({str(r.get("cluster_id", r.get("target_cluster_id")))
+                                    for r in row["roles"]
+                                    if r.get("cluster_id", r.get("target_cluster_id")) is not None}),
+            "roles": sorted({str(r.get("role", row.get("role", "unknown")))
+                              for r in row["roles"]}),
         })
     if set(found) != set(expected):
         raise ValueError("some approved coordinates have no returned PSF file")
+    if (schema == "astrafek-s23b-camira-member-profile-psf-plan-v1"
+            and total_bytes > plan["max_total_bytes_for_review"]):
+        raise ValueError("returned PSF files exceed the explicitly approved transfer-size cap")
     if max_centroid_offset > 1.0:
         raise ValueError(f"model PSF centroids depart by >1 pixel: {max_centroid_offset}")
     if args.output.exists():
@@ -146,6 +191,7 @@ def main() -> int:
         "plan_sha256": sha256(plan_path),
         "coordinate_list_sha256": sha256(coordinate_path),
         "position_mapping_sha256": sha256(mapping_path),
+        "approved_plan_sha256": args.approved_plan_sha256,
         "download_directory": str(args.download_dir.resolve()),
         "n_requested": len(expected),
         "n_returned": len(records),

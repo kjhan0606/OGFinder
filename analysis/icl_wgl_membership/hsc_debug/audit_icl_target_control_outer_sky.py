@@ -73,7 +73,8 @@ def measure_outer_frame(path: Path, frame: dict, mask_path: Path | None,
         if mask_path is None:
             center = np.asarray(info["center_pixel_xy"], dtype=float)
             base, variants, _, _, _ = control_masks(
-                image, variance, bits, center, info["pixel_scale_arcsec"])
+                image, variance, bits, center, info["pixel_scale_arcsec"],
+                info["mask_planes"])
             mask = np.asarray(variants[0], dtype=bool)
         else:
             with fits.open(mask_path, memmap=False, checksum=True) as masks:

@@ -29,6 +29,7 @@ from joint_icl_satellite_injection import (
     DEFAULT_DATA, DEFAULT_ICL_MASKS, DEFAULT_ICL_PAIRS, DEFAULT_SAT_PREP,
     add_surface_brightness_injection, redetect_masks_and_targets,
     satellite_halo_template, satellite_outer_measurement, sha256,
+    supported_satellite_shell_union,
 )
 from position_psf import (PositionPSFBank, build_core_wing_hybrid_psf,
                           convolve_surface_brightness,
@@ -225,7 +226,8 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
               diffuse_amplitude: float = 1.0, satellite_amplitude: float = 1.0,
               diffuse_scale_kpc: float = 100.0, satellite_scale_kpc: float = 15.0,
               unresolved_bcg_policy: str = "mask_all", filter_name: str = "i",
-              hybrid_parameters: dict | None = None) -> dict:
+              hybrid_parameters: dict | None = None,
+              shell_exclusion_profiles: list[dict] | None = None) -> dict:
     if filter_name not in ("i", "i2"):
         raise ValueError("filter_name must be i or i2")
     if output.exists():
@@ -368,6 +370,19 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
 
     icl_geom = prestack_core.geometry(original.shape, center_xy, kpc_per_pixel)
     dx, dy, _, _, _ = icl_geom
+    shell_union = None
+    shell_overlap_pixels = 0
+    if shell_exclusion_profiles is not None:
+        shell_union = supported_satellite_shell_union(
+            shell_exclusion_profiles, member_rows, matched, detections_list,
+            original.shape, base, segmentation, detections, fallback_tree,
+            pixel_scale, kpc_per_pixel, ~invalid,
+        )
+        geometric = (icl_geom[2] >= 200.0) & (icl_geom[2] < 300.0)
+        shell_overlap_pixels = int(np.count_nonzero(
+            shell_union & geometric & ~icl_excluded & ~invalid))
+        shell_union &= geometric
+    shell_icl_mask = (icl_excluded | shell_union) if shell_union is not None else None
     diffuse = prestack_core.diffuse_model(dx, dy, diffuse_scale_kpc, 1.0,
                                            diffuse_amplitude).astype(np.float32)
     diffuse_convolved = convolve_surface_brightness(diffuse, kernel)
@@ -378,6 +393,11 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
     point_source_wing_profile = measure_point_source_wing_profile(
         point_source_convolved, icl_excluded, variance, icl_geom[2],
         kpc_per_pixel, pixel_scale, point_source_flux_njy)
+    point_source_shell_excluded_profile = None
+    if shell_icl_mask is not None:
+        point_source_shell_excluded_profile = measure_point_source_wing_profile(
+            point_source_convolved, shell_icl_mask, variance, icl_geom[2],
+            kpc_per_pixel, pixel_scale, point_source_flux_njy)
     if hybrid_satellite_kernels is not None:
         satellite_convolved = satellite_halos_with_psfs(
             original.shape, np.asarray(sat_centers), kpc_per_pixel,
@@ -392,7 +412,7 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
     scenarios = {"baseline": empty, "icl_only": diffuse_convolved,
                  "satellite_only": satellite_convolved,
                  "both": diffuse_convolved + satellite_convolved}
-    measurements, fixed_mask_measurements, redetection = {}, {}, {}
+    measurements, fixed_mask_measurements, shell_excluded_measurements, redetection = {}, {}, {}, {}
     fixed_detected, fixed_targets = None, None
     for name, injected in scenarios.items():
         synthetic = add_surface_brightness_injection(original, injected, conversion)
@@ -439,6 +459,15 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
                                   for key in ("n_satellites", "n_control_profiles")},
             "icl_coverage_200_300": float(fixed_icl_result["coverage"][3]),
         }
+        if shell_icl_mask is not None:
+            shell_result = prestack_core.measure(
+                synthetic, variance, shell_icl_mask, icl_geom,
+                center_xy, kpc_per_pixel)
+            shell_excluded_measurements[name] = {
+                "icl_raw_200_300_njy_arcsec2": float(shell_result["raw"][3] * conversion),
+                "icl_plane_corrected_200_300_njy_arcsec2": float(shell_result["corrected"][3] * conversion),
+                "icl_coverage_200_300": float(shell_result["coverage"][3]),
+            }
         redetection[name] = detected["diagnostics"]
 
     transfer_response = calculate_transfer_response(
@@ -449,6 +478,17 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
         key: transfer_response[key] - fixed_mask_transfer_response[key]
         for key in transfer_response
     }
+    shell_excluded_transfer_response = None
+    if shell_icl_mask is not None:
+        shell_baseline = shell_excluded_measurements["baseline"]["icl_raw_200_300_njy_arcsec2"]
+        shell_diffuse = shell_excluded_measurements["icl_only"]["icl_raw_200_300_njy_arcsec2"] - shell_baseline
+        shell_satellite = shell_excluded_measurements["satellite_only"]["icl_raw_200_300_njy_arcsec2"] - shell_baseline
+        shell_both = shell_excluded_measurements["both"]["icl_raw_200_300_njy_arcsec2"] - shell_baseline
+        shell_excluded_transfer_response = {
+            "icl_response_to_diffuse_unit_injection": shell_diffuse / diffuse_amplitude,
+            "icl_response_to_all_satellite_envelopes": shell_satellite / satellite_amplitude,
+            "both_minus_sum_residual_icl_njy_arcsec2": shell_both-shell_diffuse-shell_satellite,
+        }
     image_hashes = {str(path): sha256(path) for path in (
         manifest_path, mask_records_path, mask_summary_path, image_path, icl_mask_path,
         detections_path, members_path, sat_mask_path, sat_prep_path, icl_pairs_path)}
@@ -485,17 +525,31 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
             "injected_source_photon_noise_added": False,
             "original_fits_modified": False,
             "n_injected_satellite_centers": len(targets),
+            "icl_satellite_shell_exclusion_applied": shell_union is not None,
+            "icl_satellite_shell_overlap_pixels_removed": shell_overlap_pixels,
         },
         "support": {"n_matched_members": len(matched),
                     "n_ambiguous_matches_rejected": match_stats["ambiguous"],
                     "n_injected_targets_in_50_500_kpc": len(targets)},
+        "icl_satellite_shell_exclusion": {
+            "applied": shell_union is not None,
+            "overlap_pixels_removed": shell_overlap_pixels,
+            "supported_profiles": ([{"member_index": int(row["member_index"]),
+                                     "detection_number": int(row["detection_number"]),
+                                     "target_n_pixels": int(row["target_n_pixels"])}
+                                    for row in shell_exclusion_profiles]
+                                   if shell_exclusion_profiles is not None else []),
+        },
         "measurements_by_scenario": measurements,
         "measurements_by_scenario_fixed_masks": fixed_mask_measurements,
+        "measurements_by_scenario_satellite_shells_excluded": shell_excluded_measurements,
         "redetection_by_scenario": redetection,
         "point_source_wing_profile": point_source_wing_profile,
+        "point_source_wing_profile_satellite_shells_excluded": point_source_shell_excluded_profile,
         "transfer_response": transfer_response,
         "fixed_mask_transfer_response": fixed_mask_transfer_response,
         "redetection_minus_fixed_mask_response": redetection_minus_fixed_mask_response,
+        "satellite_shell_excluded_transfer_response": shell_excluded_transfer_response,
         "input_sha256": image_hashes,
         "code_sha256": {
             str(Path(__file__).resolve()): sha256(Path(__file__)),
@@ -503,6 +557,8 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
                 sha256(Path(__file__).with_name("joint_icl_satellite_injection.py")),
             str(Path(__file__).with_name("position_psf.py").resolve()):
                 sha256(Path(__file__).with_name("position_psf.py")),
+            str(Path(__file__).with_name("audit_satellite_icl_shared_pixel_covariance.py").resolve()):
+                sha256(Path(__file__).with_name("audit_satellite_icl_shared_pixel_covariance.py")),
         },
         "limitations": [
             "The public HSC-I reference is not matched to this frame's position, epoch, or seeing.",
@@ -534,7 +590,11 @@ def run_frame(data: Path, ident: str, output: Path, reference: dict,
 def run_batch(data: Path, output_dir: Path, reference_path: Path,
               reference_dir: Path, plan_dir: Path, psf_dir: Path,
               test_center_psf: Path, *, only_cluster: str | None = None,
-              filter_name: str = "i", hybrid_parameters: dict | None = None) -> dict:
+              filter_name: str = "i", hybrid_parameters: dict | None = None,
+              icl_pairs_path: Path = DEFAULT_ICL_PAIRS,
+              satellite_profiles_path: Path = DEFAULT_SATELLITE_TABLE,
+              association_pairs_path: Path | None = None,
+              exclude_supported_satellite_shells: bool = False) -> dict:
     if filter_name not in ("i", "i2"):
         raise ValueError("filter_name must be i or i2")
     if output_dir.exists():
@@ -542,9 +602,49 @@ def run_batch(data: Path, output_dir: Path, reference_path: Path,
     bank = PositionPSFBank(plan_dir, psf_dir, test_center_psf)
     kernel, reference, reference_summary_path = load_public_reference(reference_path, reference_dir)
     reference["summary_path"] = str(reference_summary_path)
-    pairs = select_jointly_supported_pairs(
-        DEFAULT_ICL_PAIRS, DEFAULT_SATELLITE_TABLE)
+    pairs = select_jointly_supported_pairs(icl_pairs_path, satellite_profiles_path)
     selected = select_reference_frames(pairs, bank.supported_frames, filter_name)
+    association_scope = None
+    if association_pairs_path is not None:
+        association_pairs_path = association_pairs_path.resolve()
+        association_summary_path = association_pairs_path.parent / "summary.json"
+        association_audit_path = association_pairs_path.parent / "independent_audit.json"
+        if not association_summary_path.is_file() or not association_audit_path.is_file():
+            raise FileNotFoundError("association filter requires its summary and independent audit")
+        audit = json.loads(association_audit_path.read_text(encoding="utf-8"))
+        if (audit.get("status") != "verified" or audit.get("science_measurement") is not False
+                or audit.get("association_rows") != 74
+                or audit.get("association_table_sha256") != sha256(association_pairs_path)):
+            raise ValueError("association input is not the verified fixed 74-pair sample")
+        association_rows = read_tsv(association_pairs_path)
+        association_keys = [(row["target_id"], row["filter"]) for row in association_rows]
+        if len(association_keys) != 74 or len(set(association_keys)) != 74:
+            raise ValueError("expected exactly 74 unique target/filter association rows")
+        selected = [pair for pair in selected if pair in set(association_keys)]
+        expected_association_frames = {"i": 12, "i2": 36}[filter_name]
+        if len(selected) != expected_association_frames:
+            raise ValueError(
+                f"expected {expected_association_frames} association/PSF-supported {filter_name} frames; got {len(selected)}")
+        association_scope = {
+            "path": str(association_pairs_path),
+            "sha256": sha256(association_pairs_path),
+            "summary_sha256": sha256(association_summary_path),
+            "independent_audit_sha256": sha256(association_audit_path),
+            "n_fixed_association_pairs": 74,
+            "n_association_joint_psf_intersection_all_filters": 48,
+            "n_selected_this_filter": len(selected),
+        }
+    supported_shell_rows = {}
+    if exclude_supported_satellite_shells:
+        for row in read_tsv(satellite_profiles_path):
+            if (row.get("cohort") == "full_sample" and row.get("radial_bin_kpc") == "50-75"
+                    and float(row["target_coverage"]) >= 0.60
+                    and float(row["control_coverage"]) >= 0.60
+                    and int(row["n_controls"]) >= 3):
+                supported_shell_rows.setdefault((row["cluster_id"], row["filter"]), []).append(row)
+        missing = [pair for pair in selected if pair not in supported_shell_rows]
+        if missing:
+            raise ValueError(f"selected frames lack supported satellite-shell pixels: {missing[:10]}")
     if only_cluster is not None:
         selected = [pair for pair in selected if pair[0] == str(only_cluster)]
         if len(selected) != 1:
@@ -558,13 +658,19 @@ def run_batch(data: Path, output_dir: Path, reference_path: Path,
         print(f"[{index}/{len(selected)}] extended PSF injection cluster {ident} ({filt})", flush=True)
         try:
             result = run_frame(data, ident, output, reference, kernel,
-                               DEFAULT_ICL_MASKS, DEFAULT_SAT_PREP, DEFAULT_ICL_PAIRS,
+                               DEFAULT_ICL_MASKS, DEFAULT_SAT_PREP, icl_pairs_path,
                                bank, filter_name=filter_name,
-                               hybrid_parameters=hybrid_parameters)
+                               hybrid_parameters=hybrid_parameters,
+                               shell_exclusion_profiles=(
+                                   supported_shell_rows.get((ident, filt))
+                                   if exclude_supported_satellite_shells else None))
             records.append({"cluster_id": ident, "filter": filt, "path": str(output),
                             "sha256": sha256(output),
                             "transfer_response": result["transfer_response"],
                             "fixed_mask_transfer_response": result["fixed_mask_transfer_response"],
+                            "satellite_shell_excluded_transfer_response": result["satellite_shell_excluded_transfer_response"],
+                            "point_source_wing_profile_satellite_shells_excluded": result["point_source_wing_profile_satellite_shells_excluded"],
+                            "icl_satellite_shell_exclusion": result["icl_satellite_shell_exclusion"],
                             "redetection_minus_fixed_mask_response": result["redetection_minus_fixed_mask_response"],
                             "hybrid_psf": result.get("hybrid_psf"),
                             "hybrid_satellite_psfs": result.get("hybrid_satellite_psfs"),
@@ -584,6 +690,8 @@ def run_batch(data: Path, output_dir: Path, reference_path: Path,
         "public_reference_transfer_mode": ("exploratory_HSC_I_proxy_for_i2" if filter_name == "i2"
                                             else "HSC_I_reference_for_i_coadd"),
         "selected_pairs": [{"cluster_id": ident, "filter": filt} for ident, filt in selected],
+        "fixed_association_scope": association_scope,
+        "exclude_supported_satellite_shells_from_icl": exclude_supported_satellite_shells,
         "only_cluster_pilot": only_cluster,
         "psf_model_mode": "position_core_public_wing_hybrid_sensitivity" if hybrid_parameters else "public_extended_reference_sensitivity",
         "hybrid_parameters": hybrid_parameters,
@@ -594,6 +702,10 @@ def run_batch(data: Path, output_dir: Path, reference_path: Path,
         "records": records, "errors": errors,
         "reference_summary_path": str(reference_summary_path),
         "reference_summary_sha256": sha256(reference_summary_path),
+        "icl_support_table": str(icl_pairs_path.resolve()),
+        "icl_support_table_sha256": sha256(icl_pairs_path),
+        "satellite_profile_table": str(satellite_profiles_path.resolve()),
+        "satellite_profile_table_sha256": sha256(satellite_profiles_path),
         "position_mapping_sha256": sha256(plan_dir / "position_mapping.json"),
         "code_sha256": {
             str(Path(__file__).resolve()): sha256(Path(__file__)),
@@ -609,6 +721,7 @@ def run_batch(data: Path, output_dir: Path, reference_path: Path,
             "The symmetric and asymmetric reference products share the same star sample and are sensitivity variants, not independent PSFs.",
             "Only synthetic light is convolved; observed data, source Poisson noise, coadd covariance, and upstream sky transfer are not changed.",
             "This is a model-dependence test on a support-selected subset, not science validation or a correction.",
+            "Satellite-shell-excluded transfer uses supported target pixels from the saved segmentation and keeps that exclusion fixed across injections.",
         ],
     }
     summary_path = output_dir / "summary.json"
@@ -628,6 +741,13 @@ def main() -> None:
     parser.add_argument("--cluster-id")
     parser.add_argument("--filter", choices=("i", "i2"), default="i",
                         help="analyze one coadd filter; i2 uses HSC-I only as a proxy sensitivity")
+    parser.add_argument("--icl-pairs", type=Path,
+                        default=DEFAULT_DATA / "icl_annulus_support_2026-10-18_01/pair_metrics_k2p5_c40_r50_300.tsv")
+    parser.add_argument("--satellite-profiles", type=Path, default=DEFAULT_SATELLITE_TABLE)
+    parser.add_argument("--association-pairs", type=Path,
+                        help="restrict to the independently verified fixed ICL--satellite association table")
+    parser.add_argument("--exclude-supported-satellite-shells-from-icl", action="store_true",
+                        help="measure ICL transfer after excluding observed supported 50--75 kpc satellite pixels")
     parser.add_argument("--hybrid-splice-radius-arcsec", type=float)
     parser.add_argument("--hybrid-blend-width-arcsec", type=float)
     parser.add_argument("--hybrid-wing-amplitude", type=float)
@@ -652,7 +772,12 @@ def main() -> None:
                        args.reference_psf.resolve(), args.reference_dir.resolve(),
                        args.plan_dir.resolve(), args.psf_dir.resolve(),
                        args.test_center_psf.resolve(), only_cluster=args.cluster_id,
-                       filter_name=args.filter, hybrid_parameters=hybrid_parameters)
+                       filter_name=args.filter, hybrid_parameters=hybrid_parameters,
+                       icl_pairs_path=args.icl_pairs.resolve(),
+                       satellite_profiles_path=args.satellite_profiles.resolve(),
+                       association_pairs_path=(args.association_pairs.resolve()
+                                               if args.association_pairs else None),
+                       exclude_supported_satellite_shells=args.exclude_supported_satellite_shells_from_icl)
     print(json.dumps({k: result[k] for k in (
         "status", "n_selected", "n_completed", "n_errors", "elapsed_seconds",
         "only_cluster_pilot", "reference")}, indent=2))

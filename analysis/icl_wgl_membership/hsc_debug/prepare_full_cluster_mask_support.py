@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Prepare automatic source-mask candidates and radial area for the 800 clusters.
+"""Prepare automatic source-mask candidates and radial area for HSC cutouts.
 
 This creates masks and support diagnostics only. It does not measure or stack
-surface brightness, and automatic BCG matches are not science approvals.
+surface brightness, and automatic BCG matches are not science approvals. The
+legacy ``--sample`` input remains fixed to the original 800-target sample;
+``--download-dir`` accepts a completed arbitrary-size download when paired with
+its pinned approved manifest and completed header/WCS audit.
 """
 import argparse
 import csv
@@ -18,7 +21,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 import prepare_detection_psf as prep
-from download_pilot import BAD_BIT_POSITIONS, BRIGHT_OBJECT_BIT, validate_fits
+from download_pilot import BAD_MASK_PLANE_NAMES, mask_plane_bitmask, validate_fits
 from prestack_core import EDGES, FACTORS, geometry
 
 
@@ -67,15 +70,20 @@ def prepare_one(frame, image_path, file_record, output_dir, cosmology):
               (members[:, 0] < image.shape[1]) & (members[:, 1] >= 0) &
               (members[:, 1] < image.shape[0]))
     members_in = members[inside]
-    bad = (bits & sum(1 << bit for bit in BAD_BIT_POSITIONS)) != 0
+    bad = (bits & mask_plane_bitmask(info["mask_planes"], BAD_MASK_PLANE_NAMES)) != 0
     bad |= ~np.isfinite(image) | ~np.isfinite(variance) | (variance <= 0)
-    bright = (bits & BRIGHT_OBJECT_BIT) != 0
+    bright = (bits & mask_plane_bitmask(info["mask_planes"], ("MP_BRIGHT_OBJECT",))) != 0
     base = bad | bright
 
     objects, segmentation, kron, kron_flags, bcg, _, detection = prep.detect(
         image, variance, bad, center, members_in, scale)
+    role = str(frame.get("frame_role", frame.get("sample_role", "target")))
+    is_control = role in {"matched_control", "control"}
+    # A random control center is not a BCG. Do not protect the central source
+    # from the control mask even if SEP finds a compact object there.
     masks, fallback = prep.source_masks(
-        objects, segmentation, kron, kron_flags, base, bcg, members_in, scale)
+        objects, segmentation, kron, kron_flags, base,
+        -1 if is_control else bcg, members_in, scale)
     if not all(np.all(mask[base]) for mask in masks):
         raise AssertionError("a proposed source mask removed a quality exclusion")
     if not (np.all(~masks[0] | masks[1]) and np.all(~masks[1] | masks[2])):
@@ -91,7 +99,8 @@ def prepare_one(frame, image_path, file_record, output_dir, cosmology):
     wh = wcs.to_header()
     wh["SCIVAL"] = False
     wh["AUTOMASK"] = True
-    wh["BCGCAND"] = bool(bcg >= 0)
+    wh["BCGCAND"] = bool(bcg >= 0) and not is_control
+    wh["CTRLPT"] = is_control
     hdus = [fits.PrimaryHDU(), fits.ImageHDU(base.astype(np.uint8), header=wh, name="BASE_MASK")]
     for factor, mask in zip(FACTORS, masks):
         hdus.append(fits.ImageHDU(mask.astype(np.uint8), header=wh,
@@ -115,10 +124,12 @@ def prepare_one(frame, image_path, file_record, output_dir, cosmology):
 
     center_masked = ([bool(mask[iy, ix]) for mask in masks] if center_in else [True] * len(masks))
     record = dict(
-        id=str(frame["id"]), image=str(image_path), image_bytes=int(file_record["bytes"]),
+        id=str(frame["id"]), frame_role=role, image=str(image_path), image_bytes=int(file_record["bytes"]),
         image_sha256=file_record["sha256"], primary_filter=info["coadd_header_filter"],
-        n_detections=int(len(objects)), bcg_match_count=int(detection["bcg_matches"]),
-        auto_unique_center_candidate=bool(bcg >= 0),
+        n_detections=int(len(objects)), center_source_match_count=int(detection["bcg_matches"]),
+        bcg_match_count=0 if is_control else int(detection["bcg_matches"]),
+        auto_unique_center_candidate=bool(bcg >= 0) and not is_control,
+        center_source_protected=bool(bcg >= 0) and not is_control,
         nearest_detection_arcsec=detection["nearest_bcg_detection_arcsec"],
         center_base_masked=bool(base[iy, ix]) if center_in else True,
         center_masked_by_kron=dict(zip((str(f) for f in FACTORS), center_masked)),
@@ -135,23 +146,91 @@ def prepare_one(frame, image_path, file_record, output_dir, cosmology):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sample", type=Path, required=True)
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--sample", type=Path,
+                        help="legacy 800-target sample directory containing download_01/")
+    inputs.add_argument("--download-dir", type=Path,
+                        help="completed download work directory containing status, manifest, and images/")
     parser.add_argument("--work", type=Path, required=True)
+    parser.add_argument("--expected-n", type=int,
+                        help="required frame count with --download-dir; defaults to 800 for --sample")
+    parser.add_argument("--approved-manifest", type=Path,
+                        help="pinned target/control manifest used to authorize this download")
+    parser.add_argument("--expected-manifest-sha256",
+                        help="expected SHA-256 of --approved-manifest")
+    parser.add_argument("--audit-summary", type=Path,
+                        help="completed independent FITS/header/WCS audit summary")
     args = parser.parse_args()
     if args.work.exists():
         parser.error(f"Refusing to overwrite existing output directory: {args.work}")
 
-    manifest_path = args.sample / "download_01/download_manifest.json"
-    status_path = args.sample / "download_01/download_status.json"
+    if args.download_dir is not None and (args.expected_n is None or args.expected_n <= 0):
+        parser.error("--download-dir requires a positive --expected-n")
+    if args.sample is not None and args.expected_n not in (None, 800):
+        parser.error("--sample is the fixed legacy 800-target input")
+    if (args.approved_manifest is None) != (args.expected_manifest_sha256 is None):
+        parser.error("--approved-manifest and --expected-manifest-sha256 must be supplied together")
+    if args.download_dir is not None and (args.approved_manifest is None or args.audit_summary is None):
+        parser.error("--download-dir requires its pinned approved manifest and --audit-summary")
+    download_dir = (args.download_dir.resolve() if args.download_dir is not None
+                    else (args.sample / "download_01").resolve())
+    expected_n = args.expected_n if args.expected_n is not None else 800
+    manifest_path = download_dir / "download_manifest.json"
+    status_path = download_dir / "download_status.json"
     manifest = json.loads(manifest_path.read_text())
     download_status = json.loads(status_path.read_text())
     frames = manifest.get("clusters", [])
     completed = {str(row["id"]): row for row in download_status.get("completed", [])}
     frame_ids = [str(frame["id"]) for frame in frames]
-    if download_status.get("status") != "complete" or len(frames) != 800:
-        raise ValueError("Expected the complete 800-image download manifest")
-    if len(set(frame_ids)) != 800 or set(frame_ids) != set(completed):
+    if (download_status.get("status") != "complete"
+            or download_status.get("downloaded", len(download_status.get("completed", []))) != expected_n
+            or download_status.get("science_measurement") is not False
+            or download_status.get("credentials_saved") is not False
+            or len(frames) != expected_n):
+        raise ValueError(f"Expected the complete {expected_n}-image download manifest")
+    if (len(set(frame_ids)) != expected_n
+            or len(download_status.get("completed", [])) != expected_n
+            or set(frame_ids) != set(completed)):
         raise ValueError("Download manifest and completed ID sets differ")
+    approved_manifest_sha = None
+    if args.approved_manifest is not None:
+        approved_manifest = args.approved_manifest.resolve()
+        approved_manifest_sha = sha256(approved_manifest)
+        if approved_manifest_sha != args.expected_manifest_sha256:
+            raise ValueError("approved manifest SHA-256 differs from the pinned value")
+        if download_status.get("manifest_sha256") != approved_manifest_sha:
+            raise ValueError("download checkpoint is not tied to the approved manifest")
+        approved_doc = json.loads(approved_manifest.read_text(encoding="utf-8"))
+        approved_rows = {str(row["id"]): row for row in approved_doc.get("clusters", [])}
+        if len(approved_rows) != expected_n or set(approved_rows) != set(frame_ids):
+            raise ValueError("downloaded frame identities differ from the approved manifest")
+        for frame in frames:
+            source = approved_rows[str(frame["id"])]
+            for key in ("ra_deg", "dec_deg", "z"):
+                if float(frame[key]) != float(source[key]):
+                    raise ValueError(f"downloaded frame {frame['id']} changed approved {key}")
+            approved_role = str(source.get("frame_role", source.get("sample_role", "")))
+            downloaded_role = str(frame.get("frame_role", frame.get("sample_role", "")))
+            if approved_role != downloaded_role:
+                raise ValueError(f"downloaded frame {frame['id']} changed its approved role")
+    audit_summary = None
+    if args.audit_summary is not None:
+        audit_path = args.audit_summary.resolve()
+        audit_summary = json.loads(audit_path.read_text(encoding="utf-8"))
+        audit_manifest_sha = audit_summary.get("manifest_sha256")
+        audit_inputs = audit_summary.get("inputs_sha256", {})
+        if audit_manifest_sha is None and approved_manifest_sha is not None:
+            audit_manifest_sha = audit_inputs.get(str(args.approved_manifest.resolve()))
+        if (audit_summary.get("status") != "complete_header_wcs_file_integrity_audit"
+                or audit_summary.get("n_expected_frames") != expected_n
+                or audit_summary.get("n_verified_frames") != expected_n
+                or audit_summary.get("science_measurement") is not False
+                or audit_summary.get("images_ready_for_stacking") is not False
+                or audit_inputs.get(str(status_path)) != sha256(status_path)
+                or audit_inputs.get(str(manifest_path)) != sha256(manifest_path)
+                or (approved_manifest_sha is not None
+                    and audit_manifest_sha != approved_manifest_sha)):
+            raise ValueError("independent image audit is incomplete or belongs to different inputs")
 
     cosmology = FlatLambdaCDM(H0=float(manifest["h0"]), Om0=float(manifest["omega_m"]), Tcmb0=0)
     args.work.mkdir(parents=True, exist_ok=False)
@@ -160,16 +239,19 @@ def main():
         method="prepare_detection_psf.detect + source_masks; native HSC masks retained",
         kron_factors=list(FACTORS), radial_edges_kpc=EDGES.tolist(),
         source_manifest=str(manifest_path), source_status=str(status_path),
-        n_expected=800, no_surface_brightness_measurement=True,
+        n_expected=expected_n, no_surface_brightness_measurement=True,
         bcg_status="automatic positional candidate only; no new manual association review",
         area_status="engineering support only; no threshold or mask approved for science",
+        approved_manifest_sha256=approved_manifest_sha,
+        audit_summary=str(args.audit_summary.resolve()) if args.audit_summary else None,
         science_measurement=False, mask_ready_for_science=False,
     ))
     summary_path = args.work / "summary.json"
     records_path = args.work / "records.tsv"
     coverage_path = args.work / "coverage.tsv"
-    record_fields = ["id", "image", "image_bytes", "image_sha256", "primary_filter",
-                     "n_detections", "bcg_match_count", "auto_unique_center_candidate",
+    record_fields = ["id", "frame_role", "image", "image_bytes", "image_sha256", "primary_filter",
+                     "n_detections", "center_source_match_count", "bcg_match_count",
+                     "auto_unique_center_candidate", "center_source_protected",
                      "nearest_detection_arcsec", "center_base_masked", "center_masked_by_kron",
                      "n_members", "n_members_in_frame", "member_fallback_count",
                      "min_coverage_by_kron", "coverage_by_kron", "counts_by_kron",
@@ -178,11 +260,12 @@ def main():
     records = []
     coverage_rows = []
     errors = []
+    image_dir = download_dir / "images"
     start = time.monotonic()
     for index, frame in enumerate(frames, 1):
         ident = str(frame["id"])
         file_record = completed[ident]
-        image_path = args.sample / "download_01/images" / file_record["file"]
+        image_path = image_dir / file_record["file"]
         try:
             if not image_path.is_file() or image_path.stat().st_size != int(file_record["bytes"]):
                 raise ValueError("downloaded FITS is missing or its byte size changed")
@@ -190,11 +273,11 @@ def main():
                 frame, image_path, file_record, args.work / "clusters" / ("cluster_" + ident), cosmology)
             records.append(record)
             coverage_rows.extend(field_coverage)
-            print(f"[{index}/800] cluster {ident}: detections={record['n_detections']} "
+            print(f"[{index}/{expected_n}] cluster {ident}: detections={record['n_detections']} "
                   f"unique_center={record['auto_unique_center_candidate']}", flush=True)
         except Exception as exc:
             errors.append(dict(id=ident, error=f"{type(exc).__name__}: {exc}"))
-            print(f"[{index}/800] cluster {ident}: ERROR {type(exc).__name__}: {exc}", flush=True)
+            print(f"[{index}/{expected_n}] cluster {ident}: ERROR {type(exc).__name__}: {exc}", flush=True)
         if index % 10 == 0 or index == len(frames):
             write_tsv(records_path, records, record_fields) if records else None
             write_tsv(coverage_path, coverage_rows, coverage_fields) if coverage_rows else None
@@ -205,9 +288,13 @@ def main():
 
     hashes = {str(manifest_path): sha256(manifest_path), str(status_path): sha256(status_path),
               str(args.work / "protocol.json"): sha256(args.work / "protocol.json")}
+    if args.approved_manifest is not None:
+        hashes[str(args.approved_manifest.resolve())] = approved_manifest_sha
+    if args.audit_summary is not None:
+        hashes[str(args.audit_summary.resolve())] = sha256(args.audit_summary.resolve())
     summary = dict(
-        status="complete" if len(records) == 800 and not errors else "partial",
-        n_expected=800, n_success=len(records), n_error=len(errors), errors=errors,
+        status="complete" if len(records) == expected_n and not errors else "partial",
+        n_expected=expected_n, n_success=len(records), n_error=len(errors), errors=errors,
         n_auto_unique_center_candidates=sum(row["auto_unique_center_candidate"] for row in records),
         n_center_base_masked=sum(row["center_base_masked"] for row in records),
         n_center_masked_by_kron={str(f): sum(row["center_masked_by_kron"][str(f)] for row in records)
@@ -223,7 +310,7 @@ def main():
         science_measurement=False, mask_ready_for_science=False,
     )
     write_json(summary_path, summary)
-    print(f"Mask support preparation {summary['status']}: {len(records)}/800; "
+    print(f"Mask support preparation {summary['status']}: {len(records)}/{expected_n}; "
           f"{len(errors)} errors; elapsed={summary['elapsed_seconds']:.1f}s", flush=True)
     if errors:
         raise SystemExit(2)

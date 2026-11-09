@@ -167,6 +167,340 @@ class PositionPSFBank:
         return result
 
 
+class SupportedPairsPositionPSFBank(PositionPSFBank):
+    """Combine audited PSFs for the 224-pair injection-support sample.
+
+    The base 744-position injection batch supplies PSFs for the original
+    57-frame subset. A separate center batch supplies target centers, and an
+    approved supported-pairs batch supplies the remaining satellite positions.
+    The constructor verifies each immutable plan, its coordinate mapping, the
+    audit manifest, and every file checksum before exposing a frame.
+    """
+
+    def __init__(self, injection_plan_dir: Path, injection_download_dir: Path,
+                 test_center_psf: Path, center_plan_dir: Path,
+                 center_download_dir: Path, satellite_plan_dir: Path,
+                 satellite_download_dir: Path,
+                 approved_satellite_plan_sha256: str):
+        super().__init__(injection_plan_dir, injection_download_dir, test_center_psf)
+        center_plan_dir, center_download_dir = Path(center_plan_dir), Path(center_download_dir)
+        satellite_plan_dir, satellite_download_dir = Path(satellite_plan_dir), Path(satellite_download_dir)
+        satellite_plan_path = satellite_plan_dir / "psf_request_plan.json"
+        actual_approval_hash = sha256(satellite_plan_path)
+        if actual_approval_hash != str(approved_satellite_plan_sha256).lower():
+            raise ValueError(
+                "supported-satellite PSF plan hash differs from the explicitly approved plan"
+            )
+        self.approved_satellite_plan_sha256 = actual_approval_hash
+        self.provenance_paths = [self.plan_path, self.mapping_path, self.audit_path]
+        self._center_coord_by_cluster: dict[str, tuple[float, float]] = {}
+        self._load_center_batch(center_plan_dir, center_download_dir)
+        self._load_satellite_batch(satellite_plan_dir, satellite_download_dir)
+
+        satellite_indices: dict[tuple[str, str], set[int]] = {}
+        for cluster, filt, role, target_index in self._role_coord:
+            if role == "satellite_injection_center":
+                if target_index is None:
+                    raise ValueError("satellite PSF role is missing its target index")
+                satellite_indices.setdefault((cluster, filt), set()).add(target_index)
+        incomplete = {
+            frame: sorted(indices)
+            for frame, indices in satellite_indices.items()
+            if indices != set(range(max(indices) + 1))
+        }
+        if incomplete:
+            first = next(iter(sorted(incomplete.items())))
+            raise ValueError(f"combined satellite PSF indices are incomplete for {first[0]}: {first[1]}")
+        self.supported_frames = set(satellite_indices)
+        self.request_approval_verified = True
+        if len(self.supported_frames) != 224:
+            raise ValueError(f"expected 224 PSF-complete ICL support frames, found {len(self.supported_frames)}")
+        missing_centers = [frame for frame in self.supported_frames
+                           if (frame[0], frame[1], "cluster_center", None) not in self._role_coord]
+        if missing_centers:
+            raise ValueError(f"supported injection frames lack center PSFs: {missing_centers[:10]}")
+
+    @staticmethod
+    def _read_mapping(plan_dir: Path, plan_name: str, audit_path: Path,
+                      expected_schema: str, count_field: str) -> tuple[dict, list, dict]:
+        plan_path = plan_dir / plan_name
+        mapping_path = plan_dir / "position_mapping.json"
+        coordinate_path = plan_dir / "psf_picker_coordinates.txt"
+        if not all(path.is_file() for path in (plan_path, mapping_path, coordinate_path, audit_path)):
+            raise FileNotFoundError(f"PSF plan, mapping, coordinate list, or audit is missing under {plan_dir}")
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+        audit = json.loads(audit_path.read_text(encoding="utf-8"))
+        if plan.get("schema") != expected_schema or plan.get("status") != "prepared_not_submitted":
+            raise ValueError(f"unexpected or modified PSF request plan: {plan_path}")
+        if plan.get("request_submitted") is True or plan.get("network_used") is True:
+            raise ValueError(f"plan provenance unexpectedly records a submitted request: {plan_path}")
+        request = plan.get("request", plan)
+        if (request.get("rerun") != "pdr3_wide" or request.get("type") != "coadd"
+                or request.get("filter") != "HSC-I"
+                or request.get("centered", plan.get("centered")) is not True):
+            raise ValueError(f"PSF plan is outside the centered PDR3 Wide HSC-I coadd scope: {plan_path}")
+        if (plan.get("images_requested") is not False
+                or plan.get("shape_rows_requested") is not False
+                or plan.get("photoz_requested") is not False
+                or plan.get("credentials_saved") is not False):
+            raise ValueError(f"PSF plan includes out-of-scope products: {plan_path}")
+        expected = int(plan.get(count_field, -1))
+        if expected <= 0 or len(mapping) != expected:
+            raise ValueError(f"PSF plan/mapping count mismatch: {plan_path}")
+        if sha256(mapping_path) != plan.get("position_mapping_sha256"):
+            raise ValueError(f"PSF position mapping checksum mismatch: {mapping_path}")
+        if sha256(coordinate_path) != plan.get("coordinate_list_sha256"):
+            raise ValueError(f"PSF coordinate list checksum mismatch: {coordinate_path}")
+        if (audit.get("status") != "verified"
+                or audit.get("n_returned") != expected
+                or audit.get("n_matched_coordinates") != expected
+                or audit.get("position_mapping_sha256") != sha256(mapping_path)):
+            raise ValueError(f"PSF response audit does not match plan: {audit_path}")
+        mapped = {_coord_key(row["ra_deg"], row["dec_deg"]): row for row in mapping}
+        if len(mapped) != expected:
+            raise ValueError(f"duplicate PSF coordinates in mapping: {mapping_path}")
+        lines = coordinate_path.read_text(encoding="ascii").splitlines()
+        if not lines or lines[0].strip() != "#? ra dec":
+            raise ValueError(f"unexpected PSF coordinate list header: {coordinate_path}")
+        listed = []
+        for line in lines[1:]:
+            fields = line.split()
+            if len(fields) != 2:
+                raise ValueError(f"malformed PSF coordinate row: {coordinate_path}")
+            listed.append(_coord_key(fields[0], fields[1]))
+        if len(listed) != expected or len(set(listed)) != expected or set(listed) != set(mapped):
+            raise ValueError(f"PSF coordinate list differs from mapping: {coordinate_path}")
+        return {"plan": plan_path, "mapping": mapping_path, "coordinates": coordinate_path}, mapping, audit
+
+    def _merge_batch(self, plan_dir: Path, download_dir: Path, plan_name: str,
+                     audit_name: str, expected_schema: str, count_field: str) -> list[dict]:
+        audit_path = download_dir / audit_name
+        paths, mapping, audit = self._read_mapping(
+            plan_dir, plan_name, audit_path, expected_schema, count_field)
+        plan_path = paths["plan"]
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        if audit.get("plan_sha256") != sha256(plan_path):
+            raise ValueError(f"PSF response audit plan checksum mismatch: {audit_path}")
+        if (audit.get("credentials_saved") is not False
+                or audit.get("images_returned") is not False
+                or audit.get("shape_rows_returned") is not False
+                or audit.get("photoz_rows_returned") is not False
+                or audit.get("science_measurement") is not False):
+            raise ValueError(f"unexpected returned data or gate state in {audit_path}")
+        file_rows = audit.get("files")
+        if not isinstance(file_rows, list) or len(file_rows) != len(mapping):
+            raise ValueError(f"PSF file audit count mismatch: {audit_path}")
+        expected_names = {str(row["file"]) for row in file_rows}
+        actual_names = {path.name for path in download_dir.glob("*.fits")}
+        if actual_names != expected_names:
+            raise ValueError(f"download directory FITS set differs from its audit: {download_dir}")
+        response_by_coord = {}
+        for row in file_rows:
+            coord = _coord_key(row["ra_deg_filename"], row["dec_deg_filename"])
+            if coord in response_by_coord:
+                raise ValueError(f"duplicate PSF coordinate in response audit: {audit_path}")
+            path = download_dir / row["file"]
+            if not path.is_file() or sha256(path) != row.get("sha256"):
+                raise ValueError(f"missing or changed PSF file: {path}")
+            response_by_coord[coord] = (path, row["sha256"])
+        mapped_coords = {_coord_key(row["ra_deg"], row["dec_deg"])
+                         for row in mapping}
+        if set(response_by_coord) != mapped_coords:
+            raise ValueError(f"returned PSF coordinates differ from plan mapping: {audit_path}")
+
+        for coord, (path, digest) in response_by_coord.items():
+            if coord in self._path_by_coord:
+                raise ValueError(f"supplemental PSF batch duplicates an existing coordinate: {coord}")
+            self._path_by_coord[coord] = (path, digest)
+        self.provenance_paths.extend([paths["plan"], paths["mapping"], paths["coordinates"], audit_path])
+        return mapping
+
+    def _load_center_batch(self, plan_dir: Path, download_dir: Path) -> None:
+        mapping = self._merge_batch(
+            plan_dir, download_dir, "psf_picker_plan.json",
+            "psf_picker_audit_reproducible.json",
+            "astrafek-hsc-psf-picker-target-control-center-plan-v1",
+            "n_requests_remaining")
+        for row in mapping:
+            coord = _coord_key(row["ra_deg"], row["dec_deg"])
+            for role in row.get("roles", []):
+                if role.get("role") != "target_cluster_center":
+                    continue
+                cluster = str(role["cluster_id"])
+                previous = self._center_coord_by_cluster.setdefault(cluster, coord)
+                if previous != coord:
+                    raise ValueError(f"multiple target-center PSFs for cluster {cluster}")
+
+    def _load_satellite_batch(self, plan_dir: Path, download_dir: Path) -> None:
+        mapping = self._merge_batch(
+            plan_dir, download_dir, "psf_request_plan.json", "psf_picker_audit.json",
+            "astrafek-icl-supported-pairs-psf-request-plan-v1", "n_requests_remaining")
+        satellite_roles = 0
+        for row in mapping:
+            coord = _coord_key(row["ra_deg"], row["dec_deg"])
+            for role in row.get("roles", []):
+                if role.get("role") != "satellite_injection_center":
+                    continue
+                key = (str(role["cluster_id"]), str(role["frame_filter"]).lower(),
+                       "satellite_injection_center", int(role["target_index"]))
+                previous = self._role_coord.setdefault(key, coord)
+                if previous != coord:
+                    raise ValueError(f"conflicting satellite PSF role mapping: {key}")
+                satellite_roles += 1
+        if satellite_roles != 2005:
+            raise ValueError(f"expected 2,005 new satellite PSF roles, found {satellite_roles}")
+
+        for cluster, filt, role, _ in list(self._role_coord):
+            if role != "satellite_injection_center":
+                continue
+            center_key = (cluster, filt, "cluster_center", None)
+            if center_key in self._role_coord:
+                continue
+            try:
+                coord = self._center_coord_by_cluster[cluster]
+            except KeyError as exc:
+                raise ValueError(f"no center PSF for supported cluster {cluster}") from exc
+            self._role_coord[center_key] = coord
+
+    def frame(self, cluster_id: str, frame_filter: str,
+              n_satellites: int) -> tuple[np.ndarray, list[np.ndarray], list[str]]:
+        if (str(cluster_id), str(frame_filter).lower()) not in self.supported_frames:
+            raise ValueError(f"frame is outside the verified 224-pair PSF support: {cluster_id}/{frame_filter}")
+        return super().frame(cluster_id, frame_filter, n_satellites)
+
+
+class S23BCamiraMemberProfilePSFBank:
+    """Resolve the separately approved 427-position S23B member PSF batch."""
+
+    def __init__(self, plan_dir: Path, download_dir: Path,
+                 approved_plan_sha256: str):
+        plan_dir, download_dir = Path(plan_dir), Path(download_dir)
+        self.plan_path = plan_dir / "psf_request_plan.json"
+        self.mapping_path = plan_dir / "position_mapping.json"
+        self.coordinate_path = plan_dir / "psf_picker_coordinates.txt"
+        self.audit_path = download_dir / "psf_picker_audit.json"
+        plan = json.loads(self.plan_path.read_text(encoding="utf-8"))
+        mapping = json.loads(self.mapping_path.read_text(encoding="utf-8"))
+        audit = json.loads(self.audit_path.read_text(encoding="utf-8"))
+        actual_plan_sha256 = sha256(self.plan_path)
+        if actual_plan_sha256 != str(approved_plan_sha256).lower():
+            raise ValueError("member-profile PSF plan differs from the explicitly approved plan")
+        if (plan.get("schema") != "astrafek-s23b-camira-member-profile-psf-plan-v1"
+                or plan.get("status") != "prepared_not_submitted"
+                or plan.get("n_unique_member_positions") != 427
+                or plan.get("requires_explicit_user_approval") is not True
+                or plan.get("science_measurement") is not False):
+            raise ValueError("unexpected or modified S23B member-profile PSF plan")
+        request = plan.get("request", {})
+        if (request.get("rerun") != "pdr3_wide" or request.get("type") != "coadd"
+                or request.get("filter") != "HSC-I" or request.get("centered") is not True
+                or request.get("product") != "position-specific coadd model PSF FITS core"
+                or plan.get("images_requested") is not False
+                or plan.get("coadd_images_requested") is not False
+                or plan.get("shape_rows_requested") is not False
+                or plan.get("photoz_requested") is not False):
+            raise ValueError("member-profile PSF plan falls outside its approved data scope")
+        if (sha256(self.mapping_path) != plan.get("position_mapping_sha256")
+                or sha256(self.coordinate_path) != plan.get("coordinate_list_sha256")):
+            raise ValueError("member-profile PSF mapping or coordinate checksum mismatch")
+        if (audit.get("status") != "verified"
+                or audit.get("plan_sha256") != actual_plan_sha256
+                or audit.get("approved_plan_sha256") != actual_plan_sha256
+                or audit.get("n_returned") != 427
+                or audit.get("n_matched_coordinates") != 427
+                or audit.get("position_mapping_sha256") != plan["position_mapping_sha256"]
+                or audit.get("total_bytes", plan["max_total_bytes_for_review"] + 1)
+                   > plan["max_total_bytes_for_review"]
+                or audit.get("images_returned") is not False
+                or audit.get("shape_rows_returned") is not False
+                or audit.get("photoz_rows_returned") is not False
+                or audit.get("science_measurement") is not False):
+            raise ValueError("member-profile PSF response has not passed its scoped audit")
+
+        self._path_by_coord: dict[tuple[float, float], tuple[Path, str]] = {}
+        for record in audit.get("files", []):
+            coord = _coord_key(record["ra_deg_filename"], record["dec_deg_filename"])
+            if coord in self._path_by_coord:
+                raise ValueError("duplicate position in member-profile PSF audit")
+            path = download_dir / record["file"]
+            if not path.is_file() or path.stat().st_size != int(record["bytes"]):
+                raise ValueError(f"missing or size-mismatched member PSF: {path}")
+            self._path_by_coord[coord] = (path, str(record["sha256"]))
+        if len(self._path_by_coord) != 427:
+            raise ValueError("expected exactly 427 audited member-profile PSF files")
+
+        self._member_coord: dict[tuple[str, str, int, str], tuple[float, float]] = {}
+        if len(mapping) != 427:
+            raise ValueError("expected exactly 427 unique member-profile PSF requests")
+        for position in mapping:
+            coord = _coord_key(position["ra_deg"], position["dec_deg"])
+            if coord not in self._path_by_coord:
+                raise ValueError("planned member coordinate has no audited PSF file")
+            for role in position.get("roles", []):
+                key = (str(role["cluster_id"]), str(role["frame_filter"]).lower(),
+                       int(role["member_index"]), str(role["source_row"]))
+                previous = self._member_coord.setdefault(key, coord)
+                if previous != coord:
+                    raise ValueError(f"conflicting PSF coordinate for member {key}")
+        if len(self._member_coord) != 427:
+            raise ValueError("expected exactly 427 selected CAMIRA member PSF roles")
+
+        self.approved_plan_sha256 = actual_plan_sha256
+        self.provenance_paths = [self.plan_path, self.mapping_path,
+                                 self.coordinate_path, self.audit_path]
+        self._cache: dict[Path, np.ndarray] = {}
+
+    def member(self, cluster_id: str, frame_filter: str, member_index: int,
+               source_row: str) -> tuple[np.ndarray, str, str]:
+        """Return the verified local PSF, filename, and recorded file digest."""
+        key = (str(cluster_id), str(frame_filter).lower(), int(member_index), str(source_row))
+        try:
+            coord = self._member_coord[key]
+            path, expected_sha = self._path_by_coord[coord]
+        except KeyError as exc:
+            raise ValueError(f"no approved member-profile PSF for {key}") from exc
+        if not path.is_file() or sha256(path) != expected_sha:
+            raise ValueError(f"member-profile PSF checksum mismatch: {path.name}")
+        if path not in self._cache:
+            with fits.open(path, memmap=False, checksum=True) as hdus:
+                if len(hdus) != 1 or hdus[0].data is None:
+                    raise ValueError(f"unexpected PSF FITS structure: {path.name}")
+                psf = np.asarray(hdus[0].data, dtype=np.float64)
+            if (psf.ndim != 2 or any(size % 2 != 1 for size in psf.shape)
+                    or not np.isfinite(psf).all()
+                    or abs(float(psf.sum()) - 1.0) > 1e-3):
+                raise ValueError(f"invalid signed unit-normalized PSF core: {path.name}")
+            positive = np.clip(psf, 0, None)
+            yy, xx = np.indices(psf.shape)
+            cx = float((positive * xx).sum() / positive.sum())
+            cy = float((positive * yy).sum() / positive.sum())
+            if np.hypot(cx - (psf.shape[1] - 1) / 2,
+                        cy - (psf.shape[0] - 1) / 2) > 0.5:
+                raise ValueError(f"member PSF is not centered: {path.name}")
+            self._cache[path] = psf.astype(np.float32)
+        return self._cache[path], path.name, expected_sha
+
+    def manifest(self) -> dict:
+        """Return immutable request, audit, and file provenance for a run."""
+        return {
+            "plan": str(self.plan_path.resolve()),
+            "plan_sha256": self.approved_plan_sha256,
+            "mapping": str(self.mapping_path.resolve()),
+            "mapping_sha256": sha256(self.mapping_path),
+            "coordinates": str(self.coordinate_path.resolve()),
+            "coordinate_list_sha256": sha256(self.coordinate_path),
+            "audit": str(self.audit_path.resolve()),
+            "audit_sha256": sha256(self.audit_path),
+            "files_sha256": {
+                str(path.resolve()): digest
+                for path, digest in sorted(self._path_by_coord.values(), key=lambda item: str(item[0]))
+            },
+            "n_files": len(self._path_by_coord),
+            "science_measurement": False,
+        }
+
+
 def convolve_surface_brightness(template: np.ndarray, psf: np.ndarray) -> np.ndarray:
     """Convolve SB with a signed, unit-normalized centered model PSF core."""
     image = np.asarray(template, dtype=np.float32)

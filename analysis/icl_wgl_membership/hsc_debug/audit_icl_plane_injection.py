@@ -293,7 +293,7 @@ def run(args):
                 raise ValueError(f"control image filter mismatch for {control_id}")
             _, control_masks, _, _, _ = validate_control_images.control_masks(
                 control_image, control_var, control_bits, control_info["center_pixel_xy"],
-                control_info["pixel_scale_arcsec"])
+                control_info["pixel_scale_arcsec"], control_info["mask_planes"])
             control_mask = np.asarray(control_masks[prepare_detection_psf.FACTORS.index(2.5)],
                                       dtype=bool)
             source_hashes[str(control_path)] = control_expected

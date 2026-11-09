@@ -21,7 +21,7 @@ from joint_icl_satellite_injection import (
     run_frame,
     sha256,
 )
-from position_psf import PositionPSFBank
+from position_psf import PositionPSFBank, SupportedPairsPositionPSFBank
 
 
 DEFAULT_SATELLITE_TABLE = DEFAULT_DATA / "satellite_outer_profile_perbin_full_2026-10-18_01/satellite_profiles.tsv"
@@ -69,6 +69,23 @@ def select_jointly_supported_pairs(icl_pairs_path: Path,
     return selected
 
 
+def select_icl_supported_pairs(icl_pairs_path: Path,
+                                icl_coverage_floor: float = 0.40) -> list[tuple[str, str]]:
+    """Select the parent ICL-support sample, retaining satellite support failures."""
+    rows = read_tsv(icl_pairs_path)
+    if not rows or not {"id", "filter", "coverage_200_300"}.issubset(rows[0]):
+        raise ValueError("ICL pair table is missing the expected common-coverage fields")
+    selected = sorted({
+        (str(row["id"]), str(row["filter"]))
+        for row in rows if float(row["coverage_200_300"]) >= icl_coverage_floor
+    }, key=lambda item: (int(item[0]), item[1]))
+    if len(selected) != sum(float(row["coverage_200_300"]) >= icl_coverage_floor for row in rows):
+        raise ValueError("duplicate ICL-supported cluster/filter pair rows")
+    if len({item[0] for item in selected}) != len(selected):
+        raise ValueError("an ICL-supported cluster is represented by multiple filters")
+    return selected
+
+
 def summarize(records: list[dict]) -> dict:
     by_filter = {}
     for filt in sorted({r["filter"] for r in records}):
@@ -90,6 +107,20 @@ def summarize(records: list[dict]) -> dict:
                 "q16": float(np.quantile(vals, 0.16)) if vals else None,
                 "q84": float(np.quantile(vals, 0.84)) if vals else None,
             }
+        shell = [r["transfer_response"].get("satellite_shell_excluded_icl") for r in subset
+                 if r["transfer_response"].get("satellite_shell_excluded_icl") is not None]
+        if shell:
+            metrics["satellite_shell_excluded_icl"] = {}
+            for key in ("icl_response_to_diffuse_unit_injection",
+                        "icl_response_to_all_satellite_envelopes",
+                        "both_minus_sum_residual_icl_njy_arcsec2"):
+                vals = np.asarray([item[key] for item in shell if item.get(key) is not None], dtype=float)
+                metrics["satellite_shell_excluded_icl"][key] = {
+                    "n_valid": int(len(vals)),
+                    "median": float(np.median(vals)) if len(vals) else None,
+                    "q16": float(np.quantile(vals, 0.16)) if len(vals) else None,
+                    "q84": float(np.quantile(vals, 0.84)) if len(vals) else None,
+                }
         by_filter[filt] = {"n_clusters": len(subset), "responses": metrics}
     return by_filter
 
@@ -105,16 +136,77 @@ def run_batch(data: Path, output_dir: Path,
               satellite_scale_kpc: float = 15.0,
               rerun_detection_masks: bool = False,
               unresolved_bcg_policy: str = "error",
-              psf_bank: PositionPSFBank | None = None) -> dict:
+              psf_bank: PositionPSFBank | None = None,
+              exclude_supported_satellite_shells: bool = False,
+              association_pairs_path: Path | None = None,
+              satellite_coverage_floor: float = 0.60,
+              minimum_controls: int = 3,
+              icl_supported_only: bool = False) -> dict:
     if output_dir.exists():
         raise FileExistsError(f"refusing to overwrite {output_dir}")
-    selected = select_jointly_supported_pairs(icl_pairs_path, satellite_profiles_path)
-    n_joint_supported = len(selected)
+    if not 0. < satellite_coverage_floor <= 1. or minimum_controls < 1:
+        raise ValueError("invalid satellite coverage floor or minimum control count")
+    if exclude_supported_satellite_shells and rerun_detection_masks:
+        raise ValueError("shell-excluded ICL injection currently requires fixed observed segmentation")
+    if icl_supported_only and exclude_supported_satellite_shells:
+        raise ValueError("shell exclusion requires satellite-supported rows and cannot use the ICL-only parent selection")
+    if icl_supported_only and association_pairs_path is not None:
+        raise ValueError("--icl-supported-only cannot be combined with the fixed association-pair subset")
+    selected = (select_icl_supported_pairs(icl_pairs_path, icl_coverage_floor=0.40)
+                if icl_supported_only else
+                select_jointly_supported_pairs(
+                    icl_pairs_path, satellite_profiles_path,
+                    icl_coverage_floor=0.40,
+                    satellite_coverage_floor=satellite_coverage_floor))
+    joint_supported_pairs = list(selected)
+    n_joint_supported = None if icl_supported_only else len(selected)
+    association_scope = None
+    if association_pairs_path is not None:
+        association_pairs_path = association_pairs_path.resolve()
+        association_summary_path = association_pairs_path.parent / "summary.json"
+        association_audit_path = association_pairs_path.parent / "independent_audit.json"
+        if not association_summary_path.is_file() or not association_audit_path.is_file():
+            raise FileNotFoundError("association table requires its summary and independent audit")
+        association_summary = json.loads(association_summary_path.read_text(encoding="utf-8"))
+        association_audit = json.loads(association_audit_path.read_text(encoding="utf-8"))
+        if (association_audit.get("status") != "verified"
+                or association_audit.get("science_measurement") is not False
+                or association_audit.get("association_rows") != 74
+                or association_audit.get("association_table_sha256") != sha256(association_pairs_path)):
+            raise ValueError("association table lacks the verified fixed 74-pair sample provenance")
+        association_rows = read_tsv(association_pairs_path)
+        association_keys = [(row["target_id"], row["filter"]) for row in association_rows]
+        if len(association_keys) != 74 or len(set(association_keys)) != 74:
+            raise ValueError("expected exactly 74 unique target/filter association pairs")
+        before_association_filter = set(selected)
+        selected = sorted(before_association_filter & set(association_keys),
+                          key=lambda item: (int(item[0]), item[1]))
+        association_scope = {
+            "path": str(association_pairs_path),
+            "sha256": sha256(association_pairs_path),
+            "summary_sha256": sha256(association_summary_path),
+            "independent_audit_sha256": sha256(association_audit_path),
+            "n_fixed_association_pairs": 74,
+            "n_association_and_joint_support": len(selected),
+        }
+    shell_rows_by_pair = {}
+    if exclude_supported_satellite_shells:
+        for row in read_tsv(satellite_profiles_path):
+            if (row.get("cohort") == "full_sample" and row.get("radial_bin_kpc") == "50-75"
+                    and float(row["target_coverage"]) >= satellite_coverage_floor
+                    and float(row["control_coverage"]) >= satellite_coverage_floor
+                    and int(row["n_controls"]) >= minimum_controls):
+                shell_rows_by_pair.setdefault((row["cluster_id"], row["filter"]), []).append(row)
+        missing_shells = [pair for pair in selected if pair not in shell_rows_by_pair]
+        if missing_shells:
+            raise ValueError(f"jointly supported pairs lack satellite-shell pixel rows: {missing_shells[:10]}")
     if psf_bank is not None:
-        selected = [pair for pair in selected if pair in psf_bank.supported_frames]
-        if len(selected) != len(psf_bank.supported_frames):
-            missing = sorted(psf_bank.supported_frames - set(selected))
-            raise ValueError(f"approved PSF frame roles lack joint annulus support: {missing[:10]}")
+        missing_psf_support = sorted(set(selected) - psf_bank.supported_frames)
+        if missing_psf_support:
+            raise ValueError(f"selected frames lack complete approved PSF role support: {missing_psf_support[:10]}")
+    if association_scope is not None:
+        association_scope["n_association_joint_psf_intersection"] = len(selected)
+        association_scope["n_association_pairs_without_joint_or_psf_support"] = 74-len(selected)
     output_dir.mkdir(parents=True, exist_ok=False)
     started = time.time()
     records, errors = [], []
@@ -126,7 +218,9 @@ def run_batch(data: Path, output_dir: Path,
                 data, ident, path, icl_masks_dir, satellite_prep_dir, icl_pairs_path,
                 diffuse_amplitude, satellite_amplitude, diffuse_scale_kpc,
                 satellite_scale_kpc, rerun_detection_masks, unresolved_bcg_policy,
-                psf_bank)
+                psf_bank, shell_rows_by_pair.get((ident, filt))
+                if exclude_supported_satellite_shells else None,
+                satellite_coverage_floor, minimum_controls)
             if result["filter"] != filt:
                 raise ValueError(f"image filter mismatch for cluster {ident}")
             records.append({
@@ -145,7 +239,9 @@ def run_batch(data: Path, output_dir: Path,
                            "error_type": type(exc).__name__, "error": str(exc)})
             print(f"  ERROR {type(exc).__name__}: {exc}", flush=True)
     summary = {
-        "schema": ("hsc-joint-icl-satellite-psf-redetection-batch-v1"
+        "schema": ("hsc-joint-icl-satellite-shell-exclusion-batch-v1"
+                   if exclude_supported_satellite_shells else
+                   "hsc-joint-icl-satellite-psf-redetection-batch-v1"
                    if psf_bank is not None else
                    "hsc-joint-icl-satellite-redetection-batch-v1"
                    if rerun_detection_masks else
@@ -158,10 +254,15 @@ def run_batch(data: Path, output_dir: Path,
             "icl_bin_kpc": [200.0, 300.0],
             "icl_common_coverage_floor": 0.40,
             "satellite_bin_kpc": [50.0, 75.0],
-            "satellite_target_and_control_coverage_floor": 0.60,
+            "satellite_target_and_control_coverage_floor": satellite_coverage_floor,
+            "minimum_azimuthal_controls": minimum_controls,
+            "satellite_profile_support_required_for_frame_selection": not icl_supported_only,
+            "frame_selection_mode": "icl_supported_parent" if icl_supported_only else "joint_icl_satellite_supported",
             "n_selected_cluster_filter_pairs": len(selected),
+            "n_frames_selected_before_psf_intersection": len(joint_supported_pairs),
             "n_joint_supported_before_psf_intersection": n_joint_supported,
             "selection_limited_to_approved_psf_positions": psf_bank is not None,
+            "fixed_association_scope": association_scope,
             "selected_pairs": [{"cluster_id": ident, "filter": filt} for ident, filt in selected],
         },
         "injection": {
@@ -169,6 +270,8 @@ def run_batch(data: Path, output_dir: Path,
             "diffuse_scale_kpc": diffuse_scale_kpc,
             "satellite_amplitude_at_50_per_galaxy_njy_arcsec2": satellite_amplitude,
             "satellite_scale_kpc": satellite_scale_kpc,
+            "satellite_profile_coverage_floor": satellite_coverage_floor,
+            "minimum_azimuthal_controls": minimum_controls,
             "masks_and_segmentation_fixed": not rerun_detection_masks,
             "detection_rerun": rerun_detection_masks,
             "unresolved_bcg_policy": unresolved_bcg_policy if rerun_detection_masks else None,
@@ -177,6 +280,8 @@ def run_batch(data: Path, output_dir: Path,
             "psf_model": ("position-dependent HSC-I coadd model PSF core"
                           if psf_bank is not None else None),
             "original_fits_modified": False,
+            "exclude_supported_satellite_shells_from_icl": exclude_supported_satellite_shells,
+            "shell_exclusion_uses_observed_fixed_segmentation": exclude_supported_satellite_shells,
         },
         "n_completed": len(records),
         "n_errors": len(errors),
@@ -215,10 +320,15 @@ def run_batch(data: Path, output_dir: Path,
     }
     if psf_bank is not None:
         summary["inputs"].update({
-            str(psf_bank.plan_path): sha256(psf_bank.plan_path),
-            str(psf_bank.mapping_path): sha256(psf_bank.mapping_path),
-            str(psf_bank.audit_path): sha256(psf_bank.audit_path),
+            str(path): sha256(path)
+            for path in getattr(psf_bank, "provenance_paths", (
+                psf_bank.plan_path, psf_bank.mapping_path, psf_bank.audit_path))
         })
+        if getattr(psf_bank, "request_approval_verified", False):
+            summary["supported_satellite_psf_request_approval"] = {
+                "verified": True,
+                "approved_plan_sha256": psf_bank.approved_satellite_plan_sha256,
+            }
     (output_dir / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
     return summary
@@ -231,6 +341,10 @@ def main() -> None:
     parser.add_argument("--satellite-prep", type=Path, default=DEFAULT_SAT_PREP)
     parser.add_argument("--icl-pairs", type=Path, default=DEFAULT_ICL_PAIRS)
     parser.add_argument("--satellite-profiles", type=Path, default=DEFAULT_SATELLITE_TABLE)
+    parser.add_argument("--satellite-coverage-floor", type=float, default=0.60,
+                        help="target and control floor used to select and measure satellite profiles")
+    parser.add_argument("--minimum-controls", type=int, default=3,
+                        help="minimum valid azimuthal controls per satellite profile")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--diffuse-amplitude", type=float, default=1.0)
     parser.add_argument("--satellite-amplitude", type=float, default=1.0)
@@ -238,6 +352,12 @@ def main() -> None:
     parser.add_argument("--satellite-scale-kpc", type=float, default=15.0)
     parser.add_argument("--rerun-detection-masks", action="store_true",
                         help="rerun SEP detection and regenerate source masks for each injection scenario")
+    parser.add_argument("--exclude-supported-satellite-shells-from-icl", action="store_true",
+                        help="measure ICL transfer after excluding the observed supported 50--75 kpc satellite pixel union")
+    parser.add_argument("--association-pairs", type=Path,
+                        help="restrict processing to a verified fixed ICL--satellite association pair table")
+    parser.add_argument("--icl-supported-only", action="store_true",
+                        help="inject all ICL-supported frames and retain satellite-profile support failures in the output")
     parser.add_argument("--unresolved-bcg-policy", choices=("error", "mask_all"), default="error",
                         help="on ambiguous/missing central detection, fail or mask every detected source")
     parser.add_argument("--psf-plan-dir", type=Path,
@@ -246,18 +366,52 @@ def main() -> None:
                         help="directory containing the audited PSF batch")
     parser.add_argument("--psf-test-center", type=Path,
                         default=Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_psf_picker_test_2026-10-19_01/cluster10_i2_center_psf.fits"))
+    parser.add_argument("--target-center-psf-plan-dir", type=Path,
+                        help="audited 1,542-position target/matched-control center PSF plan")
+    parser.add_argument("--target-center-psf-download-dir", type=Path,
+                        help="audited response for --target-center-psf-plan-dir")
+    parser.add_argument("--supported-satellite-psf-plan-dir", type=Path,
+                        help="approved supported-pairs plan for additional satellite PSF cores")
+    parser.add_argument("--supported-satellite-psf-download-dir", type=Path,
+                        help="audited response for --supported-satellite-psf-plan-dir")
+    parser.add_argument("--approved-supported-satellite-psf-plan-sha256",
+                        help="exact 64-character plan SHA-256 explicitly approved for the satellite PSF request")
     args = parser.parse_args()
-    if bool(args.psf_plan_dir) != bool(args.psf_download_dir):
+    base_pair = (args.psf_plan_dir, args.psf_download_dir)
+    supplemental = (args.target_center_psf_plan_dir, args.target_center_psf_download_dir,
+                    args.supported_satellite_psf_plan_dir, args.supported_satellite_psf_download_dir)
+    if bool(base_pair[0]) != bool(base_pair[1]):
         parser.error("--psf-plan-dir and --psf-download-dir must be supplied together")
-    psf_bank = (PositionPSFBank(args.psf_plan_dir.resolve(), args.psf_download_dir.resolve(),
-                                args.psf_test_center.resolve())
-                if args.psf_plan_dir else None)
+    if any(value is not None for value in supplemental) and not all(supplemental):
+        parser.error("the four supplemental PSF plan/download directories must be supplied together")
+    if any(supplemental) and not all(base_pair):
+        parser.error("supplemental PSF batches require the original --psf-plan-dir and --psf-download-dir")
+    if all(supplemental) and not args.approved_supported_satellite_psf_plan_sha256:
+        parser.error("supplemental satellite PSFs require --approved-supported-satellite-psf-plan-sha256")
+    if args.approved_supported_satellite_psf_plan_sha256 and not all(supplemental):
+        parser.error("approved satellite PSF plan hash requires all supplemental PSF directories")
+    if all(supplemental):
+        psf_bank = SupportedPairsPositionPSFBank(
+            args.psf_plan_dir.resolve(), args.psf_download_dir.resolve(),
+            args.psf_test_center.resolve(), args.target_center_psf_plan_dir.resolve(),
+            args.target_center_psf_download_dir.resolve(),
+            args.supported_satellite_psf_plan_dir.resolve(),
+            args.supported_satellite_psf_download_dir.resolve(),
+            args.approved_supported_satellite_psf_plan_sha256)
+    elif args.psf_plan_dir:
+        psf_bank = PositionPSFBank(args.psf_plan_dir.resolve(), args.psf_download_dir.resolve(),
+                                   args.psf_test_center.resolve())
+    else:
+        psf_bank = None
     result = run_batch(args.data.resolve(), args.output_dir.resolve(),
                        args.icl_masks.resolve(), args.satellite_prep.resolve(),
                        args.icl_pairs.resolve(), args.satellite_profiles.resolve(),
                        args.diffuse_amplitude, args.satellite_amplitude,
                        args.diffuse_scale_kpc, args.satellite_scale_kpc,
-                       args.rerun_detection_masks, args.unresolved_bcg_policy, psf_bank)
+                       args.rerun_detection_masks, args.unresolved_bcg_policy, psf_bank,
+                       args.exclude_supported_satellite_shells_from_icl,
+                       args.association_pairs, args.satellite_coverage_floor,
+                       args.minimum_controls, args.icl_supported_only)
     print(json.dumps({k: result[k] for k in
                       ("status", "n_completed", "n_errors", "by_filter", "elapsed_seconds")},
                      indent=2))

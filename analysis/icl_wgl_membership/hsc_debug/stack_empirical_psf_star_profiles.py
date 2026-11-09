@@ -28,7 +28,9 @@ def _table(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(stream, delimiter="\t"))
 
 
-def measure_stamp(stamp: Path, frame_id: str, candidate_id: str) -> list[dict]:
+def measure_stamp(stamp: Path, frame_id: str, candidate_id: str, *,
+                  radial_edges: tuple[float, ...] = tuple(RADIAL_EDGES),
+                  sky_annuli: tuple[tuple[int, int], ...] = SKY_ANNULI) -> list[dict]:
     """Return one row per mask, sky annulus, and radial bin."""
     with fits.open(stamp, memmap=False) as hdus:
         header = hdus[0].header
@@ -38,11 +40,21 @@ def measure_stamp(stamp: Path, frame_id: str, candidate_id: str) -> list[dict]:
         base = np.asarray(hdus["BASE_MASK"].data, dtype=bool)
         center_x, center_y = float(header["XCENTER"]), float(header["YCENTER"])
         pixel_scale = float(header["PIXSCALE"])
-        if image.shape != (401, 401) or base.shape != image.shape:
-            raise ValueError(f"expected 401x401 stamp and base mask: {stamp}")
+        if (image.ndim != 2 or image.shape[0] != image.shape[1]
+                or image.shape[0] % 2 != 1 or base.shape != image.shape):
+            raise ValueError(f"expected an odd square stamp and matching base mask: {stamp}")
         variance = np.asarray(hdus["VARIANCE"].data, dtype=float)
         if variance.shape != image.shape:
             raise ValueError(f"variance shape mismatch: {stamp}")
+        max_supported_radius = min(center_x, center_y,
+                                   image.shape[1] - center_x, image.shape[0] - center_y)
+        if radial_edges[0] < 0 or any(b <= a for a, b in zip(radial_edges[:-1], radial_edges[1:])):
+            raise ValueError("radial_edges must be nonnegative and strictly increasing")
+        if radial_edges[-1] > max_supported_radius:
+            raise ValueError(f"requested radial profile exceeds stamp footprint: {stamp}")
+        if len(sky_annuli) != 2 or any(lo < 0 or hi <= lo or hi > max_supported_radius
+                                        for lo, hi in sky_annuli):
+            raise ValueError("expected two valid sky annuli within the stamp footprint")
         yy, xx = np.indices(image.shape, dtype=float)
         radius = np.hypot(xx - center_x, yy - center_y)
         sector = np.floor((np.arctan2(yy - center_y, xx - center_x) + np.pi) * (4 / np.pi)).astype(int)
@@ -57,7 +69,7 @@ def measure_stamp(stamp: Path, frame_id: str, candidate_id: str) -> list[dict]:
             core = (radius < 12) & good
             core_area = np.count_nonzero(radius < 12)
             core_fraction = float(np.count_nonzero(core) / core_area)
-            for sky_lo, sky_hi in SKY_ANNULI:
+            for sky_lo, sky_hi in sky_annuli:
                 sky_region = (radius >= sky_lo) & (radius < sky_hi)
                 sky_good = sky_region & good
                 sector_means = []
@@ -86,7 +98,7 @@ def measure_stamp(stamp: Path, frame_id: str, candidate_id: str) -> list[dict]:
                         status = "blocked_core_mask"
                     elif not np.isfinite(core_flux) or core_flux <= 0 or core_noise <= 0 or core_flux / core_noise < 30:
                         status = "blocked_core_flux"
-                for lo, hi in zip(RADIAL_EDGES[:-1], RADIAL_EDGES[1:]):
+                for lo, hi in zip(radial_edges[:-1], radial_edges[1:]):
                     ring = (radius >= lo) & (radius < hi)
                     valid = ring & good
                     area = int(ring.sum())
@@ -165,12 +177,14 @@ def _write_tsv(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def _plot(stack: list[dict], destination: Path) -> None:
+def _plot(stack: list[dict], destination: Path,
+          sky_annuli: tuple[tuple[int, int], ...] = SKY_ANNULI) -> None:
     from matplotlib import pyplot as plt
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
-    for ax, (factor, sky) in zip(axes.flat, ((2.5, (120, 150)), (2.5, (160, 190)),
-                                             (3.5, (120, 150)), (3.5, (160, 190)))):
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True, sharey=True)
+    panel_specs = ((2.5, sky_annuli[0]), (2.5, sky_annuli[1]),
+                   (3.5, sky_annuli[0]), (3.5, sky_annuli[1]))
+    for ax, (factor, sky) in zip(axes.flat, panel_specs):
         selected = [r for r in stack if r["kron_factor"] == factor and r["sky_r_min_pix"] == sky[0]
                     and r["sky_r_max_pix"] == sky[1] and r["n_frames"] >= 2]
         selected.sort(key=lambda r: r["r_mid_arcsec"])
@@ -184,18 +198,23 @@ def _plot(stack: list[dict], destination: Path) -> None:
                 ax.fill_between(x, lo, hi, alpha=0.2)
         ax.axhline(0, color="0.4", lw=0.8)
         ax.set_yscale("symlog", linthresh=1e-7)
-        ax.set_title(f"Kron {factor:g}; sky {sky[0]}–{sky[1]} px")
-        ax.set_ylabel("mean / core flux per pixel")
-        ax.grid(alpha=0.18)
-    for ax in axes[-1]:
+        ax.text(0.97, 0.96, f"Kron {factor:g}; sky {sky[0]}–{sky[1]} px",
+                transform=ax.transAxes, ha="right", va="top", fontsize=10,
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2.0))
         ax.set_xlabel("Radius [arcsec]")
-    fig.suptitle("Frame-weighted empirical-star wing diagnostic (not PSF-approved)")
-    fig.tight_layout()
+        ax.set_ylabel("Mean / core flux per pixel")
+        ax.tick_params(labelbottom=True, labelleft=True)
+        ax.grid(alpha=0.18)
+    fig.subplots_adjust(left=0.10, right=0.99, bottom=0.10, top=0.99,
+                        wspace=0.0, hspace=0.0)
     fig.savefig(destination, dpi=160)
     plt.close(fig)
 
 
-def run(input_dir: Path, output_dir: Path, *, n_bootstrap: int = 10000, seed: int = 20261020) -> dict:
+def run(input_dir: Path, output_dir: Path, *, n_bootstrap: int = 10000,
+        seed: int = 20261020,
+        radial_edges: tuple[float, ...] = tuple(RADIAL_EDGES),
+        sky_annuli: tuple[tuple[int, int], ...] = SKY_ANNULI) -> dict:
     input_dir, output_dir = input_dir.resolve(), output_dir.resolve()
     ledger_path = input_dir / "star_ledger.tsv"
     if not ledger_path.is_file():
@@ -215,12 +234,15 @@ def run(input_dir: Path, output_dir: Path, *, n_bootstrap: int = 10000, seed: in
         if not stamp.is_file() or sha(stamp) != row["stamp_sha256"]:
             raise ValueError(f"stamp checksum mismatch: {stamp}")
         input_hashes[str(stamp)] = row["stamp_sha256"]
-        profiles.extend(measure_stamp(stamp, row["cluster_id"], row["candidate_id"]))
+        profiles.extend(measure_stamp(
+            stamp, row["cluster_id"], row["candidate_id"],
+            radial_edges=radial_edges, sky_annuli=sky_annuli,
+        ))
     stack = frame_weighted_stack(profiles, n_bootstrap=n_bootstrap, seed=seed)
     output_dir.mkdir(parents=True, exist_ok=False)
     _write_tsv(output_dir / "star_radial_profiles.tsv", profiles)
     _write_tsv(output_dir / "frame_weighted_stack.tsv", stack)
-    _plot(stack, output_dir / "frame_weighted_psf_wings.png")
+    _plot(stack, output_dir / "frame_weighted_psf_wings.png", sky_annuli)
     summary = {
         "schema": "astrafek-empirical-psf-frame-weighted-stack-v1", "status": "complete_diagnostic_only",
         "n_ledger_rows": len(ledger), "n_stamps": len(stamped),
@@ -228,12 +250,14 @@ def run(input_dir: Path, output_dir: Path, *, n_bootstrap: int = 10000, seed: in
         "n_profile_rows": len(profiles), "n_stacked_radial_bins": len(stack),
         "bootstrap_unit": "HSC frame (cluster_id); stars in a frame are averaged before resampling",
         "bootstrap_draws": int(n_bootstrap), "random_seed": int(seed),
+        "radial_edges_pix": [float(value) for value in radial_edges],
+        "sky_annuli_pix": [list(pair) for pair in sky_annuli],
         "script_sha256": sha(Path(__file__)),
         "input_sha256": input_hashes,
         "science_measurement": False, "psf_approved": False,
         "limitations": [
             "Gaia proper-motion propagation to the effective HSC coadd epoch is unresolved.",
-            f"Only {len(stamped)} complete stamps from {len({row['cluster_id'] for row in stamped})} frames in this ledger are used; they are not representative of all 800 cluster frames.",
+            f"Only {len(stamped)} complete stamps from {len({row['cluster_id'] for row in stamped})} frames in this ledger are used; coverage of the parent target/control sample is not established.",
             "The two measured sky annuli may contain PSF wings, ICL, undetected sources, or residual sky structure.",
             "The radial support/sector rules are geometry gates; bootstrap intervals describe frame resampling, not total uncertainty.",
             "No effective coadd PSF, extended-wing correction, or science surface-brightness correction is approved.",
@@ -252,10 +276,18 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True, help="new output directory; must not exist")
     parser.add_argument("--bootstrap-draws", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=20261020)
+    parser.add_argument("--radial-edges-pix", type=float, nargs="+",
+                        default=list(RADIAL_EDGES))
+    parser.add_argument("--sky-annulus-pix", type=int, nargs=2, action="append",
+                        dest="sky_annuli", help="two local-background annulus edges; repeat twice")
     args = parser.parse_args()
     if args.bootstrap_draws < 100:
         parser.error("--bootstrap-draws must be at least 100")
-    print(json.dumps(run(args.input, args.output, n_bootstrap=args.bootstrap_draws, seed=args.seed),
+    sky_annuli = tuple(tuple(pair) for pair in args.sky_annuli) if args.sky_annuli else SKY_ANNULI
+    if len(sky_annuli) != 2:
+        parser.error("provide exactly two --sky-annulus-pix pairs")
+    print(json.dumps(run(args.input, args.output, n_bootstrap=args.bootstrap_draws, seed=args.seed,
+                         radial_edges=tuple(args.radial_edges_pix), sky_annuli=sky_annuli),
                      ensure_ascii=False, indent=2))
 
 

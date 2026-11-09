@@ -5,6 +5,7 @@ Uses the existing research SEP dependency. No science profiles, PSF fallback,
 extinction acceptance, random-field substitution or edits to original images.
 """
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
 import hashlib
 import json
@@ -23,7 +24,8 @@ from scipy.spatial import cKDTree
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[2]))
 from ogfkit.wlcluster import ARCSEC, Cosmology
-from download_pilot import validate_fits, BAD_BIT_POSITIONS, BRIGHT_OBJECT_BIT
+from download_pilot import (BAD_MASK_PLANE_NAMES, mask_plane_bitmask,
+                            validate_fits)
 
 FACTORS = (2.5, 3.5, 5.0)
 
@@ -79,7 +81,8 @@ def source_masks(objects, segmentation, kron, kron_flags, base, bcg, members, pi
     return masks,len(fallback)
 
 
-def detect(image, variance, bad, center, members, pixel_scale, deblend_cont=.005):
+def detect(image, variance, bad, center, members, pixel_scale, deblend_cont=.005,
+           identify_center_source=True):
     valid=(~bad)&np.isfinite(image)&np.isfinite(variance)&(variance>0)
     if np.count_nonzero(valid)<100: raise ValueError('Too few valid pixels')
     data=np.ascontiguousarray(np.where(valid,image,np.median(image[valid])),dtype=np.float32)
@@ -94,13 +97,19 @@ def detect(image, variance, bad, center, members, pixel_scale, deblend_cont=.005
     else: kron,flags=np.array([]),np.array([],dtype=int)
     distance=np.hypot(objects['x']-center[0],objects['y']-center[1])
     candidates=np.flatnonzero(distance<=max(1/pixel_scale,1.5))
-    # Ambiguous and absent BCG detections remain an explicit inspection gate.
-    bcg=int(candidates[0]) if len(candidates)==1 else -1
+    # A positional match is not a BCG identification. New calibration manifests
+    # explicitly disable this legacy center-source proxy for CAMIRA/random centers.
+    bcg=int(candidates[0]) if identify_center_source and len(candidates)==1 else -1
     noise=np.sqrt(np.bincount(seg.ravel(),weights=np.where(valid,variance,0).ravel(),minlength=len(objects)+1)[1:])
     snr=np.divide(objects['flux'],noise,out=np.zeros(len(objects)),where=noise>0)
-    return objects,seg,kron,flags,bcg,snr,dict(bcg_matches=len(candidates),
-        nearest_bcg_detection_arcsec=float(distance.min()*pixel_scale) if len(distance) else None,
-        bcg_position_segment=int(seg[round(center[1]),round(center[0])]),
+    return objects,seg,kron,flags,bcg,snr,dict(
+        center_source_identification_enabled=bool(identify_center_source),
+        center_detection_matches=len(candidates),
+        bcg_matches=len(candidates) if identify_center_source else None,
+        nearest_bcg_detection_arcsec=(float(distance.min()*pixel_scale)
+                                      if identify_center_source and len(distance) else None),
+        bcg_position_segment=(int(seg[round(center[1]),round(center[0])])
+                              if identify_center_source else None),
         background_global=float(background.globalback),background_rms=float(background.globalrms),
         detection_threshold_sigma=1.5,variance_snr_model='nominal independent-pixel; coadd correlation not calibrated')
 
@@ -158,10 +167,13 @@ def prepare_frame(frame, cosmology, out):
     members=np.column_stack(wcs.all_world2pix(sky[:,0],sky[:,1],0)) if len(sky) else np.empty((0,2))
     inside=np.isfinite(members).all(axis=1)&(members[:,0]>=0)&(members[:,0]<image.shape[1])&(members[:,1]>=0)&(members[:,1]<image.shape[0])
     members_in=members[inside]
-    bad=(bits&sum(1<<bit for bit in BAD_BIT_POSITIONS))!=0
+    bad=(bits&mask_plane_bitmask(info['mask_planes'],BAD_MASK_PLANE_NAMES))!=0
     bad |= ~np.isfinite(image)|~np.isfinite(variance)|(variance<=0)
-    bright=(bits&BRIGHT_OBJECT_BIT)!=0;base=bad|bright
-    objects,seg,kron,kflags,bcg,snr,extra=detect(image,variance,bad,center,members_in,scale)
+    bright=(bits&mask_plane_bitmask(info['mask_planes'],('MP_BRIGHT_OBJECT',)))!=0;base=bad|bright
+    identify_center_source=bool(frame.get('center_is_bcg', True))
+    objects,seg,kron,kflags,bcg,snr,extra=detect(
+        image,variance,bad,center,members_in,scale,
+        identify_center_source=identify_center_source)
     masks,fallback=source_masks(objects,seg,kron,kflags,base,bcg,members_in,scale)
     assert all(np.all(mask[base]) for mask in masks)
     assert np.all(~masks[0]|masks[1]) and np.all(~masks[1]|masks[2])
@@ -207,7 +219,8 @@ def prepare_frame(frame, cosmology, out):
     axes[0,0].plot(center[0]/step,center[1]/step,'r+',ms=12);axes[0,0].set_title(f"Raw display; PSF candidates {len(stars)}")
     for ax,mask,title in zip([axes[0,1],axes[1,0],axes[1,1]],[base,masks[0],masks[-1]],['Original quality + bright mask','Kron 2.5 exclusion','Kron 5.0 exclusion']):
         ax.imshow(mask[::step,::step],origin='lower',vmin=0,vmax=1,cmap='gray');ax.plot(center[0]/step,center[1]/step,'r+',ms=12);ax.set_title(title)
-    fig.suptitle(f"Cluster {frame['id']} / {cohort} / engineering review")
+    center_label='BCG position' if identify_center_source else 'sample center; BCG not identified'
+    fig.suptitle(f"{frame['id']} / {cohort} / engineering review")
     fig.tight_layout();fig.savefig(out/'review.png',dpi=110);plt.close(fig)
     ix,iy=round(center[0]),round(center[1]);x0,x1=max(0,ix-100),min(image.shape[1],ix+101);y0,y1=max(0,iy-100),min(image.shape[0],iy+101)
     fig,axes=plt.subplots(1,2,figsize=(10,5))
@@ -217,26 +230,45 @@ def prepare_frame(frame, cosmology, out):
         ax.plot(center[0]-x0,center[1]-y0,'r+',ms=12)
         close=(objects['x']>=x0)&(objects['x']<x1)&(objects['y']>=y0)&(objects['y']<y1)
         ax.plot(objects['x'][close]-x0,objects['y'][close]-y0,'co',ms=5,fillstyle='none')
-    axes[0].set_title('BCG catalogue position + detections');axes[1].set_title('Detection segmentation; manual review')
+    axes[0].set_title(f'{center_label} + detections');axes[1].set_title('Detection segmentation; manual review')
     fig.tight_layout();fig.savefig(out/'bcg_review.png',dpi=110);plt.close(fig)
     record=dict(id=str(frame['id']),cohort=cohort,n_detections=len(objects),n_psf_candidates=len(stars),
         psf_status='provisional_inputs' if len(stars)>=4 else 'insufficient_candidates',psf_fwhm_locus_pix=mode,
-        bcg_status='unique_positional_candidate' if bcg>=0 else 'missing_or_ambiguous',
-        bcg_base_masked=bool(base[round(center[1]),round(center[0])]),n_members=len(members),n_members_in_frame=int(inside.sum()),
+        bcg_status=('unique_positional_candidate' if bcg>=0 else
+                    ('not_identified_center_not_bcg' if not identify_center_source else 'missing_or_ambiguous')),
+        bcg_base_masked=(bool(base[round(center[1]),round(center[0])])
+                         if identify_center_source else None),
+        center_definition=frame.get('center_definition'),
+        n_members=len(members),n_members_in_frame=int(inside.sum()),
         member_fallback_count=fallback,minimum_coverage_by_kron={str(f):min(c['COVERAGE'] for c in covers if c['KRON_FACTOR']==f) for f in FACTORS},
         source_image=frame['image'],science_measurement=False,detection_background_subtracted_from_science=False,
-        mask_ready_for_science=False,bcg_preservation_gate='candidate_requires_review' if bcg>=0 else 'blocked_missing_or_ambiguous_bcg',
+        mask_ready_for_science=False,
+        bcg_preservation_gate=('candidate_requires_review' if bcg>=0 else
+                               ('not_applicable_center_not_bcg' if not identify_center_source else 'blocked_missing_or_ambiguous_bcg')),
         bright_mask_used_in_detection=False,bright_mask_retained_in_outputs=True,psf_wings_validated=False,
         psf_stamps_recentered=False,psf_stamps_normalized=False,psf_stamps_background_subtracted=False,**extra)
     write_json(out/'preparation.json',record)
     return record
 
 
+def prepare_one(task):
+    index, total, frame, output_path, h0, omega_m = task
+    try:
+        cosmology=Cosmology(H0=h0,Om=omega_m)
+        record=prepare_frame(frame,cosmology,Path(output_path))
+        return index, 'ok', record
+    except Exception as error:
+        return index, 'error', dict(id=str(frame['id']),error_type=type(error).__name__,error=str(error))
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--manifest',type=Path,required=True)
     p.add_argument('--work',type=Path,required=True);p.add_argument('--limit',type=int)
+    p.add_argument('--workers',type=int,default=1,
+                   help='independent local CPU workers; default: 1')
     a=p.parse_args()
     if not platform.node().lower().startswith('lageunha'): p.error('Run on lageunha CPU')
+    if a.workers < 1: p.error('--workers must be at least 1')
     manifest_path=a.manifest.resolve();doc=json.loads(manifest_path.read_text())
     frames=doc['clusters'][:a.limit] if a.limit else doc['clusters']
     for frame in frames:
@@ -251,15 +283,35 @@ def main():
                 p.error('Image is missing for cluster '+str(frame.get('id'))+': '+str(image_candidate))
             frame['image']=str(image_candidate.resolve())
     a.work.mkdir(parents=True,exist_ok=False)
-    records=[];errors=[];started=time.time();cosmo=Cosmology(H0=doc['h0'],Om=doc['omega_m'])
-    for i,frame in enumerate(frames,1):
-        print(f'[{i}/{len(frames)}] preparing cluster {frame["id"]}',flush=True)
-        try:
-            record=prepare_frame(frame,cosmo,a.work/('cluster_'+str(frame['id'])));records.append(record)
-            print(f'  detections={record["n_detections"]}, PSF candidates={record["n_psf_candidates"]}, BCG={record["bcg_status"]}',flush=True)
-        except Exception as e:
-            errors.append(dict(id=str(frame['id']),error_type=type(e).__name__,error=str(e)))
-            print(f'  ERROR {type(e).__name__}: {e}',flush=True)
+    records=[];errors=[];started=time.time()
+    tasks=[(i,len(frames),frame,str(a.work/('cluster_'+str(frame['id']))),doc['h0'],doc['omega_m'])
+           for i,frame in enumerate(frames,1)]
+    if a.workers == 1:
+        results=(prepare_one(task) for task in tasks)
+        for index,status,result in results:
+            if status=='ok':
+                records.append(result)
+                print(f'[{index}/{len(frames)}] {result["id"]}: detections={result["n_detections"]}, '
+                      f'PSF candidates={result["n_psf_candidates"]}, BCG={result["bcg_status"]}',flush=True)
+            else:
+                errors.append(result)
+                print(f'[{index}/{len(frames)}] ERROR {result["id"]}: '
+                      f'{result["error_type"]}: {result["error"]}',flush=True)
+    else:
+        with ProcessPoolExecutor(max_workers=a.workers) as pool:
+            futures=[pool.submit(prepare_one,task) for task in tasks]
+            for completed,future in enumerate(as_completed(futures),1):
+                index,status,result=future.result()
+                if status=='ok':
+                    records.append(result)
+                    print(f'[{completed}/{len(frames)}] {result["id"]}: detections={result["n_detections"]}, '
+                          f'PSF candidates={result["n_psf_candidates"]}, BCG={result["bcg_status"]}',flush=True)
+                else:
+                    errors.append(result)
+                    print(f'[{completed}/{len(frames)}] ERROR {result["id"]}: '
+                          f'{result["error_type"]}: {result["error"]}',flush=True)
+    records.sort(key=lambda row: row['id'])
+    errors.sort(key=lambda row: row['id'])
     write_json(a.work/'summary.json',dict(status='complete' if not errors else 'partial',n_requested=len(frames),n_prepared=len(records),
         elapsed_seconds=time.time()-started,errors=errors,records=records,science_measurement=False,
         manifest_sha256=hashlib.sha256(a.manifest.read_bytes()).hexdigest(),

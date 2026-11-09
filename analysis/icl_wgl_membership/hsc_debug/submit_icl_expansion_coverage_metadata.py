@@ -27,6 +27,9 @@ DEFAULT_PLAN = Path(
     "/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/"
     "icl_expansion_coverage_plan_2026-10-21_01"
 )
+# Match the documented and previously successful Astrafek CAS route. The
+# hscdata.mtk.nao.ac.jp host returned HTTP 401 for the same account/scope.
+DEFAULT_CAS_API = "https://hsc-release.mtk.nao.ac.jp/datasearch/api/catalog_jobs/"
 OUTPUT_COLUMNS = [
     "candidate_id", "probe_id", "skymap_id", "tract", "patch", "band",
     "naxis1", "naxis2", "seeing", "zeropt", "imag_psf_depth", "iseeing",
@@ -37,7 +40,7 @@ FORBIDDEN_SQL = (
     "PDR3_WIDE.FORCED", "PDR3_WIDE.MERGED", "PDR3_WIDE.RAW",
     "PDR3_WIDE.RANDOM", "PDR3_WIDE.COADD", "FITS", "IMAGE",
 )
-EXPECTED_S23B_PLAN_SHA256 = "e615ee7c2414109af6d3c156104d71766355d3b4e2a5dba3636a0142995557d7"
+EXPECTED_S23B_PLAN_SHA256 = "62c28446f553bf45a940ea0126af1521d4ee0c1356c12cc73f42712df482c0c7"
 
 
 def validate_result(path: Path, batch: dict, allowed_probes: set[tuple[str, str]]) -> int:
@@ -161,10 +164,19 @@ def validate_plan(plan_dir: Path):
         sql = sql_path.read_text(encoding="utf-8").upper()
         if any(token in sql for token in FORBIDDEN_SQL):
             raise ValueError(f"SQL requests fields/data outside metadata scope: {sql_path.name}")
-        required = (
-            "PDR3_WIDE.MOSAIC", "PUBLIC.SKYMAP", "PDR3_WIDE.PATCH_QA",
-            "PATCH_CONTAINS", "M.BAND = 'HSC-I'",
-        )
+        if expected_candidate_prefix is not None:
+            required = (
+                "PDR3_WIDE.MOSAIC AS M ON M.BAND = 'HSC-I'",
+                "PDR3_WIDE.PATCH_QA", "M.AREACUBE && RADEC_TO_COORD",
+            )
+            if "PUBLIC.SKYMAP" in sql or "PATCH_CONTAINS" in sql:
+                raise ValueError(f"S23B batch uses unsupported skymap patch geometry: {sql_path.name}")
+        else:
+            required = (
+                "PDR3_WIDE.MOSAIC AS M ON M.FILTER01 = 'HSC-I'",
+                "PUBLIC.SKYMAP", "PDR3_WIDE.PATCH_QA",
+                "PATCH_CONTAINS", "M.FILTER01 = 'HSC-I'",
+            )
         if any(token not in sql for token in required):
             raise ValueError(f"Unexpected source, geometry, or band in {sql_path.name}")
         if sql.count("SELECT P.CANDIDATE_ID") != 1 or sql.count("FROM PROBES AS P") != 1:
@@ -311,7 +323,7 @@ def main(argv=None):
         password = getpass.getpass("HSC password (hidden): ")
         if not password:
             raise ValueError("Empty password")
-        client = Cas("kjhan0606", password)
+        client = Cas("kjhan0606", password, api_url=DEFAULT_CAS_API)
         state["status"] = "running"
         save(checkpoint, state)
         try:

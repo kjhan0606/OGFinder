@@ -29,6 +29,7 @@ API = 'https://hsc-release.mtk.nao.ac.jp/das_cutout/pdr3/cgi-bin/cutout?'
 MANUAL = 'https://hsc-release.mtk.nao.ac.jp/das_cutout/pdr3/manual.html'
 MAX_FILE_BYTES = 512 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
+MAX_SAMPLE_FRAMES = 5000
 
 # MP_* values in the HSC mask header are bit positions; these are bit values.
 # DETECTED is left to the source-mask stage so the BCG can remain in the image.
@@ -41,6 +42,36 @@ EXPECTED_MASK_PLANES = {
     'MP_NOT_DEBLENDED': 11, 'MP_UNMASKEDNAN': 12, 'MP_REJECTED': 13,
     'MP_CLIPPED': 14, 'MP_SENSOR_EDGE': 15, 'MP_INEXACT_PSF': 16,
 }
+# HSC's pipeline documentation says the bit/event correspondence can vary by
+# image and directs users to the MASK header. Validate the known plane names
+# and a one-to-one 0..16 bit assignment, then use each file's own map below.
+EXPECTED_MASK_PLANE_NAMES = frozenset(EXPECTED_MASK_PLANES)
+BAD_MASK_PLANE_NAMES = tuple(
+    name for name, bit in EXPECTED_MASK_PLANES.items() if bit in BAD_BIT_POSITIONS
+)
+
+
+def mask_plane_bitmask(mask_planes, names):
+    """Build a pixel bit mask from the named planes in one FITS header."""
+    if not isinstance(mask_planes, dict):
+        raise ValueError('mask-plane mapping is required')
+    selected = []
+    for name in names:
+        if name not in mask_planes:
+            raise ValueError('mask header omits %s' % name)
+        bit = int(mask_planes[name])
+        if bit < 0 or bit > 30:
+            raise ValueError('mask bit position is outside the signed 32-bit range')
+        selected.append(bit)
+    if len(set(selected)) != len(selected):
+        raise ValueError('mask-plane names share a bit position')
+    return sum(1 << bit for bit in selected)
+
+
+def bad_mask_bitmask(mask_planes=None):
+    """Return the standard non-source quality mask using this image's map."""
+    mapping = EXPECTED_MASK_PLANES if mask_planes is None else mask_planes
+    return mask_plane_bitmask(mapping, BAD_MASK_PLANE_NAMES)
 
 
 def write_json(path, value):
@@ -169,8 +200,9 @@ def validate_fits(path, frame):
             if plane not in mask_header:
                 raise ValueError('MASK header omits %s' % plane)
         mask_bits = {key: int(mask_header[key]) for key in mask_header if key.startswith('MP_')}
-        if mask_bits != EXPECTED_MASK_PLANES:
-            raise ValueError('HSC mask-plane mapping differs from the reviewed probe')
+        if (frozenset(mask_bits) != EXPECTED_MASK_PLANE_NAMES
+                or set(mask_bits.values()) != set(range(len(EXPECTED_MASK_PLANES)))):
+            raise ValueError('HSC mask-plane names or bit positions are incomplete or duplicated')
         pixel_width = shape[1] * scale
         pixel_height = shape[0] * scale
         required = 2 * float(frame['requested_half_width_arcsec'])
@@ -194,6 +226,7 @@ def build_manifest_row(frame, filename, review):
     result.update(image=filename, science_hdu=review['science_hdu'], sky='global-sky',
                   product='coadd/bg', product_reviewed=True, product_evidence=evidence,
                   band='HSC-I', coadd_header_filter=review['coadd_header_filter'],
+                  mask_planes=review['mask_planes'],
                   filter_evidence=('HSC PDR3 coadds combine i and i2 variants; preserve the '
                                    'actual primary FILTER value for audit: '
                                    'https://hsc-release.mtk.nao.ac.jp/doc/index.php/processing__pdr3/'),
@@ -201,8 +234,11 @@ def build_manifest_row(frame, filename, review):
                                'ab_zeropoint': review['ab_zeropoint'] if review['input_unit'] == 'instrumental_flux/pixel' else None,
                                'evidence': 'HSC PDR3 cutout manual flux calibration and inherited primary FLUXMAG0',
                                'a_i_mag': None, 'extinction_evidence': None},
-                  bad_mask=dict(common, exclude_bits=[1 << bit for bit in BAD_BIT_POSITIONS]),
-                  bright_star_mask=dict(common, exclude_bits=[BRIGHT_OBJECT_BIT]),
+                  bad_mask=dict(common, plane_names=list(BAD_MASK_PLANE_NAMES),
+                                exclude_bits=[1 << review['mask_planes'][name]
+                                              for name in BAD_MASK_PLANE_NAMES]),
+                  bright_star_mask=dict(common, plane_names=['MP_BRIGHT_OBJECT'],
+                                        exclude_bits=[1 << review['mask_planes']['MP_BRIGHT_OBJECT']]),
                   variance={'file': filename, 'hdu': review['variance_hdu'],
                             'evidence': 'HSC VARIANCE HDU; extension grid matched to IMAGE',
                             'same_grid_reviewed': True},
@@ -338,9 +374,9 @@ def main(argv=None):
             doc = json.load(handle)
         frames = doc.get('clusters') or []
         pilot = doc.get('schema') == 'hsc-bcg-diffuse-pilot-v1' and 10 <= len(frames) <= 20
-        sample = doc.get('schema') == 'hsc-bcg-diffuse-sample-v1' and 1 <= len(frames) <= 1000
+        sample = doc.get('schema') == 'hsc-bcg-diffuse-sample-v1' and 1 <= len(frames) <= MAX_SAMPLE_FRAMES
         if not (pilot or sample):
-            raise ValueError('manifest must be a prepared HSC pilot or selected sample (up to 1000 clusters)')
+            raise ValueError('manifest must be a prepared HSC pilot or selected sample (up to %d clusters)' % MAX_SAMPLE_FRAMES)
         if any(frame.get('image') for frame in frames):
             raise ValueError('manifest already contains image paths')
         ids = [str(frame.get('id')) for frame in frames]

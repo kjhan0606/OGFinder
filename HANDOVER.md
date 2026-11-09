@@ -1501,3 +1501,2819 @@ association pair를 전부 덮음을 확인했다. 분석은 기존 HSC 컷아�
 `733433f2495ef4cf1592d7885a9845de57c726b6b64a2fdf93ca91514a0260e9`; 모든 산출물은
 `science_measurement=false`를 유지한다. 다음 ICL 단계는 위성-shell 제외 profile을 포함한
 joint injection/recovery와 큰 규모 sky·PSF wing 공간 블록 공분산이다.
+
+### 2026-11-03 후속: 약중력 풍부도 차이의 적색편이 매칭 민감도
+
+기존 CAMIRA 풍부도 상·하위 400개 cluster-only HSC Y3 스택의 적색편이 중앙값은
+0.442/0.427이었다. 부모 표본에서 shear profile을 보지 않고 `|Δz|≤0.02` 1:1 최대매칭을
+구성해 392쌍을 얻었다. 승인된 shape-row export에서 양쪽 렌즈 모두 source 행이 있는 쌍만
+남기자 251쌍으로 줄었다(141쌍은 한쪽 또는 양쪽 export 지원 부족). 매칭된 실제 표본의 평균
+`|Δz|=0.00720`, 중앙값 0.00253, 최대 0.01999이며 그룹별 평균 z는 0.4259/0.4198이다.
+
+공통 49개 5도 등면적 하늘 셀 paired jackknife에서 상−하 풍부도 `DeltaSigma` 차이는
+0.1–0.2 Mpc에서 `35.28±24.90`, 이후 0.2–0.4, 0.4–0.7, 0.7–1.0, 1.0–1.5,
+1.5–2.0, 2.0–3.0 Mpc에서 각각 `40.73±14.38`, `32.79±8.74`, `24.67±6.63`,
+`15.31±5.56`, `17.61±3.57`, `9.59±2.28`이다(단위 `10^12 M_sun Mpc^-2`).
+0.2–3 Mpc의 차이는 원래 400/400 split과 유사하다. 이는 lens z 한 변수만 맞춘 cluster-only
+robustness 진단이며 random-lens subtraction, survey 연결영역 공분산, selection/shear/`n(z)`
+불확실도 및 reduced shear가 빠져 있다. nominal profile Wald 값 `χ²=62.66`, rank 7,
+`p=4.44e-11`은 검출 유의도가 아니다. 새 CAS 요청·자료 다운로드 없이 lageunha CPU에서
+실행했으며 `science_measurement=false`를 유지한다.
+
+재현기 `analysis/icl_wgl_membership/hsc_debug/audit_wl_redshift_matched_richness_split.py`,
+평가 `analysis/icl_wgl_membership/hsc_debug/wl_redshift_matched_richness_assessment_2026-11-03.md`.
+summary는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_redshift_matched_richness_2026-11-03_01/summary.json`,
+SHA-256 `f050c2c90236a4215d951cb939bb65c145b98d6526dea90a88007beff2f152fb`이다. random-center
+count-only plan은 여전히 `prepared_not_submitted`; 본 분석은 제출하지 않았다.
+
+### 2026-11-03 후속: ICL–위성 공유 고리 제외 주입 전달
+
+고정 74개 ICL–위성 연관표본과 joint-annulus 지원 94쌍, 승인된 compact PSF 위치를 교차해
+정확한 association/PSF 교집합 48쌍만 실행하도록 batch runner를 확장했다. 실제 검증된
+74행 association table SHA-256 `483f81540543fc46ec1cf4333bbd3e238799b493e48fe03235da3038f5714917`
+및 independent audit를 selector가 확인한다. 48프레임(12 i, 36 i2)의 관측 mask/segmentation에서
+지원된 위성 50–75 kpc target pixels를 합쳐 ICL 200–300 kpc에서 제외하고, diffuse, satellite,
+joint synthetic component를 local HSC-I model PSF core로 주입했다. 실제 coadd는 변경하지 않았다.
+
+Diffuse→ICL 회수 median은 i `0.22564→0.22491`, i2 `0.22594→0.22623`으로 안정적이다.
+위성 envelope→ICL marginal median은 i `0.46709→0.46624`, i2 `0.68125→0.65981`이다.
+하지만 각 프레임의 짝지은 response 차 q16–q84는 i `[-0.01361, +0.00287]`, i2
+`[-0.06558, +0.01211]`로 0을 포함하고 프레임 분산이 넓다. 고리 제외 coverage 손실 중앙값은
+i 2.46%, i2 3.70%다. 따라서 주입 전달 scalar correction을 쓰지 않는다. 57-frame broader
+joint-support batch에는 association 밖 9개가 있어 이 association 결과의 기준으로 삼지 않았다.
+
+재현 옵션은 `run_joint_icl_satellite_batch.py --association-pairs .../association_rows.tsv
+--exclude-supported-satellite-shells-from-icl`이다. 단일 프레임 계산은
+`joint_icl_satellite_injection.py`에서 실제 supported profile 픽셀 수와 기존 segmentation을
+대조한다. batch summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_shell_exclusion_association_psf48_2026-11-03_01/summary.json`
+SHA-256은 `2f6c3d2ae393dd14532d640a1f9710ddee3064f8daf4feaca8f63c57aaf1821d`다. 검토와 한계는
+`analysis/icl_wgl_membership/hsc_debug/icl_satellite_shell_exclusion_transfer_assessment_2026-11-03.md`에
+기록했다. PSF compact core만 사용했고 source Poisson noise, 확장 PSF wing, coadd covariance,
+상류 sky, 마스크 재선택과 matched-control/공간공분산을 포함하지 않았다. 결과는 계속
+`science_measurement=false`, `psf_approved=false`, `observational_validation_passed=false`,
+`flux_covariance_available=false`다.
+
+### 2026-11-03 후속: 확장 PSF wing + ICL 위성 고리 제외 민감도
+
+앞의 정확한 association/PSF 교집합 48프레임(12 i, 36 i2)에 공개 HSC-I 확장 wing을 compact local
+PSF core와 혼합해 같은 위성 50–75 kpc shell-exclusion 민감도를 실행했다. 매개변수는 splice 2.4″,
+blend 0.6″, wing amplitude 0.65다. 두 배치 모두 오류 0이며 독립 집계기가 프레임별 SHA-256,
+74행 고정 association membership, 48개 유일 target/filter key를 확인했다.
+
+기존 고정 마스크 대비 diffuse→ICL paired 변화 중앙값은 i −0.00018, i2 0.00000이고,
+위성 envelope→ICL은 i −0.00022, i2 0.00000이다. 네 조합 모두 프레임 차이 q16–q84가 0을
+포함해 상수 응답 보정을 뒷받침하지 않는다. 단위 점원의 ICL ring 내 모델 wing flux fraction은
+중앙값 i 0.000994→0.000902, i2 0.000970→0.000896으로 낮아졌다. 다만 유효 ring coverage도
+중앙값 2.46 및 3.70 percentage points 감소한다. i2는 필터별 wing이 없는 상태에서 HSC-I proxy를
+쓴 탐색 민감도다. 매칭된 target-specific PSF, source Poisson noise, full coadd/sky/control covariance,
+관측 마스크 재선택은 아직 없다.
+
+결과 해석·모든 수치는 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_shell_exclusion_hybrid_psf_assessment_2026-11-03.md`,
+독립 해시 및 표본 감사기는 `summarize_icl_hybrid_shell_exclusion.py`에 있다. i/i2 summary SHA-256은
+각각 `ee3c1ae31b6ae2cef099702f071899e6b54a652935d8456f22893b37f476ec9e`와
+`56e628cfcf39fbdf80d499376d158b0056bbafeab7de8a648c9e0b327b7ce7b3`이다. 새 CAS 요청·다운로드는
+없었다. 계속 `science_measurement=false`, `psf_approved=false`,
+`observational_validation_passed=false`, `flux_covariance_available=false`다.
+
+### 2026-11-03 후속: 약중력렌즈 무작위 중심 형상원 수 사전 집계 완료
+
+사용자가 무작위 중심 3,100개 count-only 조회를 명시 승인했다. 검증된 계획은 620개 matched lens,
+lens당 5개 중심, proper 3 Mpc, 25개씩 124 SQL batch다. 반환 열은 `random_center_id`,
+`matched_lens_id`, `n_shape_sources`이며, 고유 S19A 형상 catalog object 수만 집계한다. shape row,
+개별 좌표, photo-z, 이미지 다운로드는 포함되지 않는다. 실행 전 `--check`는 network 사용 없이
+계획/SQL/checksum을 확인했다. plan SHA-256은
+`18aeb1e831d847818b2a671dfe5f75c3122c38637c91b9abbd8fabff5faae625`, random-center source manifest SHA-256은
+`728c8e7ae25b961a6d68f4dfff1ac37913535ef20ee074b48b999b6a9bb2f133`이다.
+
+lageunha에서 기존 `submit_wl_random_shape_counts.py --submit --approved-random-shape-count-query`로
+제출했다. 실행기는 CAS 상태를 확인하며 기존 SQL과 제출 job ID를 바꾸지 않았다. 124개 batch 전부
+완료됐고, 각 결과 파일은 지정된 25개 중심 수와 SHA-256으로 검증됐다. 최종 checkpoint 경로는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_count_results_lens_reuse_2026-11-03_01/count_status.json`이다.
+checkpoint 최종 status와 124개 job 상태는 모두 `complete`다. 과거 단말 중단 때 기록된
+`error_type=KeyboardInterrupt` 필드는 checkpoint에 남아 있지만 완료된 배치의 결과 상태를 바꾸지 않는다.
+승인한 3,100개 count row가 반환됐으며 HSC 비밀번호는 checkpoint나 결과 파일에 저장되지 않았다.
+source shape row, 개별 좌표, photo-z, 이미지는 반환되지 않았다. 별도 승인 전 원자료 행 반출은 하지 않는다.
+
+기존 승인 렌즈 위치 count-only preflight(800개, 3,069,544 후보)와 전체 random-center 결과를
+해시 검증해 paired support를 비교했다. 전체 800개 사전검사 중 lens 위치 count가 0인 렌즈는 168개지만,
+random 5개가 모두 완료된 matched lens 620개 안에는 150개가 포함된다. 이 150개 중 131개는 다섯
+random 중심도 모두 0이었다. lens count-positive 470개 중 385개는 다섯 random 중심 모두 양수,
+35개는 전부 0이었다. 470개에서 random 5개 평균/lens 위치 후보 수 비의 중앙값은 0.878,
+q16–q84는 0.419–1.110이다. Random 중심 3,100개 중 1,011개(32.6%)는 0 count이고 합계는
+9,010,324이다. 이는 후보 수 비교일 뿐 shape 품질·tomography·B-mode·방사상 절단 이후의 지원,
+매칭 보정 또는 렌즈 신호 측정이 아니다. 따라서 raw random-zero 비율을 단독 random-control 실패로
+간주하지 않고, 이후 동일한 source selection을 두 endpoint에 적용해 다시 평가한다.
+
+최종 감사 결과 경로는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_count_support_audit_2026-11-03_01/lens_paired_support_audit_ratio_v25.json`,
+SHA-256 `76c7b87f5c099ad2770b56b39aeac0e324ea293e3e644b7495d244fa4bf0c1c4`다. 재현 감사기와 해석은
+`analysis/icl_wgl_membership/hsc_debug/audit_wl_random_shape_count_support.py` 및
+`analysis/icl_wgl_membership/hsc_debug/wl_random_shape_count_support_assessment_2026-11-03.md`에
+기록했다. `science_measurement=false`는 유지한다.
+
+무작위 중심 shape-row export plan은 `submit_wl_random_shape_rows.py --check`로 오프라인 검증한 뒤
+사용자가 정확한 계획 SHA-256 `fc883444d2b23663d5f6034d773b76db948add29f1cda0c23384d17cfed2996a`와 범위를
+승인해 제출했다. 범위는 620개 matched lens, lens당 5개 무작위 중심, proper 3 Mpc, 124 SQL batch,
+예상 9,010,324 `(random_center_id, object_id)` 행이다. 제안 23개 열은 source 좌표, ellipticity,
+shape weight/calibration, aperture magnitude, resolution, PSF shape, raw B-mode mask, HSC tomographic bin을
+포함하고 개별 photo-z/PDF 및 영상은 제외한다. 비압축 크기 추정은 2.15–4.03 GiB다.
+
+2026-11-03 현재 lageunha CAS 실행은 진행 중이다. batch 000–034 (jobs 1068173, 1068175, 1068176, 1068177, 1068181, 1068182, 1068183, 1068184, 1068185, 1068186, 1068187, 1068188, 1068189, 1068190, 1068191, 1068192, 1068195, 1068202, 1068207, 1068214, 1068215, 1068216, 1068217, 1068218, 1068219, 1068225, 1068276, 1068277, 1068278, 1068279, 1068280, 1068281, 1068282, 1068283, 1068284)은 각각
+58,162, 68,595, 21,091, 46,205, 41,681, 80,090, 107,855, 99,798, 109,409, 64,912, 75,494, 91,881, 93,850, 97,237, 104,882, 101,084, 145,275, 51,720, 108,181, 88,754, 58,370, 109,504, 127,802, 67,391, 53,630, 90,493, 83,412, 91,082, 21,775, 37,938, 19,427, 25,185, 16,150, 33,505, 51,059행을 반환해 planned per-center count 대조를 통과했다.
+누적 2,542,879행이다. 순서대로 파일 SHA-256은
+`97f8dabcce114e2b182a7fa351fd3549ad92cbf4eaf5b6b058de28779a2a37e8`,
+`82c45ca2f1dbedbafd5a4aba68c015274a291e1701dfe552c180e24714d98808`,
+`f49467d3ab8e140d46e3e5ae137dc3564ac4af620630e06ba1e8082a064750b4`,
+`31da89520d8e8b22027844beb348fd55b894e140476b2287a0b1b945dac46ca6`,
+`a5b5c28f12fa158f1863f018415d4e6138076f21b9046024861c96f83d97c7cf`,
+`b7d00359aad94325151bf6a58084ace301698634c4fbcd24bc88e409d274dcd8`,
+`747c7cb1ca744abf6d1a10d17784ca2dfecddffb41c0828d3f72920363489ba3`,
+`d51e19b1e6f111d59a70169a00ae17e55a685e0bc3897a00e545630bf25ad01c`,
+`936c0dff19a7a0d30a1540be36b0fcea290e012420f86bcfa5737aa6834eea62`,
+`28e57d51964a04691b28a37f46b53f62221d710dca1264c1fd0b99988eb0c72c`,
+`3179df66db0737754aec22c50bfd79873fe752f063d90d446db0bccfd7cb2815`,
+`123922011b04487310af35d89d496f68f27aecd3476a655a34b63d955fbc08e2`,
+`dd34988086f5a0a835cefad186a464b65a40375fd0816c4381d287de5d91d1b1`,
+`3dba0c0bbc0aba29f4da0f80364f120c98751569e12838600fda078e4ddede0c`,
+`795dd7c8484a13dc7fdfb42e554df8f86edec2dfc50fce75c879e3712b73d757`,
+`cabc885374d06a717376eca11033b4d748797ed9d7de943a360eec9d0bc0c864`,
+`e6dbc23165d3793a3cf7923ddbb960af7c08d81dbb515d0b678d0cafe0d0ea69`,
+`3d4ae3921a943b031a4a6f66da506e1298a76391eb2a753d93c439a7f11baf63`,
+`c2089218f7160d0177cc08f3f272a6bf38cb1aa964b6d26ad7ed95311f28db6b`,
+`0be812934fbc2c95f9ebafae9c6b25cb252b29f47096daaddea393fc0270c219`,
+`d72762323140542e626753df6dc0db43f468ff9271a41447842425934ae90389`,
+`ea923cf61d97540cd5c172a5d276c6a2560f7e2ed5aac24efed5abdf2f46897f`,
+`67c55b67b1ce62518ff2e1ad2fcbe2d6b3789cdc98831cc612df3b77216d700d`,
+`7cc8b8066309c29586c8d162f86cc8a648f07fc1e000530b7182a451b4ec6468`,
+`e75aa1ff106929117a58b5c0c70e1c5bd3415e434623d03588fca252c9cb49d7`,
+`0ef934308ceed24b4dcbe5b71981734f2ad33ded1f016d7f1c69b72866b43243`,
+`4380c9d93d5406a8994872c8b4b6481915e8b7d0fcec1e06aa99a2f7679f0c40`,
+`944303fd361e380a36aa7175657ee0c2fc5f1ef6d29a1d8279acb6cf6c2550c3`,
+`51c7b91936690d38e50de1d55de119f6b9cfad08ca8fa6441272ea8faa31d752`,
+`1f9bdce19812bfd380d77de8a9e78df7eccaf0636bbea6434544133b23216bfb`,
+`b1ec2011efbd94357ac9edb8dc5beb6a43037aaddef07bc147df8fee380747ae`,
+`be5f5c31e6688fd6aa5b2ccaee93a24e633873cdbc4f609ab9f8f9e61ef43cb7`,
+`95d696df02d42c4f475e1ef73dcde76a73d402fd585a54f094a24a39c7b0593e`,
+`83bc75dc2a9187fbb5414c6376d47552f28d917ee3dd0017f1516a38c366db45`,
+`23091616982940c92cf44565596440cd8d0ed01fd156cbe7535995e68830e362`이다.
+
+2026-11-04 재개 후 batch 035–040 (jobs 1068285–1068290)은 각각 38,478, 0, 0, 51,488,
+36,726, 0행을 반환했고 전부 preflight center count 대조를 통과했다. 누적 완료는 41/124 batch,
+2,669,571행이다. batch CSV SHA-256 순서는
+`1c02eb1b2222d0f9c497684779eabead60922fd009f407afbd46c921634a845d`,
+`5cab5731ae6624e7c0b5362a9c08cb08e3ab9358935aede924cc96736b594522` (0행),
+`5cab5731ae6624e7c0b5362a9c08cb08e3ab9358935aede924cc96736b594522` (0행),
+`bb6a89c97df9cbc37e19725cecf04e2d995fb7a0d57a8a953e3ef30bde56d71b`,
+`0c988313dce3fba8b508cd751940f3464addb6335871d9f3026f0295222075eb`,
+`5cab5731ae6624e7c0b5362a9c08cb08e3ab9358935aede924cc96736b594522` (0행)이다. Batch 041–043
+(jobs 1068291–1068293)은 각각 38,732, 12,477, 42,984행을 반환하고 preflight 대조를 통과했다.
+현재 누계 44/124 batch, 2,763,764행이다. 세 CSV SHA-256은
+`c4b70c6dbe924093808d296f79aa16e2cdc626991f4cba4955296248d82a404b`,
+`f410aeb763fdd7499bf57a1fe1de46b656c7a483b79ad1ecfb035e8c6d850c80`,
+`8f644d55e42fe254002273003de87454da33dc1255e64f30b43248f632381f02`이다. 이후 batch 044–049
+(jobs 1068294–1068303)은 각각 83,154, 49,733, 146,988, 147,935, 75,023, 73,306행을 반환해
+preflight 대조를 통과했다. batch 050 (job 1068304)도 114,673행으로 검증됐다. 누계는 51/124 batch,
+3,454,576행이다. batch별 SHA-256은 checkpoint의 jobs 항목에 기록되어 있으며 CSV와 최종 대조한다.
+Batch 051 (job 1068305)이 실행 중이며, checkpoint는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_rows_lens_reuse_2026-11-03_01/results/row_status.json`이다.
+shape 원자료 행 반출은 기존 count-only 승인과 별도이며 이번 제출은 위에 적은 승인 범위와 일치한다.
+실행 완료 뒤 모든 batch의 행 수, center별 preflight count, 파일 해시 및 실제 총량을 확인해야 한다.
+
+Plan 디렉터리는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_rows_lens_reuse_2026-11-03_01/`,
+manifest SHA-256은 `fc883444d2b23663d5f6034d773b76db948add29f1cda0c23384d17cfed2996a`다.
+shape row 제출 스크립트는 `submit_wl_random_shape_rows.py`이며 명시적 승인 플래그가 없으면 제출을
+거부한다.
+
+완료된 첫 68 batch만으로 한 과거 중간 audit에서는 340개 matched lens에 1,700개 중심이
+확인됐고, 합계 source-count는 4,749,572였다. 중심 600개(35.3%)는 count 0이며, 107/340 lens는
+5개 중심 모두 0, 211/340은 모두 양수였다. 이는 manifest 순서의 전반부만 본 비최종 결과라
+공간 순서/표본 편향 가능성이 있고 전체 지원율로 일반화하지 않는다. 해시 확인된 CSV만 사용했다.
+재현기 `analysis/icl_wgl_membership/hsc_debug/audit_wl_random_shape_count_support.py`, 평가와
+snapshot 경로는 `analysis/icl_wgl_membership/hsc_debug/wl_random_shape_count_support_assessment_2026-11-03.md`에
+기록했다. 위 전체 124-batch 감사가 최종 count-only 후보 지원 비교다.
+
+### 2026-11-03 후속: ICL–위성 sky·coadd 상관잡음 공동 민감도
+
+기존 고정 ICL–위성 연관 74쌍(i2 53, i 21)에 association 표본 내부에서 재계산한 5도 연결 블록을
+사용해, 적색편이·풍부도만 조정한 기준모형과 외곽 600–900 kpc target−control plane residual,
+local 9×9 lag-window coadd sigma-inflation target−control 차이를 각각 및 함께 추가한 네 모형의
+partial Pearson 상관을 비교했다. 입력은 저장된 outer-sky 진단과 독립 산술검증을 통과한 전체 표본
+coadd residual-covariance frame 표다. 필터별 5,000회 paired block bootstrap을 수행했고, 74행 join 및
+모든 모델 점추정치를 별도 직접 최소제곱으로 재현했다.
+
+i2의 기준 r=0.239 [0.022, 0.423], outer residual 조정 r=0.252 [0.036, 0.456], coadd proxy 조정
+r=0.211 [−0.006, 0.403], 두 변수 모두 추가한 r=0.223 [0.009, 0.440]이다. 두 proxy를 함께 넣은
+기준 대비 paired 변화는 −0.016 [−0.091, +0.083]이다. i는 기준 r=0.112 [−0.229, 0.514], joint 조정
+r=0.098 [−0.374, 0.727], 변화 −0.014 [−0.300, +0.272]로 불확실성이 크다. 대괄호는 spatial-block
+bootstrap percentile 95% 구간이며 검출 유의도가 아니다.
+
+따라서 선택된 i2 표본의 point estimate 방향은 두 진단 공변량 조정에 대체로 안정적이지만, 이는
+ICL–위성의 물리적 연관을 확증하지 않는다. 국소 lag-window proxy는 방사 ICL estimator covariance가
+아니며 outer annulus도 순수 sky가 아니다. 상류 HSC sky 전달, target-specific extended PSF,
+위성 완전도, full image-pixel covariance 등은 여전히 미보정이다. 분석기
+`analyze_icl_satellite_joint_sky_covariance.py`, 평가
+`analysis/icl_wgl_membership/hsc_debug/icl_satellite_joint_sky_covariance_assessment_2026-11-03.md`.
+summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_joint_sky_covariance_2026-11-03_01/summary.json`
+SHA-256 `947d9ecd8bb728e5a3bb1ec193f88687a893752403c9c7a4d409a3e6752888e2`; 계속
+`science_measurement=false`다.
+
+
+### 2026-11-03 후속: ICL 200–300 kpc 고유 aperture lag-covariance
+
+실제 저장된 target/control aperture 유효 픽셀 가중치에 per-frame 대칭 9×9 coadd lag kernel을
+수축해 finite-lag aperture 분산을 계산했다. 지원된 224쌍 전부(i 71, i2 153), 448프레임을 처리했고
+재구성된 aperture coverage와 평균 표면밝기를 저장 profile과 대조했다. `i`의 독립 프레임 pixel-noise
+stack sigma는 대각만 가정할 때 0.06274에서 finite-lag 0.07869 nJy arcsec⁻²로 1.254배,
+`i2`는 0.06006에서 0.07356으로 1.225배다. 해당 값은 기존 spatial-block-bootstrap 구간 halfwidth의
+각각 7.56%, 6.94%다. 이는 추가 pixel-noise floor 진단이며 전체 estimator covariance도 아니고
+관측 ICL profile 보정값도 아니다. Target/control median inflation은 각각 i 1.2588/1.2546,
+i2 1.2576/1.2441로 유사하다.
+
+9×9 kernel의 aperture 내 국소 정상성 가정, 4픽셀 밖 상관, 상류 sky 전달, source Poisson noise,
+확장 PSF wing, mask uncertainty, 프레임 간 covariance는 반영되지 않았다. 과학 측정과 보정은 적용하지
+않으며 `science_measurement=false`다. 재현기는 `analyze_icl_annulus_aperture_covariance.py`, 평가는
+`analysis/icl_wgl_membership/hsc_debug/icl_aperture_covariance_200_300_assessment_2026-11-03.md`다.
+summary 경로 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_aperture_covariance_200_300_2026-11-03_01/summary.json`,
+SHA-256 `82b0f2ee2d364b204552933f60dfcc0853e5c9869d014957a07801dfe090fb03`; frame table SHA-256
+`d7632bf7b43a978d31045a1bb7919bddb7237580b7664e51243f598b7188605a`다. 독립 해시 manifest와 재계산이
+summary 및 두 TSV 파일 해시와 일치했다.
+
+### 2026-11-04 후속 진행: 무작위 중심 weak-lensing source row export
+
+기존 50/124 checkpoint 이후 batch 050–054 (jobs 1068304–1068308)가 각각 114,673, 117,799,
+93,429, 127,958, 97,884행으로 완료되어 center별 count-only preflight 대조를 통과했다. 총 55/124
+batch, 3,891,646행이다. SHA-256은 차례대로
+`473c8f57f8d1eb7c87b9adce1d3edb1165aa896550ba442e9bde29351eef3c2f`,
+`8b929f9912c0db548633088bbddba829f933e55652fdaf406d5774bb9fb0aa06`,
+`fdc6b20d7eb311cc892842424b6a9daaf16d2fb34f5f74429939b4d65ba897bc`,
+`3bc6b00dce4b62a8e6e87c5236d69a7677888b44654eae6d3943781fd186c3ad`,
+`128e9ebfc772f9186d049938c3ede9fbcabba2871150f9ad7175c23a2cb0c738`이다. Batch 055 (job
+1068309)이 실행 중이며 최신 상태는 `row_status.json`이다. 기존 user 승인 범위와 checkpoint flags는
+유지된다: credentials 저장 없음, 개별 photo-z PDF와 이미지는 미포함, `science_measurement=false`.
+
+2026-11-04 추가 진행: batch 055–059 (jobs 1068309–1068313)은 85,314, 124,773, 131,901,
+84,962, 43,949행을 반환해 per-center preflight 대조를 통과했다. 누적 60/124 batch,
+4,362,545행이다. SHA-256 순서는
+`6709975594ceb6017a490ef59f24b57ba486567e46b05aad183bf01ccf63a6ae`,
+`930e24befebc9f240e8d4d537a662d0a93b3f04feb5d3efe8e462c9cf4146849`,
+`de614d1da55e6daa089cd61c49db4c333324546abced4ab9e77df620ea38d314`,
+`9c5b2706796d45a84d1e7955d146fd10ebb4655ee8796256afbd0afa153e5324`,
+`0b99e058b76a3b6d423110cebcd96e8391d5a262ba026bdcd5b85dfeba8cb001`이다. Batch 060 (job
+1068314)이 실행 중이다.
+
+2026-11-04 진행 갱신: 승인된 random-center shape-row export가 63/124 batch 완료,
+누적 4,574,956행·1,504,916,757 bytes다. 최신 `row_status.json`의 plan SHA-256은
+`fc883444d2b23663d5f6034d773b76db948add29f1cda0c23384d17cfed2996a`이며,
+batch 063 (job 1068317)이 제출 상태다. batch 061 (job 1068315)은 65,200행,
+SHA-256 `30d6e51844c6956c867029826e8b570bf5add0d2d8d54b3487ca01a9f8bc03d8`;
+batch 062 (job 1068316)은 76,846행,
+SHA-256 `2fb4d954dee7ed88b0ed7d904df80058ad5ee1ff210e9d1f6196b436bfa98f44`로
+완료되어 각각 center별 count-only preflight와 대조됐다. data는 계속
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_rows_lens_reuse_2026-11-03_01/results/`에만
+저장된다. 모든 124 batch가 완료되기 전에는 random stack을 실행하지 않는다.
+
+batch 063 (job 1068317)은 90,879행으로 완료되어 per-center count-only preflight와
+일치했고 CSV SHA-256은 `385c432ab147a50ddc6abac929c0cec10329a5c51acbf2ce38acd2c1224e40bb`다.
+이에 따라 현재 누계는 64/124 batch, 4,665,835행, 1,534,853,155 bytes다.
+batch 064 (job 1068318)은 실행 중이며 제출기 PID 1619431이 살아 있음을 확인했다.
+
+2026-11-04 즉시 갱신: batch 064 (job 1068318)은 83,737행, CSV SHA-256
+`2640632164525a6628add6ea3996790650fe560c50bde1911aa7052cba6253ce`로 완료되어
+전 center count와 일치했다. 누계는 65/124 batch, 4,749,572행, 1,562,533,263 bytes다.
+Batch 065 (job 1068319)이 다음으로 제출됐다. 실행기는 계속 살아 있으며 checkpoint는
+동일 경로의 `row_status.json`에서 권위 확인한다.
+
+batch 065 (job 1068319)는 0행·229 bytes의 빈 결과로 완료됐고, 해당 center별
+count-only 사전 집계와 일치했다. CSV SHA-256은
+`5cab5731ae6624e7c0b5362a9c08cb08e3ab9358935aede924cc96736b594522`이다. 누계는
+66/124 batch, 4,749,572행, 1,562,533,492 bytes다. batch 066 (job 1068320)이 제출됐다.
+
+batch 066 (job 1068320)도 동일한 0행·229 bytes 결과로 완료됐고 center별 사전 집계와
+일치했다(동일 빈 CSV 해시). 현재 누계는 67/124 batch, 4,749,572행, 1,562,533,721 bytes다.
+batch 067 (job 1068321)이 제출 상태이며 동일 실행기 PID 1619431이 계속 살아 있다.
+
+batch 067 (job 1068321)도 0행·229 bytes로 완료됐고 center별 count-only 결과와 일치했다.
+동일 빈 결과 해시를 기록했다. 현재 68/124 batch, 4,749,572행, 1,562,533,950 bytes이며
+batch 068 (job 1068322)이 제출됐다. credentials 저장·이미지·photo-z PDF 반출 없음,
+`science_measurement=false` 플래그는 그대로다.
+
+batch 068 (job 1068322)은 47,790행, 15,773,332 bytes로 완료되어 center별 사전 집계와
+일치했고 CSV SHA-256은 `55fbae44d5f13d450b05c6fa5af53ca5b0825084fc722a633f05287ce63e4c41`다.
+누계는 69/124 batch, 4,797,362행, 1,578,307,282 bytes다. batch 069 (job 1068323)이
+제출됐고 submission process PID 1619431은 살아 있다.
+
+후속 분석을 자동 연결하기 위해 Astrafek에
+`run_wl_random_shape_stack_after_export.py`를 추가하고 Lageunha에서 watcher PID 2161773을
+시작했다. watcher는 승인 제출기 PID 1619431이 남긴 checkpoint만 감시한다. export가
+완료되면 기존 해시 검증 스택을 CPU 낮은 우선순위로 실행하며 CAS에 접속하거나 재제출하지
+않는다. 예정 출력은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_stack_lens_reuse_2026-11-04_01/summary.json`이며,
+아직 export checkpoint는 `running`이고 stack 출력은 없다.
+
+갱신: batch 069 (job 1068323)은 107,318행, 35,380,876 bytes로 완료되어 count-only
+preflight와 일치했다. CSV SHA-256 `faa7957abcef5012b26a71e3c69ed783dcfeec0369a402a8ab27abae71cf7cac`.
+누계는 70/124 batch, 4,904,680행, 1,613,688,158 bytes이며 batch 070 (job 1068324)이
+제출됐다. export는 계속 실행 중이고 watcher는 checkpoint 완료를 기다린다.
+
+batch 070 (job 1068324)은 70,975행, 23,360,449 bytes로 완료되어 count-only 사전
+집계와 일치했다. CSV SHA-256 `8e3c31a014140dd2619ce677a5d00504fdda08ead22f2e5484d5593057d496b2`.
+누계 71/124 batch, 4,975,655행, 1,637,048,607 bytes다. batch 071 (job 1068325)이
+제출됐으며 live submitter와 completion watcher가 계속 실행 중이다.
+
+batch 071 (job 1068325)은 82,165행, 27,078,305 bytes로 완료되어 center별 count-only
+preflight와 일치했다. CSV SHA-256 `c06a4e944ada34b6d22a8c9a929971d209a4fdb6165bebfe39b9fb2cda0484e5`.
+누계는 72/124 batch, 5,057,820행, 1,664,126,912 bytes다. 다음 batch 072는 CAS job
+1068327로 제출됐다.
+
+2026-11-04 상태 갱신: batch 072 (job 1068327)은 44,268행, 14,539,325 bytes로
+완료됐고 count-only center별 사전 집계와 검증됐다. CSV SHA-256은
+`c9a4f9311ec450abae26d2459bfea770aff65f154c0d91c5321c5256e6d45a91`이다. 누계는
+73/124 batch, 5,102,088행, 1,678,666,237 bytes이며 batch 073 (job 1068336)이
+실행 중이다. lageunha에서 submitter PID 1619431과 후속 스택 watcher PID 2161773이
+살아 있는 것을 확인했다. `row_status.json`에는 `status: running`과 함께 이전 실행의
+`error_type: KeyboardInterrupt` 필드가 남아 있다. 프로세스와 상태를 다시 대조하기 전까지
+이를 종료 상태로 해석하지 않는다. random stack은 아직 시작되지 않았다.
+
+추가 갱신: batch 073 (job 1068336)은 계획의 124,115행을 반환했고 per-center count-only
+preflight와 일치했다. CSV는 40,926,920 bytes, SHA-256
+`f3cf370505cc53ed958f557c1f065196bd58b32f72c3968131e0513ba34daa8a`이다. 누계 74/124 batch,
+5,226,203행, 1,719,593,157 bytes다. 다음 batch 074 (job 1068337)이 제출됐으며 제출기 PID
+1619431과 completion watcher PID 2161773은 계속 실행 중이다. 전체 export 전 random stack은
+아직 시작하지 않는다.
+
+batch 074 (job 1068337)은 54,239행, 17,907,763 bytes로 완료되어 per-center count-only
+preflight와 일치했다. CSV SHA-256은
+`9cb4e88a814faabd6b753642282ad756fa8279dc48a6a91cf9bcbeb4d105a3ba`다. 누계는 75/124 batch,
+5,280,442행, 1,737,500,920 bytes다. batch 075 (job 1068338)가 제출됐고 CAS 상태는
+`running`이다. 기존 제출기와 스택 watcher가 계속 실행 중이다.
+
+batch 075 (job 1068338)은 67,646행, 22,279,477 bytes로 완료됐고 count-only center별
+preflight와 일치했다. CSV SHA-256은
+`cf8519fc15935730652fa532eb1a6afc3950e134a92878069f7bda6ae03f398e`다. 누계 76/124 batch,
+5,348,088행이다. batch 076 (job 1068339)이 제출돼 CAS `running` 상태다.
+
+### 2026-11-04 후속: ICL coadd 주입 포아송 잡음 입력 감사
+
+Astrafek `audit_icl_poisson_noise_inputs.py`가 HSC 다운로드 상태 manifest에 지정된 표적 800개와
+matched control 798개 전체의 FITS 헤더를 읽었다. 1,598개 모두 manifest의 파일 크기 및
+IMAGE/MASK/VARIANCE HDU index와 일치하고, 1,598개 모두 variance plane을 갖는다. 그러나
+primary와 image-plane headers에서 `GAIN`, `GAIN1/2`, `EFFGAIN`, `COADDGAIN`, `EXPTIME`,
+`EXPOSURE`, `EFFEXPT`, `SUMEXPT`, `NEXP`, `NINPUT`를 하나도 찾지 못했다. 따라서 현재 coadd
+variance plane과 `FLUXMAG0`만으로 합성 광원의 효과적 coadd gain/shot-noise 분산을 복원할 수
+없다. 노이즈가 작다고 결론내린 것이 아니며, 기존 ICL injection에 포아송 variance를 추가하지
+않았다.
+
+요약 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_poisson_noise_input_audit_2026-11-04_01/summary.json`
+SHA-256 `f75e704de3ae8dbdfc6c2f52700bebb9407e13532d0f1dd10eb6b71990fd533c`, 재현기 SHA-256
+`bd42fc675aaa7c4fd2c33c22d9bbbcb35309e6518fd38351ac301e7770c04e2b`다. 세부는
+`analysis/icl_wgl_membership/hsc_debug/icl_coadd_poisson_noise_assessment_2026-11-04.md`에 있다.
+픽셀 데이터 접근·network·새 HSC 자료 수신은 없었다. HSC PDR3 문서는 coadd가 visit 이미지들의
+결합이며 개별 visit `warp`와 pixel별 visit count `nImage`가 제품으로 존재함을 설명한다. 이들은
+후속 effective-noise 재구성 검토 후보지만 visit count만으로 coadd weight/gain을 정하지 못한다.
+기존 ICL injection은 `science_measurement=false`로 둔다.
+
+HSC PDR3 database 문서의 `mosaic`, `frame`, `warped`는 image metadata tables이며 Wide `warped`
+table은 약 1.58M warped-image metadata rows를 보유한다. 다음 분석 전에는 target/control coadd patch를
+contributing visit metadata에 연결하고, visit-level variance 및 coadd weights로 synthetic-source shot
+noise를 계산할 수 있는지 확인해야 한다. 이 metadata query는 아직 제출하지 않았다. 근거는
+`analysis/icl_wgl_membership/hsc_debug/icl_coadd_poisson_noise_assessment_2026-11-04.md`의 HSC 공식 문서
+링크다.
+
+추가 갱신: weak-lensing random-center batch 076 (CAS job 1068339)은 113,357행,
+37,437,519 bytes로 완료되어 per-center count-only 사전 집계와 일치했다. CSV SHA-256은
+`cf3800bec37fbf8860c9ca9b591bd253f84963f35f8c13e2eb9b24d24d11f0c4`다. 누계는 77/124 batch,
+5,461,445행, 1,797,217,916 bytes이며 batch 077 (job 1068340)이 실행 중이다. 제출기 PID 1619431과
+completion watcher PID 2161773이 살아 있고, 전체 row export가 완료되기 전 random stack은 시작되지 않는다.
+
+batch 077 (job 1068340)은 29,684행, 9,515,117 bytes로 완료되어 per-center count-only 사전 집계와
+일치했다. CSV SHA-256은 `ae82fcdb1cff03104559c168f1703a9d1242e163dfbc2fb43360572e75b9ae3b`다.
+누계 78/124 batch, 5,491,129행, 1,806,972,033 bytes다. batch 078 (job 1068341)이 제출돼 CAS
+`running`이며 제출기 PID 1619431과 watcher PID 2161773이 계속 실행 중이다.
+
+batch 078 (job 1068341)은 count-only 예상과 같은 71,116행, 23,298,516 bytes로 완료됐다.
+CSV SHA-256은 `260f33dbfd88fff2faf3d34246195ecee6b017bfb83078a905c0a428c52200fb`다. 누계 79/124
+batch, 5,562,245행, 1,830,270,549 bytes다. batch 079 (job 1068342)가 실행 중이고 기존
+submitter와 completion watcher가 살아 있다.
+
+batch 079 (job 1068342)은 count-only 기대치와 동일한 34,758행, 11,405,309 bytes로 완료됐다.
+CSV SHA-256은 `11713e8881c817b977b52c08b83714e9826d5f284edde3613bd8aa3b830f9feb`이다. 누계는
+80/124 batch, 5,597,003행, 1,841,675,858 bytes다. batch 080 (job 1068343)이 제출돼 실행 중이다.
+
+추가 갱신: 2026-11-04 현재 batch 083 (job 1068350)까지 84/124 batch가 완료됐다. 검증된
+누계는 5,784,264 source-pair 행, 1,903,446,536 CSV bytes이며 batch 084 (job 1068351)이
+제출됐다. submitter PID 1619431과 completion watcher PID 2161773을 재확인했다. status는
+`running`이다. export 도중 watcher가 실행할 `run_wl_random_shape_stack.py`를 수정해, random
+center가 있는 cluster 620개와 3,100개 무작위 중심만으로 matched estimator와 paired spatial
+jackknife를 계산하도록 했다. 무작위 중심은 각 620개 cluster ID에 정확히 5개씩 연결된다.
+나머지 180개 cluster에는 적격 중심 5개가 없다. 기존 저장 스택은 800개 전체이므로, 새 runner는
+먼저 검증된 원본 source rows로 800-cluster 저장 프로필 재현을 확인하고, 이후 공통 620개 ID의
+cluster subset으로 random subtraction 및 jackknife를 수행한다. 두 표본을 맞추지 않은 800 대
+620 차감은 실행하지 않도록 했다. runner 구문 AST 확인은 통과했으며, 완료된 HSC row export 및
+후속 stack은 아직 없다. 출력은 계속 `science_measurement=false`를 유지한다. 상세한 분석 규칙은
+`analysis/icl_wgl_membership/hsc_debug/README.md`의 random-center 절에 기록했다.
+
+같은 날 batch 086 (job 1068353)가 추가로 검증 완료되어 현재 87/124 batch, 5,901,175행,
+1,941,776,117 CSV bytes다. batch 087 (job 1068354)가 제출됐고 submitter와 watcher는 계속
+살아 있다. ICL 결과 추적을 위해 `build_icl_association_evidence_report.py`와 hash-provenance
+보고서를 만들었다. 현재 74쌍 고정 association 표본의 i2 부분상관은 raw `r=0.234`, finite-lag
+pixel-noise 진단 후 `r=0.249`이고, 지지된 satellite-shell 픽셀을 ICL aperture에서 제외하면
+`r=0.193`이다. 배제 전후 paired 변화의 95% 공간 bootstrap 구간은 `[-0.064,-0.021]`이지만
+28개의 근사 공간 블록에 조건부인 민감도 결과다. i-band는 21쌍으로 불확실성이 넓다. 외곽 잔차
+공변량을 넣었을 때 i2 변화는 `+0.013`, 구간 `[-0.034,+0.111]`로 0을 포함한다. 따라서 i2 신호는
+추적할 근거는 있으나 위성/ICL 픽셀 중첩에 민감하며 확정 검출은 아니다. ICL 합성광원 포아송잡음,
+PSF 날개, sky transfer, completeness 및 전체 공분산 문제는 남아 있다. 보고서 파일은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_association_evidence_report_2026-11-04_01/report.md`,
+재생성 스크립트는 `analysis/icl_wgl_membership/hsc_debug/build_icl_association_evidence_report.py`다.
+후속 점검에서 보고서의 5개 입력 JSON SHA-256과 builder SHA-256이 현재 파일과 모두 일치했고,
+5개 원본 진단의 `science_measurement`도 false임을 확인했다.
+
+HSC frame metadata 경로를 추가 조사했다. 공식 PDR3 [mosaicframe schema](https://hsc-release.mtk.nao.ac.jp/schema/schemata/pdr3.pdr3_wide.mosaicframe.json)는 coadd `(skymap_id, band)`에 포함된 frame/visit/CCD를 제공하며, [frame schema](https://hsc-release.mtk.nao.ac.jp/schema/schemata/pdr3.pdr3_wide.frame.json)는 `exptime`과 `gain1`–`gain4`를 정의한다. 기존 800개 target 및 798개 control 위치의 count-only SQL plan v1은 16개 batch, 1,598개 요약 행, SHA-256 `7d8b04df45489518b24095910bf201a93687f9e317aa2bf350ef0747c1c97570`였다. 승인된 v1과 v2 SQL 모두 CAS HTTP 406을 반환했고 job ID는 발급되지 않았다. v2 첫 batch의 응답 본문은 `column "patch_area" does not exist`였다. 각 결과 checkpoint의 `query_submitted=false`, 자격증명 저장·이미지·shape·photo-z 반출도 false다. 공식 PDR3 [mosaic schema](https://hsc-release.mtk.nao.ac.jp/schema/schemata/pdr3.pdr3_wide.mosaic.json)는 `areacube`와 WCS 중심 좌표를 제공한다. 따라서 v3 계획은 `public.skymap.patch_area` 대신 `mosaic.areacube && radec_to_coord(ra, dec)` 공간 조건을 사용한다. v3는 1,598개 중심·16 batch·13개 count-only 열·173,398 SQL bytes, plan SHA-256 `3dac4db631d0dcbee5c5f4509e639f2bd90ca2af99fa7cf5f66c2a9f60bd9014`, SQL aggregate SHA-256 `924c478ec02b5e703027f0446b834c381cf479f7e4ac2ab7dcf27b3af9d999d6`다. 이 SQL hash는 별도이므로 제출 전 v3 명시 승인이 필요하다. 계획은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_frame_metadata_count_plan_2026-11-05_03/plan.json`에 있다. 카운트 결과 뒤 실제 gain/exposure metadata row export는 별도 범위와 승인을 받아야 한다. Per-pixel coadd weights가 없어 frame gains만으로 포아송 보정을 확정할 수는 없다.
+
+weak-lensing 반출도 진전됐다. batch 088 (job 1068355)까지 89/124 batch가 완료되어 6,008,508 source-pair 행, 1,976,901,478 CSV bytes로 확인됐다. batch 089 (job 1068356)이 제출됐다. submitter PID 1619431과 post-export watcher PID 2161773은 살아 있고 최종 stack 결과는 아직 없다.
+
+ICL–위성 표본 선택 원인을 추가 분해했다. `audit_icl_satellite_outer_coverage_loss.py`가 224개 ICL 지원 cluster/filter 프레임의 후보 2,691개를 재검사해, unrounded 50–75 kpc coverage 40% 기준을 1,171개가 통과하고 1,520개가 실패함을 확인했다. 실패 단계는 base quality mask 465개, SEP segmentation 81개, 이웃 검출원 마스크(Kron 타원 또는 유효하지 않은 모양의 원형 마스크) 973개, 미검출 CAMIRA 멤버 원형 마스크 1개다. image footprint에서 처음 기준 아래로 내려간 후보는 없다. 따라서 손실은 이미지 경계보다 source masking에 주로 연결되지만, mask 완화의 정당성을 뜻하지 않으며 flux correction이나 ICL–위성 검출도 아니다. 3-decimal saved coverage가 경계 후보 4개를 `0.400`으로 보이게 해 최종 원인 수는 미반올림 픽셀 재구성으로 분류했다. 출력은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_outer_coverage_loss_2026-11-05_03`; 평가 문서는 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_outer_coverage_loss_assessment_2026-11-05.md`에 있다. `science_measurement=false` 유지.
+
+표본선택 진단도 진행했다. `analyze_icl_satellite_mask_selection.py`가 같은 2,691개 후보를 cluster ID 단위 5,000회 bootstrap으로 비교했다. 50–75 kpc profile 유지율은 cluster-centric radius 최상위 사분위에서 최하위보다 i `+22.7%p` (95% block interval `[+10.6,+35.1]%p`), i2 `+20.6%p` (`[+12.7,+28.2]%p`) 높았다. i에서 richness 최상위 사분위는 최하위보다 `−19.9%p` (`[−29.5,−9.2]%p`) 낮았고 i2 차이는 구간이 0을 포함했다. 이는 retained profile이 반경에 따라 달라지는 선택표본임을 보여주며 보정값은 아니다. 다음에는 cluster-level multivariable selection을 정하고 injection/recovery로 보정 가능성을 평가해야 한다. 평가 문서 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_mask_selection_assessment_2026-11-05.md`, 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_mask_selection_2026-11-05_01`.
+
+다변수 selection 진단도 완료했다. standardized radius·log(S/N)·redshift·log(richness)를 포함한 cluster-robust logistic model 4개가 수렴했다. 다른 변수를 조정한 뒤에도 profile 유지의 radius OR/SD는 i `1.55` (`95% CI 1.25–1.92`), i2 `1.45` (`1.28–1.64`)였고, richness OR/SD는 각각 `0.64` (`0.51–0.81`), `0.81` (`0.69–0.94`)였다. 이는 기술적 선택 모델이지 completeness 보정이나 과학적 가중치가 아니며, injection/recovery 검증 전 association에 적용하지 않는다. Astrafek 실행기 `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_mask_selection_adjusted.py`; 요약 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_mask_selection_adjusted_2026-11-05_02/summary.json` (SHA-256 `9fe70bf1da239c05a4bf72d6675918e1864b7186a458dcf0a7ec6f0ea74800af`).
+
+2026-11-05 support threshold 감도를 기존 60% PSF 주입/재검출 결과와 비교했다. 새 40%와 이전 60% 결과의 동일한 57개 프레임(i 13, i2 44)에서 이미지·위치별 PSF 해시, 재검출 개수와 마스크가 일치함을 확인했다. 프레임당 median satellite 수는 i `2→5`, i2 `2→6`; median control profile 수는 `7→26`, `9→34.5`였다. satellite unit-injection response 차이의 cluster bootstrap 95% 구간은 i `−0.033 [−0.768,0.487]`, i2 `+0.098 [−0.264,0.526]`로 모두 0을 포함했다. 이는 지원/추정량 민감도이며 모집단 completeness 보정이나 과학적 검출이 아니다 (`science_measurement=false`). 보고서 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_support_threshold_comparison_2026-11-05.md`; 재생성기 `compare_icl_satellite_support_thresholds.py`; 출력 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_support_threshold_comparison_2026-11-05_02`. Runner SHA-256 `55b8a89b40fdc9191412f30602d48218015d63c73157431aada0c114d84f66d6`, paired table SHA-256 `c86368c4dfb8aa4811f1d32bf9f133b341c2d14a3189a31fdc0baab084ca0add`, summary SHA-256 `c2722311dc4c5dbfaf6592751a6ae58358152baa0376e27a3cb88f8e2529ffe2`.
+
+사용자가 승인한 HSC coadd frame count-only SQL plan v2 (SHA-256 `b92a3c4931de25cf560abf5f6b0cd39af86b4e6d8cd3001a19cbeaa681f4316a`)를 제출 시도했으나 CAS가 `patch_area` 열 오류로 HTTP 406을 반환했다. job이 생성되지 않았고 checkpoint `query_submitted=false`; 결과 행이나 자격증명은 저장되지 않았다. 기존 SQL 재제출은 하지 말고 공식 스키마의 올바른 영역/WCS 열을 확인해야 한다. 수정 SQL은 새 plan hash에 대한 별도 승인이 필요하다. 현 승인 범위는 count-only로 영상·shape·photo-z를 요청하지 않는다.
+
+224개 ICL-supported pair의 위성 PSF coverage를 늘리는 오프라인 요청계획을 준비했다. 기존 744개 PSF 중 688개는 57프레임 위성 주입 위치, 기존 추가 1,542개는 target/control 중심을 덮는다. 기존 800 HSC 이미지, ICL support table, satellite prep에서 224 pair의 위성 주입 위치 2,693개를 재구성했으며 기존 파일·매핑 해시와 대조해 2,005개 위치가 빠진 것을 확인했다. `prepare_icl_psf_picker_supported_pairs_plan.py` (SHA-256 `5d97f940360220164908b96b3e63bf553782d373fb3484eb9ae1e042519258ee`)가 coordinate-only 계획을 만들었다. 계획 해시 `1d7c0189721600fc31e8524a4258dc70a5c0f0d436df45b57b9a0c3dd0058b65`; 좌표목록 SHA-256 `d71f38e67028d0e258e0b17321229f0f0102c528bdaf23c2e141c4d7d23b5ed6`; mapping SHA-256 `1dc1625cf88b86e95736c54e1a5977c6a787e4d9f8ffbe5d7dc96fe693186deb`. 요청 범위는 HSC-I PDR3 Wide centered coadd model PSF FITS 2,005개, 예상 40,420,800 bytes (38.55 MiB)다. 이미지·shape row·photo-z PDF는 포함하지 않으며, 요청은 제출되지 않았다. PSF 수신은 사용자의 별도 승인 후 진행한다. 수신되면 파일 및 좌표 감사를 통과한 뒤 injection/recovery 검증 표본을 57에서 최대 224개 supported pair로 늘릴 예정이다. 이는 과학적 검출이 아닌 선택/시스템 오차 검증이다.
+
+추가 다운로드 없이 PSF-supported 57프레임에서 위성 주입 진폭 0.5·1·2 nJy arcsec⁻²를 짝지어 비교했다. i2 normalized satellite-profile recovery median은 각각 `0.593`, `0.572`, `0.560`; 두 amplitude 대비의 paired 95% cluster-bootstrap 구간 모두 0을 포함한다. 다만 위성 밝기에 따라 재생성 detection mask가 변했다(i2에서 satellite-only mask pixel 중앙 증가는 약 `230`, `631`, `1,014`). 따라서 median transfer는 이 주입 범위에서 대체로 일정해 보이나 selection은 진폭 독립이 아니다. i 표본은 13개뿐이고 산포가 커 검출 또는 completeness 보정으로 해석하지 않는다. 평가 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_injection_amplitude_grid_assessment_2026-11-05.md`; 분석기 `analyze_icl_satellite_injection_amplitude_grid.py` (SHA-256 `fa64fd9d554e9b44b8306859bc1ce3a1a2a7679db84898fa8eda079498561852`); 출력 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_injection_amplitude_grid_2026-11-05_02`; paired table SHA-256 `dbd5489eb3c799bb6a7fb53f9251a800923dd2fd0cf30f679589a5b421cab5e5`, summary SHA-256 `733bcb90a7471be061b0280259e6cc9bc87fb05f1761f500d25cd91727d22d63`.
+
+약중력 stack의 zero-signal 검증을 5°/2.5° paired endpoint-jackknife full covariance로 추가했다. 435 common lens의 tangential ΔΣ profile은 0.1–3 Mpc에서 각각 χ²/7 dof `479.81` (51 blocks), `642.83` (154 blocks)이며, inner 0.4 Mpc를 제외해도 `460.37/5`, `537.23/5`다. chi-square approximation의 nominal p는 매우 작지만 block partition, random-center depth/mask/PSF/sky, coadd covariance, n(z) calibration, reduced shear가 미완료라 이를 최종 과학 검출로 승격하지 않는다. Cross null은 p=`0.157`/`0.399`; covariance 모두 full-rank positive definite이며 point profile는 block width에 따라 동일하다. Astrafek 분석기 `analysis/icl_wgl_membership/hsc_debug/analyze_wl_random_shape_stack_detection.py` (SHA-256 `e0934796e204acaec678a2a7dde5ae971920d098dae24fc1539659c1dc93bed1`); 평가 `wl_random_shape_stack_detection_assessment_2026-11-05.md`; 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_stack_detection_audit_2026-11-05_01/summary.json` (SHA-256 `ed6040a61157df74532fccf3e67e23c6f8231a33fe953045fd19ae35acc1cffb`). `science_measurement=false` 유지.
+
+2026-11-05 후속 무결성 감사에서 승인된 HSC random-center shape 행 반출의 124/124 CSV를 체크포인트 및 5°·2.5° stack provenance와 대조했다. 총 9,010,324행, 2,962,522,918 bytes이며 파일 hash/bytes, 계획 hash, stack의 batch hash가 모두 일치했다. row checkpoint에는 `status=complete`와 `error_type=KeyboardInterrupt`가 공존한다. 모든 job과 row summary가 complete이므로 stale error 필드로 기록하되 기존 체크포인트를 수정하지 않았다. 스택은 620개 계획 렌즈에서 cluster+random 공통지원 435개, random 중심 2,175개를 사용한다. 이 감사는 파일 무결성만 확인하며 random aperture depth/mask/PSF/sky 일치와 covariance 공간분할을 검증하지 않는다. 분석기 `analysis/icl_wgl_membership/hsc_debug/audit_wl_random_shape_export_integrity.py` (SHA-256 `1fb7ccf2122a118d0be373ec0fbfb70f486413cd125eb13bbb74c0897d51d60a`); 평가 `analysis/icl_wgl_membership/hsc_debug/wl_random_shape_export_integrity_assessment_2026-11-05.md`; 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_shape_export_integrity_2026-11-05_01/summary.json` (SHA-256 `b7a371a6ff5e4c8d546cbc88ec81a2289f57c09816fd5874eef135e2cc7da27d`). `science_measurement=false` 유지. 새 CAS query, image download, stack 실행은 하지 않았다.
+
+추가 PSF 다운로드를 쓰는 경로도 사전 보강했다. 기존 2,005-position 요청 계획을 바탕으로 `SupportedPairsPositionPSFBank`와 `run_joint_icl_satellite_batch.py`, `verify_supported_pairs_position_psf_bank.py`가 이제 정확한 명시 승인 계획 SHA-256을 인수로 요구하며, 실행 결과에는 요청 승인 증거와 과학적 PSF 승인 상태를 따로 기록한다. 기본 승인 해시는 `1d7c0189721600fc31e8524a4258dc70a5c0f0d436df45b57b9a0c3dd0058b65`이나 해당 PSF 수신은 아직 승인·실행되지 않았다. 수정 파일은 `analysis/icl_wgl_membership/hsc_debug/position_psf.py`, `run_joint_icl_satellite_batch.py`, `verify_supported_pairs_position_psf_bank.py` 및 hsc_debug README다. 분석·다운로드를 실행하지 않았다.
+
+2026-11-05에는 승인된 자료만으로 S23B 후보 표본의 기여 상한을 다시 계산했다. 현 800 parent에 catalog-only 후보 1,333개를 더하면 2,133개다. observed i2 satellite support yield를 그대로 가정하면 50–75 kpc pair는 60% 기준 181개, 40% 기준 373개 예상이지만 40%의 `r=0.249` 95% block 구간은 0을 포함하며 estimator 변경도 있다. S23B 후보 ledger는 100개 5° target 셀, 그중 discovery와 겹치지 않는 셀 22개를 보인다. 따라서 S23B 전체도 단일 endpoint 계획 92 independent blocks 및 30 비교 familywise 180 blocks의 공간상한에 미달한다. 이는 이미지·mask·PSF·depth·control 지원을 알기 전 상한일 뿐 실제 표본이 아니다. 재현기 `analysis/icl_wgl_membership/hsc_debug/assess_s23b_support_yield_and_blocks.py` (SHA-256 `5fb4c1a4354546ff972995a861e83a8f87aa92704611669d2e3138442f27b026`); 평가 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_support_yield_and_blocks_assessment_2026-11-05.md`; 산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_support_yield_and_blocks_2026-11-05_01/summary.json` (SHA-256 `b4f95bc248351a4e05446ce4fdb258485b863004dce55c811727c3af1f5b6951`). HSC query/download 없음, `science_measurement=false`.
+
+224개 ICL-supported cluster/filter pair 중 50–75 kpc 위성 프로파일이 있는 94개( i 26, i2 68 )의 표본선택 민감도를 계산했다. 모든 224개에서 이용 가능한 redshift·log richness·ICL annulus coverage·중심 mask flag로 pooled logistic support 확률을 추정하고 stabilized IPW를 적용했다. selection subset과 나머지의 ICL coverage 표준화 평균 차이는 i `+0.44`, i2 `+0.70`; richness는 `−0.29`, `−0.34`다. 선형 richness와 redshift를 통제한 상관은 i `0.079→−0.011`, i2 `0.293→0.227`이다. BFGS에서 “precision loss”로 보고된 216개 bootstrap 적합은 모두 gradient norm 기준을 충족했다(최대 `1.40×10⁻⁶`); 수정 실행은 허용기준 기반으로 0개 모형 적합 실패를 기록했다. 중심 mask 제외·coverage 제곱항·필터별 slope 대안에서도 IPW 부분상관 점추정은 i `[-0.014,0.021]`, i2 `[0.226,0.231]` 범위였다. 1,994개 i 및 2,000개 i2 연결 5° sky-block bootstrap 유효 표본의 IPW 95% 구간은 i `[-0.566,0.581]`, i2 `[-0.034,0.416]`이다. i의 6개 표본은 최소 6개 지원쌍 미달로 제외했다. 유효 표본수는 22/26, 60/68이다. IPW는 가정된 조건부 무작위 결측의 민감도일 뿐, 그 가정은 검증되지 않았고 검출이나 completeness 보정으로 해석하지 않는다 (`science_measurement=false`). Astrafek runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_joint_support_ipw_sensitivity.py` (SHA-256 `00131be3d6f91246d7e1733ee2e06845525359dd183d8464b87db26d822deb85`); 평가 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_joint_support_ipw_sensitivity_2026-11-05.md`; 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_joint_support_ipw_2026-11-05_06/summary.json` (SHA-256 `8dbfae2169361c9fb6ce5ccfcce684b486162dbf4820e531112cdfc4f39fdbc7`). IPW 분석은 HSC 네트워크를 사용하지 않았다.
+
+2026-11-05 S23B CAMIRA 후보 선택을 6개 redshift/BCG-spec 시나리오로 오프라인 비교했다. baseline은 기존 1,333 후보 ID를 정확히 재현했다. BCG-spec을 유지한 z 확장(`0.25–0.65`, `0.20–0.70`)은 후보 1,983/2,339개, 신규 5° 셀 25/26개. BCG-spec 없는 최광 선택은 후보 4,137개, 신규 셀 31개이나 렌즈 redshift 보정이 필요해 주표본으로 채택하지 않는다. 카탈로그 후보/셀은 영상 지원이나 독립 공분산 블록을 보증하지 않는다. 결과는 `analysis/icl_wgl_membership/hsc_debug/icl_s23b_camira_selection_scenarios_2026-11-05.md`, runner는 `audit_s23b_camira_selection_scenarios.py`; 기계 요약 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_camira_selection_scenarios_2026-11-05_02/summary.json` (SHA-256 `e0fddda7ecc973327842796278dd01b8e2ae3de33f2d07244590cfb085507ff6`). 신규 HSC query/download는 없고 `science_measurement=false`.
+
+2026-11-05 HSC Y3 네 source-z bin을 분해한 paired weak-lensing 진단을 추가했다. 공통 435 lens/2,175 random center에서 전체 bin profile과 pair count 합계는 기존 스택과 재현됐다. zbin1 exact estimator-weight boost는 0.1–0.2 Mpc `4.605±0.274`, 2–3 Mpc `1.260±0.049`; zbin2–4는 약 0.97–1.16이다. zbin1 대 각 high bin의 21 반경 대비가 5°/2.5° paired delete-one jackknife에서 Holm 보정 뒤 모두 남는다. zbin1 제거 profile도 양의 tangential/0-consistent cross 신호를 유지하지만, 안쪽 amplitude가 유의하게 변한다(동일 jackknife covariance 기준). 이는 저적색편이 source selection/photo-z overlap과 일치할 수 있으나 member contamination을 판별하지 않으며 boost correction을 정당화하지 않는다. 전체 random aperture depth/mask/PSF/sky, `n(z)` 불확실성 및 reduced-shear 관문은 미완료다. 재현기 `analysis/icl_wgl_membership/hsc_debug/analyze_wl_tomographic_weight_boost.py` (SHA-256 `497b1ac799f261beae91dd24bb8a2a61da65817f2943ba5411d95173d3e5d1673`); 평가 `analysis/icl_wgl_membership/hsc_debug/wl_tomographic_weight_boost_assessment_2026-11-05.md`; 산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_tomographic_weight_boost_2026-11-05_04/summary.json` (SHA-256 `47419ac229ffec9aab2a001f629252627126a456812b01cf11908ad44122fe14`). HSC 신규 query/download 없음, `science_measurement=false`.
+
+ICL–위성 94 지원쌍을 central-mask eligibility로 나눈 5,000회 block bootstrap에서 적격 표본은 i 8쌍/r=`−0.421`/95% 구간 `[-1,1]`, i2 15쌍/r=`+0.307`/구간 `[-0.069,0.792]`였다. 부적격은 i 18쌍/r=`+0.234`/`[0.014,0.802]`, i2 53쌍/r=`+0.312`/`[-0.070,0.551]`. i2 점추정은 유사하지만 구간이 넓고 0을 포함하며, 이 분리 bootstrap은 eligible/ineligible 차이를 직접 검정하지 않는다. 작은 적격표본은 mask effect 결론이나 mask 완화 근거가 되지 않는다. 보고서 `analysis/icl_wgl_membership/hsc_debug/icl_satellite_center_mask_sensitivity_assessment_2026-11-05.md`, runner `analyze_icl_satellite_center_mask_sensitivity.py` (SHA-256 `839b14e3ce4fabd504fe5398a7d6d20fc9fb0141810cb0d65fa1030904a66fd7`), 산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_center_mask_sensitivity_2026-11-05_01/summary.json` (SHA-256 `f779e417d5a5ebaf9c8e688f3d089a19e9363f15ba65375491717ee938fe91cc`). 새 HSC query/image read 없음; `science_measurement=false`.
+
+
+2026-11-05 HSC PDR3 frame-count v3 조회(승인 plan SHA-256 `3dac4db631d0dcbee5c5f4509e639f2bd90ca2af99fa7cf5f66c2a9f60bd9014`)가 이미 16/16 batch 완료되어 1,598개 중심 모두 patch에 연결됐다. 표적·대조 프레임 수 중앙값은 각각 42개이고 쌍별 차이 중앙값은 0이다. 이 결과는 촬영 횟수 차이가 큰 편향은 아님을 보일 뿐 픽셀별 분산/가중치를 주지 않는다. 후속 gain/exposure 행 반출을 오프라인 준비했으며, runner `analysis/icl_wgl_membership/hsc_debug/prepare_icl_frame_metadata_rows.py`가 기존 count 결과를 검증해 67,071 center-frame 행·21열·16 batch 계획을 만들었다. 정확한 plan SHA-256 `49aa4b7601dd42243209d7b3b394a4dd3b4cbf00d87d28cbb9467553c29f4ce3`, SQL aggregate SHA-256 `4270f3f0d290ac427b24694f7561f46cdee71cc8c3621a57c3fcf3f034583c76`. 계획 경로 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_frame_metadata_row_plan_2026-11-05_01/plan.json`; 상태 `prepared_not_submitted`, 새 CAS 제출 없음. 별도 사용자 승인이 있어야 제출한다. 이 frame-level 정보로도 per-pixel coadd weights/amplifier map이 복원되지 않으므로 ICL 주입 포아송 잡음이 해결되는 것은 아니다. `science_measurement=false` 유지.
+
+
+승인된 HSC frame-count 표를 기존 200–300 kpc ICL 대비와 연결해 frame-count 민감도를 추가 평가했다. 224 지원쌍(i 71/18 connected 5° blocks, i2 153/40 blocks)에서 ICL target-control 표면밝기 차이를 종속값으로 두고 target-control unique frame/visit/CCD 수 차이를 각각 시험했으며 redshift, log richness, common aperture coverage를 조정했다. 5,000회 block bootstrap partial-r은 i `−0.085, −0.061, +0.078`, i2 `+0.017, −0.041, −0.008`; 모든 95% 구간이 0을 포함한다. 정수 프레임 수 불균형이 이 선택 표본의 ICL 대비를 설명한다는 증거는 없지만 픽셀 깊이·분산·coadd weight의 동등성을 보이지는 않는다. Astrafek runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_frame_count_icl_sensitivity.py` (SHA-256 `de0ae9afbe5c6261b24009a9b9b6cdc0f9b24c6d4832e47f26d1eea9968b6bd4`); 평가 `analysis/icl_wgl_membership/hsc_debug/icl_frame_count_icl_sensitivity_assessment_2026-11-05.md`; 결과 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_frame_count_sensitivity_2026-11-05_01/summary.json` (SHA-256 `dd00410649e230359df6a6ea6582be2df6881e247bf81d29347bdca33d569cca`). 기존 저장 표만 사용, image pixels/HSC 추가 질의 없음, `science_measurement=false`.
+
+2026-11-05: Astrafek의 `analysis/icl_wgl_membership/hsc_debug/fit_wl_random_stack_nfw_mass.py`
+(SHA-256 `b8999e9e534def7eeeff9f29921e9ed479d57eb31e935d21c1deaba2c271c3e2`)가 저장된 435-lens
+random-subtracted weak-lensing 스택에 단일 NFW 질량 선별을 수행했다. source bin 2–4,
+proper 0.2–1.5 Mpc에서 고정 `c=3`의 유효 `M200c`는 약 `1.78e14`/`1.80e14 Msun`
+(5°/2.5° covariance)이고, `c=5`는 `1.54e14`/`1.44e14 Msun`이며 적합도가 나쁘다.
+농도 가정에 따른 약 20% 이동 때문에 질량 보정 결과로 쓰지 않는다. reduced shear,
+magnification, 중심 오차, two-halo, photo-z, 무작위 aperture 매칭 및 covariance 오차가
+미해결이다. 자세한 평가 `analysis/icl_wgl_membership/hsc_debug/wl_random_stack_nfw_mass_screen_assessment_2026-11-05.md`,
+산출물 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_stack_nfw_mass_2026-11-05_01/summary.json`
+(SHA-256 `d3ca78a24fc030f64694247fd45d33f607d89c18fb102b6b5a6879d53c52cd4b`). 새 HSC 조회는
+없고 `science_measurement=false` 유지.
+
+2026-11-05: reduced-shear 보정 민감도를 Astrafek runner
+`analysis/icl_wgl_membership/hsc_debug/fit_wl_random_stack_reduced_shear_sensitivity.py`
+(SHA-256 `92394e9ba11bc49582c7aab23a79aeb01d8d7798d1656a6bf6a42d80a8a3c556`)로 계산했다.
+동일한 435개 random-subtracted 렌즈와 5°/2.5° 공분산에서 HSC Y3 `n(z)` 모멘트 및
+8차 reduced-shear 급수를 적용하자 NFW 유효 질량은 weak-shear보다 1.7–5.5% 낮아졌다.
+급수 꼬리 상한은 0.012–0.022%지만 고정 농도에 따른 차이가 약 20%이고 `c=5` 적합은
+나빠 질량 보정이나 ICL–위성 검출로 사용할 수 없다. 평가
+`analysis/icl_wgl_membership/hsc_debug/wl_random_stack_reduced_shear_sensitivity_assessment_2026-11-05.md`,
+summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_stack_reduced_shear_sensitivity_2026-11-05_03/summary.json`
+(SHA-256 `310a03e29069b7799239f21a9ae3c0d0ef0abda5e2d0da93c9e8bdc2b50bc286`). 새 HSC 요청 없음;
+`science_measurement=false` 유지.
+
+2026-11-05: 204쌍 random-subtracted richness contrast에 저/고 그룹 NFW 질량을 동시에 적합했다.
+5° shared covariance와 0.2–1.5 proper-Mpc 네 bin에서 고/저 유효 `M200c` 비는 고정 `c=3,4,5`에
+대해 source bin1 포함 `1.89, 1.40, 1.21`, bin1 제외 `2.85, 1.73, 1.39`다. profile 비 구간은
+매우 넓어 upper limit이 최대 28이고 절대 질량은 농도·tomographic 선택에 크게 변한다. 따라서
+고 richness가 더 큰 유효 질량을 갖는 방향은 보이나 CAMIRA richness–mass 보정으로 사용하지 않는다.
+runner `analysis/icl_wgl_membership/hsc_debug/fit_wl_richness_split_nfw_mass_contrast.py`
+(SHA-256 `25e9c57d59cd3c61568bbbf5478f9726bc31263f49ad442931c7909a5dd22f1d`), 평가
+`analysis/icl_wgl_membership/hsc_debug/wl_richness_split_nfw_mass_contrast_assessment_2026-11-05.md`.
+All-bin summary SHA-256 `c0e4c92e5ef00fc77ffef7e26e918d3da312049e6d5ee2877edbe4385c32217b`, source-bin1-excluded
+summary SHA-256 `6d293f41c12a2d44fc4dd7303be238c9bfbcca27570db180f0bf93e3224eaa94`. 공분산·매칭영역·PSF·
+sky 및 질량분포 관문이 열려 `science_measurement=false`; 새 HSC 요청 없음.
+
+2026-11-05: CAMIRA richness 차이를 기존 random-subtracted 스택에서 다시 계산했다.
+처음 214쌍 계산에서 각 그룹 10개 렌즈가 target tomography에 기여하지 않는 것을 확인해
+그 산출은 폐기 대상이며, estimator-usable target/random 공통지원으로 재계산했다. 최종은
+415개 유효 공통지원 렌즈(211 low/204 high) 중 204개 redshift-matched pair, 2,040개 예정
+random aperture(1,911개에 shape rows), 50개 공유 5° block이다. high−low random-subtracted
+`DeltaSigma` 차이는 proper 0.2–3 Mpc에서 모두 양수이며 0.2–0.4 Mpc에서
+`+60.16 +/- 18.09 × 10^12 Msun Mpc^-2`이다. 명목 Wald `p=4.04e-12`는 approximate
+equal-area covariance 때문에 검출 유의도가 아니다. 매칭 깊이/마스크/PSF, selected support,
+`n(z)`·shear 보정 및 mass distribution 미해결. runner
+`analysis/icl_wgl_membership/hsc_debug/analyze_wl_random_subtracted_richness_split.py`
+(SHA-256 `6ecd77d5c1ce81b0595a4e04b8aa1b09b118929921d1e4926500adc25004cadb`), 평가
+`analysis/icl_wgl_membership/hsc_debug/wl_random_subtracted_richness_split_assessment_2026-11-05.md`,
+summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_subtracted_richness_split_2026-11-05_02/summary.json`
+(SHA-256 `b38a78f6005dc17d8a12ddd6117debd63a005d0b21ff8dbda05961bd31eb65b7`). 새 HSC 요청 없음;
+`science_measurement=false` 유지.
+
+## 2026-11-05 weak-lensing reduced-shear richness contrast
+
+Added and ran Astrafek `analysis/icl_wgl_membership/hsc_debug/fit_wl_richness_split_reduced_shear.py` on the saved 204-pair redshift-matched richness split. The same random-subtracted profile, shared 50-block covariance, exact source rows/weights, and HSC Y3 source `n(z)` were retained. With order-16 reduced-shear modeling, high/low effective NFW mass ratios for fixed `c=3,4,5` are 1.168/1.200/1.214 using source bins 1–4 and 1.150/1.172/1.198 excluding source bin 1. Weak-shear fits had 1.894/1.396/1.209 and 2.847/1.727/1.391 respectively. The series order 8-to-16 ratio change is ≤0.3%; maximum conservative per-pair truncation bound is 6.94% for c=3 with source bin 1 excluded. Conditional Δχ²=1 intervals use the approximate saved covariance and are not detections. Mass-distribution, photo-z/calibration, miscentering, magnification, matched-random depth/mask/PSF/sky, and covariance limitations remain; `science_measurement=false`. Full limits and hashes: `analysis/icl_wgl_membership/hsc_debug/wl_richness_split_reduced_shear_assessment_2026-11-05.md`. Summary JSONs: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_richness_split_reduced_shear_2026-11-05_09/summary.json` (SHA-256 `1b1fbbafc7aaf90e57b1b651dc29979b955bb593cf2e8e5e99dbd89dd4c91be4`) and `_10/summary.json` (SHA-256 `c3885d73ec8dced7bb9a87fd96510a00b075de2dfdcd6d54156c11c601af4044`). No HSC query or image read.
+
+## 2026-11-06: approved 2,005-position PSF batch and ICL-supported injection
+
+The user approved the exact HSC PDR3 Wide centered HSC-I coadd model-PSF plan
+SHA-256 `1d7c0189721600fc31e8524a4258dc70a5c0f0d436df45b57b9a0c3dd0058b65`.
+All 2,005 requested PSFs were received (38,088,000 FITS bytes) and passed
+coordinate/FITS audit; no images, shape rows, or photo-z were requested. The
+combined position-dependent bank verified 224 cluster/filter frames, 2,693
+satellite roles, and 2,917 unique PSF files (summary SHA-256
+`9c0002344fc7642a5a224ef108b209bb65ca468948ed0309420e8e12e4fac5ac`).
+
+The CPU redetection injection selected 137 of these 224 pairs by the measured
+200–300 kpc ICL common-coverage floor of 40% (44 `i`, 93 `i2`); 87 pairs did
+not pass that profile-support threshold. It completed all 137 with zero errors
+in 671.5 s. Injections used position-dependent compact PSF cores, SEP mask
+regeneration, and the `mask_all` policy for unresolved BCGs. No original FITS
+or variance plane was changed. Independent audit verified all 137 frame hashes,
+PSF role hashes, code provenance, and support-gap accounting; 79/137 frames
+have at least one satellite-profile gap.
+
+The diffuse ICL response median is 0.226 in both filters (16th–84th percentiles
+0.178–0.249 in `i`, 0.194–0.257 in `i2`). Satellite envelopes contribute a
+median 0.342/0.449 to the measured ICL annulus in `i`/`i2`. Satellite-profile
+response is unstable and support-limited: only 14 `i` and 44 `i2` frames have a
+valid satellite-injection response, with broad ranges spanning negative values
+to around or above unity. These are sensitivity diagnostics, not a correction
+matrix or ICL–satellite detection. Injected Poisson noise, upstream HSC sky
+transfer, extended PSF wings, and calibrated flux covariance remain absent;
+`science_measurement=false` and `psf_approved=false` remain.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_supported_pairs_psf_redetection_assessment_2026-11-06.md`.
+Batch summary SHA-256 `be3c2e8cb22185c06768d9022ae3e6192072f180fa54d55e21b85920e5572750`;
+independent audit SHA-256
+`b91783ee4e1582c24676d9a9bd85aacec2cebafa46d76980e909fcbfecbc0bd1`.
+The focused auditor is
+`analysis/icl_wgl_membership/hsc_debug/audit_icl_supported_pairs_psf_redetection_batch.py`.
+
+## 2026-11-06: 0.5/1/2 satellite-injection amplitude sensitivity on 137 pairs
+
+Expanded the existing paired amplitude grid from 57 to all 137 ICL-coverage-
+selected pairs. The user-approved position-dependent PSF bank, cluster images,
+and baseline detections are identical in all runs. The 0.5, 1, and 2 nJy
+arcsec⁻² runs each completed 137/137 with zero frame errors and passed the
+dedicated PSF-role/hash audit. At least one satellite support gap remains in
+78, 79, and 82 frames, respectively.
+
+Median satellite-profile unit response is `i` 0.285/0.349/0.564 (valid n
+15/14/12) and `i2` 0.612/0.409/0.411 (n 44/44/43). Paired cluster-bootstrap
+intervals for amplitude shifts cross zero in both filters; response scatter
+is wide. Mask growth is amplitude dependent: the median satellite-only added
+mask pixels rise from 151 to 871 in `i2` and 349 to 1,423 in `i`. This is a
+selected-sample pipeline sensitivity, not an astrophysical result or a
+completeness correction. Poisson variance for injected light, upstream sky
+transfer, extended PSF wings, and validated covariance remain unmodeled;
+`science_measurement=false`.
+
+The Astrafek analyzer now accepts `--expected-frames` (default 57), and its
+paired bootstrap omits unavailable responses instead of allowing missing
+support to propagate as NaN. Full tables, confidence intervals, hashes, and
+limitations are in
+`analysis/icl_wgl_membership/hsc_debug/icl_supported_pairs_satellite_amplitude_assessment_2026-11-06.md`.
+Paired summary SHA-256
+`1191414120941dc2022001ed260f277601a4af038367482383f7226cf55707f3`;
+analyzer SHA-256
+`2291744adf04d752c3f9ffa957541d2ed78c9ca6196ca28925a3928e11529cbb`.
+
+## 2026-11-05: ICL-strength split in random-subtracted weak lensing
+
+Added an Astrafek analysis joining saved 200–300 kpc ICL target-minus-control
+surface-brightness contrasts to the verified random-subtracted HSC shape rows.
+The `i2` ICL/WL common sample has 70 lenses; using source tomographic bins 2–4,
+the median ICL split produced 35 low and 35 high candidates. Maximum-cardinality
+matching with `|Δz|<=0.03` and `|Δln(richness)|<=0.25` retained 29 pairs (58
+lenses), with 26 approximate equal-area delete-one blocks. Median richness was
+18.97/19.47 and median ICL contrast −0.886/+6.360 nJy arcsec⁻² for low/high.
+The high-minus-low `DeltaSigma` profile varies in sign with radius. Its
+conditional seven-bin tangential Wald result is `χ²=27.77`, nominal `p=2.42e-4`;
+cross-component `χ²=4.54`, nominal `p=0.716`. Neither nominal p-value is a
+calibrated detection significance. The sample is selected and small; ICL
+Poisson-noise/PSF-wing/sky/completeness, random-aperture matching, and validated
+contiguous-region covariance remain unresolved. The `i` overlap has 38 lenses
+and was not analyzed here. `science_measurement=false` remains.
+
+Follow-up block-width sensitivity used the identical 29 matched pairs, source
+rows, and tangential point estimates at 2.5° blocks. It yielded 54 blocks and
+`χ²=12.05`, nominal tangential `p=0.099`; cross-component `χ²=5.22`, nominal
+`p=0.633`. Per-bin error ratios (2.5°/5°) are 0.89–1.26. The apparent 5° joint
+contrast does not pass this sensitivity, so no ICL-strength/WL relation is
+claimed. The sensitivity summary is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_subtracted_icl_split_2026-11-05_03/summary.json`
+(SHA-256 `809dc2362adc8a3b345fe469abdb50339c9aeb7baf1b8b45e3859a8f43464722`);
+plot `icl_split_profile_2p5deg.png` SHA-256
+`64aed42cef186cd7499aac16749be92d4332c75c97023f874362e12a89a19d3e`. The 5°
+figure is `icl_split_profile_5deg.png` SHA-256
+`1566f601e065eb70fa3ee93d63a09f67c5a003686831c41980722ac3cb7cf39d`. The
+plotter hash is now `e008ee7150a7da21a67f433b3eaf27ca236a6f56834dd65165a8c55f908f90bd`.
+The Astrafek comparison runner `analysis/icl_wgl_membership/hsc_debug/compare_wl_icl_split_blockwidth.py`
+(SHA-256 `e9b669dd980d83362f4a08875467e2a24a9d899c397a67f8783735af1119ab4b`)
+asserted identical matched pairs and bitwise-identical point profiles. Its
+comparison summary is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_subtracted_icl_split_blockwidth_2026-11-05_01/summary.json`
+(SHA-256 `6d9be0508c1e89aecb4a2b7f87e69764af21a9534d4449eb9cc028ab8bf0d442`).
+
+## 2026-11-06: ICL–satellite finite-lag pixel-noise correction, 94 pairs
+
+Extended the existing pixel-noise residual-covariance correction to the full
+94-pair joint-support sample (26 `i`, 68 `i2`). An independent scope audit
+verified covariance coverage for all pairs; the nested 74-pair raw values
+match the prior table. Corrected partial correlations controlling for
+redshift and richness are `0.081` in `i` (5° block interval
+`[−0.203,0.494]`) and `0.306` in `i2` (`[0.045,0.516]`), versus raw values
+`0.079` and `0.293`. The finite-lag pixel-noise correction is small. The
+intervals come from approximate connected equal-area cells and are not
+calibrated detections; support selection, block-width sensitivity, sky
+transfer, source-Poisson noise, extended PSF, calibration, and astrophysical
+covariance remain unresolved. `science_measurement=false`; no HSC query,
+download, or image read occurred.
+
+Runner `analysis/icl_wgl_membership/hsc_debug/assess_icl_satellite_pixel_noise_bias_supported_94.py`
+(SHA-256 `9d38b6b692fa15f69201e9e8eae0263bef6a59e235d92e317fe89d4c8eefc8b1`),
+assessment `analysis/icl_wgl_membership/hsc_debug/icl_satellite_pixel_noise_bias_supported_94_assessment_2026-11-06.md`.
+Summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_pixel_noise_bias_supported_94_2026-11-06_02/summary.json`
+(SHA-256 `e467e95192cabd411803b8bda350d5492301f508ecda4ee988d85df099119f54`).
+
+Astrafek files: `analysis/icl_wgl_membership/hsc_debug/analyze_wl_random_subtracted_icl_split.py`
+(SHA-256 `705d6389c70f1a7d6dce6ff2c07bc1517ede631b0a507757b81ef39417bb4a3f`),
+`plot_wl_random_subtracted_icl_split.py` (SHA-256
+`e008ee7150a7da21a67f433b3eaf27ca236a6f56834dd65165a8c55f908f90bd`), and
+`wl_icl_split_assessment_2026-11-05.md`. Result summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_subtracted_icl_split_2026-11-05_02/summary.json`
+(SHA-256 `1da415abdc45720294056e7379ceff049ecb2baff66f67921a69ec8ddc1ed495`);
+figure `icl_split_profile_5deg.png` in the same directory (SHA-256
+`1566f601e065eb70fa3ee93d63a09f67c5a003686831c41980722ac3cb7cf39d`). No HSC
+query/download or image-pixel read occurred. README and this handover record
+the reproducible path and caveats. The preliminary result directory `_01` is
+superseded by `_02`, which includes the cross-component null and final runner
+hash.
+
+## 2026-11-05: ICL–satellite association block-width sensitivity
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_supported_94_blockwidth.py`
+to recompute the nested 74/94-pair partial correlations under connected sky-cell
+widths 2.5°, 5°, and 10° (5,000 block-bootstrap draws per case). The full 94-pair
+`i2` estimate remains `r=0.293`; 95% intervals are `[0.002,0.504]`,
+`[0.048,0.498]`, `[0.056,0.496]`. The narrower 74-pair `i2` interval crosses
+zero at 2.5°. The paired 94-minus-74 scope-change intervals include zero for
+both filters at all widths. This is a selected-sample sensitivity, not a
+population detection; equal-area cells are not validated contiguous HSC
+regions. `science_measurement=false`; no HSC query, image read, or download.
+
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_satellite_supported_94_blockwidth_assessment_2026-11-05.md`.
+Runner SHA-256 `dfd845145c3e5c752aa9bf8ab0e0f77d7e99ed0bcd8364b197de51812388945b`;
+plotter SHA-256 `5115445514c12ff47d32edbcc4cb54f863c632bf83b436ff6c2b44ceb86e83cf`.
+Summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_supported_94_blockwidth_2026-11-05_01/summary.json`
+SHA-256 `7aad81051d46b88804db2923cf0de38e85e62384fa8d82455839b827e96c7227`;
+figure `icl_satellite_94_blockwidth_clean.png` SHA-256
+`b01765d7a6aab05bf3e60e5ea9f518f65317bad7c128b8cb476890fb7ec45a93`.
+
+2026-11-06 follow-up: extended the 94-pair finite-lag pixel-noise correction
+to coordinate-connected 2.5°, 5°, and 10° spatial blocks. The corrected
+partial-correlation point estimates remain `i=0.081` and `i2=0.306`; the
+95% intervals are `i: [-0.359,0.610], [-0.195,0.511], [-0.501,0.524]` and
+`i2: [-0.004,0.523], [0.050,0.519], [0.062,0.512]` at those widths. The
+smallest-width `i2` interval marginally includes zero, so this is
+block-sensitive near the boundary and is not a detection. The bootstrap
+uses approximate equal-area connected cells, not validated contiguous HSC
+fields; `science_measurement=false`. No new HSC query, download, or image
+read occurred. Runner SHA-256
+`4bd020428ba8ff2dc8ccb0a5bfa961e044f71985bdb79e31ff011da7138af7da`; summary
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_pixel_noise_bias_supported_94_2026-11-06_04/summary.json`
+SHA-256 `965d0e81e78ad8d27ebfc7726a9ae170828b824fab41d29292398fbdf2940725`.
+
+## 2026-11-06: frame-level calibration metadata export gate
+
+The coadd header audit still finds no explicit gain/exposure keys in 1,598
+target/control images, so a physically motivated source-Poisson term cannot be
+derived from the coadd headers alone. An existing count-only-approved parent
+query maps all 1,598 centers to patches and yields an exact estimate of 67,071
+contributing CCD-frame membership rows. The separately prepared metadata plan
+returns 21 fields (frame/visit/CCD, original filter, exposure, four amplifier
+gains, FLUXMAG0, sky RMS, MJD, and center/patch identity), in 16 SQL batches,
+estimated 13–27 MB. It excludes images, shape rows, photo-z, and object rows.
+
+Added
+`analysis/icl_wgl_membership/hsc_debug/submit_icl_frame_metadata_rows.py`.
+Read-only `--check` passed against exact plan SHA-256
+`49aa4b7601dd42243209d7b3b394a4dd3b4cbf00d87d28cbb9467553c29f4ce3`, 16 SQL
+hashes, and the parent count audit. Submission has not occurred; this separate
+metadata export requires explicit approval of that exact plan. Even if
+returned, frame-level gains and sky statistics do not provide per-pixel coadd
+weights or amplifier-region mapping and cannot alone calibrate the source
+Poisson variance. `science_measurement=false` remains. Official HSC references:
+PDR3 [processing](https://hsc-release.mtk.nao.ac.jp/doc/index.php/processing__pdr3/),
+[database](https://hsc-release.mtk.nao.ac.jp/doc/index.php/database__pdr3/),
+and [available data products](https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/).
+
+## 2026-11-06 continuation: diffuse-injection linearity and approved frame metadata
+
+The user approved submitting the exact per-center HSC frame-metadata plan
+(SHA-256 `49aa4b7601dd42243209d7b3b394a4dd3b4cbf00d87d28cbb9467553c29f4ce3`).
+On `lageunha`, the first batch returned original frame filter values `i` and
+`i2`, while the submitter incorrectly expected `HSC-I`/`HSC-I2`. The first
+job was checkpointed; no further SQL was submitted during the stop. The
+validator was fixed to accept the original filter codes and the exact plan was
+resumed from its saved job ID. All 16 approved batches completed: 67,071 rows,
+1,598 centers (800 target, 798 control), with no nulls in exposure, gain1–4,
+FLUXMAG0, sky RMS, or MJD. No images, shape rows, photo-z, object rows, or
+credentials were returned/saved. The independent offline auditor rechecked
+all 16 batch hashes, center/patch identities, unique frame membership and
+parent row counts. In the 798 matched pairs, median target-minus-control
+differences are zero for frame, visit, CCD counts, summed exposure, median
+sky RMS, median FLUXMAG0, and each amplifier gain. This is a patch-level
+summary only; no per-pixel coadd weights or amplifier maps exist in this
+export. It cannot yield source-Poisson variance or promote `science_measurement`.
+
+Metadata submitter:
+`analysis/icl_wgl_membership/hsc_debug/submit_icl_frame_metadata_rows.py`
+(SHA-256 `bacf170f85b3f2fc47310ec10457201981f7c8706677455036f36da44ecc43bb`).
+Offline auditor:
+`analysis/icl_wgl_membership/hsc_debug/audit_icl_frame_metadata_row_results.py`
+(SHA-256 `d0340160ed0f7c2ed7c8e7570b2687ed1009917380d8c8dda1625607d5922336`).
+Audit summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_frame_metadata_row_audit_2026-11-06_01/summary.json`
+(SHA-256 `0f361fcb496fbd7be7c1059f638414f6900535f73a9ac48696030480f400a237`).
+CAS result summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_frame_metadata_row_results_2026-11-06_01/summary.json`
+(SHA-256 `3925f74be34b19cf16ea0183055ba4d74d91568f66150c569e2d48b6bd2f7b53`).
+
+Separately, diffuse-ICL injection recovery was measured on the same 137
+PSF-convolved frames at input amplitudes 0.5, 1.0, and 2.0 nJy arcsec⁻² at
+100 kpc, with satellite amplitude fixed at 1.0 and detection masks regenerated.
+All runs completed 137/137 with zero frame errors. Median unit response is
+`i: 0.240, 0.226, 0.224` and `i2: 0.225, 0.226, 0.226`; paired 5° connected
+block-bootstrap changes from the 1.0 run include zero in both filters. Absolute
+median recovery remains about 23%, and masks change in many frames. This
+supports approximate amplitude stability within the tested range but not an
+absolute flux correction. Injected Poisson noise, coadd weights, upstream sky
+transfer and extended PSF wings remain absent. Keep
+`science_measurement=false`.
+
+Analysis tool:
+`analysis/icl_wgl_membership/hsc_debug/analyze_icl_diffuse_injection_amplitude_grid.py`
+(SHA-256 `8eef6823016e35538a059b0c125d12e88b98e9f8307c52cc21f88ceb04af7448`).
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_diffuse_injection_amplitude_assessment_2026-11-06.md`.
+Paired output summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_diffuse_injection_amplitude_grid_supported137_2026-11-06_01/summary.json`
+(SHA-256 `538656e4b3c5141282ddd24c16ad8ce0d20454692228f38b437ad996b29fcd96`).
+
+The approved frame metadata was also deduplicated for a potential pixel-level
+variance follow-up. It contains 12,839 distinct patch/filter/visit tuples and
+56,731 patch/filter/visit/CCD tuples; those are not cutout request counts. The
+authenticated PDR3 DAS Cutout manual documents `type=warp` tar downloads with
+image, mask, and variance layers. A bounded 2′×2′, one-center, nine-visit pilot
+is estimated at about 55 MB, but no query or download was made; it needs its
+own approval. Details and the scope are in
+`analysis/icl_wgl_membership/hsc_debug/icl_warp_product_scope_assessment_2026-11-06.md`.
+Even warp variance plus the approved frame metadata does not yet establish a
+calibrated injected-source Poisson model. Keep `science_measurement=false`.
+
+## 2026-11-06: i-band ICL-split weak-lensing follow-up
+
+The existing `analyze_wl_random_subtracted_icl_split.py` was also run on the
+saved `i` common-support subset at block widths 2.5°, 5°, and 10°. It has 37
+usable common lenses; the same ICL median split and redshift/richness matching
+retains 10 pairs. The exact pair list and seven-bin point profile are identical
+across all three outputs. Tangential conditional Wald χ² is 15.79/161.92/101.28
+and cross-null χ² is 24.70/90.97/105.50 at 2.5°/5°/10°. Only 9–24 approximate
+blocks support the 10-pair comparison; covariance and the nominal diagnostics
+are too unstable for a detection claim. The profile is radially mixed and
+cross-null is large at all widths. This `i` result does not strengthen the
+ICL–lensing association; `science_measurement=false` remains.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/wl_icl_i_band_blockwidth_assessment_2026-11-06.md`.
+All results are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_random_subtracted_icl_split_i_2026-11-06_{01,02,03}/`.
+Summary SHA-256 values for 5°/2.5°/10° are
+`61bbf1d605ed15b7666aee3490ed91051fa22f7452956e839b3d4b41535733ff`,
+`5c62835fcae76a8e9251f05218c03c73629579bf15ef8460257aabfc1a1d5baf`, and
+`ad38c8b5d7747d264199eaf5a420e48206be8d5c1054b82971fafc98d822007f`.
+No new HSC request or image-pixel read occurred.
+
+An additional offline region-balance audit mapped the i and i2 common/matched
+lens IDs to the approximate tract components from the existing 800-lens parent
+audit. The i common sample has 38 lenses split 18/20 across two components;
+the 10 matched high/low pairs are balanced 3/7 and 4/6, with five same-region
+and five cross-region pairs. The i2 sample has 70 lenses split 48/18/4 across
+three components; 29 matched pairs have 17 same-region and 12 cross-region
+pairs. The i cross-null therefore is not explained by a gross high/low lens
+count imbalance, but the audit does not assign source/random positions and
+cannot identify its cause. Region labels are approximate, not official HSC
+fields. Astrafek runner
+`analysis/icl_wgl_membership/hsc_debug/audit_wl_icl_split_tract_region_balance.py`
+(SHA-256 `768e18989a2907911697d6c25d01a53022bc3572a9a4dc2d06d7ec3ad1b5cbc1`);
+summary hashes i `8cba95a740c5d332b8c313c5687e58289652042497a5cc977061032203657130`,
+i2 `adb313d390c9def350255dd8719d46ea9c536b1864f142b73283455421c0f6d1`.
+Both outputs reside under `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`.
+
+To locate the i cross-null, a second Astrafek script reapplied the exact saved
+HSC Y3 source cuts and stacked the 10 matched low/high ICL groups' target and
+five-random-center rows separately by the approximate tract component of the
+lens/center. The selection reproduces 53,399 used target pairs and 241,258 used
+random pairs. All used sources are assigned to the same component as their
+lens/center. The high-minus-low random-subtracted cross profile is oscillatory
+in both occupied components and has same-sign, large first two bins; neither
+cross-component source leakage nor one component alone explains the pattern.
+No regional covariance is available, and each component has only 3–7 lenses
+per group; do not infer the source of the cross signal.
+
+Runner:
+`analysis/icl_wgl_membership/hsc_debug/audit_wl_icl_split_source_region_cross_null.py`
+(SHA-256 `961874ffdeb80efa9abe09c519adac680ea35adf7bdc83adceff5043fbfd4fdb`).
+Summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_icl_split_source_region_cross_null_2026-11-06_01/summary.json`
+(SHA-256 `fb90c982da784dff60b270efdfe986d0fbe5b8f3a656e15dd5bc14629810862c`).
+No new HSC request or image-pixel read occurred; `science_measurement=false`.
+
+The saved endpoint profiles were then decomposed into target and random-center
+high-minus-low terms. In the inner two bins, target cross differences are
+large in both components (component 0: −142.1/+120.2; component 1:
+−114.4/+159.5, in `10^12 M_sun Mpc^-2`); random terms modify these and reinforce
+component 1. A post-hoc `R>=1 Mpc` radial cut gives conditional cross-null
+nominal p values 0.307/0.303/0.107 and tangential-null values
+0.0093/6.63e-5/5.27e-5 for 2.5°/5°/10° blocks. The outer tangential contrast
+is a candidate for further confirmation only: the cut was post-hoc, there are
+10 matched pairs and 9–24 approximate blocks, and the covariance is not
+validated. In the larger i2 29-pair split, the same `R>=1 Mpc` cut gives
+tangential conditional nominal p=0.172/0.114 and cross p=0.639/0.550 for
+2.5°/5° blocks; the outer i tangential candidate is not reproduced.
+`science_measurement=false` remains.
+
+Astrafek endpoint decomposition:
+`analysis/icl_wgl_membership/hsc_debug/audit_wl_icl_split_target_random_cross_decomposition.py`
+(SHA-256 `051bc67f3be1f23f0134d7509287fa201b2da7b2689d86302fbbf1b3e2b4f42c`),
+summary SHA-256 `ffc453ac4b78e7f25a354d19469b31411856cc6d4e0ab41274f6940f331fe5af`.
+Radial-cut audit:
+`analysis/icl_wgl_membership/hsc_debug/audit_wl_icl_split_radial_cut_nulls.py`
+(SHA-256 `00a2f24b6a4c7e63b13f84c393d4778224db03b07a4ce5a6316f3b3f70717cf2`),
+summary SHA-256 `583426fef8b60c011ea392dd80c3a7783d1572fa06006d72b729bebea1eade45`.
+
+The next ICL/WL step tested continuous ICL against per-lens random-subtracted
+weak-lensing profiles for the exact 70-lens i2 common-support sample. The only
+nominal tangential-bin result is a negative 2–3 proper Mpc slope
+`−12.3×10^12 M_sun Mpc^-2` per 1-SD ICL contrast (`HC3 p=0.021`); its
+seven-bin Bonferroni/BH-adjusted minimum is `0.149`. Cross slopes are
+consistent with zero. This outer-bin candidate is not reproduced by the prior
+i2 median split. Radial support ranges from 58 to 70 lenses and covariance
+uses 27 approximate equal-area cells, so retain `science_measurement=false`.
+No HSC query was made; only already-approved local source/random rows were
+read.
+
+Astrafek runner:
+`analysis/icl_wgl_membership/hsc_debug/analyze_wl_continuous_icl_relation.py`
+(SHA-256 `9edaec5bf87da2e8739788d62275892ec904f255046bf2081b49b4d10523e6c8`).
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/wl_continuous_icl_relation_assessment_2026-11-06.md`.
+Results:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_continuous_icl_relation_i2_2026-11-06_02/`
+(summary SHA-256 `12c9456799e2671e3a0452c09a52465bdc6434c5b7546659c4bf21ac340f5fea`).
+The radial tangential/cross regression figure is in the same folder as
+`wl_continuous_icl_relation_i2_v2.png` (SHA-256
+`f8225b95111ab29a040edf97826eb3a6469fa0f87ed66c81b27078273c82ec08`) and
+`wl_continuous_icl_relation_i2_v2.pdf`; reproduce it with
+`analysis/icl_wgl_membership/hsc_debug/plot_wl_continuous_icl_relation.py`.
+
+An offline HSC warp pilot plan is now prepared from the already approved
+frame-metadata export. Scope is one `pdr3_wide/HSC-I` `type=warp` request at
+target `6966`, tract/patch `9703/306`, 2′×2′, image+mask+variance; metadata
+maps it to 43 frame rows, nine visits and 40 CCDs. Estimated full-square
+uncompressed planes are 52.65 MiB; the download runner has a 70 MiB hard cap.
+Plan SHA-256 is
+`a436df245a33bda09cd5599e564b2b9302e5d0d4c006b59fcf6fab1c2c33a65e` at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_warp_pilot_plan_2026-11-06_02/plan.json`.
+No warp request has been submitted. `download_icl_warp_pilot.py` requires a
+separate explicit approval of that exact plan hash and performs no request by
+default. Larger warp transfers would need their own approved plan.
+
+The warp downloader remains plan-only unless the user separately approves the
+exact plan SHA. Its offline FITS audit now checks image/mask/variance shapes,
+per-HDU WCS alignment, requested-center coverage, 0.168″/pixel scale, finite
+image fraction, mask occupancy, and finite/positive variance fractions. It
+labels a visit-complete response with failed checks
+`complete_with_qa_warnings`; it has not been run against a downloaded warp.
+Current downloader SHA-256:
+`766dbedb2b76951307b6c10a9d4be309f96ba1f509d6e09073c0716a6c71e291`.
+
+The 27-lens i2 triple-overlap diagnostic is now recorded in
+`analysis/icl_wgl_membership/hsc_debug/icl_satellite_wl_triple_overlap_assessment_2026-11-06.md`.
+Its Astrafek runner is
+`analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_wl_triple_overlap.py`;
+metrics and joined rows are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_wl_triple_overlap_2026-11-06_01/`.
+ICL–satellite partial `r=0.067` (block-bootstrap 95% interval
+`[-0.144, 0.293]`); all ICL–WL intervals cover zero. Two unadjusted
+satellite–WL intervals exclude zero among 29 reported relationships, so the
+result remains exploratory and `science_measurement=false`. No new HSC query
+was submitted.
+
+The existing supported-94 target/control coadds were also remeasured in ten
+radial annuli for delivered VARIANCE-plane balance. Runner:
+`analysis/icl_wgl_membership/hsc_debug/analyze_icl_variance_radial_balance.py`;
+assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_variance_radial_balance_supported94_assessment_2026-11-06.md`;
+outputs:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_variance_radial_balance_supported94_2026-11-06_01/`.
+Three of 20 unadjusted target/control radial comparisons have pointwise
+block-bootstrap intervals excluding equality; all ICL–variance correlations
+include zero. This does not estimate source-Poisson noise or the radial ICL
+estimator covariance. It read existing coadd variance/mask planes only, made
+no HSC request, and leaves `science_measurement=false`.
+
+The variance comparison was expanded to all same-filter acquired pairs
+(783 total, 302 `i`, 481 `i2`) and received a joint max-t correction over 20
+filter/radius contrasts. Three `i2` simultaneous intervals are below equal
+variance at 75–100, 100–150, and 200–300 kpc (ratios 0.961/0.955/0.961;
+intervals 0.924–0.999/0.915–0.996/0.934–0.988); none remain in `i`. The
+resampling partition has 38 approximate blocks and one large 107-pair block,
+so this is still only a delivered-variance diagnostic. Astrafek record:
+`analysis/icl_wgl_membership/hsc_debug/icl_variance_radial_balance_full783_assessment_2026-11-06.md`.
+Results are in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_variance_radial_balance_full783_2026-11-06_01/`
+and corrected simultaneous intervals in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_variance_radial_balance_familywise_2026-11-06_02/`.
+The `_01` familywise directory is explicitly invalidated for pooled-filter
+metric construction. No HSC query/download; `science_measurement=false`.
+
+### 2026-11-06 variance-adjusted ICL–satellite association
+
+Added offline sensitivity runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_variance_adjusted_satellite_assoc.py` and assessment `analysis/icl_wgl_membership/hsc_debug/icl_variance_adjusted_satellite_assoc_assessment_2026-11-06.md`. On the saved 94 supported pairs, the `i2` redshift/richness partial correlation is 0.293 (paired 5° connected-block 95% interval 0.043–0.498); adding log target/control variance ratio changes it by −0.008 (paired change interval −0.078–0.034). Adding a coarse mean-depth proxy changes it by −0.032 (−0.148–0.027). The `i` sample has N=26 and broad intervals. These selected-sample model changes include zero and do not establish that the delivered-variance difference explains the ICL–satellite association. The coadd variance plane is not total noise and this analysis does not estimate source-Poisson noise or ICL-estimator covariance. Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_variance_adjusted_satellite_assoc_2026-11-06_01/`; summary SHA-256 `8731105a3d5a9c0430ae2f688442beea640277d06af7d70ff03b1f48e9eb0644`. No HSC query/download; `science_measurement=false`.
+
+### 2026-11-06 satellite-support IPW with delivered-variance covariates
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_ipw_variance_sensitivity.py` to test whether target/control delivered VARIANCE balance predicts which of the 224 ICL-supported pairs has a 50–75 kpc satellite profile. The 94 selected pairs were compared under three support-propensity models using the same 2,000 connected 5° block resamples. For `i2`, the IPW partial r is 0.227 baseline, 0.266 with log variance ratio, and 0.193 with the ratio plus mean log variance; paired changes are +0.039 (95% interval −0.069–0.162) and −0.034 (−0.163–0.092), both spanning zero. The richer model reduces `i` effective N to 13.5/26, so that band is unstable. IPW missing-at-random is unverified and delivered variance is not total noise; no correction or science promotion follows. Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_satellite_ipw_variance_sensitivity_assessment_2026-11-06.md`. Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_ipw_variance_sensitivity_2026-11-06_01/`; summary SHA-256 `a1e2972d728bb88590dff3f3ff5197e1f10ea3bbeeec7a1aa0d93f6718fc6b2c`. No new HSC request/download; `science_measurement=false`.
+
+### 2026-11-06 joint IPW and finite-lag pixel-noise association
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_ipw_pixelnoise_joint.py` to combine the support-selection weights with the independently scope-verified finite-lag pixel covariance for the same 94 ICL/satellite pairs. The baseline `i2` corrected IPW partial correlation is 0.238 (2,000 connected 5° block interval −0.023–0.446); adding variance ratio gives 0.278 (−0.018–0.495), while adding variance ratio plus mean depth gives 0.201 (−0.054–0.410). Both paired model-change intervals include zero. The `i` interval is very broad, and the richest model leaves effective N=13.5/26. The covariance table covers all 94 pairs, but its estimation uncertainty is not propagated, source Poisson/effective gain and sky/PSF covariance are missing, and IPW missing-at-random is unverified. No science promotion: `science_measurement=false`. Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_satellite_ipw_pixelnoise_joint_assessment_2026-11-06.md`. Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_ipw_pixelnoise_joint_2026-11-06_01/`; summary SHA-256 `761e3448fd5d01b2937c62cc3668bc8a2f7e3af0bcdc74a3a2c821c193d3d01d`. No new HSC request/download.
+
+### 2026-11-06 ICL-strength split satellite profiles
+
+Added a cluster-level seven-bin high/low ICL satellite-profile comparison for
+the existing 94 supported ICL/satellite pairs (26 `i`, 68 `i2`). The OLS
+high-minus-low contrast is adjusted for redshift and log richness; 10,000
+restricted Webb wild-cluster bootstrap-t replicates use one joint 5-degree
+connected-pair partition across both filters, with Holm and max-T correction
+across 14 contrasts. All CR1 95% intervals include zero, Holm p=1.0 throughout,
+and minimum max-T p=0.520. Positive i2 profile differences remain unresolved;
+the i profile is noisy and changes sign with radius. The analysis is
+post-hoc and selected, and it does not establish an ICL–satellite relation.
+Runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_strength_split_satellite_profiles.py`
+(SHA-256 `2f6208e7f34504f3dc7a5c76d2d202b4c34ae2bdf2ed05ec9e655d8e6fac512b`),
+plotter `analysis/icl_wgl_membership/hsc_debug/plot_icl_strength_split_satellite_profiles.py`
+(SHA-256 `dfed877d3140fabffa5c3c64dad537293248f98a71c723bd7f3effe0f338f036`),
+assessment `analysis/icl_wgl_membership/hsc_debug/icl_strength_split_satellite_profiles_assessment_2026-11-06.md`.
+Machine results and figure are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_icl_strength_stacked_profiles_2026-11-06_01/`.
+No HSC request/download; `science_measurement=false`.
+
+### 2026-11-06 joint radial ICL–satellite relations
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_radial_relations.py`
+for continuous one-SD ICL slopes and median-split contrasts in each of seven
+satellite-profile radii and both filters. It uses the existing 94-pair selected
+sample, adjusts for redshift and log richness, and applies shared-block Webb
+bootstrap with Holm/max-T correction across all 28 tests. The smallest raw
+bootstrap p is 0.0369 (continuous i2, 50–75 kpc) but max-T p=0.770; minimum
+max-T p=0.190 and Holm p=1.0 throughout. Three negative pointwise CR1 intervals
+in inner i bins do not pass the joint bootstrap. No ICL–satellite relation is
+established; `science_measurement=false`. Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_satellite_radial_relations_assessment_2026-11-06.md`.
+Plotter: `analysis/icl_wgl_membership/hsc_debug/plot_icl_satellite_radial_relations.py`.
+Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_radial_relations_joint_2026-11-06_01/`.
+No new HSC request/download.
+
+
+## 2026-11-06 continuation: approved frame metadata audit and weak-lensing boost sensitivity
+
+The exact approved HSC frame-metadata plan (`49aa4b7601dd42243209d7b3b394a4dd3b4cbf00d87d28cbb9467553c29f4ce3`) had already completed all 16 CAS batches before this continuation. The user again approved this exact plan; inspection confirmed the prior completed submission, so no duplicate CAS jobs were sent. An independent offline audit completed at `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_frame_metadata_row_audit_2026-11-06_03/summary.json`: 67,071 rows, 1,598 centers (800 target, 798 control), 798 matched pairs, and zero nulls in exposure, four gains, FLUXMAG0, sky RMS, and MJD. The auditor made no network request. This export has no pixel coadd weights or amplifier map and therefore cannot calibrate source-Poisson noise; `science_measurement=false` remains.
+
+The existing weak-lensing boost analysis was extended with a paired-jackknife sensitivity profile, `B_W(R) * DeltaSigma_lens-random`, using the exact response-adjusted S19A estimator-weight ratio, not the raw count boost. Across seven bins, the candidate profile is 12.5–16.3% above the saved profile; central values agree under 2.5- and 5-degree spatial blocks. This is not an applied physical correction because member dilution is not separated from magnification, depth, mask, PSF, sky, or source-selection effects. The saved profile is unchanged; `boost_correction_applied=false` and `science_measurement=false`. Assessment: `analysis/icl_wgl_membership/hsc_debug/wl_boost_profile_sensitivity_assessment_2026-11-06.md`; runner: `analysis/icl_wgl_membership/hsc_debug/analyze_wl_source_density_boost_blocks.py`; output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_source_density_boost_spatial_2026-11-05_06/`.
+
+
+## 2026-11-06: forced CAMIRA-position coverage sensitivity
+
+The forced-profile runner `analysis/icl_wgl_membership/hsc_debug/measure_forced_satellite_profiles.py` now accepts a `--coverage-floor` option; default remains 0.60. A separate run unmasked other unmatched CAMIRA positions but retained the 60% floor. This gave no support increase: the 50–75 kpc candidate count remained nine; across the 20 retained position-bin measurements, maximum target-coverage change was zero and maximum control-coverage change was 0.00184. Lowering the floor to 0.20 (still requiring at least three rotated controls) yielded 65 forced profiles at 50–75 kpc (25 `i`, 40 `i2`) from 3,197 candidates; 123 candidates passed any bin and 263 position-bin rows were retained. All 721 eligible target frames completed. Forced-only `i2` support is 21 pairs/17 blocks, `r=0.147`, 95% block interval [−0.485, 0.425]; `i` has only eight pairs. Combined support is 29 `i` and 74 `i2`, with `i2 r=0.257` and unpaired spatial-block interval [0.092, 0.435]. Paired comparison on common `i2` support gives 20%-minus-60% change +0.003 [−0.070, 0.126]; adding the six pairs gives −0.025 [−0.127, 0.079]. Neither comparison resolves a change. The positive unpaired interval is post-hoc, unadjusted, and not a physical detection; the CAMIRA coordinates are not confirmed galaxies and low coverage may be non-random. Keep `science_measurement=false`.
+
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_satellite_forced_coverage_sensitivity_assessment_2026-11-06.md`; paired analysis: `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_forced_coverage_sensitivity.py`; runner: `analysis/icl_wgl_membership/hsc_debug/measure_forced_satellite_profiles.py`. Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_forced_coverage_sensitivity_2026-11-06_02/summary.json` (SHA-256 `14367972f95c554c989509f7f1152f2d7fffe09e28c8bcb45dd448cf595ca7a2`) and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/satellite_forced_outer_profile_unmatched_camira_unmasked_cov20_2026-11-06_01/summary.json` (SHA-256 `8de336e6d22da5ef1679d60a73ffd15e299f1c6f5303ced6bd6d5a1545e5852c`). No HSC query or download occurred.
+
+
+## 2026-11-06 forced-position radial-support selection
+
+Audited all 3,197 CAMIRA positions without SEP detections against their measured target coverage and the 60%/20% forced-profile outputs. At the 20% floor, 50–75 kpc profiles are retained for 25 `i` positions and 40 `i2` positions, but none is from a candidate within 100 kpc of the host cluster center. Forty-one of the 65 profiles are at 300–500 kpc. Parent position-radius medians are 200/195 kpc (`i`/`i2`) versus retained-profile medians 388/339 kpc. Any profile is retained for 18/282 candidate-bearing `i` clusters and 32/439 `i2` clusters. This is a positivity failure for correction to the full parent radial distribution. Do not pool forced profiles into the primary detected-satellite stack; keep the 20%-cut `i2 r=0.257` as an uncorrected sensitivity result. Assessment `analysis/icl_wgl_membership/hsc_debug/icl_satellite_forced_position_selection_assessment_2026-11-06.md`; runner `analysis/icl_wgl_membership/hsc_debug/audit_icl_satellite_forced_position_coverage_selection.py`; output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_forced_position_coverage_selection_2026-11-06_01/summary.json` (SHA-256 `6d6650a0ff81d203d11ad012ba82867b9150904af38f511212d1e25931ce9e28`). No HSC request/download; `science_measurement=false`.
+
+## 2026-11-06 continuation: contributing-member count sensitivity
+
+Added Astrafek runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_membercount_adjustment.py` and assessment `analysis/icl_wgl_membership/hsc_debug/icl_satellite_membercount_adjustment_assessment_2026-11-06.md`. The fixed 94-pair sample was checked against the per-member 50–75 proper-kpc profile table. The baseline partial correlation controls redshift and linear CAMIRA richness, matching the primary 94-pair analysis. Adding log contributing-member count changes the `i2` estimate from `r=0.293` to `0.295`; the paired shared-block change is `+0.002` with 95% interval `[-0.023, 0.044]` from 9,989 valid draws out of 10,000 requested. For `i`, the estimate changes from `0.079` to `0.088`, with change `+0.009` `[-0.081, 0.192]`. Member count does not show a resolved partial association with ICL or satellite excess in either filter. This is a selected-sample precision sensitivity, not a completeness correction. Input tables were local; no HSC request or image-pixel read occurred, and `science_measurement=false` remains. Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_membercount_adjustment_2026-11-06_02/`. Runner SHA-256 `13a6c6b6168a65e5dc0f71e40a963f0298c62c04a14266683aae3b466a39f16b`; summary SHA-256 `12420feadba8d83badf3c1cb8446652c4bf3c3041bcbc70eae84e2f94011b485`.
+
+## 2026-11-06 continuation: long-lag ICL aperture covariance and random-point auditor
+
+Current data inspection confirms that the 17×17 residual-covariance kernel has already been contracted through the exact 200–300 proper-kpc masks for the same 224 supported target/control pairs. The independent-frame noise estimates are 0.0793 nJy arcsec⁻² in `i` and 0.0745 in `i2`, only 0.8% and 1.3% above the exact-aperture 9×9 estimates. The finite-lag terms are 7.6% and 7.0% of the saved spatial-block interval half-widths. These results remain a stationary-kernel noise floor, not total uncertainty or a flux correction. Runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_long_lag_aperture_covariance.py`; assessment `analysis/icl_wgl_membership/hsc_debug/icl_long_lag_aperture_covariance_assessment_2026-11-06.md`; summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_aperture_covariance_200_300_2026-11-06_01/summary.json` (SHA-256 `ebb78c5202ff60c5484b5b6aff69d61050bf57d11b005f548e10e8fdc6fb1be4`). No HSC query or image download occurred; `science_measurement=false` remains.
+
+Added `analysis/icl_wgl_membership/hsc_debug/audit_icl_random_pixel_variance_results.py` to validate a future completed random-point result against the pinned exact plan, checkpoint, all batch hashes, annulus membership, returned flags, center identities, and target/control mapping. The tool writes 1,598 center summaries and 798 paired summaries. Syntax parsing passed; no HSC results exist because plan SHA-256 `eeef98ef2210337f714e36d8a4afcd352fe312a536c90e8e236ff9f843f53e52` remains unsubmitted pending the user's explicit approval. Auditor SHA-256 `05352d72efbd95d97ce540e5008970b4ff75fcb7fe121efb467b59e913bb80cc`. This export still cannot provide a coadd weight map or complete source-Poisson/correlated-noise correction.
+
+
+## 2026-11-06 continuation: host-centric satellite-position mix sensitivity
+
+On the fixed 94-pair ICL–satellite sample, adding the median host-centric radius of contributing members to the redshift- and richness-adjusted model changes `i2` partial `r` from 0.293 to 0.322 (paired change +0.030; shared 5-degree block-bootstrap 95% interval −0.019–0.101). In `i`, `r` changes from 0.079 to 0.029 (change −0.050; interval −0.330–0.044). All position-mix and model-change intervals include zero. This sensitivity does not explain or validate the selected-sample `i2` association and does not correct for population incompleteness. Source Poisson, PSF wings, sky transfer, and full image covariance remain unresolved; `science_measurement=false`.
+
+Runner `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_clustercentric_position_adjustment.py`; assessment `analysis/icl_wgl_membership/hsc_debug/icl_satellite_clustercentric_position_adjustment_assessment_2026-11-06.md`; output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_clustercentric_position_adjustment_2026-11-06_01/` (summary SHA-256 `78317905c3d0b2b0ada48c8b39a27ae564caaeb0bd744f365c12fedc0a7d8971`). The analysis used existing local tables; no HSC request, download, or image-pixel read occurred.
+
+
+## 2026-11-06 continuation: S20A coverage metadata query rejected by CAS
+
+The already approved metadata-only coverage request is 2,596 candidates × nine probes (23,364 positions), 52 batches, and 14 mosaic/patch-QA columns. The first submission returned HTTP 406. A missing `ON` condition on the mosaic join was repaired, with candidate centers and probe inventory unchanged byte-for-byte; the corrected plan passed offline validation but its first batch also returned HTTP 406. Both checkpoints show the first batch pending with no CAS job ID, no result files, and no later batches. The server rejection cause remains unknown. Do not retry until CAS job state and the rejection reason are checked. No images, source rows, shapes, or photo-z were requested; `science_measurement=false`. Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_expansion_coverage_submission_assessment_2026-11-06.md`. Corrected plan SHA-256 `974d4e3db450703481ac2b004d37860806586900097e626c5b456702a9e0346f`; generator and submitter hashes are recorded in the assessment.
+
+
+## 2026-11-06 continuation: consolidated ICL and weak-lensing evidence
+
+Created `analysis/icl_wgl_membership/hsc_debug/build_icl_wl_current_evidence_report.py` and generated `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_03/icl_wl_current_evidence_report.md`. It validates and hashes 13 latest Astrafek component summaries. On 94 ICL/satellite common-support pairs, i2 `r=0.293` raw and `r=0.306` after finite-lag noise; support-weighted plus noise `r=0.238` has a 95% interval containing zero. On the 435-lens random-subtracted weak-lensing stack, deleting the largest of three occupied tract components shifts inner bins by 26.8–28.6%. The ICL–lensing slope family has no adjusted detection. Both analyses remain exploratory and `science_measurement=false`. No HSC access or image-pixel read occurred. Report SHA-256 `fb061edb26f6ea25666eefcc644b464bc4b54eb68239f649a920ca8145c4439f`; summary SHA-256 `1b6fd47fea010fbb8622def7326e9ca62e467aff8e98dc1f713b9f241ea6644e`; runner SHA-256 `bc0a9dd6b85bb87eb59eaa6eee5ded8437fe3b40442cca2e8c9db8abf8c6041d`. The separate S20A metadata expansion query remains CAS HTTP 406 with no returned results.
+
+## 2026-11-06 continuation: independent hybrid-PSF shell-exclusion audit
+
+Re-ran the Astrafek offline summarizer against the already completed hybrid-PSF satellite-shell-exclusion injections. It verified the pinned 74-row association table, all per-frame checksums, 12/12 `i` and 36/36 `i2` frames, and 48 unique target/filter keys. No HSC request, download, or observed-image read occurred. The diffuse-to-ICL paired response change has q16–q84 `[-0.00167,+0.00102]` (`i`) and `[-0.00110,+0.00132]` (`i2`); neither supports a scalar correction. The satellite-envelope response is broad across frames and likewise does not support a common correction. Excluding supported satellite-shell pixels removes 62,858 (`i`) and 257,890 (`i2`) pixels; median 200–300 kpc coverage falls from 0.681 to 0.618 and from 0.652 to 0.611, respectively. This support loss accompanies the small decrease in the synthetic point-source wing fraction. This is an independent audit of model sensitivity, not observational validation; `science_measurement=false`, `psf_approved=false`, `observational_validation_passed=false`, and `flux_covariance_available=false` remain. Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_satellite_shell_exclusion_hybrid_psf_audit_2026-11-06.md`. Runner: `analysis/icl_wgl_membership/hsc_debug/summarize_icl_hybrid_shell_exclusion.py` (SHA-256 `f94191ddee4b9ad163a0ba02587cb67d885e65d359a2f9cb024baad57a2865b8`). Summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_hybrid_shell_exclusion_audit_2026-11-06_01/summary.json` (SHA-256 `599006d4f9d2d0f114df413defe3f9040a0c8bfa96fadf08ccf72509534c9aa9`).
+
+## 2026-11-06 continuation: consolidated ICL/WL report includes shell-exclusion audit
+
+Extended `build_icl_wl_current_evidence_report.py` to require the checksum-audited 48-frame hybrid-PSF shell-exclusion summary, validate its filter and observational guard states, and include the measured paired diffuse-response and mask-coverage changes in the ICL discussion. Moved output-directory creation after all source and query-attempt validation so a failed audit does not leave a misleading empty report directory. Rebuilt the consolidated report with 20 science-component summaries plus the coverage-query audit; it remains exploratory and makes no HSC request or image-pixel read. Report: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_14/icl_wl_current_evidence_report.md` (SHA-256 `769a30f6e37285dae04f7958e144b348f3be3c4276298061f2a9c812fa32ad1a`); summary SHA-256 `ebd7b8a09cf0d8e5e4b524af683c0430717079349b7ffee411cbd3ed3926b467`; builder SHA-256 `44b4150bc67e51b7052561dda83e74930cc5abb77a4b9b847b79488e23149215`. `science_measurement=false` remains.
+
+
+### 2026-11-06: approved HSC warp pilot and coadd-variance consistency check
+
+The user approved one HSC PDR3 Wide HSC-I 2′×2′ warp request at target 6966
+(tract 9703 / patch 306): image, mask, and variance for nine specified visits.
+The archive has exactly those nine FITS files (55,511,040 bytes; 52.92 MiB),
+with 715×715 aligned planes and warp-to-coadd WCS residual below 7e-10 pixel.
+Visits 77296 and 77304 have no finite image/variance coverage; 77330 is partial
+(59.5%). The other six cover 86.9–100%.
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_warp_pilot_coadd_variance.py`
+to compare delivered coadd VARIANCE against `1/sum(1/warp_VARIANCE)` using only
+the downloaded local data. At 200–300 proper kpc, primary coverage is 99.71%
+and the coadd/predicted variance ratio has pixel q16/median/q84
+1.00372/1.00748/1.01506. A sensitivity using only mask planes common to the
+warps and coadd retains 48.83% of the annulus and has q16/median/q84
+1.00312/1.00656/1.04093. These pixel quantiles are descriptive, not confidence
+intervals. The ratio near unity is a one-position product-consistency check,
+not independent noise calibration; source Poisson/effective gain, resampling
+covariance, sky-transfer covariance, PSF wings, and full ICL-estimator
+uncertainty remain open. Keep `science_measurement=false`.
+
+Results and pinned input hashes are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_warp_pilot_coadd_variance_2026-11-06_02/`.
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_warp_pilot_coadd_variance_assessment_2026-11-06.md`.
+The earlier `_01` draft output is superseded by `_02` because development
+corrected the strict-mask comparison and footprint overlap denominator. No GPU
+or Slurm job was used.
+
+The consolidated report builder now validates and includes the warp pilot summary as
+an additional input (22 inputs total), without rereading image pixels or accessing
+HSC. Updated report:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_15/icl_wl_current_evidence_report.md`
+(SHA-256 `381d20917d57c12d3977713d9269ec370c37082b67fb7a66f29c35812b5e05d9`);
+summary SHA-256 `28fdd07bf7b80c575419e251bd5ba92abc81e3e98067a8de1ab0695481be1a46`.
+The report remains exploratory and records `science_measurement=false`.
+Runner SHA-256 `dc67da5b7e6c88a6202f3d07de67e52bd7765cafe34339e3b0eb705ad48f3695`;
+report-builder SHA-256 `799f6b8f81fb0fce98bde8e208565843c053a0c4ea8957752420a0d9d8d72b5e`.
+
+### 2026-11-06: supported-sample warp noise plan prepared; awaiting exact-scope approval
+
+After the one-position 6966 pilot, used the approved 67,071-row frame metadata
+and the hash-pinned 94-pair ICL–satellite support table to inventory every
+matched target/control center. All 188 positions resolve to metadata. The new
+plan covers all 94 pairs (26 `i`, 68 `i2`), with 188 HSC-I 2′×2′ requests and
+1,471 expected visit products. Pilot-scaled expected transfer is 9,072,971,094
+bytes (8.45 GiB); the
+runner stops at 160 MiB per request or 12 GiB total. Only image/mask/variance
+warp products are in scope. No HSC request was submitted while preparing this
+plan. `science_measurement=false` remains.
+
+Plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_supported94_warp_noise_plan_2026-11-06_01/plan.json`
+(SHA-256 `bd936a94bcdbff83a607acbfca66616c396db526ada50cc89c9e3e312d37007a`).
+Planner `analysis/icl_wgl_membership/hsc_debug/prepare_icl_supported94_warp_noise_plan.py`;
+submission runner `analysis/icl_wgl_membership/hsc_debug/download_icl_supported94_warp_noise.py`.
+Both are plan-only unless an exact plan hash is approved and passed to `--submit`.
+The pilot assessment is `analysis/icl_wgl_membership/hsc_debug/icl_warp_pilot_coadd_variance_assessment_2026-11-06.md`.
+Planner SHA-256 `475cb7a3436415f8f920ab2fe04e9c20ee28f2565373ddd2f598c8e4fc2ca059`;
+downloader SHA-256 `1fe8720f87ae31c951eadd40d83988402d89971f4f2d37ea1bc08da8c2da8da53`.
+
+
+### 2026-11-06 continuation: approved 94-pair HSC warp download and variance audit
+
+The user approved the exact 188-position 2′×2′ HSC-I warp plan (plan SHA-256 `bd936a94bcdbff83a607acbfca66616c396db526ada50cc89c9e3e312d37007a`). The sequential download completed 184 archives (9,939,640,320 bytes; 9.26 GiB, within the 12 GiB cap). Four approved positions returned HTTP 404 twice: i2 target 3010, i2 control `control_7281_43773774104897710`, i control `control_418_36411590274189484`, and i control `control_6229_41567062857876122`. Every returned archive includes all metadata-expected visits; 161 additional visit files came back within the same cutouts. Download summary SHA-256 `0039321462f8158d1c006a1df64bb3e96ae988744ed780c845f74a60c79b95b4`.
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_supported94_warp_noise.py`. It maps each visit WCS onto its coadd using a locally validated affine fit (maximum allowed residual 0.05 pixel), nearest-neighbor samples variance/masks, and compares delivered coadd VARIANCE with `1/sum(1/visit_VARIANCE)`. 184 centers passed; 88 matched pairs remain (24 i, 64 i2). In the 200–300 kpc annulus, the median of center-level ratio medians is 1.00669; strict common-mask coverage has median 81.9%. Target-minus-control medians are −0.000905 (i) and +0.000559 (i2); sky-block bootstrap 95% intervals include zero for both. This is a variance-product consistency diagnostic, not exact HSC resampling/covariance, source-Poisson calibration, PSF/sky validation, or an ICL association result. `science_measurement=false` remains. Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_supported94_warp_noise_assessment_2026-11-06.md`. Output directory `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_supported94_warp_noise_analysis_affine_03_2026-11-06/`, summary SHA-256 `991274bb24525442b44d457540eaa7bd0b0e479f540b43e66d58cbd16d3fd031`. No GPU/Slurm, commit, or push.
+
+
+### 2026-11-06 continuation: 184-center warp-variance audit in consolidated evidence
+
+Extended `build_icl_wl_current_evidence_report.py` to hash-check and include the approved 94-pair warp-variance audit. The consolidated report now carries 23 pinned summaries, notes the four repeated-404 gaps and 9.26 GiB acquisition, and reports the 200–300 kpc variance ratio and block-bootstrap target/control comparisons. The report remains exploratory (`science_measurement=false`), read summaries only during this synthesis, and made no HSC request or image-pixel read. Report: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_17/icl_wl_current_evidence_report.md` (SHA-256 `5a5d074965d37cf360e42c7dbd984c38ce758663f0b6d15b8381b498ae1102ba`); summary SHA-256 `c6fe422210f825cc2171a85d8235507726a8d29c8a0fdcce06fdd21c4e3cbf64`; builder SHA-256 `c1ae82d3677ed77f84b3ae093b5e31b0973470f16bfae1d2a739ca9233fe6a75`. Next noise gate is kernel-aware warp-to-coadd resampling/covariance, followed by source-Poisson and PSF/sky-transfer checks. No commit or push.
+
+
+### 2026-11-06 continuation: strict warp-mask ICL association sensitivity
+
+Added and ran `analysis/icl_wgl_membership/hsc_debug/analyze_icl_supported94_warp_mask_association.py`. It verifies exact reconstruction of the prior target/control 200–300 kpc aperture flux and coverage, then recomputes the ICL aperture under the strict warp-valid mask while keeping the saved K=2.5 source masks and original 40% coverage floor. Of 90 pairs with both warp cutouts, 81 remain after strict-mask coverage (23 i, 58 i2). On those identical retained rows, partial r changes +0.0020 in i and −0.0048 in i2; spatial-block paired 95% intervals include zero in both filters. The 13-pair loss relative to the original 94 makes this a selected-subset sensitivity, not a parent-sample correction. `science_measurement=false`. Assessment `analysis/icl_wgl_membership/hsc_debug/icl_supported94_warp_mask_association_assessment_2026-11-06.md`; output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_supported94_warp_mask_association_2026-11-06_02/`, summary SHA-256 `f7d62ae88864157636d9d7be64ad09d4907060a2cefd7d9ce9b57faf09ef69ad`.
+
+### 2026-11-06 continuation: updated combined ICL/WL evidence report
+
+Extended the hash-validated report builder to include the strict warp-mask association sensitivity (24 component summaries total). Latest report `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_18/icl_wl_current_evidence_report.md` SHA-256 `8bdbcf46e018820fb3819372b69e71162b085fda3f1fef0cb8731093a14636fc`; summary SHA-256 `e76c2b88905ffd411c56b6b56e989e142ddf82d52b5ab3c732572f9e75d6aa22`; builder SHA-256 `8febd51821440a0dd5b8d4ab605fd640c63f8b7a059de4ce82209b80e8466a29`. The synthesis reads JSON only and does not access HSC or image pixels. No commit/push.
+
+
+### 2026-11-06: approved random-point variance export not submitted
+
+The user approved the exact HSC PDR3 random-point plan for the paired
+200–300 proper-kpc annuli at 1,598 target/control centers (16 SQL batches,
+estimated 46,424 rows/about 10 MB; plan SHA-256
+`eeef98ef2210337f714e36d8a4afcd352fe312a536c90e8e236ff9f843f53e52`). The
+scope is limited to 27 random-point, position, variance, sky, input-count, PSF,
+and mask columns; it excludes images, shape rows, photo-z, and object-catalog
+rows. The plan checker passed. Submission did not reach HSC: the hidden-
+credential execution session exited before a CAS job ID was recorded. The
+checkpoint remains pending with zero jobs, `query_submitted=false`, and
+`network_used=false`. The approval remains valid for this exact plan; no
+re-approval is needed. Results path:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_random_pixel_variance_results_2026-11-06_01/`.
+No query or download occurred; `science_measurement=false` remains. No commit
+or push.
+
+
+### 2026-11-06 continuation: 16-pixel ICL covariance sensitivity
+
+Added an Astrafek runner extending the 224 supported target/control pairs from
+±8 to ±16-pixel variance-normalized residual covariance. All 448 frames
+completed; the 129,472 lag cells overlapping the previous ±8 result are exactly
+identical. Contracting the 33×33 kernels with the exact saved 200–300 kpc
+annulus masks gives finite-lag stack sigma 0.06311 nJy arcsec⁻² in `i` and
+0.06290 in `i2`, versus 0.07931/0.07449 for 17×17. Paired 5° block-bootstrap
+5,000-replicate intervals for the sigma change are −21.3% to −19.1% (`i`) and
+−21.5% to −9.4% (`i2`). These conditional intervals do not include uncertainty
+in the lag estimates.
+
+The 16-pixel square-kernel sum is below one because negative long-lag shells
+dominate after affine-plane removal and separate per-lag patch medians; this
+assembled median kernel is not guaranteed positive-semidefinite. Treat the
+change as estimator sensitivity, not a physical noise correction. The finite-
+lag term is only 6.1%/5.9% of the saved spatial 95% interval half-width in
+`i`/`i2`. Profiles remain unchanged and `science_measurement=false`.
+Assessment `analysis/icl_wgl_membership/hsc_debug/icl_covariance_16px_aperture_assessment_2026-11-06.md`.
+Kernel, aperture, and block-bootstrap summaries are under `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_supported_covariance_to_16px_2026-11-06_01/`,
+`icl_aperture_covariance_200_300_16px_2026-11-06_01/`, and
+`icl_aperture_covariance_16px_block_bootstrap_2026-11-06_01/`. No HSC access,
+additional download, GPU, Slurm, commit, or push.
+
+
+### 2026-11-06 continuation: affine-plane covariance-null calibration
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_plane_subtraction_covariance_null.py`
+to quantify lag anticorrelation induced by the local residual-plane fit. For an
+unmasked, homoscedastic 64×64 white-noise patch, the exact OLS projection
+kernel yields square-lag sums 0.8087 at radius 8 and 0.3629 at radius 16. A
+100-realization simulation through the actual clipped estimator gives means
+0.848 and 0.358, consistent within its broad finite-simulation spread. The
+observed HSC target/control medians are 1.56–1.66 at radius 8 and 0.74–0.83 at
+radius 16. The ideal null confirms that plane removal creates negative tails,
+but its predicted 8-to-16 decrease is smaller than the observed ≈−0.8 shell;
+it does not explain the entire HSC result. Masks, heteroscedasticity, sky
+structure, source masking, and the per-lag median remain entangled. No ICL
+correction or science promotion follows; `science_measurement=false`.
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_plane_subtraction_covariance_null_assessment_2026-11-06.md`.
+Runner SHA-256 `150fedeb2a8e00ec011dea525f0bf3c71c31fe9d66f31dc1bc0463724f9a9aee`;
+summary SHA-256 `bf93d7c0b9189782c9a510cffee6964a45ab87b49bb7d5630ecc6822419b2760`.
+No HSC request or download.
+
+
+### 2026-11-06 continuation: same-visit split-stack covariance pilot
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_visit_split_covariance_pilot.py`
+and ran a target/control pilot for supported i2 cluster 101 using already
+downloaded warp cutouts. The same seven visit IDs are alternated into two
+inverse-variance half-stacks on the coadd grid. One expected visit has no valid
+pixels per center; usable split counts are 3/2 for the target and 4/2 for the
+control. Clean common support in 200–300 proper kpc is 67.5%/58.3%. Normalized
+split-difference RMS before plane fitting is 1.093/1.166, while the locally
+plane-fitted zero-lag covariance is 1.182 in each center. Cumulative symmetric
+lag sums through ±8 pixels are 0.948/1.187. This is one matched pair, and
+nearest-neighbor warp mapping does not reproduce HSC resampling covariance;
+residual sky/source variation and variance calibration remain unresolved. No
+correction or association claim follows; `science_measurement=false`. Assessment
+`analysis/icl_wgl_membership/hsc_debug/icl_visit_split_covariance_pilot_assessment_2026-11-06.md`;
+runner SHA-256 `1f28f66ed9477abbef03bb53188f0cb14cd9354498a94eaf43989802be68c929`;
+summary SHA-256 `09e557de604d4161cd0281065a59f32669744ab480b180029d192f79ba192359`.
+
+
+### 2026-11-06 continuation: supported-sample visit-split covariance
+
+Scaled the approved warp-split diagnostic to 90 complete supported pairs (24
+i, 66 i2; four center downloads were 404). The initial `_01` aggregate had a
+zero-support lag-cell issue and is superseded. Corrected `_02` requires valid
+data in all 289 lag cells for the ±8 sum; its common complete-case set is 21 i
+pairs and 64 i2 pairs. Within-filter four-metric max-T intervals do not resolve
+target/control differences in split RMS or ±8 covariance. The i2 zero-lag
+difference is +0.0060 with simultaneous 95% interval +0.0010 to +0.0110; clean
+annulus coverage differs by +0.074 (+0.006 to +0.141), so a small support/noise
+matching difference remains. Split-RMS medians are 1.082/1.082 in i and
+1.085/1.079 in i2 (target/control); these include sky/source residuals and are
+not a detector-noise calibration. Target/control visit-set Jaccard medians are
+0.80/0.845. Nearest-neighbor resampling remains approximate. No correction or
+science promotion; `science_measurement=false`. Assessment
+`analysis/icl_wgl_membership/hsc_debug/icl_visit_split_covariance_sample_assessment_2026-11-06.md`;
+sample summary SHA-256
+`82f7ebaa199dca4d278152969fe2a37bf5e8b4a3380bc999a74e6a276ef4f35c`;
+joint-bootstrap summary SHA-256
+`973d2def87d97e8c5ef5a1527ddd2e66a76fb8bdeb0dc52ac3c6e7fca0a68f26`.
+
+
+### 2026-11-06 continuation: white-noise propagation through split estimator
+
+Added `analysis/icl_wgl_membership/hsc_debug/simulate_icl_visit_split_covariance_null.py`
+and propagated 100 heteroscedastic white-noise realizations per center through
+the supported i2 cluster-101 target/control warp masks, exact visit split,
+nearest-neighbor map, weighted stacks, plane fit, clipping and lag estimator.
+The null gives raw normalized RMS ≈1.000, fitted zero-lag covariance ≈0.997,
+and ±8 cumulative kernel ≈0.715 at both centers. Observed split values are
+RMS 1.093/1.166, zero lag 1.182/1.181, and ±8 sum 0.948/1.187 (target/control),
+all above the corresponding Monte Carlo 16th–84th ranges. Plane removal
+accounts for a negative long-lag tail, but independent white noise and the
+supplied variance planes do not explain the observed residual covariance.
+Correlated warp noise, residual sky/source structure, and variance calibration
+remain confounded. No correction or science promotion; `science_measurement=false`.
+Assessment `analysis/icl_wgl_membership/hsc_debug/icl_visit_split_covariance_null_assessment_2026-11-06.md`;
+summary SHA-256 `d9dc7090b1cee14fdb88a020adc5164a6da610bcaa76d9d190142b8a2ad86890`.
+
+
+### 2026-11-06 continuation: annular coadd covariance comparison
+
+Compared the 94 supported same-filter target/control coadds in the 200–300
+proper-kpc ICL annulus and the 350–500 kpc outer ring. The estimator uses
+64×64 fully annular patches, existing target/control source masks, affine-plane
+removal, clipping, variance normalization, and ±8-pixel lag kernels. Five-degree
+paired sky-block bootstrap intervals for zero lag, cumulative lag sum, coverage,
+and radial difference-in-differences all include zero in both `i` and `i2`.
+Strict inner-annulus support is only 8 `i` and 16 `i2` pairs; this is
+underpowered and cannot establish equivalence or justify transferring the outer
+kernel inward. The outer ring may contain cluster-envelope light, not blank sky.
+No correction; `science_measurement=false`. Assessment
+`analysis/icl_wgl_membership/hsc_debug/icl_annular_coadd_covariance_assessment_2026-11-06.md`;
+runner SHA-256 `16ad75b7f9ac3f2e0cd2e1759a84037f4c9519307e982a03e32174526b80f7d3`;
+summary SHA-256 `c03b1c60fcc3415aee615c8685700b42633fa769df0ac4a8173013bafe2f93b0`;
+results `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annular_coadd_covariance_2026-11-06_01/`. No HSC request or image download occurred.
+
+The user reiterated download approval, but the only pinned outstanding HSC
+export is the already-approved random-point variance plan
+`eeef98ef2210337f714e36d8a4afcd352fe312a536c90e8e236ff9f843f53e52`. Its
+prior credential-gated session exited before a CAS job ID; checkpoint remains
+pending with zero jobs, `query_submitted=false`, and `network_used=false`. No
+new or duplicate request was submitted in this continuation.
+
+
+### 2026-11-06 continuation: familywise max-T audit of ICL–satellite–WL overlap
+
+Added and ran `analysis/icl_wgl_membership/hsc_debug/adjust_icl_satellite_wl_triple_overlap_max_t.py` on the saved 27-lens i2 common-support table. A restricted Webb six-point wild-cluster bootstrap with shared multipliers across 20 connected 5-degree sky blocks tested all 29 conditional associations together (10,000 valid replicates). The original WL-cross/satellite pointwise pattern at 0.4–0.7 Mpc has unadjusted wild-cluster p=0.043 but max-T p=0.672; the tangential 2–3 Mpc pattern has p=0.070 and adjusted p=0.923. No association survives familywise adjustment. All 29 partial-r point estimates match the source output exactly. This is a low-power selected-sample diagnostic, not evidence of absence or presence of a physical relation; `science_measurement=false`. Assessment `analysis/icl_wgl_membership/hsc_debug/icl_satellite_wl_triple_overlap_max_t_assessment_2026-11-06.md`; runner SHA-256 `162c90585875d0811f6921407c77ec72837f6ecfb5fd9e571bf2c5bbde5e156d`; summary SHA-256 `d5e2d3aa05be32b07be5fa62b8de467aea5314411daba49cb733444850126b0e`; output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_wl_triple_overlap_maxt_2026-11-06_01/`. The analysis used only saved data, with no HSC request or download.
+
+
+### 2026-11-06 continuation: consolidated evidence report and pending approved query
+
+Extended `analysis/icl_wgl_membership/hsc_debug/build_icl_wl_current_evidence_report.py` to hash-check and include the direct annular coadd covariance comparison and 29-way ICL–satellite–WL max-T analysis. Latest report is `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_19/icl_wl_current_evidence_report.md` (SHA-256 `5a4d2f7517e3fa78625c19ec96e51dbe8920c0b3c1bcf6ef3293edb6a7bf5426`); summary SHA-256 `ff2d720b09d6f0112670c956dad9053d440b02508f6ce2f4484d6a28b12d941f`; builder SHA-256 `af028a910fe9e5308d4b382029544f9968818e9dd77c97ca08ba1cbd3298418a`. It hash-pins 28 inputs and reads no image pixels or HSC endpoints.
+
+Rechecked the exact approved random-point variance export plan `eeef98ef2210337f714e36d8a4afcd352fe312a536c90e8e236ff9f843f53e52` and its checkpoint on LagEunha. Checkpoint remains `pending`, zero jobs, `query_submitted=false`, and `network_used=false`; no submitter process or `HSC_USER`/`HSC_PASSWORD` environment variables were present. No duplicate request or credential workaround was attempted.
+
+
+### 2026-11-06 continuation: i2 ICL–satellite–WL support selection audit
+
+Added and ran `analysis/icl_wgl_membership/hsc_debug/audit_icl_wl_overlap_selection.py` on the pinned 68-lens i2 ICL–satellite sample. WL eligibility falls through 60 matched-parent lenses, 35 with target shape rows, 31 with positive random counts, and 27 verified common-support lenses. These occupy 33 connected 5-degree blocks, but only nine blocks contain both selection groups; those mixed blocks have 10 selected and 16 excluded systems. The remaining 17 selected and 25 excluded systems lie in single-status blocks. Spatial positivity fails, so do not use IPW to transport the 27-lens relation to all 68. Within-block max-T balance finds no adjusted redshift/richness/ICL/satellite difference, but is low power with only nine mixed blocks. The target-pair count difference (median 4,342 vs 0) is expected from the shape-support eligibility rule. `science_measurement=false`. Assessment `analysis/icl_wgl_membership/hsc_debug/icl_wl_overlap_selection_i2_assessment_2026-11-06.md`; runner SHA-256 `b2d474d5ecc234e3b3fcb9bea21739f72af720d895d730017c1dfba111895a94`; summary SHA-256 `fef9cdbfdd595f770d1a1a933d29618443524896a318298266a6a1134cb92a98`; outputs `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_overlap_selection_i2_2026-11-06_03/`.
+
+Extended `build_icl_wl_current_evidence_report.py` to verify and include this selection audit alongside the annular covariance and familywise association audit. Latest report `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_20/icl_wl_current_evidence_report.md`, SHA-256 `dae6062a10ca70f0b2eeb6f2fdfbcae76e52665a1bf2ffac31eea9cfa9a7826a`; summary SHA-256 `c665590ba37c5ecbbd9ba08d291434d5f98fdc7d5d6dfd1d8c3fef5c4cea6c2a`; builder SHA-256 `507c0d07e6d545c5afe8f34f6f59d3ab5260129e94aadb2be7245017dd5bba80`. It pins 31 inputs and reads no image pixels or HSC endpoints.
+
+
+### 2026-11-06 continuation: i2 overlap selection and consolidated report
+
+Created and ran `analysis/icl_wgl_membership/hsc_debug/audit_icl_wl_overlap_selection.py` against the pinned ICL–satellite support and WL eligibility tables. The i2 sample falls from 68 ICL–satellite-supported systems to 27 with verified random-subtracted WL support (60 in matched parent, 35 with target shape rows, 31 with positive random counts, 27 common). The 68 systems occupy 33 connected 5-degree blocks, but only nine blocks contain both groups: 10 selected and 16 excluded lenses. The other 17 selected and 25 excluded lenses are in single-status blocks, so spatial positivity fails and IPW cannot transport the 27-lens result to the parent sample. A four-variable within-block max-T found no adjusted balance difference in redshift, richness, ICL, or satellite contrast; only nine mixed blocks make this low-power. Target shape-pair counts (median 4,342 vs 0) are a direct eligibility mechanism. `science_measurement=false`. Assessment `analysis/icl_wgl_membership/hsc_debug/icl_wl_overlap_selection_i2_assessment_2026-11-06.md`; runner SHA-256 `b2d474d5ecc234e3b3fcb9bea21739f72af720d895d730017c1dfba111895a94`; final result `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_overlap_selection_i2_2026-11-06_03/`; summary SHA-256 `fef9cdbfdd595f770d1a1a933d29618443524896a318298266a6a1134cb92a98`.
+
+Extended the consolidated report builder to hash-validate and include this selection audit alongside annular covariance and the 29-way max-T result. Latest report `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_20/icl_wl_current_evidence_report.md`; SHA-256 `dae6062a10ca70f0b2eeb6f2fdfbcae76e52665a1bf2ffac31eea9cfa9a7826a`; summary SHA-256 `c665590ba37c5ecbbd9ba08d291434d5f98fdc7d5d6dfd1d8c3fef5c4cea6c2a`; builder SHA-256 `507c0d07e6d545c5afe8f34f6f59d3ab5260129e94aadb2be7245017dd5bba80`. It pins 31 inputs and reads no image pixels or HSC endpoints.
+
+
+### 2026-11-06 continuation: approved CCD-frame metadata status and Lanczos-5 sensitivity
+
+The user approved the exact HSC CCD-frame metadata export plan SHA-256 `49aa4b7601dd42243209d7b3b394a4dd3b4cbf00d87d28cbb9467553c29f4ce3`. It was already complete before this approval reply: all 16 CAS batches returned 67,071 rows (12,196,059 CSV bytes) for 1,598 centers; the latest offline audit confirms all eight calibration columns have zero nulls, exact row totals, and no images, shape rows, photo-z, object catalog, credentials, or pixel coadd weights. No duplicate CAS submission or download was sent. This export is metadata only and does not set a pixel-noise correction; `science_measurement=false`.
+
+Ran `analysis/icl_wgl_membership/hsc_debug/analyze_icl_supported94_warp_noise_lanczos5.py` on the existing approved visit-warp downloads. It maps diagonal warp VARIANCE planes to coadd pixels with a secondary separable Lanczos-5 interpolation: 184/188 centers analyzed, four repeat HTTP 404 gaps. The 200–300 proper-kpc median coadd/prediction ratios are 1.00707/1.00760 in i target/control and 1.00639/1.00611 in i2. Paired target-control block intervals include zero in both filters. Relative to nearest-neighbor mapping, median center-level ratio changes are −0.000245 (i) and −0.000161 (i2); strict shared-mask coverage medians range from 69.0% to 71.9%. This does not model upstream CCD-to-warp covariance or reproduce exact coadd weights, clipping, and mask interpolation. No noise correction or science promotion; `science_measurement=false`.
+
+Assessment `analysis/icl_wgl_membership/hsc_debug/icl_supported94_warp_noise_lanczos5_assessment_2026-11-06.md`; result directory `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_supported94_warp_noise_lanczos5_2026-11-06_02/`; summary SHA-256 `16c8afbcc8287444860bacdcfd01038105bd51d5e82d61e44d8b82d8853e9f74`; table SHA-256 `a0322cc88e63768d172ccc8da52ce5148bef1a4407232b53e93e00bc9ae0f06f`; runner SHA-256 `0df14f6c6be1d858a38437c3ae7300adce81fba859047c8d29d8fe4d07232db9`.
+
+The consolidated report builder now hash-validates the Lanczos-5 summary and both per-center tables. Report `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_22/icl_wl_current_evidence_report.md`, SHA-256 `2ffcb4383e9923f4a904f4b6b684a5c9c03d3e3fc52d5bafe23c8e1f2b0a6389`; summary SHA-256 `51ac24ee822eedd5b8af107ef67ab9b3b893686d422a5604b59411c6482b40cf`; builder SHA-256 `cdd70be6227f272adefc1343c1c19c5d0911fb3f26718763fd3c7c8b0c57eaef`. The report reads no image pixels and makes no HSC requests. No tests, commit, or push were performed.
+
+
+### 2026-11-06 continuation: full-783 annular covariance scale sensitivity
+
+Expanded the existing delivered-coadd lag-covariance diagnostic to all 783
+same-filter target/control pairs. The 64×64-pixel run supports 17/302 `i` and
+48/481 `i2` complete pairs; none of three within-filter familywise intervals
+excludes zero, and support is strongly low-redshift selected. A 32×32 sensitivity
+with up to 64 patches, a minimum of 8 per center, 80% valid pixels, and ±8-pixel
+lags raises support to 215/302 `i` and 402/481 `i2`, but redshift SMD remains
+−0.65/−0.39. Familywise intervals show a positive `i` lag-sum difference and a
+small negative `i2` zero-lag difference; coverage differs in both filters.
+Because these results depend on patch scale and valid-mask support, and the lag
+sum may contain astrophysical residuals, they are delivered-coadd diagnostics,
+not pure detector-noise calibration. No correction; `science_measurement=false`.
+
+The 32×32 covariance output is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annular_coadd_covariance_full783_32px_2026-11-06_01/summary.json`
+(SHA-256 `6e9c786f10116de6973bdf70dda7c0d335d4cc71df717d5ab207d8d42ab25bd2`).
+The corrected support audit is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_annular_covariance_full783_32px_support_audit_2026-11-06_02/summary.json`
+(SHA-256 `8ad6bcba35b9ce9e7e87a014b97608b4f095b85cebab1e4639b76e0e0357343a`).
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_full783_annular_covariance_32px_assessment_2026-11-06.md`.
+The main summary's numeric patch-size field is 32; its descriptive label had a
+stale 64×64 literal. The runner and support auditor now render the description
+from the numeric configuration, and the corrected support audit records the
+actual 32×32 method. No raw inputs or covariance tables were changed.
+
+### 2026-11-06 continuation: approved random-point variance export is running
+
+The user reaffirmed approval for the exact existing random-point plan SHA-256
+`eeef98ef2210337f714e36d8a4afcd352fe312a536c90e8e236ff9f843f53e52`. Resumed
+its pinned Lageunha submitter with one hidden interactive credential prompt.
+The checkpoint now records submitted CAS job IDs and verified batches; credentials
+are not saved. At this handover update, 10/16 batches were complete and the
+next batch was running. Returned rows remain limited to the 1,598 approved
+centers and the 200–300 proper-kpc annulus, with random-point variance, local
+sky/input-count/PSF-moment and mask metadata. No coadd image pixels, shape rows,
+photo-z, or object-catalog rows are requested. The post-download integrity and
+paired-coverage audit must run after all 16 batches finish; no science correction
+or promotion follows from this export.
+
+
+### 2026-11-06 continuation: approved random-point variance export complete
+
+The user approved and the Lageunha submitter completed the exact HSC PDR3
+random-point plan SHA-256
+`eeef98ef2210337f714e36d8a4afcd352fe312a536c90e8e236ff9f843f53e52`.
+All 16 CAS batches returned 40,048 rows (11,138,863 CSV bytes). The query
+covered 1,598 target/control centers in the 200–300 proper-kpc annulus and
+returned points at 1,587 centers (791 targets, 796 controls). Credentials were
+not saved; the export contains no image, shape, photo-z, or object-catalog rows.
+The independent auditor verified every CSV hash, row schema, center identity,
+and radial boundary. Both ends have a valid random-point `i_pix_variance`
+summary in 787/798 matched pairs. Per-center counts are q16/median/q84 11/22/39.
+This remains sparse local variance/sky/PSF metadata, not a coadd weight map or
+full correlated-noise/source-Poisson model; no correction or science promotion.
+`science_measurement=false`.
+
+Assessment `analysis/icl_wgl_membership/hsc_debug/icl_random_pixel_variance_export_assessment_2026-11-06.md`;
+run results `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_random_pixel_variance_results_2026-11-06_01/`;
+independent audit `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_random_pixel_variance_audit_2026-11-06_01/`;
+audit summary SHA-256 `96245d565375635a994c93ec3294fc581d007161c4479232d5091bbd3cf52389`.
+
+The consolidated report was rebuilt after the variance export and full-783
+32-pixel sensitivity. Report:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_23/icl_wl_current_evidence_report.md`
+(SHA-256 `14ebf8e0965e12f9dfc5aabad4bc359d8e670428de2919c643ca3830f2d1936d`);
+summary SHA-256 `5fe134a256ea35e4a7780a796f9b6c38d6cc460432dcddad956c314b318a5cfc`;
+builder SHA-256 `adc7c9d3e86823720643644ea23fe332de32e2602062a3dd94aaa4d3ec08b87d`.
+It hash-pins 67 inputs, keeps `science_measurement=false`, and the report build
+itself made no network request or image-pixel read. Changes are uncommitted and
+unpushed.
+
+
+### 2026-11-06 continuation: random-point conditions in the ICL–satellite relation
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_random_point_variance_satellite_relation.py`.
+It joins the independently audited PDR3 random-point medians to the fixed
+94-pair support table (26 `i`, 68 `i2`) and tests target/control log ratios and
+pair-average logs for local pixel variance, sky RMS, input count, and PSF trace.
+Each term is added separately to the redshift/richness partial-correlation
+model. One shared max-T family covers all 16 comparisons across filters with
+5,000 connected 5-degree block resamples. The baseline r=0.079/0.293 (`i`/`i2`);
+`i2` adjustments range 0.260–0.295, all simultaneous change intervals include
+zero, and minimum adjusted p=0.951. This does not show that noise/selection has
+no effect: the 94-pair sample remains selected, `i` has only 26 pairs, and
+random-point median uncertainty is not propagated. No stack correction;
+`science_measurement=false`.
+
+Assessment `analysis/icl_wgl_membership/hsc_debug/icl_random_point_variance_satellite_relation_assessment_2026-11-06.md`;
+runner SHA-256 `738703bc9cadd561595440eaa9e395a783d1b67ffcabfb4c68e0515085a4b826`;
+summary `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_random_point_variance_satellite_relation_2026-11-06_01/summary.json`
+(SHA-256 `0c75520ad6b04dd500ba66ae10982e30d6fa9758379615a4372e7aa129569f0f`);
+joined table SHA-256 `e9d84e1ee6e78d483685893ade99849850019e1fd66713907b0a627d064207cf`.
+
+Rebuilt the consolidated report with hash verification for the completed
+random-point export and this 16-test sensitivity. Report
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_24/icl_wl_current_evidence_report.md`
+(SHA-256 `bb45e9d3ed817222debbe0d5aff2bad54582eb3b8d71b974234e58e933a0d122`);
+summary SHA-256 `87a7bed6f574ea12a1946f16d2b9da7654b258f02c310c1e532612cc30ddb78f`;
+builder SHA-256 `f79589e34c903152237ad04a7fb1607aa6001f819f93f3b24a3d14b54be07574`.
+The report pins 69 artifacts and remains exploratory with `science_measurement=false`.
+
+
+### 2026-11-06 continuation: HSC expansion-coverage query field audit
+
+Diagnosed a likely cause of the repeated HTTP 406 responses in the S20A/S23B
+coverage-metadata SQL: the query referenced `pdr3_wide.mosaic.band`, while the
+official HSC PDR3 mosaic example uses `filter01`. The CAS response body was
+suppressed, so this remains a likely cause rather than a confirmed server
+diagnosis. Updated both plan generation and submitter validation to select
+`m.filter01 AS band` and filter on `m.filter01 = 'HSC-I'`, preserving candidate
+IDs, probe coordinates, geometry, output fields, and data scope.
+
+The corrected S20A plan has 2,596 candidates, 23,364 probes, 52 SQL batches,
+and SHA-256 `96ad3b9078beff082d3dce4de1f9bb7608791915ffc7a46a656d9e6cf30e1149`.
+The corrected S23B plan has 1,333 candidates, 11,997 probes, 27 batches, and
+an upper estimate of 47,988 metadata rows; plan SHA-256
+`ee6d2b11893dab0e9ceb0c0d2a3c80c2dee27b600683839d2be294441578ef05`. Offline
+scope/hash checks pass for both; no HSC request was sent. The S23B plan remains
+approval-gated at that exact hash. These metadata-only requests exclude images,
+object/source rows, shape rows, and photo-z. Any later image acquisition needs
+its own reviewed scope and approval. Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_expansion_coverage_filter_column_assessment_2026-11-06.md`.
+`science_measurement=false` remains.
+
+## 2026-11-06 continuation: forced-profile coverage selection and ICL association
+
+Fixed `analyze_icl_satellite_forced_coverage_both_sides.py` so its selection
+ledger includes all 224 ICL-supported cluster/filter pairs, not only those with
+a forced-profile association row. The 20/20 coverage selection retains 50/71
+`i` and 110/153 `i2` pairs. Selected pairs have higher median ICL 200–300 kpc
+residual than excluded pairs (3.060 vs 1.116 nJy arcsec⁻² in `i`; 4.446 vs
+1.853 in `i2`), with similar median redshift and richness. This signals that
+coverage support is related to the ICL outcome and the selected subset cannot
+be treated as representative.
+
+In paired connected-5° block resampling, all intervals for the full-vs-detected
+partial-correlation changes include zero. For `i2`, adding the newly supported
+pairs shifts the point estimate by −0.164 (95% interval −0.339 to +0.012),
+while adding forced measurements within the detected common sample shifts it
+by −0.003 (−0.161 to +0.166). For `i`, those shifts are −0.007 (−0.396 to
++0.432) and −0.175 (−0.451 to +0.113), respectively. This remains a post-hoc
+coverage sensitivity with unconfirmed CAMIRA positions, not a full-sample
+correction or a science detection. Keep `science_measurement=false`.
+
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_satellite_forced_coverage_both_sides_assessment_2026-11-06.md`.
+Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_icl_satellite_forced_coverage_both_sides.py`.
+Machine output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_satellite_forced_coverage_both_sides_2026-11-06_03/`
+(summary SHA-256 `b8b79a65e1c838e757fc4ee6c1e1fdf61340d72e989bf035ab29bc0a7a6a314a`; runner SHA-256 `7e9ec1672e0ac000e5e28cf9810c9f98b1e538e60465664853b1dc9a0fe5609f`).
+The user reaffirmed approval for frame-metadata plan `49aa4b7601dd42243209d7b3b394a4dd3b4cbf00d87d28cbb9467553c29f4ce3`; it was already complete at all 16 batches / 67,071 rows, so no duplicate request was sent.
+
+### Latest consolidated ICL/WL report: forced-coverage selection included
+
+Rebuilt `build_icl_wl_current_evidence_report.py` to validate and include the
+20/20 target/control forced-profile sensitivity. The synthesis verifies the
+224-row ICL-supported comparison ledger, the 50/71 `i` and 110/153 `i2`
+support counts, all six paired intervals, and hashes for the summary, paired
+table, and six underlying inputs. The selected 20/20 pairs have higher median
+ICL residual than excluded pairs; the relation remains exploratory and
+`science_measurement=false`. The report builder reads saved summaries/tables
+only and made no HSC request or pixel read.
+
+Report: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_27/icl_wl_current_evidence_report.md`
+(SHA-256 `af88c214eadad945c5177e701f4d7496f95222b297ad84e0be2ba91f595f8b0f`);
+summary SHA-256 `42780af71c7392f90f80d53057a8efefe5f9062a84e8f08c595dbbc045eb89b5`;
+builder SHA-256 `6a253f424e4e3e3688bbc4698f73c2744a41a6c76413f092944b20d66e8f182a`.
+It pins 77 artifacts.
+
+### 2026-11-06 continuation: spatial support overlap in the 20/20 ICL selection
+
+Added `analysis/icl_wgl_membership/hsc_debug/audit_icl_forced_coverage_selection_blocks.py`
+to join the 224-pair 20/20 sensitivity to target/control coordinates and
+measure selected/excluded overlap in connected paired 5-degree sky blocks.
+Mixed blocks are 9/18 in `i` and 21/40 in `i2`; the equal-block selected-minus-
+excluded ICL residual mean is +1.80 nJy arcsec⁻² in `i` (95% block-bootstrap
+interval −3.26 to +6.66) and +3.73 in `i2` (+0.55 to +6.93). The `i2`
+difference remains positive within the observed mixed-block support. The `i`
+result is unresolved. This is descriptive, unadjusted for redshift/richness,
+post-hoc at the 20% threshold, and does not validate transport to blocks with
+only selected or only excluded pairs. No correction or science promotion;
+`science_measurement=false`.
+
+Assessment: `analysis/icl_wgl_membership/hsc_debug/icl_forced_coverage_spatial_selection_assessment_2026-11-06.md`;
+runner SHA-256 `35888cca6115619e77b23a465ce769aa61e6af495bdd4c6bacd45382a73d3ae8`;
+summary SHA-256 `3eb63f02507fa83cf1eea377ebc3574bd2b66e86f204bb76face995dcf5f5742`.
+The current 80-artifact integrated report is `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_28/icl_wl_current_evidence_report.md`
+(report SHA-256 `33e41f660a70d3a81114b11801b47793fbdad161b8087da87c3a2458d1417fc3`;
+summary SHA-256 `bc97fe8ba720c1edb90538d09cbdb918cfb9ac976f5b8cf8a4001a75028351f8`;
+builder SHA-256 `e3ade262b4f2b5cffd07deac2fc63645f186565af329d536df3e1579a5f05999`).
+All 80 input hashes and the report hash were independently checked. No HSC query
+or image read occurred.
+
+### 2026-11-06 continuation: covariate-adjusted support selection
+
+Added `analysis/icl_wgl_membership/hsc_debug/estimate_icl_forced_coverage_selection_adjusted.py`
+to estimate the selected-minus-excluded ICL residual only within mixed 5-degree
+blocks, with block fixed effects, redshift, and log richness. The pair-weighted
+contrasts are +1.47 nJy arcsec⁻² in `i` (9 blocks; 95% block-bootstrap interval
+−2.10 to +4.79) and +2.13 in `i2` (21 blocks; −0.64 to +5.91). Both intervals
+include zero; the unadjusted i2 contrast is attenuated after covariate control.
+The small mixed-block counts and single-status blocks preclude population
+transport. This is exploratory support diagnosis only; no correction or
+science promotion, `science_measurement=false`. Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_forced_coverage_adjusted_selection_assessment_2026-11-06.md`;
+runner SHA-256 `5f81094c8a8f4a0b37567a6c05cc9e2b482fcd786588a308ae734b3bb2530cf0`;
+summary SHA-256 `7e3c57cbd95b32986a7f52b707429f682a6d4e358e12724f9866f14f69b6f07c`.
+
+Integrated report version 29: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_29/icl_wl_current_evidence_report.md`
+(report SHA-256 `8350d58462b4eabd228920d970de9852d5b66272e58b629a52577a280dff8d10`;
+summary SHA-256 `a3bc38d6191c84c99d58d9391285903670e7b5723674ddfc9627fa74287031a1`;
+builder SHA-256 `1968cf3bad3f932d2238601bae668b6fb3833386de76410ecf17848a5720c36e`).
+All 82 input hashes and report hash verified. Report build made no HSC request or
+image-pixel read.
+
+### Forced unmatched-position radial sensitivity (2026-11-06)
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_icl_forced_position_radial_relations.py`
+and the assessment
+`analysis/icl_wgl_membership/hsc_debug/icl_forced_position_radial_relations_assessment_2026-11-06.md`.
+It finds no familywise-resolved relation among the nine supported radial tests;
+the smallest max-T p is 0.059 (i, 50–75 kpc). Forced positions have no unique
+SEP identity, so the measurement is unmatched-position light rather than
+confirmed satellite light. The result is selected and omits measurement,
+noise, PSF, and sky-transfer uncertainty; `science_measurement=false`.
+
+An attempt to retrieve the separately approved S23B coverage metadata was
+rejected by HSC CAS with HTTP 401 before the first job was created. The exact
+approved plan hash was `ee6d2b11893dab0e9ceb0c0d2a3c80c2dee27b600683839d2be294441578ef05`.
+No metadata rows were returned, and credentials were not persisted.
+
+Integrated report version 30 is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_30/icl_wl_current_evidence_report.md`
+(SHA-256 `62a41b863e1ee2d2150c8647829626972fb3a99d5b123cd993289cc130a65515`;
+91 validated inputs; `science_measurement=false`). It includes the forced
+unmatched-position radial sensitivity and pins the S23B HTTP 401 attempt audit.
+Its summary and all input hashes were independently checked.
+
+### S23B HSC-I metadata coverage screen
+
+The exact previously approved scope completed: 1,333 S23B candidates,
+11,997 center/eight-boundary probes, 14 metadata columns, 27 batches, 13,575
+result rows. The CAS route and SQL geometry were corrected to the established
+`hsc-release.mtk.nao.ac.jp` endpoint and `mosaic.areacube` operator. Independent
+Astrafek audit: 1,048 centers matched; 1,043 candidates match all nine points
+and carry image/background-product metadata flags at each point. This is not
+image-level WCS/mask validation or matched-control validation; no images or
+source/shape/photo-z rows were downloaded. Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_s23b_coverage_metadata_assessment_2026-11-06.md`.
+
+Integrated evidence report version 31 is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_31/icl_wl_current_evidence_report.md`
+(SHA-256 `3d6aebd01cb2727ca21d2617ef2de1fd17a85c526199315510710f167a1acf15`,
+124 verified inputs). `science_measurement=false`.
+
+### 2026-11-06 S23B matched-control candidate gate
+
+The HSC-I footprint metadata audit identified 1,043 S23B CAMIRA candidates with
+metadata matches at the center and all eight 1-Mpc probes. To test whether these
+candidates can be paired with usable controls, Astrafek prepared an offline
+PDR3 random-position query plan: up to 200 points per candidate within 30′,
+29 position/ID and scalar I-band QA/depth columns, maximum 208,600 rows, 105
+SQL batches, estimated 80 MB. It requests no images, detected-source rows,
+shapes, or photo-z. The plan generator is
+`analysis/icl_wgl_membership/hsc_debug/prepare_s23b_icl_control_candidate_plan.py`;
+plan directory is `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_candidate_plan_2026-11-06_01/`;
+plan SHA-256 is `143a1bd0a3a3c341576ce420f77ba0089fbfe80fdf58fbfd7afe30ea8e3f6714`.
+All 105 batch SQL hashes were checked locally. The corresponding submitter is
+`analysis/icl_wgl_membership/hsc_debug/submit_s23b_icl_control_candidates.py`;
+its `--check` mode passed without network, while `--submit` requires the exact
+approved SHA-256 and validates returned rows. No CAS query was submitted; this
+new metadata scope awaits explicit user approval. Any later HSC image retrieval
+requires its own specific approval. The data will support candidate matching,
+not a science measurement by themselves; keep `science_measurement=false`.
+
+### 2026-11-06 radial profile contrast
+
+Astrafek added
+`analysis/icl_wgl_membership/hsc_debug/analyze_icl_radial_outer_baseline_contrast.py`
+and ran it against the saved full-sample profile archives. The six-annulus
+50–500 proper-kpc complete-case sample contains 20 `i` pairs/10 connected
+5-degree blocks and 48 `i2` pairs/30 blocks. The 200–300 kpc target-minus-control
+surface brightness exceeds the area-weighted 300–500 kpc profile by 2.780
+nJy arcsec⁻² in raw `i` (95% block interval 0.825–5.115) and 2.494 after
+outer-plane correction (0.640–4.774). The `i2` contrasts are 2.359
+(−0.110–4.219) and 2.159 (−0.296–4.047). Intervals come from 20,000 connected
+paired-sky block resamples. The outer profile can include real cluster light.
+The result is a relative radial contrast, not a pure ICL measurement. Sample
+selection, source-Poisson, exact coadd covariance, upstream sky transfer, and
+extended PSF wings remain unresolved. Assessment:
+`analysis/icl_wgl_membership/hsc_debug/icl_radial_outer_baseline_contrast_assessment_2026-11-06.md`.
+
+Integrated report version 32 includes 933 hash-verified inputs at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_32/icl_wl_current_evidence_report.md`
+(SHA-256 `6a76bec4c8549d7cd887a5d2b115a3559d1ec8e03e10b719391813ebde83d06a`).
+All input hashes were independently checked. No HSC request or image-pixel
+read occurred. `science_measurement=false`.
+
+### 2026-11-06 ICL–satellite outer-profile relation
+
+`analyze_icl_satellite_outer_profile_relation.py` joins the existing ICL radial
+contrast with the detected-member satellite-centered 50–75 proper-kpc
+target-minus-control profile, adjusting for redshift and log richness. The
+partial correlations are −0.140/−0.126 in `i` (20 pairs/10 connected 5°
+blocks) and +0.417/+0.391 in `i2` (47/30). All four 95% block-bootstrap
+intervals include zero. One i2 pair without supported satellite profile stays
+missing. This remains exploratory: the satellite sample is detection- and
+coverage-selected, and measurement/source-Poisson/coadd covariance/sky-transfer/
+PSF-wing uncertainty is not propagated. Report:
+`analysis/icl_wgl_membership/hsc_debug/icl_satellite_outer_profile_relation_assessment_2026-11-06.md`.
+
+The integrated evidence report was rebuilt as version 33 with this relation and
+940 hash-verified inputs:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_wl_current_evidence_2026-11-06_33/icl_wl_current_evidence_report.md`
+(SHA-256 `1ef9acc5bff699fed8e1d75131192cc03e88d48832e8ea485918b70c94832742`).
+An independent pass verified all 940 input hashes. `science_measurement=false`.
+
+The approved S23B random-control-candidate metadata plan
+(`143a1bd0a3a3c341576ce420f77ba0089fbfe80fdf58fbfd7afe30ea8e3f6714`)
+was submitted from LagEunha after the user's approval on 2026-11-06. It is a
+maximum of 208,600 random-position rows across 1,043 candidate centers, with
+29 position/ID and I-band QA/depth fields in 105 batches (estimated 80 MB).
+Images, source detections, shapes, and photo-z are excluded. Batches 000 and
+001 returned and passed validation with 2,000 rows each; batch 002 was running
+at the latest checkpoint. Resume
+only the existing checkpoint in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_candidate_results_2026-11-06_01/`;
+do not resubmit completed batches. The interactive HSC password is not saved.
+Image retrieval remains a separate approval scope.
+
+Follow-up check (2026-11-07): live session 3123 remains active. The checkpoint
+now records batches 000–061 complete and verified (124,000 rows); batch 062 is
+submitted. `credentials_saved`, `images_returned`, `source_detections_returned`,
+`shape_rows_returned`, `photoz_rows_returned`, and `science_measurement` remain
+false. Continue polling the same session and checkpoint; do not restart it or
+request credentials again while it is live. The export is limited to the
+approved random-position and scalar I-band QA/depth metadata plan; image
+retrieval remains a separate approval scope.
+
+The local-only postprocessor `analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_random_control_candidates.py`
+is now prepared for the completed export. It verifies the approved batch hashes,
+screens depth/seeing/SFD extinction and CAMIRA cluster contamination, and emits
+only provisional one-per-target control candidates. Full cutout validation and
+any subsequent image retrieval remain outstanding.
+
+### S23B target image receipt (2026-11-07)
+
+The user approved image receipt. `prepare_s23b_icl_target_image_manifest.py`
+prepared the exact target scope from the 1,043 nine-probe-complete S23B CAMIRA
+centers: HSC PDR3 `pdr3_wide`, HSC-I-family `coadd/bg`, IMAGE/MASK/VARIANCE,
+1,000 proper-kpc half-width. The target manifest SHA-256 is
+`e487582ba40cd3e58da67704242db4d7219e381fb08f4b33fed47ce4ff268b44`; estimated
+payload is 58,311,064,944 bytes (54.31 GiB), with 75,804,384,428 bytes of
+30%-margin free space required. The existing `download_pilot.py` now accepts
+up to 5,000 frames for this expansion while retaining its per-file cap,
+streaming validation, exclusive output, and resume checkpoint behavior.
+
+Download session 5633 is active at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_target_image_plan_2026-11-07_01/target_download_01/`.
+At the latest checkpoint, 121/1,043 FITS files (6,826,320,000 bytes) passed
+FITS/HDU/WCS validation. `credentials_saved=false`, `science_measurement=false`.
+The separate S23B random-control metadata session 3123 is also active: 80/105
+batches and 160,000 rows verified; batch 080 submitted. No control images are
+included yet; they will be selected from the approved random-point metadata.
+
+`analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_target_images.py` is
+prepared for after the transfer. It independently rechecks each FITS checksum,
+IMAGE/MASK/VARIANCE planes, HSC-I filter, WCS alignment, and requested footprint
+before any stack is attempted.
+
+Live checkpoint follow-up (2026-11-07): approved target download session 5633
+remains active and has validated 373/1,043 images (21,290,526,720 bytes).
+Random-control metadata session 3123 has now completed all 105 batches; its
+final audit and separate control-image plan are recorded below. The completed
+query confirms no saved credentials, images, detected-source rows, shapes, or
+photo-z, and `science_measurement=false`.
+
+S23B random-control metadata completed in session 3123 on 2026-11-07: all 105
+batches and 208,600 rows passed the submitter's hash/schema checks. The local
+audit `audit_s23b_icl_random_control_candidates.py` then verified the batches,
+catalogue and SFD input hashes, metadata QA/matching, and cluster exclusions.
+At the 1 proper-Mpc CAMIRA exclusion, it produced 1,041 provisional
+non-overlapping controls for 1,041 of the 1,043 targets; the 0.5/2-Mpc
+sensitivity yields 1,041/1,037 controls. There are 164,984 unique random
+positions, 148,682 center-QA passes, and 132,886 metadata matches. Audit output
+is at `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_control_candidate_audit_2026-11-07_01/`;
+`candidate_audit.csv` SHA-256 is
+`ac9cb72ca769b19ace23e2b90de3f6dd5676c9f3813a525e8f8319f6fae6cb14` and
+`provisional_controls.csv` SHA-256 is
+`6a9d80db375f5a1266ab386a618849bebfe66f8723ddca5e693142526210ee78`.
+The 1-Mpc control image manifest was prepared locally at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_image_plan_2026-11-07_01/`;
+SHA-256 `4e182a3160055f1dfec4171035bceb1f4a8b574d10f0b12660f67a39dd037c35`.
+It specifies 1,041 HSC PDR3 `pdr3_wide` HSC-I `coadd/bg` IMAGE/MASK/VARIANCE
+cutouts, each 1,000 proper-kpc half-width. Maximum estimated payload is
+58,209,418,068 bytes (54.21 GiB); 30%-margin free-space requirement is
+75,672,243,489 bytes. The user approved this separate control-image scope.
+Session 81219 stopped after 14/1,041 FITS files (876,274,560 bytes) passed
+validation. The HSC cutout API returned HTTP 404 at control `CTRL_S23B_456`,
+random-table ID `42740933254447653`, RA 8.823223439694, Dec 2.837294350839,
+tract 9718/patch 507. No partial file remains. The first non-TTY attempt
+stopped at getpass before network access; `--resume` under TTY used the same
+checkpoint. Credentials are not saved.
+
+The offline replan script
+`analysis/icl_wgl_membership/hsc_debug/replan_s23b_icl_control_manifest_after_404.py`
+prepared v2 while preserving the 1,041-control scope and the other 1,040
+positions. For `S23B_456`, it selected the next-ranked metadata-matched,
+1-Mpc CAMIRA-clean, globally non-overlapping point: random ID
+`42740795815504337`, RA 8.842668812326, Dec 2.786488591937, tract 9718/patch
+407. This changes only that cluster entry. V2 manifest SHA-256 is
+`ae9eb406cfc179d9980031bb67f85f8ee71c4580ba59e97713278823db5c06df`; the
+58,209,418,068-byte estimate (54.21 GiB) and 75,672,243,489-byte 30%-margin
+space requirement are unchanged. The user approved this exact v2 hash. The v1
+14-file failure checkpoint is preserved as
+`download_status_v1_404_checkpoint.json`; the resume checkpoint now records the
+approved v2 hash. The 14 existing FITS files match unchanged v2 rows and were
+revalidated on resume. Control-download session 56526 is active; 86/1,041
+files (5,233,340,160 bytes) passed validation at the latest checkpoint,
+including the replacement position. Credentials are not saved.
+
+Approved target download session 5633 remains active with 850/1,043 target
+images (47,507,889,600 bytes) validated at the latest checkpoint. The partial
+sample currently contains 685 coadds with header filter `i2` and 165 with `i`;
+this split is provisional until all images arrive.
+The latest `/gpfs` capacity check reports 157,141,126,086,656 bytes available,
+above the approved target and control-plan 30%-margin requirements.
+Prepared `analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_control_images.py`
+for an independent post-download checksum/FITS/HDU/filter/WCS and target-pair
+audit. It pins the approved v2 manifest and requires all 1,041 images; it has
+not run on the partial transfer. The legacy 2D stacker is specific to the
+previous 800-target/798-control sample, so the S23B files will not be passed to
+it as though they were that sample. Both image audits and the centering/member
+catalog gates remain prerequisites for a scientific ICL–satellite result.
+Centering note: the S23B method paper says a bright galaxy is selected as the
+BCG and richness/redshift are recomputed around it, while the released seven-
+column cluster table labels its fields only as RA and Dec. The available
+catalog does not provide a separate BCG coordinate pair. Thus the earlier v1
+manifest phrase “not a BCG centroid” is not independently established; read it
+as “not yet verified against a separate BCG position.” The approved manifest
+and download coordinates remain unchanged. The manifest generator now uses
+this more cautious wording for future plans. Sources:
+https://arxiv.org/abs/2512.13954 and
+https://github.com/oguri/cluster_catalogs/tree/main/hsc_s23b_camira.
+
+Local S23B CAMIRA catalog check: `catalogue_s23b_camira_2026-10-20_01/camira_s23b_wide_sm.tbl`
+is 827,339 bytes with 12,162 data rows (SHA-256
+`5af057028feab7976cd3ed389a7246cbe73add8bbb96891101f0f692b1de4d71`). Its
+published columns are cluster ID/name, RA/Dec, photometric redshift, richness,
+and BCG spectroscopic redshift; it contains no member positions or membership
+rows. The S23B image expansion therefore cannot measure the satellite-light
+relation on its own. Obtain and validate member/source membership data, and
+verify the ICL center definition against a BCG center before interpreting a
+satellite association. No such data were requested in the approved image scope.
+The reproducible local audit is
+`analysis/icl_wgl_membership/hsc_debug/audit_s23b_camira_catalog_content.py`
+(SHA-256 `8bbf3c4ea8de9df9902528c4cada49ff6dbcfea9d0bd6507a60c2f7b0bd631ad`);
+it verified 12,162 well-formed seven-field rows against the pinned file hash.
+Summary: `/gpfs/kjhan/Astrafek/data/s23b_camira_catalog_content_audit_2026-11-07_01/summary.json`
+(SHA-256 `28f7836a0520f6b59a32241531a8e3ce5fc2e0bb7b71248dfad05f8870743ac8`).
+The public `oguri/cluster_catalogs` S23B directory lists the cluster
+catalog files and points separately to photometric LRG catalogs; it does not
+list a CAMIRA member table. See
+https://github.com/oguri/cluster_catalogs/tree/main/hsc_s23b_camira.
+The associated paper reports more than 600,000 probable CAMIRA member galaxies,
+but describes its photometric LRG catalog as independently constructed rather
+than the CAMIRA member list; the public GitHub directory does not identify a
+downloadable member table. Track the membership source as unresolved and do not
+substitute the LRG catalog as confirmed cluster members. Paper:
+https://arxiv.org/abs/2512.13954.
+
+## 2026-11-07 S23B image transfer and pixel-support checkpoint
+
+The approved target transfer completed: all 1,043 S23B CAMIRA HSC PDR3
+`pdr3_wide` HSC-I `coadd/bg` IMAGE/MASK/VARIANCE FITS files are present. The
+target manifest SHA-256 is
+`e487582ba40cd3e58da67704242db4d7219e381fb08f4b33fed47ce4ff268b44`; total
+file size is 58,373,470,080 bytes. Independent local checksum/FITS/HDU/filter/
+WCS audit verified 1,043/1,043 frames (header filter `i`: 251; `i2`: 792).
+Audit summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_target_image_audit_2026-11-07_01/summary.json`
+(SHA-256 `8580d64ba76e1c1f64331f7ce29b8d6f9dde4b56914b699e9e09e57f339e4b25`).
+The audit confirms file integrity, layout, filter evidence, and WCS only; it
+does not certify pixel usability. `science_measurement=false` and
+`images_ready_for_stacking=false` remain in force.
+
+Automatic source-mask and radial-area preparation is running at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_mask_support_2026-11-07_01/target/`.
+Its 90-frame checkpoint has 89 successes and one failure (`S23B_10647`, “Too
+few valid pixels”). A separate pixel diagnostic found zero unflagged pixels:
+all 4,420,504 pixels carry both `MP_INTRP` and `MP_NO_DATA`; this frame must be
+excluded from any stack. The preparation is support-only and does not approve
+an ICL measurement. Do not rerun into the existing output directory; inspect
+its final summary after the current run finishes.
+
+The separately approved control-image v2 transfer is still running from its
+existing resume checkpoint. At this checkpoint it has 308/1,041 files; the
+approved manifest SHA-256 is
+`ae9eb406cfc179d9980031bb67f85f8ee71c4580ba59e97713278823db5c06df`. Status is
+at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_image_plan_2026-11-07_01/control_download_01/download_status.json`.
+No credentials are saved. Do not start the target-control stack until the
+control transfer and its independent audit finish and filter/usable-area
+matching is reviewed.
+
+For satellite positions, the one-file member-catalog intake plan remains
+separate from the image approval. Plan SHA-256:
+`724860324ee069e1b07c1e324ca48c14fde9c6278343b4f645044c002e4eeb56`;
+the candidate is `camira_s23b_wide_sm_member.dat.gz` (10,626,590 bytes; Drive
+ID `1DEnjGj9P1ilUooEm2U5_A-qXUrxeiJdE`). Download approval is pending. External
+sharing visibility and file contents remain unverified; do not download until
+the user explicitly approves this exact file. No ICL–satellite science stack
+has been produced from the S23B sample.
+
+Follow-up checkpoint on 2026-11-07: target mask/area preparation reached
+430/1,043 frames (427 successful, 3 excluded for zero usable pixels):
+`S23B_10647`, `S23B_11786`, and `S23B_432`. Pixel checks for all three show
+every pixel flagged `MP_INTRP` and `MP_NO_DATA`; each has zero unflagged,
+finite, positive-variance pixels. The reproducible audit is
+`analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_zero_support_frames.py`;
+its output is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_zero_support_audit_2026-11-07_01/summary.json`
+(SHA-256 `ffa87816d6b92da75ded4fb4ef79628e50661d7fa03a60c53b6f43a62da3bbd5`).
+The approved control download reached 376/1,041 files with no transfer error;
+keep using its existing v2 resume session and checkpoint.
+
+The target mask/area run has now finished with `partial` status: 1,039/1,043
+frames processed, and the four failed IDs are exactly the zero-pixel frames
+listed above. Post-exclusion header-filter counts are 251 `i` and 788 `i2`.
+The descriptive support assessment is
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_mask_support_assessment_2026-11-07_01/summary.json`
+(SHA-256 `c140d6e02862b6d7654494a9c243eba5e664fb04234d25d5ae3e18e2ecb27c47`).
+Filter-separated diagnostic figure:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_mask_support_assessment_2026-11-07_01/radial_unmasked_area_by_filter_v4.png`.
+For K=2.5, median unmasked annular area fractions are 0.350 at 50–100 kpc and
+0.417–0.423 across 200–500 kpc; 144/1,039 frames have zero support at
+50–100 kpc, while 331/1,039 reach at least 50% there. The center pixel is in a
+base quality mask in 446 frames and in the K=2.5 automatic source mask in 824.
+These are support diagnostics, not adopted cuts; no frame-selection threshold
+has been applied. The output remains `science_measurement=false` and
+`images_ready_for_stacking=false`. Control-image v2 transfer has reached
+533/1,041 files at the latest check, with no transfer error.
+
+Latest control-transfer checkpoint on 2026-11-07: 567/1,041 files, status
+`downloading`, no error, and the checkpoint still pins approved v2 manifest
+SHA-256 `ae9eb406cfc179d9980031bb67f85f8ee71c4580ba59e97713278823db5c06df`.
+
+Later on 2026-11-07 the approved v2 transfer reached 627/1,041 and stopped at
+`CTRL_S23B_8547` with `HSC mask-plane mapping differs from the reviewed probe`.
+The complete response remains at
+`.../control_download_01/images/cluster_CTRL_S23B_8547.fits.part` (66,349,440
+bytes). Its FITS layout, image shape (2335×2367), and HSC-I filter are readable.
+The named mask planes are the established map except that `MP_NOT_DEBLENDED`
+and `MP_UNMASKEDNAN` are interchanged between bit positions 11 and 12. The
+other 627 control headers and all 1,043 target headers use the original map.
+HSC's pipeline workshop explicitly says the bit/event correspondence can vary
+and to consult the MASK header; see
+https://hsc.mtk.nao.ac.jp/pipedoc/DataWorkshop2022/_downloads/2682edf0a494c8b005acf4efa51952ae/hsc_kaiseki_20221128.pdf
+(section “マスクとフラッグ”). Accordingly, `download_pilot.py` now validates
+all 17 known named planes and a unique 0–16 bit assignment; mask preparation
+and control stacking derive bit selections from each image's own header. The approved v2 manifest
+and 1,041-control scope are unchanged. Its original resume checkpoint is being
+revalidated before the remaining files are fetched; no new catalog rows or
+coordinates have been added. The S23B-specific exploratory stack driver is
+`analysis/icl_wgl_membership/hsc_debug/stack_s23b_icl_target_control_2d.py`;
+it pins both manifests and independent audits, excludes exactly the four
+zero-support target frames, reports `i`/`i2` separately, and keeps
+`science_measurement=false`. It must wait for the resumed transfer and its
+independent audit.
+
+The exact v2 resume then recovered `CTRL_S23B_8547` from the saved response
+using its header-declared mask map and continued the approved transfer. Latest
+live checkpoint: 734/1,041, status `downloading`, no error, manifest SHA still
+`ae9eb406cfc179d9980031bb67f85f8ee71c4580ba59e97713278823db5c06df`; process
+is running in the existing LagEunha session. No new HSC files outside the
+approved manifest were requested. Two pre-stack artifacts are now prepared:
+`analysis/icl_wgl_membership/hsc_debug/prepare_full_cluster_mask_support.py`
+accepts the pinned 1,041-control download plus audit, and
+`analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_pair_common_support.py`
+will compare warped target/control/common mask area without reading science
+image pixels. The flux stack driver now requires that support audit and a
+complete control-mask preparation, and it excludes any pair with zero common
+mask support inside 1,000 proper kpc. These audits and the stack remain unrun
+until the transfer finishes.
+
+## 2026-11-07 S23B approved control download, paired support, and exploratory stack
+
+The exact approved v2 control download completed on LagEunha: 1,041/1,041
+HSC PDR3 `pdr3_wide` HSC-I `coadd/bg` IMAGE/MASK/VARIANCE cutouts;
+58,271,158,080 bytes; zero failed or partial files. Manifest SHA-256 remains
+`ae9eb406cfc179d9980031bb67f85f8ee71c4580ba59e97713278823db5c06df`. The
+independent checksum/FITS/HDU/filter/WCS audit verified all 1,041 frames and
+found 248 `i` and 793 `i2` headers. Audit summary:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_image_audit_2026-11-07_01/summary.json`.
+
+One valid control MASK header interchanges `MP_NOT_DEBLENDED` and
+`MP_UNMASKEDNAN` between bits 11 and 12; the remaining 1,040 controls and all
+1,043 targets use the other mapping. The complete header mapping is stored per
+downloaded frame and all source-mask/quality-mask logic uses each image's own
+header. HSC pipeline documentation says to read MASK-header bit/event
+correspondence:
+https://hsc.mtk.nao.ac.jp/pipedoc/DataWorkshop2022/_downloads/2682edf0a494c8b005acf4efa51952ae/hsc_kaiseki_20221128.pdf.
+
+CPU-only control mask preparation completed for 1,041/1,041 frames with zero
+errors at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_mask_support_2026-11-07_01/control/`.
+The mask-only paired support audit completed at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_pair_common_support_2026-11-07_02/`.
+Its summary SHA-256 is
+`376d9c076a54166bf8bc0f30f1cdb26ce65be9c2c43743bf5b60d0367867f91c`.
+It reports 1,022 common-filter pairs (`i`: 241; `i2`: 781), 17 filter
+mismatches, two controls paired to zero-support targets, two other targets
+without matched controls (`S23B_10647`, `S23B_8226`), and no pair with zero
+common mask pixels across 0–1,000 proper kpc. This audit reads WCS and prepared
+masks only; no science-image pixels or flux were read. Its first output version
+omitted per-pair mask paths and could not pass the stacker's provenance join;
+version 02 adds those paths, reproduces the same counts, and is the version
+used by the stack.
+
+Coverage is a significant limitation. In the innermost 0–25 kpc annulus, only
+56/241 `i` and 195/781 `i2` pairs have any common support; median common area
+is zero. For 0–50 kpc, median common area is 0.7% (`i`) and 1.3% (`i2`). In
+50–100 kpc the medians are 13.1% and 18.5%; across 300–800 kpc they are 11.1%
+and 16.5%. The share of pairs with any annular support reaches 90% only at
+about 175 kpc in `i` and 150 kpc in `i2`. No coverage threshold was selected
+after viewing the data.
+
+The S23B exploratory flux stack completed at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_target_control_stack_2026-11-07_01/`.
+It stacks 1,022 pairs on a 401×401 grid spanning ±1,000 proper kpc at 5 kpc
+spacing and reports `i` and `i2` separately. The output summary SHA-256 is
+`c8bac8dbdd0a886604c216b2410725eb97883b0cdc1a91fd47e7a7cfcaaaa20b`; both
+FITS maps pass their stored SHA-256 and FITS-checksum checks. Maps have median
+per-pixel pair counts of 30 (`i`) and 134 (`i2`), maxima 59 and 214. The
+descriptive equal-pair target-minus-control profile is positive at 50–300 kpc
+and trends toward zero outside 300 kpc. For example, 50–100 kpc is
+30.7±3.1 nJy arcsec⁻² in `i` (189 pairs) and 37.3±2.0 in `i2` (633 pairs);
+100–300 kpc is 4.47±1.14 and 4.77±0.95, respectively. These are between-pair
+SEM only, not full uncertainties. Central values have sparse support and are
+dominated by compact central light.
+
+Quality assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_icl_stack_quality_assessment_2026-11-07.md`.
+Diagnostic plot:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_stack_quality_assessment_2026-11-07_01/stack_quality_diagnostic.png`.
+The stack is useful for pipeline validation and as a candidate 50–300-kpc
+diffuse-light signal only. It is not a science result: Galactic extinction,
+PSF-wing matching, residual-sky transfer, coadd covariance, spatial jackknife,
+and manual BCG/mask review remain. `science_measurement=false` and
+`images_ready_for_science=false` remain in the stack and both FITS products.
+No commit or push has been made.
+
+## 2026-11-07 S23B exploratory ICL spatial-block uncertainty
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_spatial_blocks.py`
+to estimate spatially clustered uncertainty from the saved pair-level profiles.
+It verifies the pinned target/control manifests and completed stack, reads no
+image pixels, and makes no HSC request. It resamples connected RA-Dec cells at
+2.5, 5, and 10 degrees with two half-cell phases; these approximate blocks are
+not official HSC field polygons.
+
+The 5-degree baseline gives 50–100 proper-kpc target-minus-control excesses of
+30.68 nJy arcsec⁻² (`i`, 189 supported pairs/25 blocks; 95% block interval
+25.39–35.29) and 37.26 (`i2`, 633/38; 33.81–40.45). For 100–300 kpc the
+corresponding means are 4.47 (`i`, 232/26; 1.31–6.83) and 4.77 (`i2`, 756/39;
+3.58–6.17). All six width/phase layouts keep both 50–100 and 100–300 kpc
+intervals above zero. At 300–800 kpc intervals include zero; the 800–1,000 kpc
+`i2` residual changes zero-crossing with block layout. This is a spatial
+resampling sensitivity, not a calibrated survey covariance or ICL detection.
+
+Assessment and plot:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_spatial_blocks_2026-11-07_02/assessment.md`
+and `s23b_icl_spatial_block_uncertainty.png`. Summary SHA-256:
+`423bb5e3ad52f3b349dedc74b00a2c05ebb4589e20402abb68b4e99d17199afc`.
+The stack remains `science_measurement=false`; residual sky, Galactic
+extinction, PSF wings, coadd-pixel covariance, and manual center/mask review
+remain open. Satellite association still requires the separate CAMIRA member
+file; that one-file download approval is pending. No commit or push has been
+made.
+
+
+## 2026-11-07 S23B paired ICL radial contrasts
+
+The exploratory paired inner-minus-outer radial contrast is implemented in
+`analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_relative_radial_contrasts.py`
+(source SHA-256 `1e1f385e32aa67150f7e666ad7e36a80e189be81e5bfdd04b6f1acc47977dbba`).
+For each saved matched target/control pair, it subtracts the common-support
+300–800 proper-kpc contrast from the 50–300, 100–300, or 200–300 proper-kpc
+contrast. Uncertainty is resampled by connected RA-Dec sky blocks at 2.5, 5,
+and 10 degrees with two grid phases (5,000 draws per layout). It reads saved
+profile/audit tables only; it made no HSC requests and reads no image pixels.
+
+At the primary 5-degree layout, the 50–300 and 100–300 kpc contrasts are
+positive for both filters. In HSC-i, they are 6.56 [3.84, 8.67] and 4.53
+[1.90, 6.54] nJy arcsec⁻² (95% block intervals; 232 pairs, 26 blocks).
+In HSC-i2, they are 7.61 [5.72, 8.88] and 4.69 [3.24, 5.71]
+nJy arcsec⁻² (756 pairs, 39 blocks). The 200–300 kpc contrast is weaker:
+3.25 [0.498, 5.44] in i and 1.91 [0.401, 3.04] in i2; at least one of the
+six grid layouts crosses zero for each filter. The sign of the wider 50–300
+and 100–300 contrasts remains positive across all six layouts.
+
+Outputs are in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_relative_radial_contrasts_2026-11-07_02/`.
+Summary SHA-256: `a47c6679ad318abcbee5e5ab46e1a984976bd01c6f1dcbbe3d6de99b89306a8`;
+assessment SHA-256: `c5c4e5f3e5e275b9d5a41cb6777adc29d51c88944615c2ae7e61eb3fc752a8fa`.
+This is a relative radial excess, not an absolute ICL measurement: the
+300–800 kpc reference annulus may contain cluster light. Sky gradients,
+Galactic extinction, extended PSF wings, coadd-pixel covariance, and manual
+center/mask review remain unresolved. Keep `science_measurement=false`.
+Satellite association still awaits the separately approved CAMIRA member-file
+download; it has not been downloaded. No commit or push has been made.
+
+
+## 2026-11-07 S23B approved control-image transfer complete
+
+The approved v2 HSC PDR3 `pdr3_wide` HSC-I `coadd/bg` control transfer is
+complete: 1,041/1,041 IMAGE/MASK/VARIANCE FITS, 58,271,158,080 bytes
+(54.27 GiB), with 248 `i` and 793 `i2` headers. The download checkpoint and
+manifest both pin SHA-256
+`ae9eb406cfc179d9980031bb67f85f8ee71c4580ba59e97713278823db5c06df`.
+The offline FITS/header/WCS/file-integrity audit is complete at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_image_audit_2026-11-07_01/`:
+1,041 unique control IDs map one-to-one to 1,041 targets; verified bytes total
+58,271,158,080. Summary SHA-256:
+`3210513093e363fa7a63c98669ab2cb332f96711295f01936dd121ab64708510`;
+verified table SHA-256:
+`6e600066dc9d97d1448c8538b5bd3b2e38e1e56797485765296c4fcc44d5574c`.
+No credentials were saved and the audit used no network. The target-image
+audit is also complete: 1,043/1,043 FITS files. Mask support succeeded for
+1,039 targets; four failed the automated mask step for too few valid pixels.
+The mask-only paired common-support audit retained 1,022 same-filter pairs and
+found zero pairs with zero common support inside 1,000 kpc. The exploratory
+2D stack is already complete for those 1,022 pairs (17 filter mismatches and
+two zero-support targets excluded; `science_measurement=false`). Summary
+SHA-256 is `c8bac8dbdd0a886604c216b2410725eb97883b0cdc1a91fd47e7a7cfcaaaa20b`.
+This does not establish sky, extinction, PSF-wing, covariance, or member
+completeness corrections; `images_ready_for_science` remains false. CAMIRA
+member positions had not yet been imported at the time of this mask-only
+stack; the later approved intake below supersedes that status. No commit or
+push has been made.
+
+
+## 2026-11-07 S23B ICL contrast versus CAMIRA richness
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_richness_relation.py`
+(source SHA-256 `46eb768c301544802508fce7f15493504c272189a2711e94c71f49e0f2486cf5`).
+It models each saved pair's inner-minus-300–800 kpc relative ICL contrast
+against log10 CAMIRA richness, adjusted for redshift and target-minus-control
+SFD E(B−V) mismatch. It uses six connected RA-Dec block layouts, 5,000
+resamples per layout/filter/contrast; no network requests or science-image
+pixels. E(B−V) enters only as a nuisance covariate; no extinction correction
+was applied.
+
+At the 5° phase-zero primary layout, richness slopes per dex (95% block
+intervals; n pairs / blocks) are: `i`, 50–300 kpc 6.14 [−13.66, 22.14]
+(232/26), 100–300 4.13 [−15.56, 19.47] (232/26), and 200–300 4.51
+[−10.70, 19.96] (231/26) nJy arcsec⁻²; `i2`, 50–300 9.51 [−3.01, 22.32]
+(756/39), 100–300 7.82 [−4.77, 18.04] (756/39), and 200–300 2.25
+[−10.89, 11.90] (752/39). All primary intervals include zero. The 50–300
+and 100–300 `i2` intervals are positive only in the 10° phase-zero layout;
+the paired phase-one layouts cross zero. This relation is therefore sensitive
+to spatial partitioning and does not establish a richness trend. It also does
+not measure satellite positions or satellite radial structure: CAMIRA richness
+is only a cluster-scale proxy. Do not interpret a zero-crossing interval as
+proof of no relation.
+
+Outputs:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_richness_relation_2026-11-07_01/`.
+Summary SHA-256 `144da86644e8fadfff95d18662af4744d1b4eef0c558e5750d7f7f5200e45f16`;
+assessment SHA-256 `4190a885f57fa53567edef8e513426caba75505c6ca4b0cdc6d0979a5a52abe2`.
+Keep `science_measurement=false`; residual sky, extinction correction, PSF
+wings, covariance, centering/mask uncertainty, and member completeness remain
+open. At the time of this richness-only analysis, the CAMIRA member file had
+not yet been received; later intake and direct-analysis entries below
+supersede that status. No commit or push has been made.
+
+
+## 2026-11-07 S23B richness–coverage sensitivity
+
+Added `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_richness_coverage_sensitivity.py`
+(source SHA-256 `4a0f6be1a6eadba647cf135d365414a79e8f68746f4579a545422e795aed81cb`).
+It repeats the pinned richness regression with an added log common-mask pixel
+count and uses identical connected-block bootstrap draws for the primary and
+support-adjusted slopes. This is a sensitivity model; conditioning on coverage
+is not promoted as a causal correction.
+
+At the 5° phase-zero layout, the 50–300 kpc slope changes from 6.14 to 5.98
+(95% paired block interval for change −5.15 to 6.15) in `i`, and from 9.51 to
+9.38 (−1.97 to 1.03) in `i2`, in nJy arcsec⁻² per dex richness. The other
+annuli show similarly small changes; all paired slope-change intervals include
+zero. The correlation between log richness and log common-pixel support is
+small (|r| ≤ 0.017) in the primary layout. This weakens the concern that a
+linear richness–support correlation alone explains the slope, but does not
+resolve coverage selection or the other science gates. All outputs remain
+exploratory, `science_measurement=false`.
+
+Outputs:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_richness_coverage_sensitivity_2026-11-07_01/`.
+Summary SHA-256 `7a4df0afee18db5af23c525b9df2184c98b4e08c8b8d49ad45b0f043bffc09ae`;
+assessment SHA-256 `be7de62b92fe09296bfc057d283e19423d85ef4f663f5c8a12b5f7b2b62a4b3c`.
+Direct satellite analysis still requires the separately approved CAMIRA member
+file, whose download remains pending. No commit or push has been made.
+
+
+## 2026-11-07 S23B ICL extinction sensitivity
+
+Added and ran `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_extinction_sensitivity.py`
+(SHA-256 `746228c31f8e80c8b183ef7b50e91b356afec4463001126c12bf547176cc7b2c`).
+It applies the nominal hscPipe coefficients `i=1.641`, `i2=1.617` separately
+to saved target/control annular means on the existing common support. The
+runner pins input hashes, reproduces the shared RA grid origin and connected
+block counts, and exactly reproduces the prior raw relative-contrast results
+in all 180 checked summary fields. It reads no image pixels and makes no HSC
+requests.
+
+For the 50–300 kpc minus 300–800 kpc contrast, the 5° phase-zero result changes
+from 6.561 [3.844, 8.667] to 6.930 [4.043, 9.168] nJy arcsec⁻² in `i` (232
+pairs, 26 blocks), and from 7.611 [5.722, 8.877] to 8.055 [6.117, 9.385] in
+`i2` (756 pairs, 39 blocks). The paired correction is +0.369 [0.190, 0.516]
+and +0.444 [0.337, 0.569], respectively; its interval stays positive across
+all six spatial layouts. This is a roughly 5.6–5.8% shift, not a science
+promotion: rescaling also affects residual sky, and PSF wings, sky transfer,
+source-Poisson/coadd covariance, mask/center review, and member completeness
+remain unresolved. `science_measurement=false` remains.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_icl_extinction_sensitivity_assessment_2026-11-07.md`.
+Output:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_extinction_sensitivity_2026-11-07_04/`
+(summary SHA-256 `5dfb730f26043f2073790d21326156fd7e3d79730f457e7c0bc738745b32e8fe`).
+At the time of this extinction-only sensitivity, the separately approved
+member-file intake had not yet occurred; later sections record its receipt
+and use. No commit or push has been made.
+## 2026-11-07 S23B CAMIRA member intake and direct ICL–satellite relation
+
+This is the current status and supersedes earlier entries in this handover that
+say the member-file download or direct satellite analysis is still pending.
+The user approved and received only camira_s23b_wide_sm_member.dat.gz
+(10,626,590 compressed bytes; source SHA-256
+66529e02c6ae11ebdccc3fb1d4756b639364f372f9d0f09a721786a19906945a). No
+other file was downloaded and no credential was saved.
+
+The importer matched all 12,162 member-file cluster groups uniquely to the
+pinned S23B CAMIRA cluster catalog and joined all 1,043 target clusters,
+yielding 45,634 member-position rows. WCS checks place 39,166 positions
+(85.83%) inside the target cutout pixel-center footprints; 6,468 are outside.
+This is a geometric footprint check, not proof of usable or unmasked pixels.
+For supported profiles, all catalog candidates in both analyzed annuli are
+inside the image footprints. The final import summary SHA-256 is
+3d1442420aeae051f5a970c6b717a93c69fdaa57cebb096063c46d8afe5f4d4e.
+
+An offline exploratory association joined those positions to the 1,022
+filter-matched target/control profile pairs. It regresses the 50–300 minus
+300–800 proper-kpc relative ICL contrast against the unweighted CAMIRA
+candidate-member surface-density contrast, adjusting for richness, redshift,
+target/control SFD E(B−V) mismatch, and common-pixel support. The 5°
+phase-zero connected-block results are:
+
+| Filter | Pairs / blocks | Slope (nJy arcsec⁻² dex⁻¹) | 95% block interval |
+| --- | ---: | ---: | ---: |
+| HSC-i | 232 / 26 | 5.72 | [−0.06, 13.63] |
+| HSC-i2 | 756 / 42 | 4.24 | [0.99, 7.80] |
+
+The point estimates are positive, but the interval excludes zero in only 3/6
+spatial layouts for i and 4/6 for i2. At a 10% minimum common-support floor
+in both annuli, the i2 interval crosses zero; the i result remains unresolved.
+Treat this as a first direct, exploratory association, not a detection. Common
+support is sparse, catalog candidates are not spectroscopically confirmed,
+and the 300–800 kpc reference can contain cluster light.
+
+Residual sky, extinction correction, extended PSF wings, full coadd
+covariance, center/mask sensitivity, and member completeness/purity remain
+open. Keep science_measurement=false and images_ready_for_science=false.
+The analysis read saved tables and member positions only; it made no network
+requests and read no science-image pixels.
+
+Code and assessment:
+analysis/icl_wgl_membership/hsc_debug/import_s23b_camira_member_catalog.py
+analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_satellite_relation.py
+analysis/icl_wgl_membership/hsc_debug/s23b_icl_satellite_relation_assessment_2026-11-07.md
+The relation summary SHA-256 is
+fab29d7aef464707c31e2616fe1db9fc3bad9d281ad6d5dfa6d63f2b484bbb39.
+Products are under
+/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_relation_2026-11-07_03/.
+No commit or push has been made.
+
+## 2026-11-07 S23B raw member-field-8 weighting sensitivity
+
+A sensitivity runner tested whether the direct ICL–CAMIRA candidate relation
+changes when each member position is weighted by the member file's eighth raw
+field. Its meaning is unverified: values lie in [0,1] (median 0.373253), and
+per-target field sums divided by catalog richness have q10/median/q90
+0.830/0.945/1.071, but this does not prove the field is the published CAMIRA
+membership weight. Keep it labeled raw field 8.
+
+The adjusted 50–300 minus 300–800 proper-kpc relative-ICL slope per dex of
+weighted candidate-density ratio, at 5-degree phase zero, is 5.13
+[−0.80,13.05] nJy arcsec⁻² for HSC-i (232 pairs, 26 blocks) and 5.01
+[2.44,7.62] for HSC-i2 (756 pairs, 42 blocks). The i2 interval excludes
+zero in all six spatial layouts; i does so in two of six. At a 10% minimum
+common-pixel floor in both annuli, both filters' intervals include zero.
+This is an exploratory support-sensitive relation, not a detection. No HSC
+request or science-image pixel read occurred. Keep science_measurement=false
+and images_ready_for_science=false.
+
+Assessment:
+analysis/icl_wgl_membership/hsc_debug/s23b_icl_satellite_field8_weight_sensitivity_assessment_2026-11-07.md
+Runner:
+analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_satellite_field8_weight_sensitivity.py
+Summary SHA-256 `ec2f6a325ac0a6e349b6f0f52cd106c544d3d811594c35568f5712e3273b2500`.
+Outputs are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_field8_weight_sensitivity_2026-11-07_01/`.
+No commit or push has been made.
+
+## 2026-11-07 S23B CAMIRA member-position mask audit
+
+Audited all 45,634 member positions against the existing target mask products.
+The 1,039 successful mask hashes and image-hash joins were verified; saved-mask
+WCS positions reproduce the imported coordinates within 1.08e-7 pixel. Four
+targets lack successful masks after “Too few valid pixels”; they contain 292
+member rows, including 255 positions inside the image bounds. The remaining
+1,039 targets provide 38,911 in-footprint mask samples; 6,431 of their member
+positions are outside. Overall, 6,468/45,634 positions lie outside footprints.
+
+CAMIRA centers fall on BASE_MASK pixels in 48.9% of HSC-i and 41.4% of HSC-i2
+samples. The corresponding median whole-image BASE_MASK areas are 55.2% and
+46.5%; this comparison is not spatially matched. Combined Kron source masks
+cover 98.4–99.1% of member centers, likely including each candidate's own
+source. These masks omit SEGMENTATION labels, so the own-source mask cannot be
+safely separated from neighboring sources. Do not apply them unchanged to
+satellite outer-light profiles. Keep science_measurement=false and
+images_ready_for_science=false.
+
+Assessment:
+analysis/icl_wgl_membership/hsc_debug/s23b_icl_satellite_member_mask_audit_assessment_2026-11-07.md
+Runner:
+analysis/icl_wgl_membership/hsc_debug/audit_s23b_camira_member_mask_overlap.py
+(SHA-256 `c494bda32a606d17bee12780c7271f916a201e0267e29f9353f4a24d18657750`).
+Summary SHA-256 `98f4d4e5abe043457a19cba229c2b7c0a7f31e3e07ceeb25d7b5e84d1d713710`.
+Output directory:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_member_mask_audit_2026-11-07_02/`.
+Next gate: preserve source segmentation, match member positions to detections,
+and create member-specific masks that preserve each candidate while excluding
+unrelated sources. No commit or push has been made.
+
+## 2026-11-07 S23B member-centered outer-light profiles and ICL relation
+
+The source-aware exploratory stack and spatial-block relation have now been
+completed, superseding the mask-audit section's pending next gate. It used only
+the already approved CAMIRA member catalog and HSC images; no data was
+downloaded this turn. The all-eligible stack contains 979 target/filter frames
+(226 HSC-i, 753 HSC-i2), 16,503 CAMIRA candidate positions at 50–500 proper
+kpc, and 13,269 retained candidate-by-radial-bin profile measurements. Each
+matched SEP source is preserved while unrelated detections and bad/bright
+pixels are masked. Azimuthally rotated controls are required to have at least
+60% annular coverage, as are the target annuli, with at least three usable
+controls.
+
+The median candidate-minus-rotated-control signal declines steeply with
+member-centered radius. At 50–75 proper kpc, the cluster median is 0.68
+nJy arcsec⁻² in HSC-i (q16–q84 −3.77 to 5.64; 62 clusters) and 1.46 in
+HSC-i2 (−4.23 to 8.94; 365 clusters). These spreads are descriptive, not
+confidence intervals.
+
+The adjusted 50–75 kpc outer-light versus 50–300 minus 300–800 kpc relative
+ICL slopes use richness, redshift, ICL common support, and paired member
+coverage as covariates. Five thousand connected sky-block resamples were run
+for each of six spatial layouts. At 5° phase zero, HSC-i is 0.086
+[−0.098, 0.334] (62 clusters, 19 blocks); HSC-i2 is −0.041 [−0.145, 0.090]
+(365 clusters, 43 blocks). No layout interval excludes zero. The support-floor
+sensitivity (5%, 10%, 20%) also has no available interval excluding zero;
+the point-estimate sign varies with the floor. This is an unresolved
+exploratory association, not evidence for a physical positive or negative
+relation.
+
+Keep `science_measurement=false` and `images_ready_for_science=false`.
+Uncalibrated member purity/completeness, residual sky, PSF wings, extinction,
+source Poisson noise, coadd covariance, centering/mask selection, and possible
+cluster light in rotated controls or the outer ICL reference still limit
+interpretation. The next gates are authoritative verification of CAMIRA member
+fields; member-preserving injection/recovery including PSF wings; calibration
+of sky and correlated-noise effects; and center/mask/control sensitivity.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_camira_member_outer_profile_relation_assessment_2026-11-07.md`.
+Runners:
+`analysis/icl_wgl_membership/hsc_debug/measure_s23b_camira_member_outer_profiles.py`
+and
+`analysis/icl_wgl_membership/hsc_debug/analyze_s23b_member_outer_icl_relation.py`.
+The full stack and block-adjusted outputs are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_outer_profiles_full_2026-11-07_01/`
+and
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_outer_icl_relation_2026-11-07_01/`.
+No commit or push has been made.
+
+## 2026-11-07 S23B raw member-field-8 outer-profile sensitivity
+
+The saved source-aware profiles were reweighted by the eighth raw field of
+the headerless member file. This field remains **unverified** and must not be
+called `w_mem` or a membership probability. The runner joined all 13,269
+profile-bin rows to imported member positions; no image pixels or network were
+used, and no data was downloaded.
+
+At 50–75 proper kpc, the raw-field-8 weighted cluster median is 1.03
+nJy arcsec⁻² in HSC-i (62 clusters; q16–q84 −3.87 to 6.36) and 1.99 in
+HSC-i2 (365 clusters; −4.43 to 10.89). The adjusted ICL-versus-outer-light
+slopes at 5° phase zero are 0.017 [−0.247, 0.334] in i and −0.013
+[−0.118, 0.129] in i2. Both intervals include zero; weighted-slope
+intervals include zero in all six spatial layouts. The paired
+weighted-minus-unweighted i2 slope is marginally positive in 3/6 layouts and
+includes zero in the other three; i changes include zero in all six. Treat
+this only as a field-8 sensitivity, not as a detection. Keep
+`science_measurement=false` and `images_ready_for_science=false`.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_camira_member_outer_raw_field8_sensitivity_assessment_2026-11-07.md`.
+Runner:
+`analysis/icl_wgl_membership/hsc_debug/analyze_s23b_member_outer_raw_field8_sensitivity.py`.
+Summary SHA-256 `7156397a478932a9d1fb133b88a758a814bfc0543708719cd36f2a21c1b14875`.
+Outputs are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_outer_field8_sensitivity_2026-11-07_01/`.
+Next gate: obtain an authoritative file-specific column definition before
+labeling the field, then calibrate member-profile recovery and residual
+systematics. No commit or push has been made.
+
+## 2026-11-07 WL/S23B CAMIRA positional-overlap audit
+
+The existing 800-lens S19A weak-lensing sample was compared against all 1,043
+S23B CAMIRA target centers and the 427 targets in the member outer-profile
+relation. The 435-lens common WL support was reconstructed from the saved
+count-only results; its ID hash exactly matches the existing WL stack
+provenance. No pair is within 60 arcsec. The nearest S23B center is 364.846
+arcsec away. There are 66 equal numeric IDs (29 among profile targets), but
+none is positionally matched; do not join across these catalog namespaces by
+ID alone.
+
+The current WL and S23B member-profile products cannot form a same-cluster
+three-way weak-lensing–ICL–satellite measurement. A same-sample continuation
+requires either (a) a new S19A count-only support plan for the S23B profile
+targets plus separately validated matched random centers, or (b) authoritative
+CAMIRA member positions for the existing WL sample. Any new CAS query or
+source-row export needs separate explicit user approval.
+
+Runner: `analysis/icl_wgl_membership/hsc_debug/audit_wl_s23b_camira_crossmatch.py`.
+Assessment: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_camira_crossmatch_assessment_2026-11-07.md`.
+Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_camira_overlap_audit_2026-11-07_01/`.
+
+A local HSC S19A count-only plan is prepared for 427 S23B member-profile
+targets (18 batches, 3 proper-Mpc cones, integer counts only; 122,198 SQL
+bytes). It has not been submitted. Plan SHA-256:
+`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`.
+Separate explicit approval is required before submitting it. Runner:
+`analysis/icl_wgl_membership/hsc_debug/prepare_s23b_wl_shape_count_plan.py`.
+Submitter: `analysis/icl_wgl_membership/hsc_debug/submit_s23b_wl_shape_counts.py`.
+Its `--plan` mode verified the local plan without network use. The submit mode
+requires an interactive `lageunha` terminal and the exact explicitly approved
+plan SHA-256. No query was submitted.
+Keep `science_measurement=false`. No commit or push has been made.
+
+## 2026-11-07 S23B raw-field-8 weighted-density sensitivity
+
+The approved CAMIRA member file was already present and validated; this turn
+did not fetch it again. An offline, image-pixel-free sensitivity fit compared
+raw-field-8 weighted and unweighted member-density ratios against the existing
+relative ICL contrast. Because the public sources do not specify this file's
+headerless column order, field 8 remains `field8_raw` (likely `w_mem`), not a
+verified membership probability.
+
+For the primary 5-degree phase-zero layout, the HSC-i weighted slope is 5.13
+[−0.80, 13.05] versus unweighted 5.72 [−0.06, 13.63]. HSC-i2 is 5.01
+[2.44, 7.62] versus 4.24 [0.99, 7.80]. Paired weighted-minus-unweighted
+shifts include zero in all six spatial layouts. With the 10% common-pixel
+floor, the primary i2 interval includes zero; the relation is not robust to
+the support cut. Keep `science_measurement=false`.
+
+Runner:
+`analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_satellite_field8_weighted_density.py`.
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_icl_satellite_field8_weighted_density_assessment_2026-11-07.md`.
+Output:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_field8_weighted_density_2026-11-07_02/`.
+
+The separate 427-target S19A count-only CAS plan remains unsubmitted; approval
+for the member catalog did not authorize that new query. No commit or push
+has been made.
+
+## 2026-11-07 CAMIRA member-field schema evidence
+
+An offline audit joined all 637,146 rows of the approved S23B member file to
+the 12,162-cluster Wide star-mask catalog. Raw field 8 ranges from 0.001000069
+to 1.0 and every row is at or above the published `w_mem >= 10^-3` member
+threshold. This strongly supports raw field 8 as probable CAMIRA `w_mem`, but
+the official public README does not specify the headerless member-file column
+order. Keep it stored as `field8_raw` until a file-specific layout is
+confirmed. The earlier field-8 weighting remains an exploratory sensitivity.
+
+Runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_camira_member_raw_field_schema.py`.
+Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_camira_member_raw_field_schema_assessment_2026-11-07.md`.
+Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_schema_audit_2026-11-07_04/`.
+Keep `science_measurement=false`. No new data was downloaded; no commit or push has been made.
+
+## 2026-11-07 S23B PSF-candidate field pilot
+
+Used the already received target HSC images and verified CAMIRA member
+positions to run the existing CPU-only `prepare_detection_psf.py` on a
+stratified 50-frame subset (25 primary-filter `i`, 25 `i2`). All 50 image
+sizes and SHA-256 values matched the local receipt. Forty-nine frames
+prepared; `S23B_10647` had too few valid pixels. The 49 frames yielded 492
+morphology-only PSF candidates: 44/49 frames have at least four candidates
+(22/25 `i`, 22/24 `i2`). The median candidate-stamp valid-pixel fraction is
+0.863. Candidates remain unconfirmed stars; stamps are raw 101×101 pixels,
+not recentered, normalized, or sky-subtracted, and their 8.4-arcsec radius
+does not constrain extended PSF wings.
+
+Cross-matching against the previously approved local S19A Gaia subset found
+no candidate within 2 arcsec; the nearest old Gaia source is 523 arcsec away.
+This only confirms that the saved Gaia subset does not cover these S23B
+positions. A separate, exact Gaia DR3 plan is prepared for 492 S23B candidate
+positions in two batches (2-arcsec cones; 18 astrometry, quality, and
+classification columns). After the user explicitly approved that exact
+492-position scope, the query completed with 77 unique matched positions. No
+images, CAS rows, HSC shape rows, or photo-z values were requested; no
+scientific measurement was made.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_detection_psf_pilot_assessment_2026-11-07.md`.
+The local Gaia plan SHA-256 is
+`394083a8cdaf0770376959e71c8bd46bd004c762dcb3e77a6256bac656ee52f0`.
+Keep `science_measurement=false`. No commit or push has been made.
+
+## 2026-11-07 S23B Gaia-supported PSF-wing pilot
+
+The exact approved Gaia DR3 query for 492 morphology-only S23B target
+candidates completed in two batches and returned 77 match rows (response
+SHA-256 `1f1f8b947a3b23e1dad4675447247137d66d5f2586d6aea3a73989df3cb88e6b`).
+An offline audit found 48 conservative diagnostic candidates; this is not a
+calibrated star classifier. No S23B coadd header among the 50 inspected frames
+contains DATE, MJD, or EPOCH, so Gaia positions were not propagated to an
+assumed HSC epoch.
+
+Using already received target cutouts, 36 of the 48 candidates supplied
+complete 401×401-pixel stamps (16 `i`, 20 `i2`; 22 frames); 12 were blocked by
+image edges. Four frame-weighted profile stacks used 5,000 frame-bootstrap
+draws. Only 15.5–22.6% of profile rows passed geometry and sky-coverage gates.
+The `i2` outer-500-kpc wing is positive in several bins but changes by factors
+of about 2–3.9 when the background annulus moves outward; its farthest-bin
+interval crosses zero. The `i` profile changes sign with radius/annulus.
+Only 2–5 frames support the outer bins, and there are no matched-control star
+profiles. The result therefore does not calibrate extended PSF wings or
+correct the ICL stack.
+
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_gaia_empirical_psf_wing_assessment_2026-11-07.md`.
+Gaia audit output:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_gaia_audit_2026-11-07_01/`.
+Stamp output:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_wing_stamps_2026-11-07_01/`.
+Stack outputs:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_wing_stack_{i_all,i_outer500,i2_all,i2_outer500}_2026-11-07_02/`.
+The effective coadd epoch, control-field PSF sample, sky-annulus transfer,
+coadd covariance, and member-preserving injection/recovery remain unresolved.
+Keep `science_measurement=false` and `psf_approved=false`. No commit or push
+has been made.
+
+### 2026-11-07 801-pixel extension
+
+An offline WCS geometry screen found room for 801×801 stamps for 8 `i` and 14
+`i2` strict Gaia candidates. The local CPU pass produced 22 stamps across 13
+frames; 26 candidates fell too close to image edges. Within the >=500-proper-
+kpc subset, only 4 `i` stars from 4 frames and 10 `i2` stars from 8 frames
+remain. Profiles extend to 200 pixels (33.6 arcsec) and use sky annuli
+260–300 and 340–390 pixels. Beyond 96 pixels, `i2` bins use 1–2 frames and
+are consistent with zero under the frame bootstrap; the farthest `i` bins
+have only one supported frame. The apparent positive inner `i2` wing from the
+401-pixel run is not confirmed by this nonpaired, smaller subset. Sky-annulus
+transfer is still unresolved, so no ICL PSF correction is supported.
+
+Expanded stamps:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_wing_stamps_2026-11-07_02/`.
+Expanded profile stacks:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_wing_stack_{i_all,i_outer500,i2_all,i2_outer500}_2026-11-07_03/`.
+Assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_gaia_empirical_psf_wing_assessment_2026-11-07.md`.
+The original 492-position target and 458-position pilot-control Gaia scopes
+are complete. The later 4,299-position expansion query was also approved and
+completed. Audit and profile results appear in the final expansion section.
+
+#### Matched-control PSF candidate checkpoint
+
+Local candidate preparation is complete for the 49 already received matched
+target/control images. The controls yielded 458 morphology-only candidates in
+48 fields (180 `i`, 278 `i2`); the target side has 492 (229 `i`, 263 `i2`).
+Candidate coordinates have no target/control overlap within 2 arcsec; the
+nearest is 58.12 arcsec. No two control candidate coordinates are within
+2 arcsec. These are morphology counts, not Gaia-confirmed stars or approved
+PSF models.
+
+A separate Gaia approval was obtained for exactly the 458 control positions.
+The two coordinate-specific batches (250 and 208 cones, 2 arcsec) completed
+with 58 match rows (estimated 72; 14,326 response bytes estimated). The plan
+pins the exact ADQL, TAP endpoint, request parameters, returned fields, and
+candidate list; its SHA-256 is
+`cbf9bb94c73738b06cd5f616ba1c190f4f0e11ec71a5d914333b4b291d0e7daf`.
+No images, shape rows, photo-z values, or CAS data were requested. The audit
+found 38 strict diagnostic candidates, 20 matched without clean astrometry,
+and 400 Gaia non-matches. Together with the target audit, this yields 48
+strict target and 38 strict control candidates; these thresholds are not a
+calibrated stellar/PSF classifier.
+
+The control sample produced 26 usable 401×401 stamps from 38 strict
+candidates; 12 were edge-blocked. Same-grid control stacks were run for `i`,
+`i2`, and the center-distance-≥500-kpc subsets. In the paired target/control
+profile comparison, every radial bin has at most one matched frame pair with
+valid profiles. A paired PSF-wing difference and its uncertainty cannot be
+estimated from this pilot. For controls, center distance is from the random
+sky position. Keep `science_measurement=false` and `psf_approved=false`.
+
+Outputs:
+
+- Gaia audit: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_control_gaia_audit_2026-11-07_01/`
+- Control stamps: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_control_wing_stamps_2026-11-07_01/`
+- Four control stacks: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_control_wing_stack_{i_all,i_outer500,i2_all,i2_outer500}_2026-11-07_01/`
+- Paired support comparison: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_target_control_profile_comparison_2026-11-07_03/`
+
+Detailed assessment:
+`analysis/icl_wgl_membership/hsc_debug/s23b_gaia_empirical_psf_wing_assessment_2026-11-07.md`.
+
+### 2026-11-07 S23B matched PSF expansion and Gaia completion
+
+The local screen selected 100 new matched pairs in each actual HSC-I
+subfilter, `i` and `i2`, across five target-seeing strata. The selection
+excluded 49 pilot pairs and 17 pairs with target/control subfilter mismatch.
+The target screen used 7,505 CAMIRA member positions inside the selected
+images. Local CPU preparation completed for 199/200 target frames and all 200
+controls. `S23B_11786` had fewer than 100 valid pixels. Three additional
+target frames had no compact candidate. The candidate list contains 2,069
+target and 2,230 control positions. Per-filter counts are target/control
+1,016/1,000 in `i` and 1,053/1,230 in `i2`.
+
+The user approved the exact Gaia DR3 plan for all 4,299 positions. The plan
+SHA-256 is
+`c00eda5f896f8160022a7e4198b3f8ce69803f0e30adc8f560ce04c8beba0e7d`. The
+18 batches returned 706 candidate-source rows. The aggregate response SHA-256
+is `151f7c3f227ab7a16b1a6015563afd46fd53ccf4067d44d0264e27be75f665fb`.
+Local audit reproduced all associations and verified batch SQL, raw response,
+and match-table hashes. The 706 matches map to unique candidates and unique
+Gaia sources. No multiple-source cone or reused Gaia source was found. The
+maximum separation is 0.2876 arcsec. The conservative diagnostic screen found
+448 candidates, with 225 target and 223 control candidates. The screen is not
+a calibrated star or PSF classifier. The query returned no images, CAS rows,
+HSC shape rows, or photo-z values.
+
+The local CPU stamp pass produced 168 target and 166 control 401×401-pixel
+stamps from existing approved HSC images. Target exclusions were 57 edge
+crossings. Control exclusions were 56 edge crossings and one known variable.
+The code generated eight frame-weighted stacks for target/control, `i`/`i2`,
+and all-star/outer-500-kpc subsets. Each stack used 5,000 frame-bootstrap
+draws. In the paired comparison, `i` had no radial bin with two valid matched
+pairs. The `i2` all-star profiles had at least two pairs in 43/44 bins, with a
+maximum of 14. The `i2` outer-500-kpc profiles had at least two pairs in 30/44
+bins, with a maximum of eight.
+
+The `i2` all-star target and control frame-weighted means are negative from
+32 to 96 pixels under both tested sky annuli. The paired control-minus-target
+difference at 24–32 pixels changes from −6.7 to +1.7 × 10⁻⁶ core flux per
+pixel when the sky annulus moves from 120–150 to 160–190 pixels. The 16th–84th
+percentile bootstrap intervals include zero for both estimates. A few
+outer-500-kpc bins have nominal 95% intervals outside zero with only three
+matched pairs. Annulus sensitivity and low pair counts prevent a PSF-wing
+calibration. Keep `science_measurement=false` and `psf_approved=false`.
+
+The effective coadd epoch remains unknown. The previously approved 67,071-row
+CCD metadata export covers 800 S19A lens centers and 798 controls. The prior
+coordinate audit found no match within 60 arcsec between the S19A lenses and
+S23B CAMIRA centers. The saved MJD rows cannot assign coadd epochs to the 200
+S23B matched pairs. Any new metadata query needs separate exact approval.
+
+Outputs
+
+- Gaia audit runner `analysis/icl_wgl_membership/hsc_debug/audit_s23b_psf_expansion_gaia_matches.py`
+- Gaia audit results `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_expansion_2026-11-07_01/gaia_audit_2026-11-07_01/`
+- Target and control stamps `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_expansion_2026-11-07_01/{target,control}_wing_stamps_2026-11-07_01/`
+- Eight profile stacks `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_expansion_2026-11-07_01/{target,control}_wing_stack_{i,i2}_{all,outer500}_2026-11-07_01/`
+- Paired comparison `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_psf_expansion_2026-11-07_01/target_control_profile_comparison_2026-11-07_01/`
+- Detailed assessment `analysis/icl_wgl_membership/hsc_debug/s23b_gaia_empirical_psf_wing_assessment_2026-11-07.md`
+
+## 2026-11-07 S23B coadd residual covariance
+
+CPU-only diagnostic completed for the exact 1,022 exploratory target/control
+pairs (241 HSC `i`, 781 HSC `i2`), using existing coadds, VARIANCE planes,
+and saved K=2.5 masks. All 2,044 frames were read; 2,043 had at least eight
+eligible outer-field patches. The median zero-lag residual variance is about
+1.14 times the delivered variance plane for both targets and controls. The
+finite 9×9-lag sum gives approximate variance factors 1.586/1.580 for `i`
+target/control and 1.572/1.555 for `i2`; corresponding median standard-
+deviation factors are about 1.25. Paired target-minus-control factor medians
+are +0.023 and +0.029, with descriptive frame-pair 16th–84th spreads crossing
+zero. This is consistent with similar short-lag residual covariance in both
+populations, not a target-specific covariance detection.
+
+The finite lag kernel was not propagated through Lanczos reprojection or the
+signed annular estimator; outer patches can retain sources and diffuse light.
+Do not use these factors to correct profile errors. Source Poisson, residual
+sky, PSF wings, selection effects, and covariance-estimator uncertainty remain
+unresolved. Keep `science_measurement=false` and `images_ready_for_science=false`.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_icl_residual_covariance_assessment_2026-11-07.md`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/estimate_s23b_icl_coadd_noise_correlation.py`
+- Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_residual_covariance_2026-11-07_01/`
+- Result summary SHA-256: `8034a140deb4e52cb9c47fff7a2475dcaec19f0410305c5c0520995ab9eedbe1`
+- No new data/query, commit, or push was performed for this diagnostic.
+
+No commit or push has been made.
+
+## 2026-11-07: S23B relative-contrast covariance propagation
+
+The local CPU run completed the conditional finite-lag covariance propagation
+for all 1,022 matched target/control pairs (241 HSC `i`, 781 `i2`). It used the
+same bilinear metric-grid warp, saved K=2.5 masks, pair-common pixels, and
+50–300, 100–300, or 200–300 proper-kpc means minus the 300–800 proper-kpc
+reference annulus. Replayed means and all six propagated pair counts match the
+saved profile and 5-degree block-support products. Supported counts are
+231–232 in `i` and 752–756 in `i2`. The conditional finite-lag pixel-noise σ
+for the equal-pair mean is 1.089–1.098 times the delivered-VARIANCE diagonal
+estimate. It remains smaller than the existing block intervals, but is not a
+complete uncertainty or a correction. Outer-field kernels were assumed
+stationary in cluster annuli; long-range sky covariance, source Poisson, PSF
+wings, and other systematics remain. One missing `i2` target kernel was
+median-imputed only in three rows that lacked common support and did not enter
+the summary. Keep `science_measurement=false` and
+`images_ready_for_science=false`.
+
+- Runner: `analysis/icl_wgl_membership/hsc_debug/propagate_s23b_icl_relative_contrast_covariance.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_icl_relative_covariance_propagation_assessment_2026-11-07.md`
+- Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_relative_covariance_propagation_2026-11-07_02/`
+- Summary SHA-256: `9c1ef1740490f7cbc4811a9bd2573d69405f5482d7ce754a09642108507fc94e`
+
+The separately approved Gaia expansion plan for 4,299 PSF-candidate positions
+was already completed and audited: 18/18 batches, 706 candidate-source rows,
+aggregate response SHA-256
+`151f7c3f227ab7a16b1a6015563afd46fd53ccf4067d44d0264e27be75f665fb`.
+Its existing audit is complete and local-only; it does not approve PSFs or
+promote science measurements. No duplicate Gaia query was submitted.
+
+## 2026-11-07 CAMIRA member outer-profile injection recovery
+
+Completed a CPU-only measurement-transfer check using one seeded-random,
+already-profiled member in each of 427 S23B target/filter frames (62 HSC `i`,
+365 `i2`). The saved baseline profile replays exactly in all 427 frames.
+Across three exponential-halo amplitudes, 1,221/1,281 injected rows retain
+adequate support. Median recovered/input ratios are 0.838–0.896 in `i` and
+0.807–0.819 in `i2`; all paired amplitude-difference intervals include zero.
+Detection counts or segmentation footprints change in many frames. This is
+conditional transfer calibration for previously detected members, not a
+completeness estimate or an ICL–satellite detection. No PSF convolution or
+source Poisson noise was included, and rotated controls were not injected.
+Keep `science_measurement=false` and `images_ready_for_science=false`.
+
+- Runner: `analysis/icl_wgl_membership/hsc_debug/run_s23b_member_outer_profile_injection_recovery.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_camira_member_outer_injection_recovery_assessment_2026-11-07.md`
+- Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_outer_injection_recovery_2026-11-07_01/`
+- Summary SHA-256: `e9d4cced59f0b0f8ea3f189989886f28af74a339cc5a9b3421f8bca187defc77`
+
+No commit or push has been made for this checkpoint.
+
+## 2026-11-07 S23B member-profile PSF request checkpoint
+
+Prepared a local, unsubmitted request for position-specific HSC PDR3 Wide
+coadd model-PSF FITS cores at the 427 CAMIRA member positions used by the
+source-aware injection recovery (62 `i`, 365 `i2`). Existing audited PSF
+banks have no exact coordinate matches; the nearest position is 69.6869 arcsec
+away. The size estimate is 8,608,320 bytes based on the largest audited PSF
+file and is a hard review cap; stop if a response exceeds it. This scope asks
+for no images, shape rows, or photo-z. The plan was not submitted, and
+`science_measurement=false` remains unchanged.
+
+- Planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_member_profile_psf_plan.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_member_profile_psf_request_assessment_2026-11-07.md`
+- Prepared plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_profile_psf_plan_2026-11-07_03/`
+- Plan SHA-256: `03f974ad24ead32eabd103ef7a6e0d6b52317aa2647023a5f7402003a2e3b25d`
+- Coordinate list SHA-256: `7327d411bacab15954538c64cb44deae9141955377325bc459a1e6a162db7b31`
+
+The existing HSC PSF batch auditor and member-profile injection runner have
+been extended for this plan schema. The future run requires the approved plan
+SHA-256 and records all PSF file checksums; it preserves signed PSF pixels.
+Neither retrieval nor the PSF-convolved run has occurred.
+
+No request, commit, or push was made for this checkpoint.
+
+## 2026-11-07 기존 S19A 약중력 원천행의 S23B 재사용 감사
+
+기존 800개 S19A 렌즈용 3,069,544개 lens-source 행을 32개 배치의 해시,
+바이트 수, 행 수, 중복 source ID 필드 일관성, 원래 3 proper-Mpc 원뿔
+포함 여부까지 로컬 검증했다. 고유 source ID는 2,929,303개이며 반복
+행 사이 원천 필드 충돌은 없다. S23B member-profile 중심 427곳 가운데
+기하학적으로 기존 쿼리 원뿔과 겹치는 곳은 43곳, 실제 기존 source 행이
+있는 곳은 21곳뿐이다. 단일 기존 원뿔이 완전히 덮는 S23B aperture는
+없고, 기존 원뿔 합집합의 면적 커버리지 추정은 중앙값 0, 90백분위
+0.00713, 최댓값 0.604다. 따라서 이 반출 자료로 새 S23B 표본의 shape
+지원을 대체할 수 없다.
+
+별도 427중심 count-only CAS 계획은 준비되어 있지만 미제출 상태이며,
+Gaia 승인과 다른 자료 조회다. 정확한 계획 SHA-256
+b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984에 대한
+별도 승인이 있어야 제출한다. count 결과 이후에도 matched random-center
+지원과 별도 shape-row 계획 검증이 필요하다. science_measurement=false.
+
+- 감사기: analysis/icl_wgl_membership/hsc_debug/audit_wl_s23b_reuse_existing_s19a_shape_rows.py
+- 상세 평가: analysis/icl_wgl_membership/hsc_debug/wl_s23b_existing_export_reuse_assessment_2026-11-07.md
+- 결과: /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_existing_export_overlap_2026-11-07_01/
+- summary SHA-256: 61026a5d82d47303724f576922415c451589f2516f39337adee3abe021c2c54a
+- 이 감사에서 원격 조회·자료 전송·커밋·푸시는 하지 않았다.
+
+### 2026-11-07 S19A 렌즈·무작위 중심 원천행 합집합 재사용 감사
+
+기존 승인된 3,100개 random-center shape 행 9,010,324개(124 배치)를
+저장된 바이트 수·행 수·SHA-256·계획 schema와 대조하고, 800개 S19A 렌즈
+원천행과 `object_id` 단위로 합쳐 427개 S23B member-profile aperture를
+로컬 검색했다. 두 반출 사이 반복 ID의 source 필드 충돌은 없었다.
+기존 자료의 행은 표적 32곳에서만 발견됐고, 395곳에는 행이 없다. 렌즈
+반출만 21곳, random-center 반출만 11곳, 양쪽을 포함해 32곳이다.
+
+두 반출 원뿔 합집합의 4,096점 Sobol 기하 커버리지 추정은 중앙값 0,
+p90 0.310, 최댓값 0.994이며, 95% 이상은 2곳, 99% 이상은 1곳뿐이다.
+이는 실제 catalog 깊이·완전성의 상한 진단이지 보정된 약중력 측정이
+아니다. B-mode polarity, n(z), lensing efficiency는 보정하지 않았고
+`science_measurement=false`를 유지한다. 427중심 CAS count-only 계획은
+여전히 미제출이며 별도 승인이 필요하다.
+
+- 감사기: `analysis/icl_wgl_membership/hsc_debug/audit_wl_s23b_reuse_existing_s19a_sources.py`
+- 평가 문서: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_existing_export_reuse_assessment_2026-11-07.md`
+- 결과: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_existing_source_union_2026-11-07_01/`
+- summary SHA-256: `876bed400f93a55c391c89128aa9e9214ed489e664ea0e618ea3df6920f91ed7`
+- 이 로컬 감사는 네트워크 사용, 새 자료 전송, commit, push 없이 완료했다.
+
+## 2026-11-07 Integrated S23B ICL–satellite–PSF–WL checkpoint
+
+An offline report builder now consolidates the S23B ICL stack, satellite
+relations, injection recovery, Gaia PSF-candidate audit, and the mismatch with
+the current S19A weak-lensing sample. The completed Gaia expansion matches the
+approved 4,299-position plan: 18/18 batches and 706 one-to-one Gaia sources;
+the 448 strict astrometric candidates remain diagnostics, not PSF approval.
+
+The stack's 50–300 minus 300–800 kpc contrast is positive in `i` and `i2`, but
+common-mask support and unmodeled systematics still limit interpretation. The
+unweighted `i2` satellite-density relation weakens to an interval including
+zero with a 10% support floor; both adjusted member-centered outer-light
+relation intervals include zero. The prior S19A sample has no center within
+60 arcsec of an S23B target, and reused lens/random rows cover only 32/427
+S23B apertures. The S23B-specific count-only query is still unsubmitted and
+requires its own approval. No source-row query is authorized by that plan.
+
+- Assessment: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_wl_evidence_2026-11-07_01/assessment.md`
+- Summary SHA-256: `5684f7e788c72e482ec5f6bbff9e205ffae67a124c0f36fac89ee0fd1055d0fe`
+- Builder: `analysis/icl_wgl_membership/hsc_debug/build_s23b_icl_wl_evidence_report.py`
+- Pending count-only plan SHA-256: `b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`
+- The report build was local-only; it made no network request or data transfer.
+- Keep `science_measurement=false`, `images_ready_for_science=false`, and
+  `psf_approved=false`.
+
+## 2026-11-07 follow-up: S23B satellite association inference
+
+A 10,000-draw Webb six-point restricted wild-cluster bootstrap-t reused the
+988 pinned S23B pair/filter records. It used a shared 5-degree connected
+target/control partition (49 union blocks) across both filters and four
+common-support definitions. Three of eight raw p-values were below 0.05; one
+`i2` result at >=20% support survived Holm (slope 4.21 nJy arcsec^-2 dex^-1,
+raw p=0.0057, Holm p=0.0456), but none passed complete-null max-T (minimum
+p=0.2666). Because the support cuts reuse the same images and the relative ICL
+measurement retains unresolved sky/PSF/mask/covariance terms, treat this as
+exploratory sensitivity evidence and keep `science_measurement=false`.
+
+- Assessment: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_relation_wild_2026-11-07_01/assessment.md`
+- Summary SHA-256: `d95f894c6cf54e92d906063fdc920c24e80bdf9ad4194d2ff63dacd8bdd42494`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_satellite_relation_wild.py`
+
+## 2026-11-09 S23B weak-lensing count query paused
+
+The user-approved S19A count-only plan has plan SHA-256
+`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`.
+The last local checkpoint is `interrupted` after 15 of 18 batches and 375
+verified integer counts. Batch `shape_counts_015` (CAS job `1070884`) had been
+submitted but its result had not been retrieved; batches 016–017 had not been
+submitted. The local runner is stopped. CAS may finish the submitted job
+remotely, but no result has been fetched since the pause. Credentials are not
+saved; source rows, coordinates, shape values, photo-z, and images were not
+returned. `science_measurement=false` remains in force.
+
+The exact plan was count-only: one HSC S19A released-shape-catalog object count
+per 3 proper-Mpc lens cone. The HSC release's weak-lensing flag and star mask
+are already part of that catalog subset; project-specific photo-z, tomography,
+B-mode, and radial selections have not been applied. The local audit runner
+`analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_shape_counts.py` is ready
+but has not been run because the 427-row result is incomplete.
+
+Next proposed step, pending user approval: resume from the saved checkpoint,
+first retrieve/verify the already submitted batch, finish the two unsubmitted
+batches, and audit all 427 counts. Any source-row export would require a separate
+explicit approval.

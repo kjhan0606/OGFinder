@@ -319,7 +319,8 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
                  control: dict, control_download_record: dict, control_base: Path,
                  control_status_sha: str, cosmology: Cosmology,
                  kpc_max: float, n_side: int, mask_factor: float,
-                 include_independent_profile: bool = False) -> tuple[dict, dict]:
+                 include_independent_profile: bool = False,
+                 control_mask_override: np.ndarray | None = None) -> tuple[dict, dict]:
     ident = str(target["id"])
     control_id = str(control["id"])
     target_path = Path(target_mask_record["image"])
@@ -366,16 +367,25 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
 
     with fits.open(control_path, memmap=False, checksum=True) as hdul:
         control_image = np.asarray(hdul[control_info["science_hdu"]].data, dtype=np.float32)
-        control_variance = np.asarray(hdul[control_info["variance_hdu"]].data, dtype=np.float32)
-        control_bits = np.asarray(hdul[control_info["mask_hdu"]].data, dtype=np.int32)
-    if control_image.shape != control_variance.shape or control_bits.shape != control_image.shape:
-        raise ValueError(f"{ident}: control image/variance/mask shapes differ")
-    _, control_mask_variants, _, _, _ = control_masks(
-        control_image, control_variance, control_bits,
-        control_info["center_pixel_xy"], control_info["pixel_scale_arcsec"],
-    )
-    control_mask_index = MASK_FACTORS.index(mask_factor)
-    control_mask = np.asarray(control_mask_variants[control_mask_index], dtype=bool)
+        if control_mask_override is None:
+            control_variance = np.asarray(hdul[control_info["variance_hdu"]].data, dtype=np.float32)
+            control_bits = np.asarray(hdul[control_info["mask_hdu"]].data, dtype=np.int32)
+        else:
+            control_variance = control_bits = None
+    if control_mask_override is None:
+        if control_image.shape != control_variance.shape or control_bits.shape != control_image.shape:
+            raise ValueError(f"{ident}: control image/variance/mask shapes differ")
+        _, control_mask_variants, _, _, _ = control_masks(
+            control_image, control_variance, control_bits,
+            control_info["center_pixel_xy"], control_info["pixel_scale_arcsec"],
+            control_info["mask_planes"],
+        )
+        control_mask_index = MASK_FACTORS.index(mask_factor)
+        control_mask = np.asarray(control_mask_variants[control_mask_index], dtype=bool)
+    else:
+        control_mask = np.asarray(control_mask_override, dtype=bool)
+        if control_mask.shape != control_image.shape:
+            raise ValueError(f"{ident}: prepared control mask and image shapes differ")
 
     target_warp = target_and_control_map(target_image, target_mask, target_info,
                                          float(target["z"]), cosmology, kpc_max, n_side)
@@ -402,7 +412,9 @@ def process_pair(target: dict, target_mask_record: dict, target_mask_summary: di
         pair["independent_profile"] = independent_support_radial_profile(
             target_warp["sb"], control_warp["sb"], target_warp["weight"],
             control_warp["weight"], axis)
-    maps = {"target": tmap, "control": cmap, "delta": dmap, "valid": valid, "axis_kpc": axis}
+    maps = {"target": tmap, "control": cmap, "delta": dmap, "valid": valid,
+            "target_weight": target_warp["weight"], "control_weight": control_warp["weight"],
+            "axis_kpc": axis}
     return pair, maps
 
 

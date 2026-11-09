@@ -183,6 +183,10 @@ def run(plan_dir, results_dir, user, *, submit=False, approved=False):
         if not password:
             raise ValueError("empty password")
         client = Cas(user, password)
+        # A resumable checkpoint may retain an exception from an earlier
+        # interrupted process. Once this invocation has acquired the lock and
+        # is actively running, do not expose that stale terminal marker.
+        state.pop("error_type", None)
         state["status"] = "running"
         save(checkpoint, state)
         try:
@@ -263,7 +267,9 @@ def run(plan_dir, results_dir, user, *, submit=False, approved=False):
                 "source_shape_rows_downloaded": True, "photoz_pdf_rows_included": False,
                 "images_returned": False, "science_measurement": False,
             }
-            state.update(status="complete", summary=summary)
+            state.pop("error_type", None)
+            state.update(status="complete", source_shape_rows_downloaded=True,
+                         summary=summary)
             save(checkpoint, state)
             (results_dir / "row_summary.json").write_text(
                 json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

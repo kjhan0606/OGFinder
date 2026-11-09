@@ -22,7 +22,8 @@ import sep
 import hsc_quality as quality
 import prepare_detection_psf as prep
 from diagnose_outer_sky import tile_diagnostics
-from download_pilot import file_sha256 as sha, validate_fits
+from download_pilot import (BAD_MASK_PLANE_NAMES, file_sha256 as sha,
+                            mask_plane_bitmask, validate_fits)
 
 
 class ExactCosmology:
@@ -162,9 +163,13 @@ def run_quality(sample, work):
     return 1 if errors else 0
 
 
-def control_masks(image, variance, bits, center, scale):
-    bad = ((bits & quality.BAD_VALUE) != 0) | ~np.isfinite(image) | ~np.isfinite(variance) | (variance <= 0)
-    base = bad | ((bits & prep.BRIGHT_OBJECT_BIT) != 0)
+def control_masks(image, variance, bits, center, scale, mask_planes=None):
+    bad_value = (quality.BAD_VALUE if mask_planes is None else
+                 mask_plane_bitmask(mask_planes, BAD_MASK_PLANE_NAMES))
+    bright_value = (prep.BRIGHT_OBJECT_BIT if mask_planes is None else
+                    mask_plane_bitmask(mask_planes, ("MP_BRIGHT_OBJECT",)))
+    bad = ((bits & bad_value) != 0) | ~np.isfinite(image) | ~np.isfinite(variance) | (variance <= 0)
+    base = bad | ((bits & bright_value) != 0)
     empty = np.empty((0, 2))
     objects, seg, kron, flags, _, snr, extra = prep.detect(image, variance, bad, center, empty, scale)
     # A source coinciding with the random center is still a contaminant, not a BCG.
@@ -254,7 +259,8 @@ def run_compare(sample, quality_dir, work):
                 header = WCS(hdus[info['science_hdu']].header).celestial.to_header()
             center = info['center_pixel_xy']; scale = info['pixel_scale_arcsec']
             kpp = float(cosmo.kpc_proper_per_arcmin(frame['z']).value)*scale/60
-            native, masks, seg, det, detection = control_masks(image, variance, bits, center, scale)
+            native, masks, seg, det, detection = control_masks(
+                image, variance, bits, center, scale, info["mask_planes"])
             out = work/ident; out.mkdir()
             write_table(out/'detections.tsv', det)
             header['SCIVAL'] = False; header['BCGPOL'] = 'none'; header['BGSUB'] = False

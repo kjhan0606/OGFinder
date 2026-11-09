@@ -19,6 +19,7 @@ from fetch_ancillary_catalogues import Cas, catalogue_reader, save
 
 
 DEFAULT_USER = "kjhan0606"
+STATUS_POLL_INTERVAL_S = 20
 
 
 def validate_plan(plan_dir):
@@ -196,7 +197,7 @@ def run(plan_dir, results_dir, user, *, submit=False, approved=False):
                         save(checkpoint, state)
                         raise ValueError(f"CAS count query failed for {name}")
                     print(f"{name}: {status.get('status', 'unknown')}", flush=True)
-                    time.sleep(60)
+                    time.sleep(STATUS_POLL_INTERVAL_S)
                 partial = results_dir / f"{name}.csv.part"
                 if partial.exists():
                     partial.rename(results_dir / f"{name}.csv.incomplete-{time.time_ns()}")
