@@ -3517,19 +3517,35 @@ null only, and sky/PSF/mask/covariance uncertainties remain. Keep
 - Summary SHA-256: `d95f894c6cf54e92d906063fdc920c24e80bdf9ad4194d2ff63dacd8bdd42494`
 - Input pair table SHA-256: `98ed9e0022bfa68d5921ead62dce55be7df1cfa169e6a777d66d1e9760f43994`
 
-## 2026-11-09 S23B count-only query pause
+## 2026-11-09 S23B count-only query and audit
 
-Approved plan SHA-256: `b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`.
-The latest local checkpoint is interrupted after 15/18 batches (375 count rows
-verified). `shape_counts_015` / CAS job `1070884` was submitted but not retrieved;
-016–017 were not submitted. The local process is stopped pending user approval.
-A remote completion of the submitted job is possible, but no post-pause result
-was fetched. Credentials remain unsaved; no source rows, coordinates, shape
-values, photo-z, or images were received. Keep `science_measurement=false`.
+The approved plan SHA-256
+`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984` completed
+all 18 batches. The resumed runner retrieved job `1070884`, completed jobs
+`1071485` and `1071508`, and verified all 427 integer counts. The local audit
+checked the receipts and hashes, SQL center IDs, and mapping to the saved
+target manifest. No source rows, coordinate rows, shape values, photo-z, or
+images were returned, and credentials were not saved.
 
-The count query uses the released S19A weak-lensing shape-catalog subset, whose
-release selection includes the weak-lensing flag and star mask. Project-specific
-photo-z, tomography, B-mode, and radial cuts remain unapplied. Resume the saved
-checkpoint only after approval; then verify the submitted job, finish the two
-remaining batches, and run `audit_s23b_wl_shape_counts.py`. A source-row export
-is a separate request requiring separate approval.
+The 3 proper-Mpc cones contain 356,191 summed lens-source candidate pairs.
+Counts are zero for 329/427 centers (77%); 82 centers have >=1,000 entries,
+62 have >=3,000, and 25 have >=5,000. Median count is zero and maximum is
+8,959. Descriptive Spearman rho is 0.060 versus redshift and -0.145 versus
+CAMIRA richness; no p-values were computed. A local sky-region cross-tab shows
+substantial footprint variation in zero counts. Before source-row planning,
+define and justify a common-support lens/control sample.
+
+The released S19A weak-lensing table already applies its release weak-lensing
+flag and star mask. Project-specific source-redshift, tomographic, B-mode, and
+radial cuts are not applied. The totals are availability counts and candidate
+pairs, not unique sources, final effective source counts, a lensing signal-to-
+noise estimate, or a weak-lensing measurement. Keep `science_measurement=false`.
+
+- Audit output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_shape_count_audit_2026-11-07_01/`
+- Assessment SHA-256: `f2ce0c5f22c2f6f894386f0c682d08aaf21236d5dd56188cf896b65064e6d672`
+- Per-center table SHA-256: `d650564b4870d4af93ce04b9ebd82475a99366aa68c2dfe236e7f070826c0f7f`
+- Auditor: `audit_s23b_wl_shape_counts.py`
+
+Next step, pending approval: assess local footprint evidence and define a
+common-support lens/control sample, then prepare an exact source-row plan.
+Source-row query submission and transfer require separate approval.

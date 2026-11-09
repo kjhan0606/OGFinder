@@ -2479,20 +2479,33 @@ PSF, mask, and coadd-covariance terms keep `science_measurement=false`.
 - Pair-table SHA-256: `98ed9e0022bfa68d5921ead62dce55be7df1cfa169e6a777d66d1e9760f43994`
 - No network request, image-pixel read, new data download, commit, or push was made for this analysis.
 
-## 2026-11-09 Paused S23B S19A count-only query
+## 2026-11-09 S23B S19A count-only audit
 
 The exact approved count-only plan (SHA-256
-`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`) has a
-local checkpoint of 15/18 complete batches (375 verified integer counts).
-`shape_counts_015`, CAS job `1070884`, had been submitted but its result was not
-retrieved; batches 016–017 were not submitted. The runner is stopped at the
-user's request to await approval before the next step. The remote job may finish,
-but no result has been fetched since the pause. No source rows, coordinates,
-shape values, photo-z, or images were returned, and credentials were not saved.
+`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`) completed
+18/18 batches and returned one integer count for each of 427 centers. The audit
+verified the batch receipts, result hashes, SQL center IDs, and target-manifest
+mapping. It recorded 356,191 summed lens-source candidate pairs; 329/427
+centers have zero entries, 82 have at least 1,000, 62 at least 3,000, and 25
+at least 5,000. Median count is zero; maximum is 8,959. Descriptive Spearman
+rho is 0.060 versus redshift and -0.145 versus richness; no p-values were
+computed. A local cross-tab shows that zero counts vary strongly by sky region,
+so footprint and common-support selection need resolution before defining a
+usable lens sample.
 
-The `weaklensing_hsm_regauss` table represents the released S19A weak-lensing
-shape-catalog subset, which already applies the HSC catalog weak-lensing flag
-and star mask. Counts are before additional project-specific photo-z,
-tomographic, B-mode, and radial selections. The count audit runner is
-`hsc_debug/audit_s23b_wl_shape_counts.py`; it is prepared but not yet run.
-Keep `science_measurement=false`. Any source-row export needs separate approval.
+The `weaklensing_hsm_regauss` count is from the released S19A shape-catalog
+subset, whose release selection already includes the weak-lensing flag and star
+mask. It precedes project-specific source-redshift, tomographic, B-mode, and
+radial cuts. These are availability counts, not unique-source totals, final
+effective counts, signal-to-noise estimates, or a weak-lensing measurement.
+No source rows, coordinate rows, shape values, photo-z, or images were returned;
+credentials were not saved. Keep `science_measurement=false`.
+
+- Audit runner: `hsc_debug/audit_s23b_wl_shape_counts.py`
+- Assessment: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_shape_count_audit_2026-11-07_01/assessment.md`
+- Assessment SHA-256: `f2ce0c5f22c2f6f894386f0c682d08aaf21236d5dd56188cf896b65064e6d672`
+- Per-center table SHA-256: `d650564b4870d4af93ce04b9ebd82475a99366aa68c2dfe236e7f070826c0f7f`
+
+Next step, pending approval: assess the saved local footprint evidence, define
+a common-support lens/control sample, and prepare an exact source-row export
+plan. Submitting or transferring source rows remains a separate approval gate.

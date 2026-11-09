@@ -4294,26 +4294,37 @@ exploratory sensitivity evidence and keep `science_measurement=false`.
 - Summary SHA-256: `d95f894c6cf54e92d906063fdc920c24e80bdf9ad4194d2ff63dacd8bdd42494`
 - Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_icl_satellite_relation_wild.py`
 
-## 2026-11-09 S23B weak-lensing count query paused
+## 2026-11-09 S23B weak-lensing count-only query and audit
 
-The user-approved S19A count-only plan has plan SHA-256
-`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`.
-The last local checkpoint is `interrupted` after 15 of 18 batches and 375
-verified integer counts. Batch `shape_counts_015` (CAS job `1070884`) had been
-submitted but its result had not been retrieved; batches 016–017 had not been
-submitted. The local runner is stopped. CAS may finish the submitted job
-remotely, but no result has been fetched since the pause. Credentials are not
-saved; source rows, coordinates, shape values, photo-z, and images were not
-returned. `science_measurement=false` remains in force.
+The user-approved S19A count-only plan (SHA-256
+`b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984`) completed
+all 18 batches. The resumed run retrieved job `1070884`, completed jobs
+`1071485` and `1071508`, and verified 427 integer counts. The local audit
+verified every batch hash and center ID against the approved plan and joined
+the counts to the saved target manifest. Credentials were not saved; no source
+rows, coordinate rows, shape values, photo-z, or images were returned.
 
-The exact plan was count-only: one HSC S19A released-shape-catalog object count
-per 3 proper-Mpc lens cone. The HSC release's weak-lensing flag and star mask
-are already part of that catalog subset; project-specific photo-z, tomography,
-B-mode, and radial selections have not been applied. The local audit runner
-`analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_shape_counts.py` is ready
-but has not been run because the 427-row result is incomplete.
+There are 356,191 lens-source candidate pairs summed over the 427 cones, but
+329 centers (77%) have zero catalog entries within 3 proper Mpc. Only 82 have
+at least 1,000 entries, 62 at least 3,000, and 25 at least 5,000; the median is
+zero and the maximum is 8,959. Descriptive Spearman coefficients are 0.060 for
+count versus redshift and -0.145 for count versus CAMIRA richness; no p-values
+were computed. A local cross-tab by the already saved target coordinates shows
+strong sky-region variation in the zero counts, so the next analysis must
+resolve HSC footprint/support selection before defining a lens sample.
 
-Next proposed step, pending user approval: resume from the saved checkpoint,
-first retrieve/verify the already submitted batch, finish the two unsubmitted
-batches, and audit all 427 counts. Any source-row export would require a separate
-explicit approval.
+These are availability counts from the released S19A weak-lensing shape subset,
+which already applies the release weak-lensing flag and star mask. The project
+has not applied source-redshift, tomographic, B-mode, or radial cuts. Counts
+are lens-source candidate pairs, not unique sources or a lensing measurement.
+Keep `science_measurement=false`.
+
+- Audit: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_shape_count_audit_2026-11-07_01/assessment.md`
+- Audit assessment SHA-256: `f2ce0c5f22c2f6f894386f0c682d08aaf21236d5dd56188cf896b65064e6d672`
+- Per-center table SHA-256: `d650564b4870d4af93ce04b9ebd82475a99366aa68c2dfe236e7f070826c0f7f`
+- Audit runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_shape_counts.py`
+
+Next step, pending approval: make a local footprint/support assessment and
+define a defensible common lens and matched-control sample, then prepare an
+exact source-row export plan with columns, row/size estimates, and selection
+rules. This approval did not authorize source-row submission or transfer.
