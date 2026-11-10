@@ -4546,3 +4546,27 @@ member dilution/boost, selection-response 오차도 미해결이므로
 - summary SHA-256: `2c899b0090dd94a34f1fd6b0cb111e3d1ada696da2178f98e9fd5b659e699edf`
 - assessment/TSV/PNG SHA-256: `d152c22f21a244e9848f453523c0a346120e30f4897b9a427d65776aa804ba2a` / `3dd1ef2b7f4ac7aa33d6b046ef9b528ae6c8818d1f3992037b6b70aa6e5548b2` / `4c3593236d5a46dd504d0f54b3f2396e0a925460c27f3f879bc6fef7bef92ce9`
 - 다음 단계: 렌즈 세트별 동일 가중 random 민감도와 보유 S19A 전용 `n(z)` 대안을 평가한다. 새 자료 반출은 포함하지 않는다.
+## 2026-11-11 S23B 가중 및 DESI `n(z)` 민감도
+
+기존 승인된 S23B HSC S19A shape 행, HSC Y3 SACC, DESI/HSC `n(z)` 자료만으로
+오프라인 민감도 분석을 완료했다. CAS·네트워크·다운로드·영상 pixel 접근은
+없었다. Runner는 `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_weight_and_desi_nz_sensitivity.py`이고
+SHA-256은 `af42929b6c392a2ccf98cf11780de46f141450ec9fc43f4e06af51492094ae18`이다.
+
+기준 표본은 74 렌즈/367 대조, source bins 2–4다. 반경별 공통 지지는 60–74개
+렌즈 세트다. 세트 동일 가중 random subtraction은 pooled 기준보다 0.2–0.4 Mpc에서
++22.71%, 0.4–0.7 Mpc에서 −19.39%, 0.7–1.0 Mpc에서 −11.97%다. 대조 세트만
+동일 가중해도 1.5–2.0 Mpc 값이 −24.01% 달라진다. 이 가중 variant들의 별도
+공간 공분산은 산출하지 않았다. DESI `n(z)` 중앙 곡선은 SACC 대비 약 −2–4%이며,
+lower/upper는 점별 주변 envelope라 joint posterior가 아니다.
+
+따라서 pooled random profile은 estimator 선택에 민감하다. 동일 aperture 지지,
+zero-support set 처리, footprint-aware covariance 및 cross-shear가 정리될 때까지
+mass fit과 detection 해석을 보류한다. 영상 PSF/depth/mask/sky 매칭, reduced shear,
+magnification, member dilution/boost, selection response 및 injection/recovery도
+미해결이다. `science_measurement=false` 유지.
+
+- 평가: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md`
+- 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_weight_and_desi_nz_sensitivity_2026-11-11_03/`
+- summary SHA-256: `9c66b281e0920b79a5c7854e40081b873621867cfaca2a9991d5e93e031f1aa5`
+- 이전 `_01`과 `_02` 시도는 각각 비교 지원 불일치와 문구 오류 때문에 superseded 처리했다. 최종 기준은 `_03`이다.

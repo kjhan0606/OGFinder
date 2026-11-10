@@ -2714,3 +2714,26 @@ DESI 곡선/범위를 fiducial SACC와 비교한다 (공동 posterior draw는 �
 - 평가서 SHA-256: `d152c22f21a244e9848f453523c0a346120e30f4897b9a427d65776aa804ba2a`
 - TSV SHA-256: `3dd1ef2b7f4ac7aa33d6b046ef9b528ae6c8818d1f3992037b6b70aa6e5548b2`
 - 그림 SHA-256: `4c3593236d5a46dd504d0f54b3f2396e0a925460c27f3f879bc6fef7bef92ce9`
+# 2026-11-11 약중력 가중·`n(z)` 민감도 결과
+
+80개 S23B 렌즈와 400개 matched control 중 기존 지지 기준을 통과한 74개/367개를
+사용했다. 반경별 같은 렌즈 세트 지지를 고정해 비교했을 때, 세트 동일 가중
+random-subtracted `DeltaSigma`는 pooled 결과 대비 0.2–1.0 proper Mpc에서 약
+−19%에서 +23%까지 달랐다. 대조 세트 동일 가중만 해도 1.5–2.0 Mpc에서 −24%다.
+따라서 pooled profile은 최종 estimator 선택 근거로 부족하며, aperture 가중과
+0 지지 matched-set 처리 규칙을 사전에 고정해야 한다.
+
+기존 DESI/HSC S19A `n(z)` 중앙 곡선은 SACC 기준 프로파일을 반경별 약 −2–4% 이동했다.
+점별 lower/upper envelope는 joint posterior가 아니므로 불확도 전파로 해석하지
+않는다. 5° endpoint jackknife도 분리된 HSC 영역을 합칠 수 있는 근사 공분산이다.
+
+이는 기존 자료만 사용한 민감도 검토이며 질량 적합이나 과학 검출이 아니다.
+`science_measurement=false`를 유지한다. 다음에는 허용된 source-row 범위 안에서
+렌즈 세트/대조 aperture 매칭, zero-support 처리, footprint-aware covariance,
+cross-shear 점검을 명시한 사전 estimator 계획을 만든다. 대조 위치의 HSC 영상에서
+깊이·마스크·PSF·하늘 일치, reduced shear, magnification, 멤버 희석/boost,
+selection response, 주입/회수 검증이 해결되기 전에는 halo-mass 적합을 보류한다.
+
+재현 평가와 해시는
+[`hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md`](hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md)
+및 그 안의 실행기/산출물 기록을 참조한다.

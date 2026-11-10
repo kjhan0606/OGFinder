@@ -3787,3 +3787,17 @@ and reproducible runner
 Outputs outside Git:
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_random_subtracted_profile_2026-11-11_01/`
 (summary SHA-256 `2c899b0090dd94a34f1fd6b0cb111e3d1ada696da2178f98e9fd5b659e699edf`).
+# 2026-11-11 가중 방식 및 DESI `n(z)` 민감도
+
+기존 승인된 80-lens/400-control HSC shape rows, 기존 SACC 기준과 DESI/HSC
+분포만 사용해 pooled 대조와 세트 동일 가중, 12개 DESI `n(z)` 곡선을 비교했다.
+새 조회·다운로드·영상 읽기는 없었다. 렌즈 세트 동일 가중은 중간 반경에서
+pooled 대비 최대 약 23% 변했고, 대조 세트 동일 가중은 특정 구간에서 24%까지
+달랐다. DESI 중앙 `n(z)` 곡선 변화는 약 −2–4%다. 가중 민감도 공분산과 joint
+`n(z)` posterior가 없고 영상/대조장 일치 및 cross-shear 문제가 남아 있어
+`science_measurement=false`를 유지한다.
+
+- 실행기: [`analyze_s23b_wl_weight_and_desi_nz_sensitivity.py`](analyze_s23b_wl_weight_and_desi_nz_sensitivity.py)
+- 평가: [`wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md`](wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md)
+- 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_weight_and_desi_nz_sensitivity_2026-11-11_03/`
+- summary SHA-256: `9c66b281e0920b79a5c7854e40081b873621867cfaca2a9991d5e93e031f1aa5`
