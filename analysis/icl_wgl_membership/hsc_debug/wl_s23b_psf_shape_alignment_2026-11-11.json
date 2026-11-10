@@ -1,0 +1,480 @@
+{
+  "schema": "astrafek-s23b-wl-psf-shape-alignment-v1",
+  "status": "complete_descriptive_psf_alignment_diagnostic",
+  "science_measurement": false,
+  "network_used": false,
+  "additional_data_downloaded": false,
+  "image_pixels_read": false,
+  "approved_sample": {
+    "row_plan_sha256": "7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc",
+    "n_lens_centers": 74,
+    "n_positive_control_centers": 367,
+    "minimum_positive_controls_per_lens": 4,
+    "support_policy_audit": {
+      "n_lens_sets_with_positive_lens_support": 78,
+      "n_lenses_with_any_positive_control": 80,
+      "n_positive_control_centers": 376,
+      "policies": {
+        "3": {
+          "n_eligible_lens_sets": 74,
+          "n_positive_control_centers": 367,
+          "lens_ids_sha256": "78e35dcab6bc000160d391ae3b16516bc342ee9f74a550a6106bb256afef7a08",
+          "control_ids_sha256": "583fd154ebb799338dd354eb3e043583f9247cef87200323c5574f21bc6c5894"
+        },
+        "4": {
+          "n_eligible_lens_sets": 74,
+          "n_positive_control_centers": 367,
+          "lens_ids_sha256": "78e35dcab6bc000160d391ae3b16516bc342ee9f74a550a6106bb256afef7a08",
+          "control_ids_sha256": "583fd154ebb799338dd354eb3e043583f9247cef87200323c5574f21bc6c5894"
+        },
+        "5": {
+          "n_eligible_lens_sets": 71,
+          "n_positive_control_centers": 355,
+          "lens_ids_sha256": "894aec1212d2c983476aa4ece08926e899f9e36d245288ea2db8229990565745",
+          "control_ids_sha256": "07a0b3478926b9b18ff6c85939f6b40b5eba8d9797811087c381531c5b2c8c4a"
+        }
+      }
+    },
+    "source_redshift_bins": [
+      2,
+      3,
+      4
+    ],
+    "masked_raw_b_mode_value": 0,
+    "radial_range_proper_mpc": [
+      0.1,
+      3.0
+    ]
+  },
+  "pair_selection_counts": {
+    "lenses": {
+      "candidate_center_sourcebin_pairs": 176930,
+      "valid_calibration_input_pairs": 176930,
+      "pass_hsc_shape_and_weight_cuts": 174258,
+      "pass_b_mode_mask": 174258,
+      "positive_nz_lensing_efficiency": 174258,
+      "pass_0p1_to_3_proper_mpc": 174064,
+      "pair_weighted_responsivity_by_source_zbin": {
+        "2": 0.8446340806002712,
+        "3": 0.839842281678785,
+        "4": 0.8377625981089432
+      },
+      "science_measurement": false
+    },
+    "controls": {
+      "candidate_center_sourcebin_pairs": 854987,
+      "valid_calibration_input_pairs": 854986,
+      "pass_hsc_shape_and_weight_cuts": 843233,
+      "pass_b_mode_mask": 841569,
+      "positive_nz_lensing_efficiency": 841569,
+      "pass_0p1_to_3_proper_mpc": 840486,
+      "pair_weighted_responsivity_by_source_zbin": {
+        "2": 0.8448829235495181,
+        "3": 0.8399688328185297,
+        "4": 0.8375854283484719
+      },
+      "science_measurement": false
+    }
+  },
+  "source_deduplication": {
+    "lenses": {
+      "pair_rows": 174064,
+      "unique_sources": 172993,
+      "repeated_pair_rows_removed": 1071,
+      "maximum_pairs_per_source": 2,
+      "unique_sources_after_cross_role_exclusion": 169169
+    },
+    "controls": {
+      "pair_rows": 840486,
+      "unique_sources": 460289,
+      "repeated_pair_rows_removed": 380197,
+      "maximum_pairs_per_source": 6,
+      "unique_sources_after_cross_role_exclusion": 456465
+    },
+    "sources_shared_between_lens_and_control_roles_excluded_from_both": 3824
+  },
+  "regression": {
+    "model": "per-source-z-bin intercept plus linear PSF-ellipticity terms for each galaxy-shape component",
+    "psf_ellipticity": "e1=(PSF11-PSF22)/(PSF11+PSF22); e2=2*PSF12/(PSF11+PSF22)",
+    "raw_shape_response": "catalog e1/e2",
+    "corrected_shape_response": "(e/(2R_z)-c)/(1+m), with pair-weighted sample responsivity R_z per source bin; sample-level edge-selection correction is not applied",
+    "weight": "HSC shape_weight*[2R_z*(1+m)]^2, one observation per unique source and role",
+    "uncertainty": "delete-one equal-area RA/sin(Dec) source-cell jackknife at 5 and 2.5 degree widths",
+    "p_values_reported": false
+  },
+  "results": {
+    "5_degree_cells": {
+      "lenses": {
+        "n_unique_sources": 169169,
+        "n_occupied_equal_area_cells": 36,
+        "source_zbin_counts": {
+          "2": 71877,
+          "3": 62217,
+          "4": 35075
+        },
+        "weighted_least_squares_shape_to_psf_matrix": {
+          "raw_catalog_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.02913445650386838,
+                -0.0063028618115499955
+              ],
+              [
+                -0.0013912601186451806,
+                0.01833194349853439
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.037836981401681284,
+                0.03263668969209217
+              ],
+              [
+                0.0309310826373499,
+                0.030251905677351254
+              ]
+            ]
+          },
+          "per_object_m_c_corrected_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.022477546087753042,
+                -0.005275118142911243
+              ],
+              [
+                0.0014230953915699701,
+                0.00876482115502449
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.024903072769776498,
+                0.021553793130532885
+              ],
+              [
+                0.020036809351424312,
+                0.02043668692081004
+              ]
+            ]
+          }
+        },
+        "block_width_deg": 5.0,
+        "jackknife_method": "delete one equal-area RA/sin(Dec) source cell"
+      },
+      "controls": {
+        "n_unique_sources": 456465,
+        "n_occupied_equal_area_cells": 36,
+        "source_zbin_counts": {
+          "2": 196590,
+          "3": 168381,
+          "4": 91494
+        },
+        "weighted_least_squares_shape_to_psf_matrix": {
+          "raw_catalog_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                0.0021076585698212207,
+                0.010136352134703642
+              ],
+              [
+                -0.005312019030310446,
+                -0.016990089805370822
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.02789900724446385,
+                0.018604347571804115
+              ],
+              [
+                0.018257521476902905,
+                0.016697557589925412
+              ]
+            ]
+          },
+          "per_object_m_c_corrected_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.0010681267282759035,
+                0.006375651462572942
+              ],
+              [
+                -0.003929339180197773,
+                -0.013293692623923879
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.019154294074771174,
+                0.012837812446283325
+              ],
+              [
+                0.012214326137581655,
+                0.01137635881195523
+              ]
+            ]
+          }
+        },
+        "block_width_deg": 5.0,
+        "jackknife_method": "delete one equal-area RA/sin(Dec) source cell"
+      },
+      "paired_difference": {
+        "paired_lens_minus_control_matrix": {
+          "raw_catalog_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.0312421150736896,
+                -0.01643921394625364
+              ],
+              [
+                0.003920758911665266,
+                0.03532203330390521
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.04736170635994235,
+                0.03875020573169454
+              ],
+              [
+                0.02971761936536286,
+                0.030292096880179135
+              ]
+            ]
+          },
+          "per_object_m_c_corrected_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.021409419359477138,
+                -0.011650769605484185
+              ],
+              [
+                0.005352434571767743,
+                0.02205851377894837
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.031397327407069395,
+                0.026080493618646866
+              ],
+              [
+                0.019287551508717235,
+                0.019917565813416856
+              ]
+            ]
+          }
+        },
+        "paired_occupied_equal_area_cells": 36
+      }
+    },
+    "2.5_degree_cells": {
+      "lenses": {
+        "n_unique_sources": 169169,
+        "n_occupied_equal_area_cells": 57,
+        "source_zbin_counts": {
+          "2": 71877,
+          "3": 62217,
+          "4": 35075
+        },
+        "weighted_least_squares_shape_to_psf_matrix": {
+          "raw_catalog_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.029134456503868283,
+                -0.00630286181154981
+              ],
+              [
+                -0.0013912601186451927,
+                0.0183319434985343
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.03732727656354628,
+                0.03305708712721132
+              ],
+              [
+                0.025757926622063793,
+                0.028479306888524437
+              ]
+            ]
+          },
+          "per_object_m_c_corrected_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.02247754608775318,
+                -0.005275118142911404
+              ],
+              [
+                0.001423095391569971,
+                0.008764821155024544
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.024564437658852516,
+                0.02184214142322563
+              ],
+              [
+                0.016775279237631998,
+                0.018950506026851704
+              ]
+            ]
+          }
+        },
+        "block_width_deg": 2.5,
+        "jackknife_method": "delete one equal-area RA/sin(Dec) source cell"
+      },
+      "controls": {
+        "n_unique_sources": 456465,
+        "n_occupied_equal_area_cells": 79,
+        "source_zbin_counts": {
+          "2": 196590,
+          "3": 168381,
+          "4": 91494
+        },
+        "weighted_least_squares_shape_to_psf_matrix": {
+          "raw_catalog_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                0.0021076585698213256,
+                0.01013635213470353
+              ],
+              [
+                -0.005312019030310542,
+                -0.016990089805370742
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.02355444100437535,
+                0.018388535657835124
+              ],
+              [
+                0.020188023348588,
+                0.016519370591958765
+              ]
+            ]
+          },
+          "per_object_m_c_corrected_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.0010681267282758732,
+                0.0063756514625730055
+              ],
+              [
+                -0.003929339180197654,
+                -0.013293692623923796
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.016185332052039127,
+                0.012494855024449247
+              ],
+              [
+                0.01374863461885809,
+                0.011545707856734803
+              ]
+            ]
+          }
+        },
+        "block_width_deg": 2.5,
+        "jackknife_method": "delete one equal-area RA/sin(Dec) source cell"
+      },
+      "paired_difference": {
+        "paired_lens_minus_control_matrix": {
+          "raw_catalog_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.03124211507368961,
+                -0.01643921394625334
+              ],
+              [
+                0.003920758911665349,
+                0.03532203330390504
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.043647978815111746,
+                0.036188856797619164
+              ],
+              [
+                0.030030346561925915,
+                0.02880276145554825
+              ]
+            ]
+          },
+          "per_object_m_c_corrected_shape": {
+            "coefficient_matrix_rows_e1_e2_columns_psf_e1_psf_e2": [
+              [
+                -0.021409419359477308,
+                -0.01165076960548441
+              ],
+              [
+                0.005352434571767625,
+                0.022058513778948338
+              ]
+            ],
+            "equal_area_jackknife_se": [
+              [
+                0.02876340844395845,
+                0.02415623626018082
+              ],
+              [
+                0.0199929139955255,
+                0.01897655859237223
+              ]
+            ]
+          }
+        },
+        "paired_occupied_equal_area_cells": 80
+      }
+    }
+  },
+  "inputs": {
+    "source_row_plan_sha256": "7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc",
+    "row_status_sha256": "fe2611d149e577c3ca3a6b44d0375848988eef63eb08f18702531925ccfc8bf4",
+    "row_summary_sha256": "068651f593dac782ed1e7eb2c5da9a01fdc1b21162b5ee1187758274619eb321",
+    "source_batch_sha256": {
+      "lens_shape_rows_000": "44ae91c6dc56eb14d402a4e49be92cc90f1298f7020c6f0d2c9ac99b0cc702fa",
+      "lens_shape_rows_001": "a61f939ac07ae200ecf308e6ebd9c5f78d9dd6943a0ce2057b80445349616e1e",
+      "lens_shape_rows_002": "93e5b29e1013291391ddd5c5fc0a8aaa46676d0d34289ab5cbab0f02361ecf4a",
+      "lens_shape_rows_003": "331e489d1dadd056138ed400b76c88bb013f1549177caa49e293d5da5776f779",
+      "random_shape_rows_000": "8e53156a1c9edb6632294f5fabe924ee79ae8519ced32f3202f716b41cc04b45",
+      "random_shape_rows_001": "d2cd2e2fbafb18b1bc8e662b54d9e2b1366ade8fcfb13d884d52ea6dd1ef53b9",
+      "random_shape_rows_002": "f81d0d796277588f9a906b4e26957bd185f9574e15721604c3acccd9adc23446",
+      "random_shape_rows_003": "a5d6871e422631353c493e9c050a0ccf7d397bc41c2ce5d82bba0b72ed859202",
+      "random_shape_rows_004": "2974174c1dc14eb43351b7afb7cf3214d51c61f3b2cfc308c99866a6755fc904",
+      "random_shape_rows_005": "90f90010cff43ff000e870c44c1f25b4932728ba3e7e72b4746d72d8d496b44b",
+      "random_shape_rows_006": "56d1ed20a6e9c263fb500aafed9ab3d7bd13716a26f2f9c57d369e8406d7ca58",
+      "random_shape_rows_007": "1a1476608e8d09d9dfd7fef35d139674c2aa261ca49dc845004f9ba8a2eed856",
+      "random_shape_rows_008": "18d01e48708b73106905e9696d3ef80e5fb433e513fc46a083c0bb844dd20e42",
+      "random_shape_rows_009": "985cce2dd9b18dc27c6e971fbd6c2c787e915f3d36b04de72e1c2ac024640961",
+      "random_shape_rows_010": "a207245ede3775e1e6fb71ee0abc434657b6a187a46acad8adb8df546e883126",
+      "random_shape_rows_011": "49bafa390c99340aa1d092b44c1d777143eada2e6ce02078fab6fe1d5aa63796",
+      "random_shape_rows_012": "fd2351ddb87e05c113a203e75bea8bd38777e8806ec2ea73ae2fe3817b7c53bd",
+      "random_shape_rows_013": "adeb23af9cbb3fc1e83c9678652935b31eec97ba54215f30510b0196eb652265",
+      "random_shape_rows_014": "fc8a75cca183d499a57fd0e7e06e39e8324730be10243b6a848a347b79d85cb9",
+      "random_shape_rows_015": "27f21c9fc77d1b9fc1074b0eaaf1915c6870e8145d38a2ef02cf022449a98bfd"
+    },
+    "support_summary_sha256": "eb73aa0365813d880d3edf60b12e4039f2575f8a97eab8868fc918121a34d445",
+    "per_center_support_sha256": "e630442cbaeb054763897a46d68d3b4baea7c0884e80ac22f46ece906583f48e",
+    "hsc_y3_nz_sacc_sha256": "a28f9e2e088e92d96d2d87083a6eeeac4c0c84c6b48e033bd3d1dc1bf0d8958f"
+  },
+  "limitations": [
+    "The PSF association is a sample-specific descriptive null and does not isolate PSF leakage from lensing or other spatial correlations.",
+    "The regression omits sample-level HSC edge-selection response and responsivity terms.",
+    "Equal-area source cells are approximate and are not validated contiguous HSC survey regions.",
+    "The audit does not replace the HSC star, random-point, B-mode, or image-level PSF tests.",
+    "A small or zero linear coefficient does not establish negligible PSF systematics.",
+    "science_measurement remains false."
+  ],
+  "analysis_script_sha256": "d468a9005489ae551a4e3010b4790b546586eff306a40f0ea4097c049a5d9761",
+  "cosmology": {
+    "H0_km_s_mpc": 70.0,
+    "Omega_m": 0.3
+  }
+}
