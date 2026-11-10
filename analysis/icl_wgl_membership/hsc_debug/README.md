@@ -3997,6 +3997,13 @@ unsubmitted; S16A coverage is a ceiling only and must not be combined with
 S19A without a separate release/calibration audit. Submission requires
 approval of the exact plan hash.
 
+`submit_s23b_s16a_shape_counts.py` validates the reviewed plan in `--plan`
+mode without network access. `--submit` requires the exact approved plan
+SHA-256, an interactive Lageunha terminal, and one hidden HSC password prompt.
+The adapter submits the 42 count-only batches sequentially and stores the two
+aggregate columns for each center.
+
 - Assessment: [`s23b_s16a_shape_count_plan_assessment_2026-11-11.md`](s23b_s16a_shape_count_plan_assessment_2026-11-11.md)
+- Submitter: [`submit_s23b_s16a_shape_counts.py`](submit_s23b_s16a_shape_counts.py)
 - Prepared plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
