@@ -4382,3 +4382,30 @@ queries were submitted and no network was used in this stage.
 - Assessment and plans (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
 - Row-plan file SHA-256: `3ec3c8e77cf9cf38fdd02320718c6e38ee3d23e8948584255cfdc27bfe90cfee`
 - This stage used local analysis only; no remote query or data transfer occurred.
+
+### 2026-11-10 승인된 대조 count-only 실행 및 원천행 계획 갱신
+
+별도 승인된 count-only 계획 SHA-256
+`fe19ac426272d4005e3ee74a902dfdb52d1fe83ecb2cc5ec901c10b880d28e8f`를
+lageunha에서 실행했다. 16/16 batch와 400개 결과 행의 ID, 정수 count,
+영수증 해시를 확인했다. 결과는 무작위 중심 ID, 짝지은 렌즈 ID, 정수
+count뿐이며 shape 값·좌표·photo-z·영상은 반환되지 않았고 자격 증명은
+저장되지 않았다.
+
+대조군 400개 원시 count 합은 1,572,453개이며 18개 중심은 0, 382개는
+양수다. 80개 렌즈 count 합 340,256개와 합친 source-pair 예상치는
+1,912,709개다. 렌즈별 대조 평균 count/렌즈 count 비율의 q16/중앙/q84는
+0.690/0.936/1.295다. 렌즈 7곳은 대조 5곳 중 적어도 하나가 0이고, 5곳
+모두 0인 렌즈는 없다. 이는 릴리스 원시 count이며 프로젝트 source 선택
+후의 유효 공통 지지나 lensing 측정은 아니다.
+
+count 결과로 갱신한 원천행 계획은 렌즈 80개 4 batch, 대조 중심 400개
+16 batch다. 예상 총 행 1,912,709쌍, 무압축 CSV는 0.46/0.58/0.86 GiB
+(낮음/중앙/높음)이다. byte 수는 과거 export의 행당 크기를 사용한 추정으로
+실제 다운로드 용량은 아니다. 이 원천행 계획은 여전히
+`prepared_not_submitted`이며 별도 hash 승인 전에는 제출하지 않는다.
+
+- Finalizer: `analysis/icl_wgl_membership/hsc_debug/finalize_s23b_wl_common_support_plan.py`
+- Count audit와 갱신 계획: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
+- 원천행 계획 파일 SHA-256: `7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`
+- 원천행 query/download 미실행; `science_measurement=false` 유지.

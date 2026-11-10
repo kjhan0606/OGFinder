@@ -3600,3 +3600,30 @@ were submitted in this stage; no network or data transfer was used.
 - Assessment and plans (outside Git):
   `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
 - Row-plan file SHA-256: `3ec3c8e77cf9cf38fdd02320718c6e38ee3d23e8948584255cfdc27bfe90cfee`
+
+### 2026-11-10 approved control-count execution and post-count row plan
+
+The approved count-only plan
+`fe19ac426272d4005e3ee74a902dfdb52d1fe83ecb2cc5ec901c10b880d28e8f` completed
+16/16 batches and verified all 400 control-center rows. It returned only
+`random_center_id`, `matched_lens_id`, and integer `n_shape_sources`; no shape
+values, source coordinates, photo-z, or images were returned, and credentials
+were not saved.
+
+The controls sum to 1,572,453 raw source counts (18 zero and 382 positive).
+The 80 selected lenses sum to 340,256, so the future export is expected to
+contain 1,912,709 lens/control pairs. The per-lens mean-of-five control count
+divided by its lens count has q16/median/q84 0.690/0.936/1.295. Seven lenses
+have at least one zero-count control, and none has all five zero. Project source
+cuts are not included in these raw counts.
+
+The finalized row plan has 4 lens batches and 16 control batches. Estimated
+uncompressed CSV volume is 0.46/0.58/0.86 GiB (low/point/high), from observed
+count totals and historical bytes per row. The row query and transfer remain
+unsubmitted and need separate approval for exact plan-file SHA-256
+`7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`.
+`science_measurement=false` remains in force.
+
+- Finalizer: `finalize_s23b_wl_common_support_plan.py`
+- Count audit and post-count plans:
+  `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`

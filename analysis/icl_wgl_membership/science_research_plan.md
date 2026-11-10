@@ -2554,3 +2554,31 @@ spatial-covariance support. Keep `science_measurement=false` until those gates
 and image/shape quality checks pass. The local planner and complete assessment
 are in `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`;
 runner: `hsc_debug/prepare_s23b_wl_common_support_plan.py`.
+
+### 2026-11-10 approved control-count query and post-count row plan
+
+The separately approved count-only plan
+`fe19ac426272d4005e3ee74a902dfdb52d1fe83ecb2cc5ec901c10b880d28e8f` completed
+on `lageunha`: all 16 batches and 400 integer-count rows passed center-ID,
+count, and receipt-hash validation. The result schema contained only random
+center ID, paired lens ID, and integer source count. No shape values, source
+coordinates, photo-z, or images were returned; credentials were not saved.
+
+The 400 controls sum to 1,572,453 raw catalog counts (18 zero, 382 positive).
+The 80 lenses sum to 340,256, giving 1,912,709 expected lens/control pairs
+for a future row export. The per-lens mean of five control counts divided by
+the lens count has q16/median/q84 0.690/0.936/1.295; seven lenses have at least
+one zero-count control and none has five zeros. Counts precede the project
+shape, source-redshift, B-mode, and radial cuts, so they do not establish final
+common support or a shear measurement.
+
+The post-count row manifest expects 80 lens centers in four batches and 400
+controls in 16 batches. Estimated uncompressed CSV size is 0.46/0.58/0.86 GiB
+(low/point/high), using the exact count totals and historical bytes per pair;
+these are not observed transfer bytes. The row query remains unsubmitted and
+requires separate explicit approval tied to file SHA-256
+`7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`.
+`science_measurement=false` remains in force.
+
+- Count audit, post-count assessment, and plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
+- Finalizer: `hsc_debug/finalize_s23b_wl_common_support_plan.py`
