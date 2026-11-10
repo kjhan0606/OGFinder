@@ -2834,3 +2834,19 @@ nearest patch-QA 중심을 이용했으며 실제 필드 다각형도 검증되�
 - 실행기: [`hsc_debug/analyze_s23b_fixed52_tract_region_influence.py`](hsc_debug/analyze_s23b_fixed52_tract_region_influence.py)
 - 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_tract_region_influence_2026-11-11_01/`
 - summary SHA-256: `afc151a6b189af182f975b7a70a2e8bc176b85fa62ab09bff7a2b8718cb41326`
+
+## 2026-11-11 공식 HSC footprint geometry 후속
+
+고정 52-lens 약중력렌즈 표본의 근사 tract-center 삭제 감사에서 두 큰 영역의
+제외에 따라 1.5–2.0 Mpc 프로파일이 표본 추정치만큼 움직였다. 이를 개선하기 위해
+공식 PDR3 Wide tract/patch 모서리 좌표를 읽는
+[`hsc_pdr3_tract_patch_geometry.py`](hsc_debug/hsc_pdr3_tract_patch_geometry.py)를
+구현했다. 구면 좌표를 다각형에 포함하는 방식으로 field/tract/patch를 기록하고,
+겹침·미할당 좌표를 명시한다. 파서는 자동 다운로드하지 않는다.
+
+공식 Wide 좌표 파일 4개(49,225,826 bytes)는 별도 수신 승인 대기다. 승인 뒤 파일
+크기·스키마·geometry를 확인하고, 같은 승인 source rows의 렌즈·대조 중심과 source
+위치에 tract block을 할당한다. 충분한 독립 tract와 매 deletion의 공통 7-bin support가
+있을 때만 14차원 covariance gate를 평가한다. field 단위 3개 그룹만 남으면 covariance는
+추정하지 않는다. shape/영상 추가 수신이나 CAS 조회는 이 단계에 포함되지 않으며,
+과학 측정 승격 및 질량 적합은 보류한다.

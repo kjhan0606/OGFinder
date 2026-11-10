@@ -3859,3 +3859,20 @@ It reads only the approved shape-row export and pinned products, and keeps
 - Assessment: [`wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md`](wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md)
 - Output (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
 - Summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`
+
+## Official PDR3 Wide tract/patch geometry (prepared)
+
+[`hsc_pdr3_tract_patch_geometry.py`](hsc_pdr3_tract_patch_geometry.py) parses
+the four official PDR3 Wide tract/patch coordinate tables and assigns sky
+coordinates by polygon containment. It records unmatched points, overlapping
+polygons, and cross-field ambiguity. Within a same-field overlap, it chooses
+the nearest containing polygon center deterministically. It performs no
+download; the coordinate files are still awaiting the user's separate receipt
+approval. The official links are listed in the module docstring.
+
+The planned files total 49,225,826 bytes. After approval, validate their exact
+sizes and geometry, assign the approved lens/control/source coordinates to
+tracts, then rerun the fixed-52 regional influence analysis using tract blocks.
+Three field-level regions alone cannot provide a full covariance. Keep
+`science_measurement=false` unless the tract-block support and covariance
+gates are independently satisfied.
