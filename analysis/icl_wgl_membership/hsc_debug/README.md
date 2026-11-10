@@ -3918,3 +3918,27 @@ sbatch --export=ALL,HSC_PDR3_GEOMETRY_DIR=/gpfs/kjhan/Astrafek/data/sample_800_2
 영상·shape·photo-z 다운로드는 하지 않는다.
 기본 결과 경로는
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_tract_influence_2026-11-11_01`이다.
+
+## 2026-11-11 HSC 선택응답 계수 오차 민감도
+
+현재 HSC S19A 적층기는 공식 HSC edge-selection 보정계수의 점추정치를 쓰고
+계수 오차는 결과 프로필에 전파하지 않는다. 이를 위해 기존 승인 표본의 고정
+52개 렌즈·260개 대조장 무작위 차감 프로필을 기준으로 네 공개 계수 각각을
+±1σ 변화시킨 전체 보정 적층을 재계산하는
+[`analyze_s23b_wl_selection_coefficient_sensitivity.py`](analyze_s23b_wl_selection_coefficient_sensitivity.py)를
+추가했다. 계수는 한 번에 하나씩만 바꾸고, 기준 프로필 재현을 통과하지 않으면
+산출을 중단한다.
+
+이 결과는 계수별 반응이지 결합 systematic covariance가 아니다. HSC 유틸리티는
+각 multiplicative/additive 보정 내 두 선택경계 기여를 독립으로 합산하지만,
+두 보정 사이의 공분산은 제공하지 않는다. 따라서 이 단계는 전체 오차나 검출
+유의도를 산출하지 않고 `science_measurement=false`를 유지한다. 새 조회나 데이터
+수신 없이 기존 승인 CSV와 n(z)를 사용한다.
+
+```bash
+sbatch analysis/icl_wgl_membership/hsc_debug/run_s23b_wl_selection_coefficient_sensitivity.sbatch
+```
+
+기본 결과는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_selection_coefficient_sensitivity_2026-11-11_01`에
+저장된다.

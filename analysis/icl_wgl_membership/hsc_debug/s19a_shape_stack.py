@@ -277,8 +277,23 @@ def _to_tangential(phi, e1, e2):
     return e_t, e_x
 
 
+HSC_SELECTION_BIAS_COEFFICIENTS = {
+    "m_mag": -0.059,
+    "m_resolution": 0.019,
+    "a_mag": 0.0064,
+    "a_resolution": 0.0063,
+}
+HSC_SELECTION_BIAS_COEFFICIENT_ERRORS = {
+    "m_mag": 0.0089,
+    "m_resolution": 0.0013,
+    "a_mag": 0.0034,
+    "a_resolution": 0.0009,
+}
+
+
 def hsc_selection_bias(weight, mag_a10, resolution,
-                       psf_shape11, psf_shape22, psf_shape12):
+                       psf_shape11, psf_shape22, psf_shape12,
+                       *, coefficients=None):
     """Estimate HSC edge-selection bias for one selected lens-source sample.
 
     This implements the published HSC Y3/S19A calibration prescription for the
@@ -310,10 +325,28 @@ def hsc_selection_bias(weight, mag_a10, resolution,
     mag_width, res_width = 0.025, 0.01
     p_edge_mag = float(np.sum(w[mag >= 25.5 - mag_width]) / w_sum / mag_width)
     p_edge_res = float(np.sum(w[res <= 0.3 + res_width]) / w_sum / res_width)
-    m_sel = -0.059 * p_edge_mag + 0.019 * p_edge_res
-    a_sel = 0.0064 * p_edge_mag + 0.0063 * p_edge_res
-    m_sel_err = math.sqrt((0.0089 * p_edge_mag) ** 2 + (0.0013 * p_edge_res) ** 2)
-    a_sel_err = math.sqrt((0.0034 * p_edge_mag) ** 2 + (0.0009 * p_edge_res) ** 2)
+    active_coefficients = dict(HSC_SELECTION_BIAS_COEFFICIENTS)
+    if coefficients is not None:
+        unknown = set(coefficients) - set(active_coefficients)
+        if unknown:
+            raise ValueError(f"unknown HSC selection-bias coefficients: {sorted(unknown)}")
+        for name, value in coefficients.items():
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                raise ValueError(f"HSC selection-bias coefficient {name} must be finite")
+            active_coefficients[name] = numeric
+    m_sel = (active_coefficients["m_mag"] * p_edge_mag
+             + active_coefficients["m_resolution"] * p_edge_res)
+    a_sel = (active_coefficients["a_mag"] * p_edge_mag
+             + active_coefficients["a_resolution"] * p_edge_res)
+    m_sel_err = math.sqrt(
+        (HSC_SELECTION_BIAS_COEFFICIENT_ERRORS["m_mag"] * p_edge_mag) ** 2
+        + (HSC_SELECTION_BIAS_COEFFICIENT_ERRORS["m_resolution"] * p_edge_res) ** 2
+    )
+    a_sel_err = math.sqrt(
+        (HSC_SELECTION_BIAS_COEFFICIENT_ERRORS["a_mag"] * p_edge_mag) ** 2
+        + (HSC_SELECTION_BIAS_COEFFICIENT_ERRORS["a_resolution"] * p_edge_res) ** 2
+    )
     mean_psf_e1 = float(np.sum(w * e1_psf) / w_sum)
     mean_psf_e2 = float(np.sum(w * e2_psf) / w_sum)
     return {
@@ -393,7 +426,8 @@ def _check_columns(pairs):
 def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
                      radial_edges_mpc, cosmology, *, apply_b_mode_mask=True,
                      _pair_lensing_efficiency=None,
-                     _pair_geometry_precomputed=None):
+                     _pair_geometry_precomputed=None,
+                     selection_bias_coefficients=None):
     """Make HSC-calibrated tangential/cross and weak-approximation DeltaSigma bins.
 
     ``pairs`` contains lens-source rows. A source may appear with multiple lenses,
@@ -500,6 +534,7 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
             arr["psf_shape11"][in_bin],
             arr["psf_shape22"][in_bin],
             arr["psf_shape12"][in_bin],
+            coefficients=selection_bias_coefficients,
         )
         msel = selection_bin["m_sel"]
         m = arr["m"][in_bin]
@@ -565,7 +600,8 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
 
 def stack_s19a_tomographic_pairs(pairs, nz_redshift, nz_by_bin,
                                   radial_edges_mpc, cosmology,
-                                  *, apply_b_mode_mask=True):
+                                  *, apply_b_mode_mask=True,
+                                  selection_bias_coefficients=None):
     """Stack using HSC Y3 calibrated tomographic ``n(z)`` distributions.
 
     This path consumes ``source_zbin`` from the minimal shape-row export and
@@ -599,6 +635,7 @@ def stack_s19a_tomographic_pairs(pairs, nz_redshift, nz_by_bin,
         pairs, None, None, None, radial_edges_mpc, cosmology,
         apply_b_mode_mask=apply_b_mode_mask,
         _pair_lensing_efficiency=beta,
+        selection_bias_coefficients=selection_bias_coefficients,
     )
     result["counts"]["unassigned_source_zbin"] = int(np.count_nonzero(source_bins == 0))
     result["calibration"]["photoz_geometry"] = (

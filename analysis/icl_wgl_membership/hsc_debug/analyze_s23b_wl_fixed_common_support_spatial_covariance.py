@@ -241,7 +241,7 @@ def cache_geometry_and_efficiency(pairs, nz_z, nz_bins, cosmology) -> dict:
     }
 
 
-def cached_stack(pairs, cache, indices, cosmology):
+def cached_stack(pairs, cache, indices, cosmology, *, selection_bias_coefficients=None):
     indices = np.asarray(indices, dtype=np.int64)
     if indices.size == 0:
         return None
@@ -251,6 +251,7 @@ def cached_stack(pairs, cache, indices, cosmology):
         apply_b_mode_mask=True,
         _pair_lensing_efficiency=cache["beta"][indices],
         _pair_geometry_precomputed=(cache["radius"][indices], cache["phi"][indices]),
+        selection_bias_coefficients=selection_bias_coefficients,
     )
 
 
