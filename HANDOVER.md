@@ -4324,7 +4324,61 @@ Keep `science_measurement=false`.
 - Per-center table SHA-256: `d650564b4870d4af93ce04b9ebd82475a99366aa68c2dfe236e7f070826c0f7f`
 - Audit runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_shape_counts.py`
 
-Next step, pending approval: make a local footprint/support assessment and
-define a defensible common lens and matched-control sample, then prepare an
-exact source-row export plan with columns, row/size estimates, and selection
-rules. This approval did not authorize source-row submission or transfer.
+This local sample and row-plan stage was completed on 2026-11-10. Submitting
+the new 400-center count-only query needs separate approval tied to its exact
+plan hash. Shape-row export also requires separate approval after the observed
+counts and transfer size are known.
+
+## 2026-11-10 S23B weak-lensing common-support sample and export plan
+
+The approved 427-target, 3-proper-Mpc S19A count-only results were audited
+locally. Counts are zero for 329 targets; 82 have at least 1,000 entries. These
+are raw availability counts from the released weak-lensing shape subset, before
+project-specific shape, tomographic, B-mode, and radial cuts. They are not
+effective source counts or a lensing measurement.
+
+Of the 82 targets above the provisional 1,000-count screen, 80 have five
+qualifying controls in the saved candidate pool. The provisional design has 80
+lenses and 400 HSC random-table control positions (five per lens). Control
+positions are globally unique, pass the saved center-flag, depth, seeing, and
+SFD-EBV criteria, have zero in the earlier CAMIRA 2-Mpc overlap screen, and
+lie more than 6 proper Mpc from their paired lens so the two 3-Mpc query cones
+do not overlap. The CAMIRA screen is incomplete and does not remove all
+environmental or large-scale shear contributions.
+
+The selected lenses have 340,256 verified count-only lens-source pairs; the
+per-lens minimum/median/maximum is 1,040/4,323/8,959. Previously selected ICL
+controls are unsuitable for weak-lensing control: 114/427 lie within 3 Mpc of
+their paired lens and 280/427 within 6 Mpc. Other S23B CAMIRA centers are within
+projected 3 Mpc of 110 of those controls at any redshift, and 23 at
+|dz|<=0.05. This is a center-proximity diagnostic, not a mass/shear model.
+The old S19A lens/random source-row union has rows in only 29 of the selected
+80 apertures and none reaches 95% estimated query-cone area coverage.
+
+The prepared next count-only plan covers 400 control centers in 16 batches of
+25 and returns only `random_center_id`, `matched_lens_id`, and the integer
+`n_shape_sources`. It passes the existing random-count plan validator but is
+still `prepared_not_submitted`. It must not be submitted without separate
+approval for exact plan SHA-256
+`fe19ac426272d4005e3ee74a902dfdb52d1fe83ecb2cc5ec901c10b880d28e8f`.
+
+The later shape-row plan has 80 lens centers in 4 batches and 400 controls in
+16 batches. The lens-side expected row total is 340,256 based on the approved
+counts; the control row total is unknown until the count query completes. A
+proxy from a different completed sample gives 1.05/1.83/2.23 million combined
+pairs (q16/median/q84) and 0.25/0.55/1.00 GiB uncompressed CSV (low/point/high).
+These are planning estimates, not observed S23B counts. Source-row query and
+transfer require another separate approval.
+
+Lens rows have 22 columns and control rows 23, preserving shapes, calibration
+terms, PSF moments, the raw B-mode mask, and the HSC Y3 source-redshift bin.
+Full object-level photo-z PDFs and images are excluded. Identical shape,
+source-redshift, B-mode, and radial cuts must be applied to lenses and controls;
+verify B-mode polarity and calibrated n(z)/lensing efficiency before a
+measurement. Keep `science_measurement=false`. Neither count nor shape-row
+queries were submitted and no network was used in this stage.
+
+- Planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_wl_common_support_plan.py`
+- Assessment and plans (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
+- Row-plan file SHA-256: `3ec3c8e77cf9cf38fdd02320718c6e38ee3d23e8948584255cfdc27bfe90cfee`
+- This stage used local analysis only; no remote query or data transfer occurred.

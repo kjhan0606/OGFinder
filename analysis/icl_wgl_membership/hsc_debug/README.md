@@ -3546,6 +3546,57 @@ noise estimate, or a weak-lensing measurement. Keep `science_measurement=false`.
 - Per-center table SHA-256: `d650564b4870d4af93ce04b9ebd82475a99366aa68c2dfe236e7f070826c0f7f`
 - Auditor: `audit_s23b_wl_shape_counts.py`
 
-Next step, pending approval: assess local footprint evidence and define a
-common-support lens/control sample, then prepare an exact source-row plan.
-Source-row query submission and transfer require separate approval.
+The local common-support and row-plan stage was completed on 2026-11-10. The
+400-control count-only query and any later source-row submission remain
+separate approval gates.
+
+## 2026-11-10 S23B weak-lensing common-support plan
+
+The approved 427-center, 3-proper-Mpc count audit has 329 zero-count centers;
+82 centers have at least 1,000 entries in the released S19A shape subset before
+project-specific shape, source-redshift, B-mode, or radial cuts. These are raw
+availability counts, not final effective source counts or a measurement.
+
+The provisional sample selects 80 of those 82 lenses and assigns five globally
+unique HSC random-table controls per lens (400 controls). The other two lenses
+do not have five candidates in the saved pool that pass all screens. Controls
+pass the saved center flags and depth/seeing/SFD-EBV match; the previous CAMIRA
+2-Mpc overlap count is zero; and each is more than 6 proper Mpc from its lens,
+so paired 3-Mpc count cones do not overlap. The CAMIRA screen is incomplete and
+does not establish a clean large-scale environment.
+
+The 80 selected lenses contain exactly 340,256 verified count-only candidate
+pairs, with per-lens min/median/max 1,040/4,323/8,959. The old ICL control
+positions are too close to their paired lens for this use: 114/427 are within
+3 Mpc and 280/427 within 6 Mpc. Other S23B CAMIRA centers lie within projected
+3 Mpc of 110 old controls at any redshift and 23 at |dz|<=0.05. This is a
+proximity screen, not a shear-contamination model. The previous S19A
+lens/random source-row union has rows in only 29 selected apertures and none
+reaches 95% estimated geometric coverage.
+
+The next count-only plan covers 400 control centers in 16 batches of 25 and
+returns three columns only: `random_center_id`, `matched_lens_id`, and integer
+`n_shape_sources`. It passed the existing random-count plan validator but was
+not submitted. Its exact plan-file SHA-256 is
+`fe19ac426272d4005e3ee74a902dfdb52d1fe83ecb2cc5ec901c10b880d28e8f`; submit
+only after separate explicit approval for that hash.
+
+The prepared source-row plan has 80 lens centers in 4 batches and 400 controls
+in 16. The expected lens rows from verified counts are 340,256; exact control
+rows require the count-only result. A different completed sample gives only a
+planning proxy of 1.05/1.83/2.23 million combined pairs (q16/median/q84) and
+0.25/0.55/1.00 GiB uncompressed CSV (low/point/high). The lens and control
+schemas carry 22 and 23 columns respectively, including shapes, calibration,
+PSF moments, raw B-mode mask, and HSC Y3 source-redshift bin. Full object
+photo-z PDFs and images are excluded.
+
+Before a measurement, apply identical source selections to lenses and controls,
+verify the raw B-mode polarity, provide calibrated source n(z) and lensing
+efficiency, and audit footprint, PSF, control overlap, and spatial covariance.
+Keep `science_measurement=false`. Neither count-only nor source-row queries
+were submitted in this stage; no network or data transfer was used.
+
+- Planner: `prepare_s23b_wl_common_support_plan.py`
+- Assessment and plans (outside Git):
+  `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
+- Row-plan file SHA-256: `3ec3c8e77cf9cf38fdd02320718c6e38ee3d23e8948584255cfdc27bfe90cfee`
