@@ -2679,3 +2679,38 @@ remain unresolved. Keep `science_measurement=false`.
 - Per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc6030c2f8c11bed`
 - Aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
 - Zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`
+
+### 2026-11-11 S23B matched-sample random-subtracted 약중력 프로파일
+
+승인된 80개 S23B 렌즈와 400개 대조 중심의 HSC S19A shape 행, 고정된 HSC Y3
+SACC `n(z)`만 사용해 Astrafek 보정 추정기로 탐색 프로파일을 계산했다. 4/5
+양의 지지 대조 기준에서 74개 렌즈 세트와 367개 대조 중심이 남았다. 주 분석은
+이전 프로토콜대로 source bin 2–4를 사용했다. 무작위 중심은 양의 지지 표본을
+pooled stack했으므로 대조가 5개인 세트가 4개인 세트보다 한 aperture 더 기여한다.
+렌즈 세트별 동일 가중 민감도 비교가 필요하다.
+
+5도 equal-area RA/sin(Dec) paired endpoint jackknife에서 tangential
+`DeltaSigma`는 0.1–0.2 proper Mpc의 `23.845 ± 3.432`에서 2–3 Mpc의
+`0.762 ± 0.400`으로 감소했다 (단위 `10^13 Msun Mpc^-2`). 조건부 zero-profile
+진단은 `chi2=221.85`, rank 7, 명목 `p=2.67e-44`이나 검출 확률이 아니다. 5/5
+대조 민감도에서 cross-null 명목 `p=0.0341`, 2.5도 민감도에서는 `p=0.3182`로
+달라져 null 결과가 대조 기준과 block 폭에 안정적이지 않다. source bin 1을
+포함하면 가장 안쪽 tangential 값이 22.565로 바뀐다.
+
+따라서 이 결과는 80-lens pilot이며 질량 또는 ICL–위성 관계 검출로 해석하지
+않는다. fiducial `n(z)`/photo-z 희석 오차, contiguous HSC 영역 공분산, random
+aperture의 depth/mask/PSF/sky 일치, pooled 대조 가중, reduced shear,
+magnification, cluster-member dilution/boost, selection-response 오차가 남았다.
+`science_measurement=false`를 유지한다. 우선 기존 자료만으로 렌즈 세트별 동일
+가중 random stack과 pooled 기준의 차이를 평가하고, 보유 중인 S19A 전용 `n(z)`
+DESI 곡선/범위를 fiducial SACC와 비교한다 (공동 posterior draw는 없어 완전한
+불확도 전파는 불가능하다). 이후 footprint 기반 공분산과 영상/대조 일치 관문을
+통과한 뒤에만 질량 모델이나 ICL–위성 연결 분석을 고려한다.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_random_subtracted_profile.py`
+- 평가서: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_random_subtracted_profile_assessment_2026-11-11.md`
+- 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_random_subtracted_profile_2026-11-11_01/`
+- summary SHA-256: `2c899b0090dd94a34f1fd6b0cb111e3d1ada696da2178f98e9fd5b659e699edf`
+- 평가서 SHA-256: `d152c22f21a244e9848f453523c0a346120e30f4897b9a427d65776aa804ba2a`
+- TSV SHA-256: `3dd1ef2b7f4ac7aa33d6b046ef9b528ae6c8818d1f3992037b6b70aa6e5548b2`
+- 그림 SHA-256: `4c3593236d5a46dd504d0f54b3f2396e0a925460c27f3f879bc6fef7bef92ce9`

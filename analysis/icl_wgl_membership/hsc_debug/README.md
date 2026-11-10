@@ -3766,3 +3766,24 @@ fit was calculated; `science_measurement=false` remains.
 - Per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc603c2f8c11bed`
 - Aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
 - Zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`
+
+## 2026-11-11 S23B random-subtracted weak-lensing profile
+
+The approved 80-lens/400-control source rows were passed through the existing
+calibrated HSC S19A estimator with fiducial HSC Y3 tomographic `n(z)`. The
+primary 4/5-control, bins-2–4 profile retains 74 lens sets and 367 controls.
+Tangential `DeltaSigma` declines from `23.845 ± 3.432` in 0.1–0.2 proper Mpc
+to `0.762 ± 0.400` in 2–3 proper Mpc, in units of `10^13 Msun Mpc^-2`.
+Cross-null behavior changes with the control threshold and jackknife width;
+the result is exploratory and `science_measurement=false`.
+
+The calculation used no new query, download, or image pixels. Its pooled
+random-center weighting, fiducial `n(z)` uncertainty, survey-region covariance,
+random-aperture PSF/depth/mask/sky matching, reduced shear, magnification,
+member dilution, and selection-response uncertainty remain open. See the
+[full assessment](wl_s23b_random_subtracted_profile_assessment_2026-11-11.md)
+and reproducible runner
+[`analyze_s23b_wl_random_subtracted_profile.py`](analyze_s23b_wl_random_subtracted_profile.py).
+Outputs outside Git:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_random_subtracted_profile_2026-11-11_01/`
+(summary SHA-256 `2c899b0090dd94a34f1fd6b0cb111e3d1ada696da2178f98e9fd5b659e699edf`).

@@ -4519,3 +4519,30 @@ lensing 측정이나 질량 추정이 아니다. n(z) 불확실성, 보정 respo
 - 다음 단계 제안: 동일 데이터만 사용해 보정 random-subtracted profile의
   구현 계획과 0 지지 기준, 공간 covariance block 정책을 구체화하고, 해당
   계획 승인 후 탐색 profile 계산을 수행한다.
+
+## 2026-11-11 S23B matched-sample random-subtracted 약중력 프로파일
+
+이전 QA에서 승인된 80개 렌즈/400개 matched-control HSC S19A shape 행과
+고정된 HSC Y3 SACC `n(z)`만 사용해 `lageunha` CPU에서 탐색 프로파일을
+계산했다. CAS 조회·네트워크 요청·추가 다운로드·영상 pixel 읽기는 없었다.
+4/5 positive-control 기준으로 74개 렌즈 세트와 367개 대조 중심이 남았다.
+주 프로파일 source bins 2–4는 0.1–0.2 proper Mpc에서
+`23.845 ± 3.432`, 2–3 Mpc에서 `0.762 ± 0.400` (`10^13 Msun Mpc^-2`)였다.
+5도 equal-area endpoint jackknife의 명목 tangential zero-profile 진단은
+`chi2=221.85`, rank 7, `p=2.67e-44`다. 근사 블록 공분산에 조건부이며 검출
+확률로 볼 수 없다.
+
+교차 shear null은 4/5 기준에서 `p=0.0741`, 5/5 기준에서 `p=0.0341`,
+2.5도 블록 민감도에서 `p=0.3182`로 변한다. 대조 선택과 블록 폭 민감도가
+남아 profile을 검출로 주장하지 않는다. 대조는 pooled stack이어서 매칭 세트별
+동일 가중 결과와 비교가 필요하다. `n(z)` 오차, contiguous survey-region
+공분산, random 위치의 PSF/depth/mask/sky 일치, reduced shear, magnification,
+member dilution/boost, selection-response 오차도 미해결이므로
+`science_measurement=false`를 유지한다.
+
+- Astrafek 실행기: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_random_subtracted_profile.py`
+- 상세 평가: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_random_subtracted_profile_assessment_2026-11-11.md`
+- 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_random_subtracted_profile_2026-11-11_01/`
+- summary SHA-256: `2c899b0090dd94a34f1fd6b0cb111e3d1ada696da2178f98e9fd5b659e699edf`
+- assessment/TSV/PNG SHA-256: `d152c22f21a244e9848f453523c0a346120e30f4897b9a427d65776aa804ba2a` / `3dd1ef2b7f4ac7aa33d6b046ef9b528ae6c8818d1f3992037b6b70aa6e5548b2` / `4c3593236d5a46dd504d0f54b3f2396e0a925460c27f3f879bc6fef7bef92ce9`
+- 다음 단계: 렌즈 세트별 동일 가중 random 민감도와 보유 S19A 전용 `n(z)` 대안을 평가한다. 새 자료 반출은 포함하지 않는다.
