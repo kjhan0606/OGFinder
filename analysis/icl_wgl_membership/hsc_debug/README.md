@@ -3879,3 +3879,15 @@ tracts, then rerun the fixed-52 regional influence analysis using tract blocks.
 Three field-level regions alone cannot provide a full covariance. Keep
 `science_measurement=false` unless the tract-block support and covariance
 gates are independently satisfied.
+
+## 2026-11-11 HSC S19A estimator calibration-source audit
+
+정적 검토에서 Astrafek의 responsivity, per-object m/c 보정, edge-selection 보정식이
+HSC PDR3 문서와 해당 문서에서 연결한 HSC 보정 유틸리티의 정의와 일치했다.
+현재 export는 선택 경계값에 놓인 원천이 없어 strict/inclusive 경계 차이도 없다.
+이는 구현식 대조이지 측정 검증은 아니다. photo-z 편향·희석 보정과 n(z) 불확실성,
+selection-response 오차, 검증된 HSC 공간 공분산 및 대조 영상의 depth/PSF/sky
+일치가 남아 science_measurement=false를 유지한다.
+
+- 상세 기록: [wl_s23b_hsc_calibration_conformance_assessment_2026-11-11.md](wl_s23b_hsc_calibration_conformance_assessment_2026-11-11.md)
+- 근거: [HSC S19A PDR3 문서](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)와 문서에서 연결된 [HSC calibration utility](https://github.com/mr-superonion/hsc-y3-calib/blob/main/utils.py)
