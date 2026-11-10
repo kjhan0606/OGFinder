@@ -4761,7 +4761,7 @@ systematics prevent physical detection claims. `science_measurement=false`.
 - Max-T summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_wl_fixed52_maxt_2026-11-11_01/` (`e1bbe2282adca533791dd3b4a3a82e048e99d74c4c2e1a82b27a85bb69a807c2`)
 - Astrafek reports: `analysis/icl_wgl_membership/hsc_debug/s23b_icl_wl_fixed_support_overlap_assessment_2026-11-11.md`, `s23b_icl_satellite_wl_fixed52_relation_assessment_2026-11-11.md`, and `s23b_icl_satellite_wl_fixed52_max_t_assessment_2026-11-11.md`.
 
-## 2026-11-11 S16A shape coverage count plan prepared, not submitted
+## 2026-11-11 S16A shape coverage count: approved submission in progress
 
 To assess whether the ICL sample can be expanded beyond the S19A-supported
 52-cluster overlap, a local planner prepared a count-only S16A CAS plan for all
@@ -4769,7 +4769,11 @@ To assess whether the ICL sample can be expanded beyond the S19A-supported
 42 batches of at most 25 centers, and returns only `lens_id` plus one integer
 distinct-shape-object count per center (1,043 rows; estimated maximum CSV
 size about 31.4 kB). It requests no source IDs, positions, shapes, photo-z,
-images, or PSF data. The query has not been submitted, and future shape-row
+images, or PSF data. The user approved the exact plan SHA-256 below. The
+guarded submitter was run on LagEunha and verified the plan/hash before CAS
+access. At the latest checkpoint, batches 0–4 are complete (125 center counts;
+sum 83,561; 50 centers have zero sources), and batch 5 is running. Counts are
+validated per batch and saved outside Git. No credential is saved. Source-row
 export remains a separate scope requiring its own approval.
 
 S16A and S19A are separate processing/calibration releases. Aggregate counts
@@ -4779,8 +4783,10 @@ sample. The official HSC S16A page documents the `s16a_wide` shape-table joins,
 and the FAQ explains its PDR1 CAS schema.
 
 - Planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_s16a_shape_count_plan.py`
+- Submitter: `analysis/icl_wgl_membership/hsc_debug/submit_s23b_s16a_shape_counts.py`
 - Plan report: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_count_plan_assessment_2026-11-11.md`
 - Prepared SQL and plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
+- Live checkpoint (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/count_status.json`
 - Exact plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
-- Query submitted: no; new CAS work requires approval for this exact plan hash.
+- Query submitted under the exact approved plan; submission is still running.
 - Official references: https://hsc-release.mtk.nao.ac.jp/doc/index.php/s16a-shape-catalog-pdr2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/database/summary_table_usage-2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/faq__pdr3/

@@ -5,8 +5,9 @@
 The existing HSC S19A source-row export supports only a selected 52-lens joint
 ICL/WL sample. This offline plan checks whether the public S16A weak-lensing
 shape catalog has source coverage around the full set of 1,043 S23B CAMIRA
-centers. It has **not** been submitted to HSC CAS. It makes no network request
-and returns no data.
+centers. The exact plan was approved for count-only submission. The immutable
+plan file stays pinned to its reviewed hash; query progress and results are
+stored separately.
 
 ## Exact proposed query
 
@@ -37,7 +38,15 @@ requires its own explicit approval.
 - Prepared files (outside Git):
   `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
-- Submitted: **no**; `science_measurement=false`.
+- Exact plan approved: yes; SHA-256
+  `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`.
+- Latest execution snapshot (2026-11-11): 5/42 batches complete, 125 verified
+  center counts, 50 centers with zero sources, sum of counts 83,561; batch 6
+  is running.
+- Checkpoint (outside Git):
+  `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/count_status.json`
+- No source rows, images, or photo-z were requested or returned; credentials
+  were not saved. `science_measurement=false`.
 - Official schema/query examples: [S16A Shape Catalog](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s16a-shape-catalog-pdr2/), [HSC summary-table SQL usage](https://hsc-release.mtk.nao.ac.jp/doc/index.php/database/summary_table_usage-2/), and [HSC FAQ on the PDR1 schema](https://hsc-release.mtk.nao.ac.jp/doc/index.php/faq__pdr3/).
 
-Before CAS submission, the user must approve this exact plan hash and scope.
+The plan hash and scope are the approval boundary for this count-only query.

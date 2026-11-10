@@ -3985,17 +3985,19 @@ source-reuse limitations remain. No physical detection is claimed;
 - Max-T summary SHA-256: `e1bbe2282adca533791dd3b4a3a82e048e99d74c4c2e1a82b27a85bb69a807c2`
 - Max-T metrics SHA-256: `c29878527b2bbfdb379e4e4bfdc2fbe4fdee6d38bef67e4b3a204b4a38545010`
 
-## 2026-11-11 S16A shape-catalog coverage plan (not submitted)
+## 2026-11-11 S16A shape-catalog coverage count (in progress)
 
 [`prepare_s23b_s16a_shape_count_plan.py`](prepare_s23b_s16a_shape_count_plan.py)
 prepares 42 count-only SQL batches for all 1,043 pinned S23B cluster centers,
 within 3 proper Mpc. The response would contain only center ID and the integer
 number of distinct S16A weak-lensing shape objects (1,043 rows; estimated
 maximum CSV size about 31.4 kB). It would not return source IDs, coordinates,
-shape values, photo-z, images, or PSF data. The plan is local and remains
-unsubmitted; S16A coverage is a ceiling only and must not be combined with
-S19A without a separate release/calibration audit. Submission requires
-approval of the exact plan hash.
+shape values, photo-z, images, or PSF data. The exact plan hash was approved
+and submitted through the guarded CAS runner. S16A coverage is a ceiling only
+and must not be combined with S19A without a separate release/calibration
+audit. At this snapshot, the first five batches returned 125 verified counts;
+50 centers have zero sources and the count sum so far is 83,561. The sixth
+batch is running.
 
 `submit_s23b_s16a_shape_counts.py` validates the reviewed plan in `--plan`
 mode without network access. `--submit` requires the exact approved plan
@@ -4006,4 +4008,5 @@ aggregate columns for each center.
 - Assessment: [`s23b_s16a_shape_count_plan_assessment_2026-11-11.md`](s23b_s16a_shape_count_plan_assessment_2026-11-11.md)
 - Submitter: [`submit_s23b_s16a_shape_counts.py`](submit_s23b_s16a_shape_counts.py)
 - Prepared plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
+- Running checkpoint (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/count_status.json`
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
