@@ -2792,3 +2792,24 @@ covariance를 보증하지 않는다. equal-area RA/sin(Dec) 셀은 연결된 �
 [`wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md`](hsc_debug/wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md),
 산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_spatial_covariance_2026-11-11_02/`
 (summary SHA-256 `acdd4da69e4d7fe3dbb52d8584b3996bd836a41196da59aecfe3fcdf3e1fc6e9`)이다.
+
+## 2026-11-11 fixed-52 random-center weighting covariance
+
+승인된 20개 HSC S19A shape-row CSV와 기존 SACC `n(z)`로, 52개 고정 lens-set에서
+random-center의 source-pair pooled estimator와 중심별 equal-weight estimator를 같은
+paired endpoint 공간 공분산 아래 비교했다. 두 방식은 바깥 lens-set을 동일 가중하고,
+7개 반경 모두에서 최소 4/5 positive random center를 요구한다. Pooled profile은 앞선
+fixed-52 기준 결과와 정확히 재현됐다. Equal-center minus pooled 차이는 모든 반경에서
+각 블록 폭의 paired-jackknife 오차보다 1.35배 이내였으나, 이는 근사 covariance에
+조건부인 민감도이지 estimator 동등성 검정은 아니다.
+
+2.5°/5° grid의 점유 셀 수는 64/28이며 pooled, equal-center, 차이의 14×14 covariance
+모두 full-rank·PSD였다. 삭제 뒤 공통 렌즈 세트 최솟값은 49/52 및 47/52다. Cross
+zero-profile nominal p는 pooled 0.500/0.064, equal-center 0.446/0.050으로 grid 폭에
+민감하다. 이 equal-area 셀은 연결된 실제 HSC footprint가 아니므로 null 또는 측정
+유효성을 확정하지 않는다. `science_measurement=false`를 유지하며 mass fit은 보류한다.
+
+- 실행기: [`hsc_debug/analyze_s23b_wl_fixed_equal_control_spatial_covariance.py`](hsc_debug/analyze_s23b_wl_fixed_equal_control_spatial_covariance.py)
+- 평가서: [`hsc_debug/wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md`](hsc_debug/wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md)
+- 산출물: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
+- summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`

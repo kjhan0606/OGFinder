@@ -3846,3 +3846,16 @@ photo-z dilution, target/control 영상 일치, member contamination, selection 
 - summary SHA-256: `acdd4da69e4d7fe3dbb52d8584b3996bd836a41196da59aecfe3fcdf3e1fc6e9`
 - `_01`은 5° 표만 deletion-support ledger에 남겨 superseded했다. `_02`에는 2.5° 64개와
   5° 28개 block deletion이 모두 기록되어 있다.
+
+## Fixed-sample random-center weighting covariance
+
+[`analyze_s23b_wl_fixed_equal_control_spatial_covariance.py`](analyze_s23b_wl_fixed_equal_control_spatial_covariance.py)
+compares source-pair-pooled random subtraction with an equal mean of individually
+calibrated positive random centers on the same fixed 52-lens sample. It uses paired
+2.5°/5° endpoint-cell covariance and reports cross-component conditional diagnostics.
+It reads only the approved shape-row export and pinned products, and keeps
+`science_measurement=false`.
+
+- Assessment: [`wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md`](wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md)
+- Output (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
+- Summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`

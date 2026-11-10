@@ -4629,3 +4629,30 @@ lensing weight로 pooled한 뒤 바깥 52세트 평균은 동일 가중했다. s
   deletion을 모두 보존했다. 수치 결과는 동일하다.
 - 다음 관문: 실측 survey footprint 기반 region jackknife, target/control 영상의 PSF·depth·mask·sky
   일치, `n(z)` 및 selection-response 오차다. 해결 전 mass fit과 검출 주장은 보류한다.
+
+## 2026-11-11 fixed-52 random-center weighting covariance
+
+고정 52개 lens set에서 random source pairs를 source-pair lensing weight로 합치는 기존
+방식과 각 matched random center를 따로 보정한 뒤 중심별 동일 가중 평균하는 방식을
+비교했다. 입력은 이미 승인된 shape-row CSV 20개와 pinned HSC Y3 SACC `n(z)`뿐이다.
+CAS/network/download/image 접근은 없었다. 바깥 lens-set 동일 가중, source bins 2–4,
+7개 반경의 최소 4/5 control 지지 및 동일 paired endpoint deletion을 유지했다.
+
+Pooled profile은 직전 fixed-52 결과와 정확히 일치한다. Equal-center profile은
+`10^13 Msun Mpc^-2` 단위로 `24.204, 5.900, 4.085, 3.379, 2.551, 0.773, 1.301`이며
+pooled 값과의 차이는 paired block error의 최대 1.35배다. 다만 covariance partition이
+근사이므로 estimator 동등성은 결론 내리지 않았다. Cross-component zero-profile nominal
+p는 2.5°에서 pooled/equal-center `0.500/0.446`, 5°에서 `0.064/0.050`으로 달라 null
+판정이 grid 폭에 민감하다.
+
+2.5°와 5°에서 64/28개 셀이 점유됐고 두 방법 및 estimator 차이 covariance 모두 rank
+14/14·PSD였다. 삭제 후 최소 공통 lens-set 수는 49/52 및 47/52다. equal-area 셀은 실제
+연결 HSC survey field가 아니므로 과학적 covariance 관문을 통과한 것으로 보지 않는다.
+깊이·mask·PSF·sky 매칭, `n(z)` 오차, member dilution/boost, selection response와
+PSF-주입/회수는 남아 `science_measurement=false` 및 mass-fit 보류를 유지한다.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_fixed_equal_control_spatial_covariance.py`
+- 상세 평가: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md`
+- 실행기 SHA-256: `f31f7f30fc9d244d20dd6efaccaa51a9b5b833cf76bbb8c05b310aecb7039fc7`
+- 결과 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
+- summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`
