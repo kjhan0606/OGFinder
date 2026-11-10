@@ -44,7 +44,7 @@ DEFAULT_NZ = Path(
     "/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/"
     "hsc_y3_nz_sacc_2026-10-19_01/hsc_y3_fourier_space_data_vector.sacc"
 )
-DEFAULT_OUTPUT = DEFAULT_ROWS.parent / "quality_audit_2026-11-10_01"
+DEFAULT_OUTPUT = DEFAULT_ROWS.parent / "quality_audit_2026-11-11_01"
 EXPECTED_NZ_SHA256 = "a28f9e2e088e92d96d2d87083a6eeeac4c0c84c6b48e033bd3d1dc1bf0d8958f"
 EXPECTED_COUNT_PLAN_SHA256 = "fe19ac426272d4005e3ee74a902dfdb52d1fe83ecb2cc5ec901c10b880d28e8f"
 EXPECTED_LENS_COUNT_PLAN_SHA256 = "b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984"
@@ -151,6 +151,7 @@ def load_batch(path: Path, role: str, centers: list[dict], expected_counts: dict
                expected_columns: list[str], seen_pairs: dict[str, set[str]],
                global_masks: dict, global_zbins: dict, sample_arrays: dict,
                center_results: dict, radial_results: list[dict],
+               radial_tomographic_results: list[dict],
                cosmology: Cosmology, nz_redshift: np.ndarray, nz_by_bin: np.ndarray) -> tuple[int, str]:
     center_key = "lens_id" if role == "lens" else "random_center_id"
     center_index = {str(center[center_key]): index for index, center in enumerate(centers)}
@@ -345,6 +346,16 @@ def load_batch(path: Path, role: str, centers: list[dict], expected_counts: dict
         sw2_annulus = sum_by_center(a["weight"] ** 2, in_annulus)
         sg_annulus = sum_by_center(sigma_crit_weight_proxy, in_annulus)
         sg2_annulus = sum_by_center(sigma_crit_weight_proxy ** 2, in_annulus)
+        tomo_annulus = {}
+        for bin_index in range(1, 5):
+            in_annulus_bin = in_annulus & (a["source_zbin"] == bin_index)
+            tomo_annulus[bin_index] = (
+                count_by_center(in_annulus_bin),
+                sum_by_center(a["weight"], in_annulus_bin),
+                sum_by_center(a["weight"] ** 2, in_annulus_bin),
+                sum_by_center(sigma_crit_weight_proxy, in_annulus_bin),
+                sum_by_center(sigma_crit_weight_proxy ** 2, in_annulus_bin),
+            )
         for index, center in enumerate(centers):
             center_id = str(center[center_key])
             radial_results.append({
@@ -356,6 +367,21 @@ def load_batch(path: Path, role: str, centers: list[dict], expected_counts: dict
                 "sum_sigma_crit_weight_proxy": float(sg_annulus[index]),
                 "n_eff_sigma_crit_weight_proxy": effective_n(float(sg_annulus[index]), float(sg2_annulus[index])),
             })
+            for bin_index in range(1, 5):
+                n_bin, sw_bin, sw2_bin, sg_bin, sg2_bin = tomo_annulus[bin_index]
+                radial_tomographic_results.append({
+                    "role": role, "center_id": center_id,
+                    "matched_lens_id": lens_id_for(center, role),
+                    "radial_bin": radial_index, "source_zbin": bin_index,
+                    "r_min_mpc": float(lo), "r_max_mpc": float(hi),
+                    "n_rows": int(n_bin[index]),
+                    "sum_shape_weight": float(sw_bin[index]),
+                    "sum_shape_weight2": float(sw2_bin[index]),
+                    "n_eff_shape_weight": effective_n(float(sw_bin[index]), float(sw2_bin[index])),
+                    "sum_sigma_crit_weight_proxy": float(sg_bin[index]),
+                    "sum_sigma_crit_weight_proxy2": float(sg2_bin[index]),
+                    "n_eff_sigma_crit_weight_proxy": effective_n(float(sg_bin[index]), float(sg2_bin[index])),
+                })
     return int(len(a["center_index"])), sha(path)
 
 
@@ -401,6 +427,7 @@ def matched_lens_rows(lens_stats: dict[str, dict], control_stats: dict[str, dict
         lens = lens_stats[lens_id]
         controls = controls_by_lens[lens_id]
         counts = [int(row["n_calibration_valid"]) for row in controls]
+        positive_controls = [row for row in controls if int(row["n_calibration_valid"]) > 0]
         sumw = [float(row["sum_shape_weight"]) for row in controls]
         geom = [float(row["sum_sigma_crit_weight_proxy"]) for row in controls]
         neff_geom = [float(row["n_eff_sigma_crit_weight_proxy"] or 0.0) for row in controls]
@@ -416,6 +443,18 @@ def matched_lens_rows(lens_stats: dict[str, dict], control_stats: dict[str, dict
         weight_ratio = mean_control_w / lens_w if lens_w > 0 else None
         geom_ratio = mean_control_geom / lens_geom if lens_geom > 0 else None
         neff_ratio = mean_control_neff / lens_neff if lens_neff > 0 else None
+        positive_count_mean = (
+            float(np.mean([int(row["n_calibration_valid"]) for row in positive_controls]))
+            if positive_controls else None
+        )
+        positive_weight_mean = (
+            float(np.mean([float(row["sum_shape_weight"]) for row in positive_controls]))
+            if positive_controls else None
+        )
+        positive_geometry_mean = (
+            float(np.mean([float(row["sum_sigma_crit_weight_proxy"]) for row in positive_controls]))
+            if positive_controls else None
+        )
         if count_ratio is not None:
             count_ratios.append(count_ratio)
         if weight_ratio is not None:
@@ -450,11 +489,24 @@ def matched_lens_rows(lens_stats: dict[str, dict], control_stats: dict[str, dict
                 if lens["n_eff_shape_weight"] else None
             ),
             "n_zero_control_centers": sum(value == 0 for value in counts),
+            "n_positive_control_centers": len(positive_controls),
+            "positive_control_count_mean": positive_count_mean,
+            "positive_control_to_lens_count_ratio": (
+                positive_count_mean / lens_count if lens_count > 0 and positive_count_mean is not None else None
+            ),
+            "positive_control_to_lens_shape_weight_ratio": (
+                positive_weight_mean / lens_w if lens_w > 0 and positive_weight_mean is not None else None
+            ),
+            "positive_control_to_lens_geometry_proxy_ratio": (
+                positive_geometry_mean / lens_geom
+                if lens_geom > 0 and positive_geometry_mean is not None else None
+            ),
         })
     summary = {
         "lenses_with_zero_retained_sources": sum(row["lens_n_selected"] == 0 for row in output),
         "lenses_with_at_least_one_zero_control": sum(row["n_zero_control_centers"] > 0 for row in output),
         "lenses_with_all_five_zero_controls": sum(row["n_zero_control_centers"] == 5 for row in output),
+        "positive_lens_support_pairs": sum(row["lens_n_selected"] > 0 for row in output),
         "mean_control_to_lens_count_ratio_q16_q50_q84": quantiles(count_ratios),
         "mean_control_to_lens_shape_weight_ratio_q16_q50_q84": quantiles(weight_ratios),
         "mean_control_to_lens_sigma_crit_weight_ratio_q16_q50_q84": quantiles(geom_ratios),
@@ -465,7 +517,62 @@ def matched_lens_rows(lens_stats: dict[str, dict], control_stats: dict[str, dict
         ]),
         "ratio_definition": "mean of five matched controls divided by the paired lens, center by center",
     }
+    policy_summary = {}
+    for minimum_positive_controls in (3, 4, 5):
+        eligible = [
+            row for row in output
+            if row["lens_n_selected"] > 0
+            and row["n_positive_control_centers"] >= minimum_positive_controls
+        ]
+        ratio_sets = {
+            "positive_control_count_to_lens_ratio": "positive_control_to_lens_count_ratio",
+            "positive_control_shape_weight_to_lens_ratio": "positive_control_to_lens_shape_weight_ratio",
+            "positive_control_geometry_proxy_to_lens_ratio": "positive_control_to_lens_geometry_proxy_ratio",
+        }
+        policy = {
+            "minimum_positive_controls": minimum_positive_controls,
+            "n_eligible_lens_sets": len(eligible),
+            "fraction_of_80_lens_sets": len(eligible) / len(output),
+            "lens_pair_rows_retained": sum(int(row["lens_n_selected"]) for row in eligible),
+            "control_centers_used": sum(int(row["n_positive_control_centers"]) for row in eligible),
+        }
+        for summary_key, row_key in ratio_sets.items():
+            policy[summary_key + "_q16_q50_q84"] = quantiles([
+                float(row[row_key]) for row in eligible if row[row_key] is not None
+            ])
+        policy_summary[str(minimum_positive_controls)] = policy
+    summary["zero_support_policy_sensitivity"] = policy_summary
     return output, summary
+
+
+def aggregate_radial_tomographic(rows: list[dict]) -> list[dict]:
+    totals: dict[tuple[str, int, int], dict] = {}
+    for row in rows:
+        key = (str(row["role"]), int(row["radial_bin"]), int(row["source_zbin"]))
+        aggregate = totals.setdefault(key, {
+            "role": key[0], "radial_bin": key[1], "source_zbin": key[2],
+            "r_min_mpc": float(row["r_min_mpc"]), "r_max_mpc": float(row["r_max_mpc"]),
+            "n_centers_total": 80 if key[0] == "lens" else 400,
+            "n_centers_with_support": 0, "n_rows": 0,
+            "sum_shape_weight": 0.0, "sum_shape_weight2": 0.0,
+            "sum_sigma_crit_weight_proxy": 0.0, "sum_sigma_crit_weight_proxy2": 0.0,
+        })
+        aggregate["n_centers_with_support"] += int(int(row["n_rows"]) > 0)
+        aggregate["n_rows"] += int(row["n_rows"])
+        aggregate["sum_shape_weight"] += float(row["sum_shape_weight"])
+        aggregate["sum_shape_weight2"] += float(row["sum_shape_weight2"])
+        aggregate["sum_sigma_crit_weight_proxy"] += float(row["sum_sigma_crit_weight_proxy"])
+        aggregate["sum_sigma_crit_weight_proxy2"] += float(row["sum_sigma_crit_weight_proxy2"])
+    output = []
+    for key in sorted(totals):
+        row = totals[key]
+        row["n_centers_without_support"] = row["n_centers_total"] - row["n_centers_with_support"]
+        row["n_eff_shape_weight"] = effective_n(row["sum_shape_weight"], row["sum_shape_weight2"])
+        row["n_eff_sigma_crit_weight_proxy"] = effective_n(
+            row["sum_sigma_crit_weight_proxy"], row["sum_sigma_crit_weight_proxy2"]
+        )
+        output.append(row)
+    return output
 
 
 def run(args) -> dict:
@@ -515,6 +622,7 @@ def run(args) -> dict:
         for role in ("lens", "control")
     }
     radial_results: list[dict] = []
+    radial_tomographic_results: list[dict] = []
     batch_hashes: dict[str, str] = {}
     expected_rows = {"lens": 0, "control": 0}
     row_counts = {"lens": 0, "control": 0}
@@ -543,7 +651,8 @@ def run(args) -> dict:
         seen = seen_lens if role == "lens" else seen_control
         n_rows, digest = load_batch(
             path, role, centers, counts, columns, seen, global_masks, global_zbins,
-            sample_arrays, center_map, radial_results, cosmology, nz_redshift, nz_by_bin,
+            sample_arrays, center_map, radial_results, radial_tomographic_results,
+            cosmology, nz_redshift, nz_by_bin,
         )
         if digest != item["sha256"] or n_rows != int(item["rows"]):
             raise ValueError(f"source-row batch row count or digest changed: {checkpoint_name}")
@@ -559,6 +668,7 @@ def run(args) -> dict:
     lens_aggregate = aggregate_role(lens_rows)
     control_aggregate = aggregate_role(control_rows)
     matched_rows, matched_summary = matched_lens_rows(lens_stats, control_stats, selected_lens_ids)
+    radial_tomographic_summary = aggregate_radial_tomographic(radial_tomographic_results)
 
     geometry = global_masks["rectangle"]
     mask_geometry_mismatches = geometry["outside_mask0_exact"] + geometry["inside_mask1_exact"]
@@ -576,8 +686,8 @@ def run(args) -> dict:
         mask_geometry_status = "exact_with_published_GAMA09H_rectangle"
 
     audit_summary = {
-        "schema": "astrafek-s23b-wl-common-shape-row-qa-v1",
-        "status": "complete_local_shape_quality_and_common_support_audit",
+        "schema": "astrafek-s23b-wl-common-shape-row-qa-v2",
+        "status": "complete_local_shape_quality_radial_tomographic_and_common_support_audit",
         "science_measurement": False,
         "network_used": False,
         "cas_query_submitted": False,
@@ -646,6 +756,8 @@ def run(args) -> dict:
             "control": distribution_summaries["control"],
         },
         "matched_control_support": matched_summary,
+        "zero_support_policy_sensitivity": matched_summary["zero_support_policy_sensitivity"],
+        "radial_tomographic_support": radial_tomographic_summary,
         "limitations": [
             "Rows are center/source pairs; sources repeated across apertures are intentionally retained and not independent.",
             "The HSC Y3 SACC curves are fiducial n(z); their systematic/posterior uncertainty is not propagated.",
@@ -677,6 +789,26 @@ def run(args) -> dict:
     write_tsv(output / "per_lens_five_control_support.tsv", matched_rows, match_fields)
     radial_fields = list(radial_results[0].keys())
     write_tsv(output / "radial_support.tsv", radial_results, radial_fields)
+    radial_tomographic_fields = list(radial_tomographic_results[0].keys())
+    write_tsv(
+        output / "per_center_radial_tomographic_support.tsv",
+        radial_tomographic_results, radial_tomographic_fields,
+    )
+    aggregate_fields = list(radial_tomographic_summary[0].keys())
+    write_tsv(
+        output / "radial_tomographic_support.tsv",
+        radial_tomographic_summary, aggregate_fields,
+    )
+    policy_rows = []
+    for policy in matched_summary["zero_support_policy_sensitivity"].values():
+        flat = {key: value for key, value in policy.items() if not key.endswith("_q16_q50_q84")}
+        for key, value in policy.items():
+            if key.endswith("_q16_q50_q84"):
+                for quantile in ("q16", "q50", "q84"):
+                    flat[f"{key.removesuffix('_q16_q50_q84')}_{quantile}"] = value[quantile]
+        policy_rows.append(flat)
+    policy_fields = list(policy_rows[0].keys())
+    write_tsv(output / "zero_support_policy_sensitivity.tsv", policy_rows, policy_fields)
     write_assessment(output / "assessment.md", audit_summary, output)
     return audit_summary
 
@@ -707,6 +839,36 @@ def write_assessment(path: Path, summary: dict, output: Path) -> None:
         )
     selected_bins = summary["hsc_y3_zbin_retained_after_all_audit_cuts"]
     mask_counts = bmode["coordinate_crosscheck_counts"]
+    support_policies = summary["zero_support_policy_sensitivity"]
+    policy_lines = [
+        "| Minimum positive controls | Eligible lens sets | Lens sets retained | Control/lens count ratio q16 / median / q84 |",
+        "|---:|---:|---:|---:|",
+    ]
+    for minimum, policy in support_policies.items():
+        policy_lines.append(
+            f"| {minimum}/5 | {policy['n_eligible_lens_sets']} | "
+            f"{100 * policy['fraction_of_80_lens_sets']:.1f}% | "
+            f"{fmt_quantiles(policy['positive_control_count_to_lens_ratio_q16_q50_q84'])} |"
+        )
+    radial_support = summary["radial_tomographic_support"]
+    radial_table_lines = [
+        "| Role | R proper (Mpc) | Pair rows | z-bin pair rows (1/2/3/4) | Centers with support (1/2/3/4) |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for role in ("lens", "control"):
+        for radial_bin in range(len(RADIAL_EDGES_MPC) - 1):
+            cells = [
+                row for row in radial_support
+                if row["role"] == role and row["radial_bin"] == radial_bin
+            ]
+            cells.sort(key=lambda row: row["source_zbin"])
+            total = sum(int(row["n_rows"]) for row in cells)
+            bins = "/".join(f"{int(row['n_rows']):,}" for row in cells)
+            coverage = "/".join(str(row["n_centers_with_support"]) for row in cells)
+            radial_table_lines.append(
+                f"| {role} | {cells[0]['r_min_mpc']:.1f}–{cells[0]['r_max_mpc']:.1f} | "
+                f"{total:,} | {bins} | {coverage} |"
+            )
     lines = [
         "# S23B weak-lensing source-row quality and common-support audit",
         "",
@@ -729,13 +891,21 @@ def write_assessment(path: Path, summary: dict, output: Path) -> None:
         f"Retained HSC Y3 z-bin counts (1/2/3/4): lenses {selected_bins['lens']['1']:,}/{selected_bins['lens']['2']:,}/{selected_bins['lens']['3']:,}/{selected_bins['lens']['4']:,}; controls {selected_bins['control']['1']:,}/{selected_bins['control']['2']:,}/{selected_bins['control']['3']:,}/{selected_bins['control']['4']:,}.",
         f"At the paired-lens level, {matched['lenses_with_zero_retained_sources']} lenses have zero retained lens rows; {matched['lenses_with_at_least_one_zero_control']} have at least one zero-support control; {matched['lenses_with_all_five_zero_controls']} have all five controls at zero.",
         f"The q16/median/q84 ratios of mean-five-control to lens are {fmt_quantiles(matched['mean_control_to_lens_count_ratio_q16_q50_q84'])} by count, {fmt_quantiles(matched['mean_control_to_lens_shape_weight_ratio_q16_q50_q84'])} by HSC weight sum, and {fmt_quantiles(matched['mean_control_to_lens_sigma_crit_weight_ratio_q16_q50_q84'])} by geometry-weight proxy sum.",
+        "The table below shows how many nonzero-lens sets remain under a minimum number of positive-support controls. Ratios use only positive-support controls for each set; the table is a support sensitivity, not a selected estimator.",
+        "",
+        *policy_lines,
+        "",
         f"Center-level `N_eff` q16/median/q84 is {fmt_quantiles(lens['center_n_eff_shape_weight_q16_q50_q84'])} (lens) and {fmt_quantiles(control['center_n_eff_shape_weight_q16_q50_q84'])} (control) for catalog weight; geometry-weight proxy `N_eff` is {fmt_quantiles(lens['center_n_eff_sigma_crit_weight_proxy_q16_q50_q84'])} and {fmt_quantiles(control['center_n_eff_sigma_crit_weight_proxy_q16_q50_q84'])}.",
         "",
         "Retained shape and weight distributions (q16 / median / q84):",
         "",
         *distribution_table,
         "",
-        "Per-aperture retained counts and effective-support measures are in `per_center.tsv`; paired five-control comparisons are in `per_lens_five_control_support.tsv`; 0.1–3 Mpc annular counts and weights are in `radial_support.tsv`.",
+        "Radial/tomographic support is pair-counted, with the number of apertures having at least one retained source in each cell:",
+        "",
+        *radial_table_lines,
+        "",
+        "Per-aperture retained counts and effective-support measures are in `per_center.tsv`; paired five-control comparisons are in `per_lens_five_control_support.tsv`; 0.1–3 Mpc annular counts and weights are in `radial_support.tsv`. The 13,440-row `per_center_radial_tomographic_support.tsv` and its 56-row `radial_tomographic_support.tsv` aggregate the same support by radial annulus and HSC Y3 source bin.",
         "",
         "## Interpretation limits",
         "",
@@ -757,6 +927,8 @@ def main() -> int:
         "status": summary["status"], "science_measurement": summary["science_measurement"],
         "rows": summary["rows"], "cutflow": summary["shape_cutflow"],
         "matched_control_support": summary["matched_control_support"],
+        "zero_support_policy_sensitivity": summary["zero_support_policy_sensitivity"],
+        "radial_tomographic_cells": len(summary["radial_tomographic_support"]),
         "b_mode_polarity_validation": summary["b_mode_polarity_validation"],
         "output": str(args.output.resolve()),
     }, ensure_ascii=False, indent=2), flush=True)

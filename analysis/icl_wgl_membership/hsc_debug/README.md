@@ -3730,3 +3730,39 @@ and injection/recovery remain unresolved. Keep `science_measurement=false`.
 - Next: prepare a pre-specified calibrated, random-subtracted estimator and
   covariance plan, including how to handle zero-support lenses/controls;
   await approval before running a shear profile. Keep `science_measurement=false`.
+
+## 2026-11-11 radial/tomographic support and zero-control sensitivity
+
+The follow-up pass extended the verified 80-lens/400-control source-row QA to
+all seven proper-radius bins and HSC Y3 source bins 1–4. It created 13,440
+center × radius × tomographic-bin rows and 56 role/radius/bin aggregate cells.
+The per-center tomographic counts sum exactly to the earlier radial totals,
+and the full radial/tomographic totals sum to the 239,565 lens and 1,105,779
+control rows after the common cuts.
+
+The inner 0.1–0.2 Mpc bin is the limiting region. Lens aperture coverage by
+z-bin 1/2/3/4 is 65/63/59/52 of 80; control coverage is 285/303/293/262 of
+400. In the outer 2–3 Mpc bin, coverage is 78/78/78/78 lenses and
+376/376/376/376 controls. All cell counts are center/source pairs, so repeated
+sources remain correlated across apertures.
+
+Zero-support sensitivity, among lens sets with nonzero lens rows:
+
+| Minimum positive controls | Eligible lens sets | Positive control centers used | Retained lens pairs | Median control/lens count ratio |
+|---:|---:|---:|---:|---:|
+| 3/5 | 74/80 (92.5%) | 367 | 233,064 | 0.940 |
+| 4/5 | 74/80 (92.5%) | 367 | 233,064 | 0.940 |
+| 5/5 | 71/80 (88.8%) | 355 | 224,375 | 0.950 |
+
+The 3/5 and 4/5 rules select the same set. The 5/5 rule removes three more
+lens sets; their support-ratio distributions remain similar. These are
+selection sensitivities, not a chosen final policy. No shear profile or mass
+fit was calculated; `science_measurement=false` remains.
+
+- Runner: `audit_s23b_wl_common_shape_rows.py`
+- Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-11_01/`
+- Summary SHA-256: `eb73aa0365813d880d3edf60b12e4039f2575f8a97eab8868fc918121a34d445`
+- Assessment SHA-256: `35369bbc74fa576570860af09d95d29c33c32cf8b1dfb96c30bb5949d5ddcf95`
+- Per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc603c2f8c11bed`
+- Aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
+- Zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`

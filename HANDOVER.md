@@ -4484,3 +4484,38 @@ HSC 공식 문서는 mask의 목적은 설명하지만 정수 방향은 지정�
 - summary SHA-256: `9ef472c1ae0888e187fce05f3449b1614d1da7c99e7a400403b92f8aa7e2dc54`
 - 다음 단계 제안: 0 지지 짝 처리 기준, 보정 random-subtracted estimator, 공간
   covariance를 명시한 계획을 만들고 승인받은 뒤 shear profile을 계산한다.
+
+## 2026-11-11 반경·tomographic 지지 및 0 지지 대조 민감도
+
+기존 승인된 S23B 원천행 CSV 20개와 기존 HSC Y3 SACC n(z)만 사용해 7개
+반경 구간과 4개 source-z bin으로 지지를 세분화했다. CAS 조회, 추가 다운로드,
+영상 pixel 읽기, shear profile 계산은 없었다. 13,440개 중심×반경×z-bin 셀은
+이전 반경 집계와 정확히 일치하며 공통 선택 후 렌즈 239,565쌍, 대조
+1,105,779쌍이다. source가 aperture 간 반복되므로 이 수는 전역 고유 source
+수로 해석하면 안 된다.
+
+가장 약한 곳은 0.1–0.2 proper Mpc다. z-bin 1/2/3/4별 지지 렌즈 수는
+65/63/59/52 of 80, 대조 수는 285/303/293/262 of 400이다. 바깥 2–3 Mpc에서는
+렌즈 78/78/78/78, 대조 376/376/376/376곳에 지지가 있다.
+
+렌즈 지지가 양수인 78개 짝 중 양의 지지를 가진 대조를 최소 3/5개 요구하면
+74개 짝(92.5%), 대조 중심 367개, 렌즈 233,064쌍이 남는다. 4/5 기준도 동일하다.
+5/5 기준은 71개 짝(88.8%), 대조 355개, 렌즈 224,375쌍이다. 대조/렌즈 유지
+count 비율 중앙값은 3/5와 4/5에서 0.940, 5/5에서 0.950이다. 이는 지지
+민감도 비교이지 최종 선택 기준은 아니다.
+
+전 구간을 정량적으로 다시 쓴 TSV와 assessment를 보존했다. 결과는 QA이지
+lensing 측정이나 질량 추정이 아니다. n(z) 불확실성, 보정 response, PSF 공간
+일치, 대조 오염, 반복 source/공간 공분산, injection/recovery가 해결될 때까지
+`science_measurement=false`를 유지한다.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_common_shape_rows.py`
+- 산출물: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-11_01/`
+- summary SHA-256: `eb73aa0365813d880d3edf60b12e4039f2575f8a97eab8868fc918121a34d445`
+- assessment SHA-256: `35369bbc74fa576570860af09d95d29c33c32cf8b1dfb96c30bb5949d5ddcf95`
+- per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc6030c2f8c11bed`
+- aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
+- zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`
+- 다음 단계 제안: 동일 데이터만 사용해 보정 random-subtracted profile의
+  구현 계획과 0 지지 기준, 공간 covariance block 정책을 구체화하고, 해당
+  계획 승인 후 탐색 profile 계산을 수행한다.

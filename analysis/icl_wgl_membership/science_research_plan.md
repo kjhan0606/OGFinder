@@ -2642,3 +2642,40 @@ including treatment of zero-support matched sets.
 - QA runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_common_shape_rows.py`
 - Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-10_01/`
 - Summary SHA-256: `9ef472c1ae0888e187fce05f3449b1614d1da7c99e7a400403b92f8aa7e2dc54`
+
+## 2026-11-11 radial/tomographic support and zero-control sensitivity
+
+Using only the 20 previously approved S23B source-row CSVs and the existing HSC
+Y3 SACC n(z), the local follow-up audit resolved support across seven proper-
+radius bins and source-z bins 1–4. It added no CAS query, download, image read,
+or shear-profile calculation. The 13,440 per-center cells reconcile exactly
+with the earlier radial totals: 239,565 lens pairs and 1,105,779 control pairs
+after common source and input-validity cuts. Pair counts are center/source
+pairs; the same source can recur in multiple apertures.
+
+Support is weakest at 0.1–0.2 proper Mpc: lens apertures with support by source
+bin 1/2/3/4 are 65/63/59/52 of 80, while control coverage is 285/303/293/262
+of 400. At 2–3 Mpc, coverage is 78/78/78/78 lenses and 376/376/376/376
+controls. The detailed radial × z-bin pair counts, shape-weight sums, effective
+counts, and per-center cells are in the external audit outputs below.
+
+Among the 78 lenses with nonzero retained lens support, a requirement for at
+least 3 positive-support controls retains 74 sets (92.5%), 367 positive control
+centers, and 233,064 lens pairs. Requiring 4/5 gives the same sample. Requiring
+5/5 retains 71 sets (88.8%), 355 controls, and 224,375 lens pairs. The median
+positive-control/lens retained-count ratio is 0.940 for 3/5 or 4/5 and 0.950
+for 5/5. These are support sensitivities only; none is designated as the final
+selection or estimator policy.
+
+No shear profile or mass fit was calculated. The HSC Y3 n(z) remains fiducial,
+and its posterior uncertainty, shear calibration response, PSF matching,
+control contamination, repeated-source/field covariance, and injection/recovery
+remain unresolved. Keep `science_measurement=false`.
+
+- Runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_common_shape_rows.py`
+- Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-11_01/`
+- Summary SHA-256: `eb73aa0365813d880d3edf60b12e4039f2575f8a97eab8868fc918121a34d445`
+- Assessment SHA-256: `35369bbc74fa576570860af09d95d29c33c32cf8b1dfb96c30bb5949d5ddcf95`
+- Per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc6030c2f8c11bed`
+- Aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
+- Zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`
