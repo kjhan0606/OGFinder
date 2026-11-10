@@ -3950,3 +3950,23 @@ sbatch analysis/icl_wgl_membership/hsc_debug/run_s23b_wl_selection_coefficient_s
 covariance가 아니다. 상세 수치, 입력 hash와 해석 제한은
 [`wl_s23b_selection_coefficient_sensitivity_assessment_2026-11-11.md`](wl_s23b_selection_coefficient_sensitivity_assessment_2026-11-11.md)에
 기록했다. `science_measurement=false`를 유지한다.
+
+## 2026-11-11 WL 고정 지지 표본 선택 감사
+
+[`audit_s23b_wl_fixed_support_sample_selection.py`](audit_s23b_wl_fixed_support_sample_selection.py)는
+승인된 80개 렌즈 manifest와 기존 radial-support 결과만 읽어 전 구간 공통 지지가
+있는 52개 렌즈와 같은 74개 전역 지원 표본의 나머지 22개 렌즈를 비교한다.
+80개 중 6개는 74개 전역 지원 집합에 들어오지 않는다. 원본 shape-row CSV,
+이미지, CAS 또는 네트워크는 사용하지 않았다.
+
+비교 세부표는
+[`wl_s23b_wl_fixed_support_sample_selection_assessment_2026-11-11.md`](wl_s23b_wl_fixed_support_sample_selection_assessment_2026-11-11.md)에
+기록했다. 고정 52개의 원시 shape-source 중앙값은 나머지 22개보다 높다
+(4,673 대 2,902.5, SMD 1.121). 이 수는 보정된 깊이 지도가 아닌 catalog 가용성
+지표다. 52개 WL 표본의 일반화에는 선택효과를 고려해야 한다. 이 감사는 기술
+비교이며 가설검정이나 shear 측정이 아니다. `science_measurement=false`를 유지한다.
+
+평가서와 요약은
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_fixed_support_selection_2026-11-11_01/`에
+저장했다. `summary.json` SHA-256은
+`226d92d196ecafa097ed669ca38d65c00f9a7808bd0c2356e654e5388dcbe76b`이다.
