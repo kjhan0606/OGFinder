@@ -14,6 +14,26 @@ S23B catalog README](https://raw.githubusercontent.com/oguri/cluster_catalogs/ma
 lists the cluster catalog files but does not document the headerless member
 file's column order.
 
+## Independent algorithm-source check (2026-11-11)
+
+The S23B paper explicitly points to Oguri (2014) for the definition of
+`w_mem`. Equation 20 defines it as the red-sequence number parameter times the
+stellar-mass and spatial filters for positive spatial-filter values, and zero
+outside that region. The paper describes `w_mem` as a weight factor that scales
+similarly to membership probability; it is not, by itself, a calibrated
+posterior probability. The [S23B paper](https://arxiv.org/html/2512.13954v1#S3.SS1)
+reports more than 600,000 Wide member rows above `w_mem=10^-3` and states that
+no `w_mem` cutoff is used when computing cluster richness. The [original
+CAMIRA algorithm paper](https://arxiv.org/html/1407.4693v2#S2.SS5) gives the
+definition and percolation context.
+
+The official [S23B author repository](https://github.com/oguri/cluster_catalogs/tree/main/hsc_s23b_camira)
+contains the four cluster catalogs and a README, but no member-file column
+dictionary. This independently confirms the documentation gap; it does not
+map raw field 8 to `w_mem`. Keep `field8_raw` uninterpreted in products and
+retain its weighted profiles as sensitivity analyses until a file-specific
+schema or author confirmation is available.
+
 ## Offline file audit
 
 `audit_s23b_camira_member_raw_field_schema.py` rejoined all rows of the
