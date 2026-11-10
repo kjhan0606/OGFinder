@@ -2676,7 +2676,7 @@ remain unresolved. Keep `science_measurement=false`.
 - Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-11_01/`
 - Summary SHA-256: `eb73aa0365813d880d3edf60b12e4039f2575f8a97eab8868fc918121a34d445`
 - Assessment SHA-256: `35369bbc74fa576570860af09d95d29c33c32cf8b1dfb96c30bb5949d5ddcf95`
-- Per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc6030c2f8c11bed`
+- Per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc603c2f8c11bed`
 - Aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
 - Zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`
 
@@ -2737,3 +2737,33 @@ selection response, 주입/회수 검증이 해결되기 전에는 halo-mass 적
 재현 평가와 해시는
 [`hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md`](hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md)
 및 그 안의 실행기/산출물 기록을 참조한다.
+
+## 2026-11-11 반경별 대조 지지와 고정 표본 민감도
+
+기존 verified QA 표를 재집계한 source bins 2–4의 양쪽 지지 렌즈 세트 수는
+0.1–0.2, 0.2–0.4, 0.4–0.7, 0.7–1.0, 1.0–1.5, 1.5–2.0, 2.0–3.0 proper Mpc에서
+60/67/69/73/74/74/74다. 각 반경에서 4개 이상 matched control 중심도 지지되는
+세트는 52/59/64/67/70/72/74개, 5개 모두 지지되는 수는 38/51/60/64/65/68/71개다.
+
+일곱 구간 전부에서 렌즈와 ≥4/5 대조 지지를 요구한 동일 52개 세트는
+적색편이 중앙값이 전역 74개 세트와 유사하지만 유지 source-pair 수 중앙값이
+3,415 대 3,119로 높다. 이 52개 fixed-set `DeltaSigma_t` profile은 전역 표본의
+반경별 공통지원 profile에 비해 일부 구간에서 −55% 또는 +62% 이동했다. 이는
+선택된 렌즈 집합과 radial support가 profile을 바꿀 수 있다는 증거다. fixed-set
+profile은 선행 세트별 calibrated profile을 다시 평균한 값이고, spatial covariance를
+추정하지 않았다. 동일 가중은 바깥 lens-set 평균에만 적용되고 set 안의 positive
+random aperture들은 source-pair lensing weight로 pooled된다. 통계 검출 또는 질량으로
+해석하지 않으며 `science_measurement=false`를 유지한다.
+
+따라서 source-pair 가중 pooled estimator와 equal-lens-set estimator 중 하나를
+검증 없이 선택하면 안 된다. 다음은 동일 고정 표본에서 matched lens/random
+endpoint를 함께 지우는 covariance, 반복 source의 동시 제거, 2.5°/5° 블록 민감도와
+연결된 HSC field 지원을 평가하는 것이다. 공간분할이 실측 footprint를 대표하지
+못하면 covariance를 검출 근거로 쓰지 않는다. 대조 영상의 PSF/depth/mask/sky,
+`n(z)` 전체 공분산, reduced shear, magnification, member dilution/boost,
+selection response, injection/recovery도 남아 있으므로 mass fit은 보류한다.
+
+재현기와 해시:
+[반경 지지 감사](hsc_debug/audit_s23b_wl_matched_radial_support.py),
+[고정 표본 profile 재집계](hsc_debug/analyze_s23b_wl_fixed_common_support_profile.py),
+[상세 평가](hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md).

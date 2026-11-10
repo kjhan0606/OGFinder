@@ -4513,7 +4513,7 @@ lensing 측정이나 질량 추정이 아니다. n(z) 불확실성, 보정 respo
 - 산출물: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-11_01/`
 - summary SHA-256: `eb73aa0365813d880d3edf60b12e4039f2575f8a97eab8868fc918121a34d445`
 - assessment SHA-256: `35369bbc74fa576570860af09d95d29c33c32cf8b1dfb96c30bb5949d5ddcf95`
-- per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc6030c2f8c11bed`
+- per-center radial/tomographic TSV SHA-256: `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc603c2f8c11bed`
 - aggregate radial/tomographic TSV SHA-256: `ae84048ee707ffe531ecff80ede270544a7475846079db7520ee59bd62706911`
 - zero-support policy TSV SHA-256: `ba89948681cb0560408030a4df66a232a2989cd5415c34ca1cb99c59d8bc26da`
 - 다음 단계 제안: 동일 데이터만 사용해 보정 random-subtracted profile의
@@ -4570,3 +4570,31 @@ magnification, member dilution/boost, selection response 및 injection/recovery�
 - 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_weight_and_desi_nz_sensitivity_2026-11-11_03/`
 - summary SHA-256: `9c66b281e0920b79a5c7854e40081b873621867cfaca2a9991d5e93e031f1aa5`
 - 이전 `_01`과 `_02` 시도는 각각 비교 지원 불일치와 문구 오류 때문에 superseded 처리했다. 최종 기준은 `_03`이다.
+
+## 2026-11-11 S23B 반경별 matched-control support 후속
+
+최신 Astrafek runner는 승인된 80-lens/400-control QA 결과의 이미 집계된 표만
+읽었다. Raw shape CSV, 이미지, HSC 서버, 네트워크를 읽지 않았다. source bins 2–4,
+전역 4/5 support sample은 74 lens sets/367 controls다. 양쪽 역할이 지지되는
+반경별 세트 수는 60/67/69/73/74/74/74다. 반경마다 4개 이상 positive controls가
+있는 수는 52/59/64/67/70/72/74, 5개 모두인 수는 38/51/60/64/65/68/71이다.
+모든 반경에서 lens rows와 ≥4/5 controls를 요구하는 고정 교집합은 52세트다.
+
+고정 52세트의 redshift 중앙값은 전역 74세트와 유사하다 (0.44805 대 0.44705).
+그러나 렌즈 aperture별 유지 source-pair 중앙값은 3,415 대 3,118.5이며 shape-weight
+합 중앙값도 19,682 대 17,662로 높다. 따라서 지지 기반 표본은 자료 support가 더
+좋은 렌즈를 고른다. 이 고정 표본 `DeltaSigma_t` (`10^13 Msun Mpc^-2`)는 일곱
+반경에서 23.554, 6.048, 4.003, 3.521, 2.521, 0.675, 1.255다. 반경별 60–74개
+지지 표본과 비교하면 최대 −54.8%/+61.8% 차이가 난다. per-set 산포는 descriptive
+only이며 covariance를 계산하지 않았다. `science_measurement=false`; 질량 적합과
+검출 주장을 보류한다.
+
+- support 감사 runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_matched_radial_support.py` (SHA-256 `1c924dd6173addca14e0eec36e8698d687e535f659425e52b93a5c18e1ad3ba3`)
+- fixed profile runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_fixed_common_support_profile.py` (SHA-256 `3640ec5b6313a4bf1ef48cf8270676a8c4c466e20e274bbef30a952b8257524d`)
+- support summary (Git 외) SHA-256: `c51a4d9268935a0919d0abd3da2f10b6cd16ee7e35f1e6e23a8f3fe8c9e51234`
+- fixed profile summary (Git 외) SHA-256: `4d270b81737e5bcb6188941f9f26cd6255614fd7ae8d1e6f2977cf51a4686930`
+- 결과: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_matched_radial_support_2026-11-11_02/` 및 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_profile_2026-11-11_02/`
+
+이 기록에서 앞서 저장한 per-center radial/tomographic QA TSV의 해시는 문서 오타를
+수정했다. 검증된 값은 `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc603c2f8c11bed`
+(64자)다.

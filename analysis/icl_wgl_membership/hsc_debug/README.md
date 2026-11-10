@@ -3801,3 +3801,26 @@ pooled 대비 최대 약 23% 변했고, 대조 세트 동일 가중은 특정 �
 - 평가: [`wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md`](wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md)
 - 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_weight_and_desi_nz_sensitivity_2026-11-11_03/`
 - summary SHA-256: `9c66b281e0920b79a5c7854e40081b873621867cfaca2a9991d5e93e031f1aa5`
+
+## 2026-11-11 반경별 matched-control 지지와 고정 표본 프로파일
+
+기존 QA 산출표만 재집계해 source bins 2–4의 반경별 matched-control 지지를
+확인했다. 전역 74개 렌즈 세트 중 양쪽 모두 반경 지지가 있는 세트는
+0.1–0.2부터 2–3 proper Mpc까지 60/67/69/73/74/74/74개다. 그중 반경마다
+4개 이상 대조 중심도 지지되는 수는 52/59/64/67/70/72/74개다. 일곱 반경 모두에
+렌즈와 대조 ≥4/5를 요구하는 고정 교집합은 52개다.
+
+이 고정 52개 세트의 equal-lens `DeltaSigma_t`는 `10^13 Msun Mpc^-2` 단위로
+23.554, 6.048, 4.003, 3.521, 2.521, 0.675, 1.255다. 반경별 지원 표본(60–74개)
+profile과 비교하면 일부 구간에서 −55% 또는 +62% 차이가 난다. 52개 표본의
+적색편이 중앙값은 전역 74개와 비슷하지만, aperture당 유지 source 행 중앙값은
+3,415 대 3,119로 더 높다. 공간 공분산은 계산하지 않았고 per-set 산포는 오차가
+아니다. 따라서 이는 지지·표본선택 민감도이며 `science_measurement=false`다.
+동일 가중은 렌즈 세트 바깥 평균에만 적용하며, 각 세트 안의 positive random
+aperture들은 source-pair lensing weight로 계속 pooled된다.
+
+- 지지 감사기: [`audit_s23b_wl_matched_radial_support.py`](audit_s23b_wl_matched_radial_support.py)
+- 고정 표본 재집계기: [`analyze_s23b_wl_fixed_common_support_profile.py`](analyze_s23b_wl_fixed_common_support_profile.py)
+- 평가 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_matched_radial_support_2026-11-11_02/` 및 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_profile_2026-11-11_02/`
+- summary SHA-256: `c51a4d9268935a0919d0abd3da2f10b6cd16ee7e35f1e6e23a8f3fe8c9e51234` / `4d270b81737e5bcb6188941f9f26cd6255614fd7ae8d1e6f2977cf51a4686930`
+- 다음: 고정 표본 estimator에 matched endpoint 공간 공분산을 붙이고 source 재사용·블록 폭·HSC footprint 민감도를 평가한다. 현 자료로만 수행하며 과학 측정 승격은 별도 관문을 통과한 뒤 판단한다.
