@@ -4409,3 +4409,21 @@ count 결과로 갱신한 원천행 계획은 렌즈 80개 4 batch, 대조 중�
 - Count audit와 갱신 계획: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
 - 원천행 계획 파일 SHA-256: `7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`
 - 원천행 query/download 미실행; `science_measurement=false` 유지.
+
+### 2026-11-10 원천행 계획 승인 및 실행기 사전검증
+
+사용자가 원천행 계획 파일 SHA-256
+`7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`의
+제출과 수신을 승인했다. 범위는 렌즈 80개와 대응 대조 중심 400개,
+렌즈 source-pair 340,256개와 대조 1,572,453개로 총 1,912,709개다. SQL은
+렌즈 4개, 대조 16개 batch이며 출력 열은 각각 22개와 23개다. 영상과 전체
+photo-z PDF는 포함하지 않는다. 무압축 CSV 예상량은 낮음/중앙/높음
+0.46/0.58/0.86 GiB이며 실제 전송량은 아직 측정 전이다.
+
+새 실행기
+`analysis/icl_wgl_membership/hsc_debug/submit_s23b_wl_common_shape_rows.py`의
+lageunha `--check`는 네트워크 없이 통과했다. 불변 계획 해시, count-only
+영수증, 중심별 예상 수, SQL 내용과 해시를 확인했다. 이 기록 시점에는
+아직 소스 행 query와 다운로드를 시작하지 않았다. 다운로드 후에는 배치별
+CSV hash/크기/행 수와 count-only 대조를 기록하고 `science_measurement=false`를
+유지한다.

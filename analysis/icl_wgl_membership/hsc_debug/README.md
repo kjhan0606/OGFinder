@@ -3627,3 +3627,21 @@ unsubmitted and need separate approval for exact plan-file SHA-256
 - Finalizer: `finalize_s23b_wl_common_support_plan.py`
 - Count audit and post-count plans:
   `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
+
+### 2026-11-10 approved S23B source-row export
+
+The user approved the exact post-count row-plan file SHA-256
+`7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`.
+The plan covers 80 lenses and 400 matched controls in 4+16 serial query
+batches, with 1,912,709 expected lens/control source pairs. It returns the
+approved 22-column lens and 23-column control schemas; images and full photo-z
+PDFs are excluded. The estimated uncompressed CSV volume is 0.46/0.58/0.86
+GiB (low/point/high), not an observed transfer size.
+
+`submit_s23b_wl_common_shape_rows.py --check` passed on `lageunha` with no
+network access. It validates the immutable plan hash, both count-only sources,
+all per-center counts, and every SQL batch. Submission requires the explicit
+approval flag and the same exact hash; it uses one hidden password prompt and
+records job IDs, row counts, byte counts, and file checksums without saving
+credentials. At this checkpoint, no source-row query or transfer has started;
+`science_measurement=false`.
