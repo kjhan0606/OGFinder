@@ -4716,3 +4716,71 @@ tract 단위 삭제는 영향도만을 보여준다. 인접 tract 간 상관이 
 - 실행기 SHA-256: `878a5c6471af2acc2cbd0cf478f56d5ab08f825268ad9390acbe228df269ef2e`
 - 확인: Python 문법, CLI `--help`, diff whitespace, 2-tract 합성 좌표 대입 검사가 통과했다.
 - 실제 HSC geometry 입력이나 CSV 분석은 실행하지 않았다.
+
+## 2026-11-11 HSC exact-tract influence and fixed-52 ICL–satellite–WL audit
+
+The earlier approximate patch-center tract influence record above is superseded
+for the fixed-52 sample by an exact-footprint assignment using the four HSC
+PDR3 Wide tract/patch geometry tables already present on `/gpfs`. The corrected
+parser normalizes unwrapped RA, assigns endpoints through patch polygons to
+their parent tract, and records the parser and geometry-file hashes. No new
+geometry download, HSC query, image read, or shape-row download was performed.
+
+The exact audit reuses the already approved 20 S19A shape-row CSV batches and
+the pinned HSC Y3 SACC `n(z)`. It includes 52 fixed lens sets and 260 planned
+matched controls (259 have selected source rows), 138,849 lens pairs and
+656,440 control pairs, and 493,402 unique source coordinates. All active
+endpoints were assigned; same-field overlaps were resolved by nearest
+containing patch center. The analysis covers 102
+occupied parent-tract blocks. Every deletion retains the four-control floor
+and 48–52 common lens sets. Maximum inner-bin equal-control-center tangential
+and cross shifts are 1.727 and 2.705 × 10¹³ M☉ Mpc⁻². These are influence
+diagnostics, not independent errors or a survey covariance.
+
+- Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_fixed52_tract_region_influence.py`
+- Geometry parser: `analysis/icl_wgl_membership/hsc_debug/hsc_pdr3_tract_patch_geometry.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_fixed52_exact_tract_influence_assessment_2026-11-11.md`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_tract_influence_2026-11-11_02/`
+- Summary SHA-256: `7924dfdbe27d9435099bc0d4990c192e28506cf9a50c9ebf0e8ca584d7859e86`
+
+The saved ICL–satellite profiles were then joined to the fixed-52 WL profiles.
+All 52 WL clusters have an ICL profile; `i` and `i2` contain disjoint sets of
+25 and 27. Requiring at least 10% common support in both ICL annuli leaves 18
+and 22, and at least 20% leaves only 5 and 7. The four direct ICL–satellite
+partial-correlation intervals include zero. In the 112 pointwise WL
+association tests, eight saved percentile intervals excluded zero. A separate
+10,000-replicate restricted wild-cluster max-T analysis of the full 116-test
+family found 10 unadjusted p-values below 0.05 and zero familywise-adjusted
+values below 0.05; the minimum adjusted p-value is 0.5154. This does not adjust
+the earlier percentile intervals. The selected sample, approximate 5-degree
+blocks, and unresolved photo-z/shear/PSF/mask/member-dilution/source-reuse
+systematics prevent physical detection claims. `science_measurement=false`.
+
+- Overlap summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_wl_fixed_support_overlap_2026-11-11_01/` (`8145f969b60fe93075d86bd952c9cd0d0e38f9be71be2ff521252048754cf69e`)
+- Relation summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_wl_fixed52_relation_2026-11-11_03/` (`a7a9f30107bb800986d5d1aa4bf4e2012497092170e3bc27bf246587f7840e2f`)
+- Max-T summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_wl_fixed52_maxt_2026-11-11_01/` (`e1bbe2282adca533791dd3b4a3a82e048e99d74c4c2e1a82b27a85bb69a807c2`)
+- Astrafek reports: `analysis/icl_wgl_membership/hsc_debug/s23b_icl_wl_fixed_support_overlap_assessment_2026-11-11.md`, `s23b_icl_satellite_wl_fixed52_relation_assessment_2026-11-11.md`, and `s23b_icl_satellite_wl_fixed52_max_t_assessment_2026-11-11.md`.
+
+## 2026-11-11 S16A shape coverage count plan prepared, not submitted
+
+To assess whether the ICL sample can be expanded beyond the S19A-supported
+52-cluster overlap, a local planner prepared a count-only S16A CAS plan for all
+1,043 centers in the pinned S23B ICL manifest. It uses 3 proper-Mpc cones,
+42 batches of at most 25 centers, and returns only `lens_id` plus one integer
+distinct-shape-object count per center (1,043 rows; estimated maximum CSV
+size about 31.4 kB). It requests no source IDs, positions, shapes, photo-z,
+images, or PSF data. The query has not been submitted, and future shape-row
+export remains a separate scope requiring its own approval.
+
+S16A and S19A are separate processing/calibration releases. Aggregate counts
+can identify catalog coverage only; they cannot be interpreted as usable
+lensing support and do not authorize mixing S16A rows with the current S19A
+sample. The official HSC S16A page documents the `s16a_wide` shape-table joins,
+and the FAQ explains its PDR1 CAS schema.
+
+- Planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_s16a_shape_count_plan.py`
+- Plan report: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_count_plan_assessment_2026-11-11.md`
+- Prepared SQL and plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
+- Exact plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
+- Query submitted: no; new CAS work requires approval for this exact plan hash.
+- Official references: https://hsc-release.mtk.nao.ac.jp/doc/index.php/s16a-shape-catalog-pdr2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/database/summary_table_usage-2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/faq__pdr3/

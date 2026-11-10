@@ -3,9 +3,10 @@
 
 Uses only the previously approved shape-row export and pinned n(z). By default,
 saved HSC patch-QA centers define approximate connected regions. With
-``--geometry-dir``, official HSC PDR3 Wide tract polygons define exact
-single-tract influence blocks. Both modes are influence audits, not
-survey-region covariance estimates. The science flag remains false.
+``--geometry-dir``, official HSC PDR3 Wide patch polygons assign endpoints to
+their parent tract IDs for single-tract influence blocks. Both modes are
+influence audits, not survey-region covariance estimates. The science flag
+remains false.
 """
 from __future__ import annotations
 
@@ -98,7 +99,7 @@ def center_region_map(pairs: dict, centers_xyz: np.ndarray,
 
 
 def assign_tract_keys(index, ra_deg, dec_deg) -> tuple[np.ndarray, dict]:
-    """Assign coordinates to official tract polygons and preserve ambiguity counts."""
+    """Assign coordinates through official patch polygons to their parent tracts."""
     assigned = index.assign(ra_deg, dec_deg, level="tract")
     keys = np.full(len(ra_deg), UNASSIGNED_GEOMETRY, dtype=object)
     for row, (field, tract, cross_field) in enumerate(zip(
@@ -111,7 +112,7 @@ def assign_tract_keys(index, ra_deg, dec_deg) -> tuple[np.ndarray, dict]:
         "n_points": int(len(keys)),
         "unassigned": int(np.count_nonzero(keys == UNASSIGNED_GEOMETRY)),
         "cross_field_ambiguous": int(np.count_nonzero(keys == CROSS_FIELD_GEOMETRY)),
-        "multiple_tract_polygon_matches": assigned.overlap_count,
+        "multiple_patch_polygon_matches": assigned.overlap_count,
     }
 
 
@@ -188,7 +189,7 @@ def exact_region_maps(index, lens_pairs: dict, control_pairs: dict) -> tuple[dic
         "lens_source": lens_source_codes,
         "control_source": control_source_codes,
     }, {
-        "assignment": "official PDR3 Wide tract polygons; nearest containing tract center resolves same-field overlap",
+        "assignment": "official PDR3 Wide patch polygons; parent tract ID is assigned from the nearest containing patch center",
         "n_unique_source_ids_assigned": int(len(unique_ids)),
         "lens_centers": lens_center_audit,
         "control_centers": control_center_audit,
@@ -235,7 +236,7 @@ def run(args) -> dict:
         region_label_by_id = {
             int(key): str(value) for key, value in geometry_audit["region_labels"].items()
         }
-        tract_keys = list(range(geometry_summary["n_tract_polygons"]))
+        tract_keys = list(range(geometry_summary["n_patch_parent_tracts"]))
         tract_components = None
     else:
         tract_keys, tract_xyz = tract_centers_from_patch_qa(args.patch_qa.resolve())
@@ -321,7 +322,7 @@ def run(args) -> dict:
         control_center_region[active_control], control_source_region[active_control],
     )))
     if len(occupied) < 2:
-        raise ValueError("fewer than two connected tract-center components overlap the active stack")
+        raise ValueError("fewer than two spatial regions overlap the active stack")
 
     region_rows, profile_rows = [], []
     for region in occupied:
@@ -428,8 +429,8 @@ def run(args) -> dict:
     patch_sha = sha(args.patch_qa.resolve()) if not args.geometry_dir else None
     exact_mode = args.geometry_dir is not None
     method = ({
-        "region_definition": "individual official HSC PDR3 Wide tract polygons",
-        "endpoint_assignment": "point-in-polygon; nearest containing same-field tract center resolves overlaps",
+        "region_definition": "parent tract IDs from official HSC PDR3 Wide patch polygons",
+        "endpoint_assignment": "point-in-polygon over patch polygons; nearest containing same-field patch center resolves overlaps",
         "delete_rule": "remove a lens/control pair when either center or source endpoint is assigned to the deleted tract; recompute calibrations and the four-control radial support rule",
         "estimators": ["pooled_controls", "equal_control_centers", "equal_minus_pooled"],
         "profile_comparison": "each leave-tract-out profile compared with the fixed 52-set full-sample estimator",
@@ -455,6 +456,9 @@ def run(args) -> dict:
     if exact_mode:
         input_provenance["official_geometry_directory"] = str(args.geometry_dir.resolve())
         input_provenance["official_geometry_files"] = geometry_summary["files"]
+        input_provenance["official_geometry_parser_sha256"] = sha(
+            Path(__file__).with_name("hsc_pdr3_tract_patch_geometry.py")
+        )
     else:
         input_provenance["patch_qa_sha256"] = patch_sha
     summary = {
@@ -487,7 +491,7 @@ def run(args) -> dict:
         "inputs": input_provenance,
         "limitations": ([
             "individual tracts are influence blocks, not independent survey regions; covariance is deliberately not estimated",
-            "same-field polygon overlaps are assigned to the nearest containing tract center; this is a spatial block label, not a reconstruction of the catalog's owning tract",
+            "tract IDs are assigned from the nearest containing official patch polygon; patch overlap handling creates a deterministic spatial block label, not a reconstruction of the catalog's owning patch at source-row query time",
         ] if exact_mode else [
             "the approved pair rows have coordinates but no tract or patch IDs; endpoint assignment uses nearest patch-QA tract center",
             "the tract-center graph approximates footprint connectivity; it is not a polygon-overlap map or official HSC field label",
@@ -505,7 +509,7 @@ def run(args) -> dict:
 
     region_word = "tract" if exact_mode else "approximate region"
     region_description = (
-        "Official HSC PDR3 Wide tract polygons assign the center and unique source endpoints. Same-field polygon overlaps use the nearest containing tract center; active endpoints that are unassigned or cross-field ambiguous stop the run."
+        "Official HSC PDR3 Wide patch polygons assign the center and unique source endpoints to their parent tract IDs. Same-field patch overlaps use the nearest containing patch center; active endpoints that are unassigned or cross-field ambiguous stop the run."
         if exact_mode else
         "Connected components of patch-QA tract centers at the configured angular threshold define the approximate regions."
     )
@@ -534,6 +538,8 @@ def run(args) -> dict:
         f"- Reference estimator/covariance summary SHA-256: `{reference_sha}`",
         (f"- Official geometry directory: `{args.geometry_dir.resolve()}`" if exact_mode
          else f"- HSC patch-QA SHA-256: `{patch_sha}`"),
+        *( [f"- Official geometry parser SHA-256: `{input_provenance['official_geometry_parser_sha256']}`"]
+           if exact_mode else [] ),
         f"- Result directory: `{output}`",
         "",
     ])
@@ -542,7 +548,7 @@ def run(args) -> dict:
     write_json(output / "summary.json", summary)
     print(json.dumps({
         "status": summary["status"], "science_measurement": False,
-        "occupied_components": len(occupied), "region_deletions": region_rows,
+        "occupied_spatial_blocks": len(occupied), "region_deletions": region_rows,
         "output_directory": str(output),
         "summary_sha256": sha(output / "summary.json"),
     }, ensure_ascii=False, indent=2), flush=True)

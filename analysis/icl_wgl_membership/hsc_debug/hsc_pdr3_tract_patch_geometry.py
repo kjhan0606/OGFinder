@@ -8,6 +8,12 @@ polygon containment in a local gnomonic projection. Overlapping polygons are
 reported and resolved deterministically to the nearest containing center;
 cross-field overlaps remain unassigned and are flagged.
 
+The official Wide tables can list patch polygons for parent tracts whose full
+tract polygon is absent from that field's tract section. Field and tract
+assignment therefore use the complete patch-polygon set; the parent tract ID
+comes from each official patch record. Coordinates may use unwrapped right
+ascension across 0 degrees; RA is normalized modulo 360 before indexing.
+
 Official sources:
 https://hsc-release.mtk.nao.ac.jp/doc/index.php/available-data__pdr3/
 https://hsc-release.mtk.nao.ac.jp/rsrc/pdr3/tract_patches/info/tracts_patches_W-AEGIS.txt
@@ -42,6 +48,12 @@ WIDE_FILE_BYTES = {
     "tracts_patches_W-hectomap.txt": 4_762_372,
     "tracts_patches_W-autumn.txt": 26_107_950,
     "tracts_patches_W-spring.txt": 18_198_617,
+}
+WIDE_FILE_SHA256 = {
+    "tracts_patches_W-AEGIS.txt": "87548315fd1f5007a55f997f65841ac8d46c9e965207995bab127a74bd06af2c",
+    "tracts_patches_W-hectomap.txt": "52b8905e0543245d4eda653d99108009f918be6d233797edf4c0d48aa18feb87",
+    "tracts_patches_W-autumn.txt": "a1a5e36af74bc0b3bc220167d78be6893279afcf0e348751eec4b467731dc78d",
+    "tracts_patches_W-spring.txt": "6ba75ea706ffc8c2caecfd44f007f3132117dff7014d652dba6fae6adb6de504",
 }
 TRACT_MARKER = re.compile(r"^\*+\s*Tract\s*\*+$", re.IGNORECASE)
 PATCH_MARKER = re.compile(r"^\*+\s*Patches\s*\*+$", re.IGNORECASE)
@@ -157,10 +169,10 @@ def _normalize_corners(corners: dict[int, tuple[float, float]], label: str) -> t
 
 def _validate_sky_point(point: tuple[float, float], label: str) -> tuple[float, float]:
     ra, dec = map(float, point)
-    if not (math.isfinite(ra) and 0.0 <= ra < 360.0
+    if not (math.isfinite(ra) and -360.0 <= ra < 720.0
             and math.isfinite(dec) and -90.0 <= dec <= 90.0):
         raise ValueError(f"invalid sky coordinate in {label}: {point}")
-    return ra, dec
+    return ra % 360.0, dec
 
 
 def parse_geometry_file(path: Path) -> tuple[list[SkyPolygon], list[SkyPolygon]]:
@@ -242,11 +254,8 @@ def parse_geometry_file(path: Path) -> tuple[list[SkyPolygon], list[SkyPolygon]]
             raise ValueError(f"center lies outside polygon for {field} tract {tract_id}")
         tracts.append(polygon)
 
-    tract_ids = set(tract_records)
     patches = []
     for (tract_id, patch_xy), record in sorted(patch_records.items()):
-        if tract_id not in tract_ids:
-            raise ValueError(f"patch refers to absent {field} tract {tract_id}")
         if record["center"] is None:
             raise ValueError(f"missing center for {field} tract {tract_id} patch {patch_xy}")
         polygon = SkyPolygon(
@@ -284,8 +293,22 @@ def load_wide_geometry(directory: Path) -> tuple[list[SkyPolygon], list[SkyPolyg
         with path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1 << 20), b""):
                 digest.update(chunk)
+        observed_sha256 = digest.hexdigest()
+        if observed_sha256 != WIDE_FILE_SHA256[filename]:
+            raise ValueError(
+                f"official geometry file SHA-256 differs from the pinned source for {filename}: "
+                f"{observed_sha256} != {WIDE_FILE_SHA256[filename]}"
+            )
+        patch_only_parent_tracts = sorted(
+            {row.tract for row in patch_rows} - {row.tract for row in tract_rows}
+        )
         files[filename] = {
-            "bytes": observed_bytes, "sha256": digest.hexdigest(),
+            "bytes": observed_bytes, "sha256": observed_sha256,
+            "n_tract_polygons": len(tract_rows),
+            "n_patch_polygons": len(patch_rows),
+            "n_patch_parent_tracts": len({row.tract for row in patch_rows}),
+            "n_patch_parent_tracts_without_full_tract_polygon": len(patch_only_parent_tracts),
+            "patch_parent_tract_ids_without_full_tract_polygon_sample": patch_only_parent_tracts[:5],
         }
 
     tract_keys = [(row.field, row.tract) for row in tracts]
@@ -298,6 +321,12 @@ def load_wide_geometry(directory: Path) -> tuple[list[SkyPolygon], list[SkyPolyg
         "expected_total_bytes": sum(WIDE_FILE_BYTES.values()),
         "n_tract_polygons": len(tracts),
         "n_patch_polygons": len(patches),
+        "n_patch_parent_tracts": len({(row.field, row.tract) for row in patches}),
+        "n_patch_parent_tracts_without_full_tract_polygon": sum(
+            row["n_patch_parent_tracts_without_full_tract_polygon"]
+            for row in files.values()
+        ),
+        "right_ascension_normalization": "modulo 360 degrees",
         "files": files,
     }
     return tracts, patches, summary
@@ -306,9 +335,10 @@ def load_wide_geometry(directory: Path) -> tuple[list[SkyPolygon], list[SkyPolyg
 class PolygonIndex:
     """Spatial index over HSC polygons with deterministic overlap handling.
 
-    ``field`` mode uses tract polygons only to identify a field and leaves the
-    tract and patch outputs unset. ``tract`` and ``patch`` modes report the
-    nearest containing polygon within an unambiguous field.
+    Field and tract assignments use official patch polygons because some Wide
+    field files list patches whose parent tract's full polygon is absent from
+    the tract section. Tract mode returns the parent tract ID on the nearest
+    containing patch. Patch mode also returns its patch ID.
     """
 
     def __init__(self, polygons: Iterable[SkyPolygon]):
@@ -388,8 +418,15 @@ def load_index(directory: Path, *, level: str = "tract") -> tuple[PolygonIndex, 
     if level not in {"field", "tract", "patch"}:
         raise ValueError("level must be field, tract, or patch")
     tracts, patches, summary = load_wide_geometry(directory)
-    polygons = patches if level == "patch" else tracts
+    polygons = patches
     summary["indexed_level"] = level
+    summary["assignment_geometry"] = "official patch polygons"
+    if level == "tract":
+        summary["assignment_semantics"] = "parent tract ID from nearest containing patch polygon"
+    elif level == "field":
+        summary["assignment_semantics"] = "field label from containing patch polygons"
+    else:
+        summary["assignment_semantics"] = "tract and patch IDs from nearest containing patch polygon"
     return PolygonIndex(polygons), summary
 
 

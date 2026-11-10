@@ -3860,25 +3860,17 @@ It reads only the approved shape-row export and pinned products, and keeps
 - Output (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
 - Summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`
 
-## Official PDR3 Wide tract/patch geometry (prepared)
+## Official HSC PDR3 Wide tract/patch geometry
 
 [`hsc_pdr3_tract_patch_geometry.py`](hsc_pdr3_tract_patch_geometry.py) parses
-the four official PDR3 Wide tract/patch coordinate tables and assigns sky
-coordinates by polygon containment. It records unmatched points, overlapping
-polygons, and cross-field ambiguity. Within a same-field overlap, it chooses
-the nearest containing polygon center deterministically. In `field` mode it
-uses tract polygons to assign the field label and leaves tract/patch IDs unset.
-Static review also fixed stale patch state when parsing a new tract. The parser
-has not yet been run against the official tables. It performs no download; the
-coordinate files are still awaiting the user's separate receipt approval. The
-official links are listed in the module docstring.
-
-The planned files total 49,225,826 bytes. After approval, validate their exact
-sizes and geometry, assign the approved lens/control/source coordinates to
-tracts, then rerun the fixed-52 regional influence analysis using tract blocks.
-Three field-level regions alone cannot provide a full covariance. Keep
-`science_measurement=false` unless the tract-block support and covariance
-gates are independently satisfied.
+the four official HSC PDR3 Wide tract/patch tables already present at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/control_patches_2026-10-14_02/public_geometry`.
+It pins byte counts and SHA-256 digests, normalizes unwrapped RA modulo 360°,
+and uses patch polygons because the Wide tables list many patch parent tracts
+without a full tract polygon in the field's tract section. Same-field patch
+overlaps are resolved deterministically to the nearest containing patch center;
+cross-field ambiguity is flagged. The parser makes no network request or
+download. Official source links are in its module docstring.
 
 ## 2026-11-11 HSC S19A estimator calibration-source audit
 
@@ -3892,32 +3884,32 @@ selection-response 오차, 검증된 HSC 공간 공분산 및 대조 영상의 d
 - 상세 기록: [wl_s23b_hsc_calibration_conformance_assessment_2026-11-11.md](wl_s23b_hsc_calibration_conformance_assessment_2026-11-11.md)
 - 근거: [HSC S19A PDR3 문서](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)와 문서에서 연결된 [HSC calibration utility](https://github.com/mr-superonion/hsc-y3-calib/blob/main/utils.py)
 
-## 2026-11-11 공식 HSC 기하 기반 WL 영향도 실행 단계
+## 2026-11-11 HSC 공식 기하 기반 WL tract 영향도 audit
 
-고정 52개 렌즈·260개 matched control 표본에서 lens/random 중심과 고유 source 좌표를
-HSC PDR3 Wide 공식 tract polygon에 배정하는 영향도 분석기는
-[`analyze_s23b_fixed52_tract_region_influence.py`](analyze_s23b_fixed52_tract_region_influence.py)이다.
-각 tract를 하나씩 제외하고 lens와 control의 보정 프로필을 다시 계산한다. 이는
-tract별 영향도 검사이며 서로 인접한 tract가 독립 표본이라는 가정을 하지 않으므로
-공분산이나 검출 유의도를 산출하지 않는다. 산출물은 계속 `science_measurement=false`다.
+고정 52개 렌즈·260개 대조장 표본을 공식 HSC PDR3 Wide patch polygon의
+parent tract별로 하나씩 제외해 다시 계산했다. 102개 점유 tract를 제외할 때
+공통 렌즈 표본은 48–52개로 남았다. 최대 절대 변화는 안쪽 0.1–0.2 proper-Mpc
+구간에서 발생했다. equal-control-center profile의 ΔΣ 변화는
+1.727 × 10¹³ M☉ Mpc⁻² (SPRING tract 9609), cross 성분 변화는
+2.705 × 10¹³ M☉ Mpc⁻² (SPRING tract 9612)였다.
 
-네 공개 좌표표의 정확한 파일명·크기 검사는
-[`hsc_pdr3_tract_patch_geometry.py`](hsc_pdr3_tract_patch_geometry.py)에 있다.
-파일 수신은 별도 승인이 필요하며, 이 절은 파일을 내려받지 않는다. 수신 승인 후
-아래 Slurm 실행기를 사용한다. 기본 기하 디렉터리는
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_pdr3_wide_geometry_2026-11-11_01`이고,
-필요하면 `HSC_PDR3_GEOMETRY_DIR`로 바꿀 수 있다.
+이 값들은 leave-one-tract 영향도이며 독립 오차나 공분산이 아니다. 인접 tract는
+독립 표본이 아니므로 검출 유의도나 halo mass를 해석하지 않는다. 20개 승인
+shape-row CSV와 고정 HSC Y3 n(z)만 재사용했고, 원영상·CAS·신규 다운로드는
+없었다. 계속 `science_measurement=false`를 유지한다.
+
+- 상세 결과와 재현 해시: [`wl_s23b_fixed52_exact_tract_influence_assessment_2026-11-11.md`](wl_s23b_fixed52_exact_tract_influence_assessment_2026-11-11.md)
+- 출력 경로: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_tract_influence_2026-11-11_02/`
+- summary SHA-256: `7924dfdbe27d9435099bc0d4990c192e28506cf9a50c9ebf0e8ca584d7859e86`
+
+LagEunha에서 수동 CPU 재현:
 
 ```bash
-sbatch --export=ALL,HSC_PDR3_GEOMETRY_DIR=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_pdr3_wide_geometry_2026-11-11_01 \
-  analysis/icl_wgl_membership/hsc_debug/run_s23b_fixed52_exact_tract_influence.sbatch
+env OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_MAX_THREADS=1 \
+  /home/kjhan/miniconda3/bin/python3 analysis/icl_wgl_membership/hsc_debug/analyze_s23b_fixed52_tract_region_influence.py \
+  --geometry-dir /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/control_patches_2026-10-14_02/public_geometry \
+  --output /gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_tract_influence_2026-11-11_02
 ```
-
-이 단계는 승인된 기존 20개 shape-row CSV와 계획·체크포인트, 고정 표본 지원표,
-기준 프로필 산출물, HSC Y3 n(z), 승인된 네 기하 파일을 읽는다. CAS 조회와 추가
-영상·shape·photo-z 다운로드는 하지 않는다.
-기본 결과 경로는
-`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_tract_influence_2026-11-11_01`이다.
 
 ## 2026-11-11 HSC 선택응답 계수 오차 민감도
 
@@ -3970,3 +3962,41 @@ covariance가 아니다. 상세 수치, 입력 hash와 해석 제한은
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_fixed_support_selection_2026-11-11_01/`에
 저장했다. `summary.json` SHA-256은
 `226d92d196ecafa097ed669ca38d65c00f9a7808bd0c2356e654e5388dcbe76b`이다.
+
+## 2026-11-11 fixed-52 ICL–satellite–weak-lensing relation and max-T audit
+
+The fixed-52 ICL/WL overlap is 25 clusters in `i` and 27 in `i2`; the filter
+sets are disjoint. Requiring at least 10% common pixel support in both ICL
+annuli leaves 18 and 22 clusters, respectively. The four direct ICL–satellite
+partial-correlation intervals all include zero. Across the 112 pointwise WL
+association intervals, 8 excluded zero before familywise correction. A
+shared-block wild-cluster max-T analysis of all 116 tests found 10 raw
+`p<0.05`, but none remained below 0.05 after max-T adjustment; the smallest
+adjusted p-value is 0.5154. This is an exploratory result for a selected
+52-cluster sample. The 5-degree blocks are approximate, and unresolved
+photo-z, shear-response, PSF, masking, magnification, member-dilution, and
+source-reuse limitations remain. No physical detection is claimed;
+`science_measurement=false`.
+
+- Overlap audit: [`s23b_icl_wl_fixed_support_overlap_assessment_2026-11-11.md`](s23b_icl_wl_fixed_support_overlap_assessment_2026-11-11.md)
+- Relation report: [`s23b_icl_satellite_wl_fixed52_relation_assessment_2026-11-11.md`](s23b_icl_satellite_wl_fixed52_relation_assessment_2026-11-11.md)
+- Max-T runner/report: [`adjust_s23b_icl_satellite_wl_fixed52_max_t.py`](adjust_s23b_icl_satellite_wl_fixed52_max_t.py), [`s23b_icl_satellite_wl_fixed52_max_t_assessment_2026-11-11.md`](s23b_icl_satellite_wl_fixed52_max_t_assessment_2026-11-11.md)
+- Relation summary SHA-256: `a7a9f30107bb800986d5d1aa4bf4e2012497092170e3bc27bf246587f7840e2f`
+- Max-T summary SHA-256: `e1bbe2282adca533791dd3b4a3a82e048e99d74c4c2e1a82b27a85bb69a807c2`
+- Max-T metrics SHA-256: `c29878527b2bbfdb379e4e4bfdc2fbe4fdee6d38bef67e4b3a204b4a38545010`
+
+## 2026-11-11 S16A shape-catalog coverage plan (not submitted)
+
+[`prepare_s23b_s16a_shape_count_plan.py`](prepare_s23b_s16a_shape_count_plan.py)
+prepares 42 count-only SQL batches for all 1,043 pinned S23B cluster centers,
+within 3 proper Mpc. The response would contain only center ID and the integer
+number of distinct S16A weak-lensing shape objects (1,043 rows; estimated
+maximum CSV size about 31.4 kB). It would not return source IDs, coordinates,
+shape values, photo-z, images, or PSF data. The plan is local and remains
+unsubmitted; S16A coverage is a ceiling only and must not be combined with
+S19A without a separate release/calibration audit. Submission requires
+approval of the exact plan hash.
+
+- Assessment: [`s23b_s16a_shape_count_plan_assessment_2026-11-11.md`](s23b_s16a_shape_count_plan_assessment_2026-11-11.md)
+- Prepared plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
+- Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
