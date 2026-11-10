@@ -40,10 +40,11 @@ requires its own explicit approval.
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
 - Exact plan approved: yes; SHA-256
   `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`.
-- Latest verified execution snapshot (2026-11-11): 13/42 batches complete,
-  325 center counts, 251 centers with zero sources, and count sum 298,031.
-  Completed rows match the approved center IDs and batch checkpoint hashes;
-  batch 13 is submitted and still running.
+- Latest verified execution snapshot (2026-11-11): 20/42 batches complete,
+  500 center counts, 79 centers with positive counts, 421 with zero sources,
+  and count sum 322,589. The last six completed batches returned zero for all
+  centers. Completed rows match the approved center IDs and batch checkpoint
+  hashes; batch 20 is submitted and still running.
 - Checkpoint (outside Git):
   `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/count_status.json`
 - No source rows, images, or photo-z were requested or returned; credentials
