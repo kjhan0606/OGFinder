@@ -2813,3 +2813,24 @@ zero-profile nominal p는 pooled 0.500/0.064, equal-center 0.446/0.050으로 gri
 - 평가서: [`hsc_debug/wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md`](hsc_debug/wl_s23b_fixed_equal_control_spatial_covariance_assessment_2026-11-11.md)
 - 산출물: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
 - summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`
+
+## 2026-11-11 fixed-52 approximate tract-region influence
+
+고정 52 lens-set에 이미 승인된 source rows를 적용해 HSC patch-QA 트랙 중심의
+연결요소를 하나씩 제거했다. 840개 전역 요소 중 표본은 세 곳에 분포했고, 각 삭제
+후 공통 지지 lens-set 수는 24/31/49개였다. 두 큰 요소를 각각 제외하면 1.5–2.0
+proper Mpc의 tangential profile이 pooled 기준 −117.6%/+116.1%, equal-center 기준
+−101.1%/+99.6% 이동했다. 삭제 후 lens-set 교집합도 바뀌므로 이 값은 지역 영향도와
+표본 구성 변화가 섞인 진단이다.
+
+세 요소만으로 survey covariance를 추정할 수 없다. 행 자료에 tract/patch ID가 없어
+nearest patch-QA 중심을 이용했으며 실제 필드 다각형도 검증되지 않았다. 따라서
+약중력렌즈 프로파일은 여전히 탐색 결과이고 `science_measurement=false`; mass fit 및
+검출 주장은 보류한다. 다음에는 공식 HSC footprint를 기준으로 필드 안의 연속 공간
+블록을 정의할 수 있는지 확인하고, 공통 표본과 독립 블록 수가 사전에 정한 covariance
+조건을 충족하는지 평가한다. 추가 공개 자료 수신은 별도 승인 전까지 하지 않는다.
+
+- 상세 평가: [`hsc_debug/wl_s23b_fixed52_tract_region_influence_assessment_2026-11-11.md`](hsc_debug/wl_s23b_fixed52_tract_region_influence_assessment_2026-11-11.md)
+- 실행기: [`hsc_debug/analyze_s23b_fixed52_tract_region_influence.py`](hsc_debug/analyze_s23b_fixed52_tract_region_influence.py)
+- 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_tract_region_influence_2026-11-11_01/`
+- summary SHA-256: `afc151a6b189af182f975b7a70a2e8bc176b85fa62ab09bff7a2b8718cb41326`

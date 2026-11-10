@@ -4656,3 +4656,26 @@ PSF-주입/회수는 남아 `science_measurement=false` 및 mass-fit 보류를 �
 - 실행기 SHA-256: `f31f7f30fc9d244d20dd6efaccaa51a9b5b833cf76bbb8c05b310aecb7039fc7`
 - 결과 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/`
 - summary SHA-256: `00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033`
+
+## 2026-11-11 fixed-52 HSC tract-region influence
+
+승인된 S19A shape 행 20개 CSV, HSC Y3 SACC `n(z)`, 기존 patch-QA만으로
+고정 52 lens-set의 근사 트랙 연결요소 삭제 영향도를 계산했다. 전역 840개 트랙 중
+분석 표본은 세 요소에 놓였다. 렌즈 중심 수는 28/21/3이며, source-bin 및 보정 행
+선택 뒤 남은 대조 중심은 139/105/15개다. 260개 계획 대조 중 259개만 선택 행을
+가졌다. 영역 삭제 후 공통 지지는 각각 24/31/49 lens-set이고 모든 유지 세트에서
+반경별 대조 수는 최소 4개였다.
+
+두 큰 요소 중 하나를 삭제하면 1.5–2.0 Mpc의 tangential profile이 전체 표본 값에
+비해 pooled 기준 −117.6% 또는 +116.1% 이동한다. Equal-center 방식도 −101.1% 또는
++99.6%로 같은 민감도를 보였다. 표본 교집합이 삭제 후 달라지므로 이 값은 순수한
+면적 효과가 아닌 영향도 진단이다. 세 요소로 안정적인 covariance를 추정하지 않았고
+`science_measurement=false`를 유지한다. 형상 행에 tract/patch ID가 없어 nearest
+patch-QA 중심 분류를 사용했으며 공식 필드 경계가 아니다.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_fixed52_tract_region_influence.py`
+- 평가: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_fixed52_tract_region_influence_assessment_2026-11-11.md`
+- 실행기 SHA-256: `d21057f9a5176f22fdd01d1bf18dbb6302ca26effd6892b6528cc6b3df015911`
+- 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_tract_region_influence_2026-11-11_01/`
+- summary SHA-256: `afc151a6b189af182f975b7a70a2e8bc176b85fa62ab09bff7a2b8718cb41326`
+- 상세 per-bin shifts SHA-256: `b2f1e5ac95c42354cca8c3e593c8207527fcc23dae92e136c03f6593f5640d69`
