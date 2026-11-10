@@ -3942,3 +3942,11 @@ sbatch analysis/icl_wgl_membership/hsc_debug/run_s23b_wl_selection_coefficient_s
 기본 결과는
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_selection_coefficient_sensitivity_2026-11-11_01`에
 저장된다.
+
+`lageunha` CPU 실행이 완료됐다. 기준 profile은 고정 52-lens 결과를 최대
+`0.03125 Msun Mpc^-2` 차이로 재현했다. 각 계수를 단독으로 ±1σ 변화시킨 profile
+반응은 2.5°·5° equal-area spatial jackknife diagonal error의 최대 1.21%
+(tangential)와 0.83% (cross)였다. 이 결과는 단독 계수 반응이며 결합 systematic
+covariance가 아니다. 상세 수치, 입력 hash와 해석 제한은
+[`wl_s23b_selection_coefficient_sensitivity_assessment_2026-11-11.md`](wl_s23b_selection_coefficient_sensitivity_assessment_2026-11-11.md)에
+기록했다. `science_measurement=false`를 유지한다.
