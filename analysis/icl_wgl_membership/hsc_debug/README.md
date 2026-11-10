@@ -3891,3 +3891,30 @@ selection-response 오차, 검증된 HSC 공간 공분산 및 대조 영상의 d
 
 - 상세 기록: [wl_s23b_hsc_calibration_conformance_assessment_2026-11-11.md](wl_s23b_hsc_calibration_conformance_assessment_2026-11-11.md)
 - 근거: [HSC S19A PDR3 문서](https://hsc-release.mtk.nao.ac.jp/doc/index.php/s19a-shape-catalog-pdr3/)와 문서에서 연결된 [HSC calibration utility](https://github.com/mr-superonion/hsc-y3-calib/blob/main/utils.py)
+
+## 2026-11-11 공식 HSC 기하 기반 WL 영향도 실행 단계
+
+고정 52개 렌즈·260개 matched control 표본에서 lens/random 중심과 고유 source 좌표를
+HSC PDR3 Wide 공식 tract polygon에 배정하는 영향도 분석기는
+[`analyze_s23b_fixed52_tract_region_influence.py`](analyze_s23b_fixed52_tract_region_influence.py)이다.
+각 tract를 하나씩 제외하고 lens와 control의 보정 프로필을 다시 계산한다. 이는
+tract별 영향도 검사이며 서로 인접한 tract가 독립 표본이라는 가정을 하지 않으므로
+공분산이나 검출 유의도를 산출하지 않는다. 산출물은 계속 `science_measurement=false`다.
+
+네 공개 좌표표의 정확한 파일명·크기 검사는
+[`hsc_pdr3_tract_patch_geometry.py`](hsc_pdr3_tract_patch_geometry.py)에 있다.
+파일 수신은 별도 승인이 필요하며, 이 절은 파일을 내려받지 않는다. 수신 승인 후
+아래 Slurm 실행기를 사용한다. 기본 기하 디렉터리는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_pdr3_wide_geometry_2026-11-11_01`이고,
+필요하면 `HSC_PDR3_GEOMETRY_DIR`로 바꿀 수 있다.
+
+```bash
+sbatch --export=ALL,HSC_PDR3_GEOMETRY_DIR=/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_pdr3_wide_geometry_2026-11-11_01 \
+  analysis/icl_wgl_membership/hsc_debug/run_s23b_fixed52_exact_tract_influence.sbatch
+```
+
+이 단계는 승인된 기존 20개 shape-row CSV와 계획·체크포인트, 고정 표본 지원표,
+기준 프로필 산출물, HSC Y3 n(z), 승인된 네 기하 파일을 읽는다. CAS 조회와 추가
+영상·shape·photo-z 다운로드는 하지 않는다.
+기본 결과 경로는
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_tract_influence_2026-11-11_01`이다.
