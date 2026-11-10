@@ -3663,9 +3663,70 @@ or full photo-z PDFs were included, credentials were not saved, and
 outside Git at
 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/source_rows_post_count_01/`.
 
-Next, perform a local source-row quality and common-support audit. Apply only
-documented identical lens/control source cuts, report retained counts and
-effective weights by aperture, and verify the B-mode-mask semantics before
-interpreting any tangential-shear contrast. Calibrated source n(z), lensing
-efficiency, and the spatial/PSF covariance gates remain required before a
-measurement.
+The approved local source-row quality and common-support audit is complete;
+results are recorded below. Calibrated source n(z) uncertainty, PSF, and
+spatial covariance remain interpretation gates before a measurement.
+
+### 2026-11-10 approved local S23B source-row QA complete
+
+`audit_s23b_wl_common_shape_rows.py` read only the 20 already-received CSVs and
+the previously downloaded HSC Y3 SACC n(z) file. It made no network request,
+CAS query, or additional download, and did not read image pixels or compute a
+shear profile. It rechecked all batch sizes, SHA-256 receipts, source-pair
+uniqueness, approved center IDs, per-center count-only totals, and the 80-lens /
+400-control mapping.
+
+The same cuts were applied to both roles: `|e|<2`, `0<=sigma_e<=0.4`,
+`mag_a10<=25.5`, `resolution>=0.3`, HSC Y3 source bins 1–4, verified B-mode
+mask pass value 1, positive fiducial `n(z)` lensing efficiency, and
+0.1–3 proper Mpc. The additional `m>-1` and positive PSF-moment-trace checks
+are input-validity gates for effective-support summaries, not HSC shape cuts.
+
+| Stage | Lenses | Five-control centers |
+|---|---:|---:|
+| Input center/source pairs | 340,256 | 1,572,453 |
+| HSC shape + magnitude + resolution + z-bin + B-mode | 240,068 | 1,107,161 |
+| Also positive fiducial `n(z)` efficiency | 240,068 | 1,107,161 |
+| Also 0.1–3 Mpc and calibration-input valid | 239,565 | 1,105,779 |
+
+The final pair-row retention is 70.4% for lenses and 70.3% for controls.
+Those rows are not globally unique sources. Two lens apertures have zero
+retained rows; 24/400 control centers have zero, affecting nine paired lens
+sets. None of the 80 sets has all five controls at zero. Among lens sets with
+nonzero lens support, the q16/median/q84 mean-five-control/lens ratios are
+0.690/0.925/1.311 by
+retained count, 0.686/0.929/1.311 by HSC weight sum, and 0.690/0.956/1.387 by
+the geometry-weight proxy sum.
+
+Median retained `|e|`, `sigma_e`, HSC weight, resolution, and PSF moment trace
+are similar between lenses and controls: 0.529/0.532, 0.1056/0.1053,
+5.379/5.384, 0.622/0.620, and 0.1127/0.1118, respectively. Median
+center-level catalog-weight `N_eff` is 2,964.6 for lenses and 2,840.7 for
+controls; geometry-proxy `N_eff` is 1,910.6 and 1,970.4. `N_eff` uses
+`(sum w)^2/sum(w^2)`; the geometry proxy uses `weight*(D_l beta)^2` and is not
+the calibrated estimator weight.
+
+The B-mode polarity cross-check against the published GAMA09H rectangle
+matched exactly: all 48,765 raw-zero pairs were inside RA 132.5–140 degrees,
+Dec 1.6–5 degrees, and all 1,863,944 raw-one pairs were outside. There were
+zero opposite-value pairs. This confirms raw 0 as excluded for this export,
+consistent with the earlier same-release coordinate audit; the official HSC
+page itself describes the mask purpose but not the stored-value polarity.
+
+This passes a catalog-row support and distribution QA gate and supports
+preparing a calibrated estimator plan. It is not a weak-lensing measurement:
+the SACC n(z) is fiducial and its uncertainty is not propagated; the proxy
+omits per-object `(1+m)`, responsivity, and selection-bias response; and
+control contamination, PSF spatial matching, source-reuse/field covariance,
+and injection/recovery remain unresolved. Keep `science_measurement=false`.
+
+- Runner: `audit_s23b_wl_common_shape_rows.py`
+- Results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-10_01/`
+- Summary SHA-256: `9ef472c1ae0888e187fce05f3449b1614d1da7c99e7a400403b92f8aa7e2dc54`
+- Assessment SHA-256: `4fd4d752f1138810702ec3c1034fa3181f2758505bc9e95deaaed39687d4d753`
+- Per-center TSV SHA-256: `e630442cbaeb054763897a46d68d3b4baea7c0884e80ac22f46ece906583f48e`
+- Paired-lens TSV SHA-256: `68e2bf3cf4e7dd515400881f8f5a508c66d3cb019fecff32e2b81100de2afe14`
+- Radial TSV SHA-256: `6d25f945d2dc567b26d741cba9329b7ddcacd55d60a24341d2f03ca0ce6fb087`
+- Next: prepare a pre-specified calibrated, random-subtracted estimator and
+  covariance plan, including how to handle zero-support lenses/controls;
+  await approval before running a shear profile. Keep `science_measurement=false`.

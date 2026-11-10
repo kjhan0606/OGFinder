@@ -4452,3 +4452,35 @@ batch가 count-only 결과와 일치해 완료됐다.
 렌즈와 대조에 동일한 문서화된 source cut을 적용해 aperture별 생존 수와
 유효 weight를 요약하고, B-mode mask 의미를 확인한다. 보정 source n(z),
 lensing efficiency, PSF/공분산 검증 전에는 lensing 측정으로 승격하지 않는다.
+
+## 2026-11-10 S23B weak-lensing 로컬 QA 완료
+
+승인된 로컬 QA를 lageunha CPU에서 완료했다. 이미 받은 20개 CSV와 기존 HSC
+Y3 SACC n(z)만 읽었고, CAS 조회·네트워크 요청·추가 다운로드·이미지 읽기·shear
+stack은 없었다. 모든 batch의 SHA-256, byte 수, count-only 중심별 행 수,
+중심/원천 쌍 중복, 중심 ID, 80개 렌즈와 400개 대조 연결을 확인했다.
+
+렌즈 340,256쌍 중 239,565쌍, 대조 1,572,453쌍 중 1,105,779쌍이 공통 source
+cut, 양의 fiducial n(z) 효율, 0.1–3 proper-Mpc, calibration-input 유효성
+검사 후 남았다. 렌즈 2곳은 생존 쌍이 0이고 대조 중심 24/400곳은 0이다.
+적어도 하나의 대조가 0인 짝은 9/80이며, 다섯 대조가 모두 0인 짝은 없다.
+렌즈 지지가 양수인 짝에서 대조 평균/렌즈 유지 수의 q16/중앙/q84는
+0.690/0.925/1.311이다. 형상 및
+weight 중앙값은 양쪽에서 비슷하지만, 0 지지 짝을 어떻게 다룰지 사전 규칙이
+필요하다.
+
+GAMA09H 공개 사각영역 좌표 대조는 정확히 일치했다. raw mask 0인 48,765쌍은
+모두 영역 안에 있고, raw mask 1인 1,863,944쌍은 모두 밖에 있었으며 반대
+분류는 0건이다. 따라서 이 export에서는 raw 0을 제외값으로 유지한다. 다만
+HSC 공식 문서는 mask의 목적은 설명하지만 정수 방향은 지정하지 않는다.
+
+이는 catalog-row 지지/분포 QA 통과이지 lensing 측정은 아니다. SACC n(z)
+불확실성, per-object 보정·responsivity·selection-bias, PSF 공간 일치,
+대조 오염, 반복 원천/공간 공분산, injection/recovery가 남았다.
+`science_measurement=false` 유지.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_common_shape_rows.py`
+- 산출물: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-10_01/`
+- summary SHA-256: `9ef472c1ae0888e187fce05f3449b1614d1da7c99e7a400403b92f8aa7e2dc54`
+- 다음 단계 제안: 0 지지 짝 처리 기준, 보정 random-subtracted estimator, 공간
+  covariance를 명시한 계획을 만들고 승인받은 뒤 shear profile을 계산한다.

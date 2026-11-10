@@ -2609,3 +2609,36 @@ to lenses and controls, report aperture-level retained counts and effective
 weights, and verify the raw B-mode-mask semantics. Calibrated source n(z),
 lensing efficiency, PSF, spatial covariance, and injection/recovery remain
 interpretation gates. Keep `science_measurement=false`.
+
+## 2026-11-10 S23B weak-lensing source-row QA
+
+The approved local-only audit re-read the 20 received CSVs (1,912,709
+center/source pairs), verified each hash and count-only row total, and applied
+the same documented HSC cuts to 80 lens apertures and 400 matched controls.
+After shape, magnitude, resolution, z-bin, B-mode, positive fiducial n(z)
+efficiency, 0.1–3 proper-Mpc, and catalog-input-validity gates, 239,565 lens
+pairs and 1,105,779 control pairs remain. Pair rows include repeated sources
+across apertures and are not globally unique objects.
+
+Support is adequate for preparing a calibrated estimator, but not uniform in
+every paired set: two lenses have zero retained rows; 24 control centers have
+zero rows, affecting nine of the 80 sets. None of the 80 sets has all five
+controls at zero. Among lens sets with nonzero lens support, the
+q16/median/q84 control-to-lens ratios are
+0.690/0.925/1.311 for count, 0.686/0.929/1.311 for HSC weight sum, and
+0.690/0.956/1.387 for the `weight*(D_l beta)^2` geometry proxy. The latter is
+not the final estimator weight. Shape and weight medians are similar between
+roles, and the raw B-mode mask matches the published GAMA09H rectangle exactly,
+confirming stored 0 as masked in this export.
+
+No shear profile was computed. The four-bin SACC n(z) is fiducial; its
+uncertainty, per-object calibration/responsivity, selection-bias response,
+PSF spatial matching, control contamination, repeated-source/field covariance,
+and injection/recovery still need explicit treatment. Keep
+`science_measurement=false`. Before a profile, prepare and review a
+pre-specified calibrated, random-subtracted estimator and covariance plan,
+including treatment of zero-support matched sets.
+
+- QA runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_wl_common_shape_rows.py`
+- Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/quality_audit_2026-11-10_01/`
+- Summary SHA-256: `9ef472c1ae0888e187fce05f3449b1614d1da7c99e7a400403b92f8aa7e2dc54`
