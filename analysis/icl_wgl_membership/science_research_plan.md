@@ -2582,3 +2582,30 @@ requires separate explicit approval tied to file SHA-256
 
 - Count audit, post-count assessment, and plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/`
 - Finalizer: `hsc_debug/finalize_s23b_wl_common_support_plan.py`
+
+### 2026-11-10 approved S23B weak-lensing source-row export
+
+The user-approved row plan (file SHA-256
+`7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`) completed
+on `lageunha`: 4/4 lens batches and 16/16 matched-control batches. Returned
+data contains 340,256 lens-source pairs and 1,572,453 control-source pairs,
+1,912,709 center/source pairs total. Actual CSV size is 102,103,795 bytes for
+lenses plus 523,062,067 bytes for controls, 625,165,862 bytes (0.582 GiB)
+combined. These are pair rows; repeated source IDs across apertures are kept.
+
+All batches matched the approved count-only totals per center and passed
+duplicate-pair, schema, finite-number, coordinate-range, binary B-mode-mask,
+tomographic-bin, and positive-weight checks. An independent audit recomputed
+the SHA-256 and size for every CSV against the job checkpoint. The schemas are
+22 lens columns and 23 control columns, including source coordinates, shapes,
+calibration terms, magnitude, resolution, PSF moments, raw B-mode mask, and the
+HSC Y3 source-z bin. Images and full photo-z PDFs were not included; credentials
+were not saved. Results are in
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/source_rows_post_count_01/`.
+
+This is validated raw released-catalog support, not the final selected source
+sample or a lensing measurement. Next, apply identical documented source cuts
+to lenses and controls, report aperture-level retained counts and effective
+weights, and verify the raw B-mode-mask semantics. Calibrated source n(z),
+lensing efficiency, PSF, spatial covariance, and injection/recovery remain
+interpretation gates. Keep `science_measurement=false`.

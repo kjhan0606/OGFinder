@@ -3645,3 +3645,27 @@ approval flag and the same exact hash; it uses one hidden password prompt and
 records job IDs, row counts, byte counts, and file checksums without saving
 credentials. At this checkpoint, no source-row query or transfer has started;
 `science_measurement=false`.
+
+### 2026-11-10 approved S23B source-row export complete
+
+The approved plan was submitted from `lageunha`; all 20/20 batches completed.
+The four lens batches returned 340,256 lens-source pairs (102,103,795 bytes),
+and the 16 control batches returned 1,572,453 control-source pairs
+(523,062,067 bytes). The combined export contains 1,912,709 center/source
+pairs in 625,165,862 bytes (0.582 GiB). Pair rows are not a count of globally
+unique source objects because a source may appear in multiple apertures.
+
+Every batch passed its exact count-only row total, unique center/object-ID
+pair, schema, numeric-value, coordinate, and shape-field checks. An independent
+post-run audit rechecked all 20 saved file sizes and SHA-256 receipts. No images
+or full photo-z PDFs were included, credentials were not saved, and
+`science_measurement=false` remains in force. Results and `row_status.json` are
+outside Git at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/source_rows_post_count_01/`.
+
+Next, perform a local source-row quality and common-support audit. Apply only
+documented identical lens/control source cuts, report retained counts and
+effective weights by aperture, and verify the B-mode-mask semantics before
+interpreting any tangential-shear contrast. Calibrated source n(z), lensing
+efficiency, and the spatial/PSF covariance gates remain required before a
+measurement.

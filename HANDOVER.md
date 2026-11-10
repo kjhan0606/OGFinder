@@ -4427,3 +4427,28 @@ lageunha `--check`는 네트워크 없이 통과했다. 불변 계획 해시, co
 아직 소스 행 query와 다운로드를 시작하지 않았다. 다운로드 후에는 배치별
 CSV hash/크기/행 수와 count-only 대조를 기록하고 `science_measurement=false`를
 유지한다.
+
+### 2026-11-10 승인된 S23B weak-lensing 원천행 수신 완료
+
+정확한 계획 SHA-256
+`7bfb998149f30a50b5ee7a537bb703ed302b7ea269a3296c35204a836e75aabc`로
+lageunha에서 원천행 query 20개(렌즈 4, 대조 16)를 순차 실행했다. 모든
+batch가 count-only 결과와 일치해 완료됐다.
+
+- 렌즈 80곳: 340,256 lens–source 쌍, 102,103,795 bytes
+- 대조 400곳: 1,572,453 control–source 쌍, 523,062,067 bytes
+- 합계: 1,912,709 center–source 쌍, 625,165,862 bytes (0.582 GiB)
+- 파일: 각 렌즈 22열, 대조 23열. 영상과 전체 photo-z PDF 없음.
+- 출력: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_wl_common_support_plan_2026-11-10_01/source_rows_post_count_01/`
+
+배치별 count-only 행 수, `(center_id, object_id)` 유일성, 열 스키마,
+수치 유한성, 좌표 범위, mask/z-bin 정수 및 shape weight 범위 검사를
+통과했다. 별도 재감사에서 20개 CSV 모두 실제 크기와 SHA-256이 checkpoint와
+일치했다. 자격 증명은 저장되지 않았다. 행은 center–source 쌍이므로
+전역 고유 source 개수로 해석하면 안 된다. 프로젝트별 최종 source 선택 전
+릴리스 원천행이며 `science_measurement=false`다.
+
+다음 작업은 다운로드 자료만 사용하는 로컬 source 품질·공통 지지 감사다.
+렌즈와 대조에 동일한 문서화된 source cut을 적용해 aperture별 생존 수와
+유효 weight를 요약하고, B-mode mask 의미를 확인한다. 보정 source n(z),
+lensing efficiency, PSF/공분산 검증 전에는 lensing 측정으로 승격하지 않는다.
