@@ -392,7 +392,8 @@ def _check_columns(pairs):
 
 def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
                      radial_edges_mpc, cosmology, *, apply_b_mode_mask=True,
-                     _pair_lensing_efficiency=None):
+                     _pair_lensing_efficiency=None,
+                     _pair_geometry_precomputed=None):
     """Make HSC-calibrated tangential/cross and weak-approximation DeltaSigma bins.
 
     ``pairs`` contains lens-source rows. A source may appear with multiple lenses,
@@ -422,7 +423,19 @@ def stack_s19a_pairs(pairs, photoz_object_ids, photoz_redshift, photoz_pdf,
         beta = np.asarray(_pair_lensing_efficiency, dtype=float)
         if beta.shape != (n_input,) or not np.all(np.isfinite(beta)) or np.any((beta < 0) | (beta > 1)):
             raise ValueError("precomputed pair lensing efficiencies must be finite [0, 1] values")
-    radius, phi = pair_geometry(arr, cosmology)
+    if _pair_geometry_precomputed is None:
+        radius, phi = pair_geometry(arr, cosmology)
+    else:
+        try:
+            radius, phi = _pair_geometry_precomputed
+        except (TypeError, ValueError):
+            raise ValueError("precomputed pair geometry must contain radius and position angle") from None
+        radius = np.asarray(radius, dtype=float)
+        phi = np.asarray(phi, dtype=float)
+        if (radius.shape != (n_input,) or phi.shape != (n_input,)
+                or not np.all(np.isfinite(radius)) or not np.all(np.isfinite(phi))
+                or np.any(radius < 0)):
+            raise ValueError("precomputed pair geometry must be finite vectors matching pair rows")
     bmode = arr["b_mode_pass"]
     ellipticity_amplitude = np.hypot(arr["e1"], arr["e2"])
     shape_selection = ((arr["sigma_e"] >= 0.0) & (arr["sigma_e"] <= 0.4)

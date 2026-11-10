@@ -4598,3 +4598,34 @@ only이며 covariance를 계산하지 않았다. `science_measurement=false`; �
 이 기록에서 앞서 저장한 per-center radial/tomographic QA TSV의 해시는 문서 오타를
 수정했다. 검증된 값은 `f8d604e91c43705cb24152c7e98553efd8838933034a8657bcc603c2f8c11bed`
 (64자)다.
+
+## 2026-11-11 fixed-52 matched-random spatial covariance
+
+승인된 shape-row 20개 CSV와 기존 HSC Y3 SACC만 사용해 고정 52개 lens-set
+프로파일의 paired endpoint 공간 공분산을 `lageunha` CPU에서 계산했다. 매 세트에서
+lens와 matched random profile을 각각 재보정하고, 세트 안의 random center는 source-pair
+lensing weight로 pooled한 뒤 바깥 52세트 평균은 동일 가중했다. source bin은 2–4이며
+모든 7개 반경에서 lens 지지와 대조 ≥4/5를 요구한다. 새 CAS 조회·다운로드·이미지 분석은
+없다.
+
+2.5° equal-area RA/sin(Dec) grid는 64개 점유 셀, 5° grid는 28개다. 두 공분산은 모두
+14×14, rank 14, PSD이며 deletion마다 고정 표본의 최소 49/52 및 47/52 세트가 남았다.
+이 gate는 근사 grid 안정성 검사다. grid는 연결된 실제 HSC survey region이 아니며 이
+공분산으로 검출이나 질량을 주장하지 않는다. tangential profile은 `10^13 Msun Mpc^-2`
+단위로 0.1–0.2 Mpc에서 `23.554 ± 5.286 (2.5°) / 4.410 (5°)`, 2–3 Mpc에서
+`1.255 ± 0.556 / 0.535`다. 전체 점추정은 이전 fixed-52 프로파일과 최대
+0.03125 Msun Mpc⁻² 차이로 일치한다. `science_measurement=false` 유지.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_fixed_common_support_spatial_covariance.py`
+- 실행기 SHA-256: `662b17470b342f0f2486a2fd23472b7105ba6a76e5354fa37b1aa679a0010256`
+- 상세 평가: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md`
+- 최종 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_spatial_covariance_2026-11-11_02/`
+- summary SHA-256: `acdd4da69e4d7fe3dbb52d8584b3996bd836a41196da59aecfe3fcdf3e1fc6e9`
+- deletion-support / replicate / covariance matrix SHA-256:
+  `810e80bdf9cd28bad42c456968e885ab61d417f68a5c823c5fad5ca98ba6b790` /
+  `158bbaf5518b91589c6477673b259a79de9deeab997e8069abd0995bd46a8f27` /
+  `bc718cb4c5734e7a981048b735ad6239486aeb99cbc6ee26155228906ceed9b4`
+- 첫 `_01`은 2.5° block-support 행이 기록되지 않아 superseded했고, `_02`에 두 폭의 92개
+  deletion을 모두 보존했다. 수치 결과는 동일하다.
+- 다음 관문: 실측 survey footprint 기반 region jackknife, target/control 영상의 PSF·depth·mask·sky
+  일치, `n(z)` 및 selection-response 오차다. 해결 전 mass fit과 검출 주장은 보류한다.

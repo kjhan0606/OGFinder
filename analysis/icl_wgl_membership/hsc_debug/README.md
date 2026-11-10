@@ -3824,3 +3824,25 @@ aperture들은 source-pair lensing weight로 계속 pooled된다.
 - 평가 산출물 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_matched_radial_support_2026-11-11_02/` 및 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_profile_2026-11-11_02/`
 - summary SHA-256: `c51a4d9268935a0919d0abd3da2f10b6cd16ee7e35f1e6e23a8f3fe8c9e51234` / `4d270b81737e5bcb6188941f9f26cd6255614fd7ae8d1e6f2977cf51a4686930`
 - 다음: 고정 표본 estimator에 matched endpoint 공간 공분산을 붙이고 source 재사용·블록 폭·HSC footprint 민감도를 평가한다. 현 자료로만 수행하며 과학 측정 승격은 별도 관문을 통과한 뒤 판단한다.
+
+## 2026-11-11 fixed-52 paired endpoint spatial covariance
+
+기존 승인된 source rows만 사용해 고정 52개 lens-set의 lens-minus-matched-random
+프로파일 공분산을 계산했다. 각 block deletion에서 source 또는 lens/random-center endpoint가
+있는 pair를 함께 제거하고 S19A calibration을 다시 계산했다. 두 폭 모두에서 각 replicate에
+동일한 7-bin lens-set 집합을 사용하고, annulus마다 최소 4/5 random center를 요구했다.
+
+2.5°/5° grid 점유 셀은 64/28개, covariance rank는 모두 14/14이며 PSD다. deletion 후
+최소 공통 set 수는 49/52 및 47/52다. `DeltaSigma_t` (`10^13 Msun Mpc^-2`)는
+0.1–0.2 Mpc에서 `23.554 ± 5.286 / 4.410`, 2–3 Mpc에서 `1.255 ± 0.556 / 0.535`다.
+전체 52-set point profile은 선행 산출물과 최대 0.03125 Msun Mpc⁻² 안에서 일치한다.
+공분산은 근사 equal-area grid에 조건부이며 실측 HSC 영역 공분산은 아니다. `n(z)`,
+photo-z dilution, target/control 영상 일치, member contamination, selection response가 남아
+`science_measurement=false`를 유지한다.
+
+- 실행기: [`analyze_s23b_wl_fixed_common_support_spatial_covariance.py`](analyze_s23b_wl_fixed_common_support_spatial_covariance.py)
+- 상세 평가: [`wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md`](wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md)
+- 결과 (Git 외): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_spatial_covariance_2026-11-11_02/`
+- summary SHA-256: `acdd4da69e4d7fe3dbb52d8584b3996bd836a41196da59aecfe3fcdf3e1fc6e9`
+- `_01`은 5° 표만 deletion-support ledger에 남겨 superseded했다. `_02`에는 2.5° 64개와
+  5° 28개 block deletion이 모두 기록되어 있다.

@@ -2767,3 +2767,28 @@ selection response, injection/recovery도 남아 있으므로 mass fit은 보류
 [반경 지지 감사](hsc_debug/audit_s23b_wl_matched_radial_support.py),
 [고정 표본 profile 재집계](hsc_debug/analyze_s23b_wl_fixed_common_support_profile.py),
 [상세 평가](hsc_debug/wl_s23b_weight_and_desi_nz_sensitivity_assessment_2026-11-11.md).
+
+## 2026-11-11 fixed-52 matched-random spatial covariance
+
+기존 승인된 80-lens/400-control source rows와 HSC Y3 SACC만으로, 7개 proper-radius
+구간 모두에서 target 및 최소 4/5 matched-control 지지가 있는 고정 52개 lens-set의
+paired endpoint spatial covariance를 계산했다. 세트 안에서는 random centers를 source-pair
+lensing weight로 pooled했고 바깥 lens-set 평균은 동일 가중했다. 각 deletion에서 target와
+random 보정을 다시 계산하고, 공통 7-bin 지지와 최소 4개 random control을 유지한 lens-set만
+평균했다. 추가 CAS 조회·다운로드·image pixel 접근은 없었다.
+
+2.5° grid는 64개 점유 셀, 5°는 28개다. deletion 뒤 공통 lens-set 최소치는 각각 49/52,
+47/52였으며 두 14×14 covariance 모두 rank 14이고 PSD다. 전체 profile은 이전 Astrafek
+fixed-sample 결과와 최대 0.03125 Msun Mpc⁻² 차이로 재현됐다. `DeltaSigma_t`는 0.1–0.2 Mpc에서
+`23.554 ± 5.286 (2.5°) / 4.410 (5°)`, 2–3 Mpc에서 `1.255 ± 0.556 / 0.535`다
+(`10^13 Msun Mpc^-2`). 오류는 block 폭에 의존한다. 이 numerical gate는 유효한 HSC survey
+covariance를 보증하지 않는다. equal-area RA/sin(Dec) 셀은 연결된 실제 survey region이 아니고,
+`n(z)`·photo-z dilution, PSF/depth/mask/sky 일치, boost/member contamination, selection response,
+주입/회수도 미해결이다. `science_measurement=false`를 유지하며 mass fit과 검출 주장은 보류한다.
+
+재현 실행기와 수치는
+[`analyze_s23b_wl_fixed_common_support_spatial_covariance.py`](hsc_debug/analyze_s23b_wl_fixed_common_support_spatial_covariance.py),
+상세 평가는
+[`wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md`](hsc_debug/wl_s23b_fixed_common_support_spatial_covariance_assessment_2026-11-11.md),
+산출물은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed_common_support_spatial_covariance_2026-11-11_02/`
+(summary SHA-256 `acdd4da69e4d7fe3dbb52d8584b3996bd836a41196da59aecfe3fcdf3e1fc6e9`)이다.
