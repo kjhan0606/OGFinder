@@ -2855,3 +2855,16 @@ nearest patch-QA 중심을 이용했으며 실제 필드 다각형도 검증되�
 있을 때만 14차원 covariance gate를 평가한다. field 단위 3개 그룹만 남으면 covariance는
 추정하지 않는다. shape/영상 추가 수신이나 CAS 조회는 이 단계에 포함되지 않으며,
 과학 측정 승격 및 질량 적합은 보류한다.
+
+Astrafek의 고정 52표본 영향도 실행기에 선택적 `--geometry-dir`를 구현했다.
+공식 PDR3 Wide 다각형으로 렌즈·대조 중심과 반복 source 좌표를 tract에 배정하고,
+tract별 leave-one-out 영향을 계산한다. 활성 endpoint가 미할당 또는 필드 간 모호하면
+계산을 중단한다. 동일 필드 tract overlap은 가장 가까운 포함 tract 중심으로 결정하며,
+겹침 개수와 각 입력 파일 hash를 보존한다. 인접 tract가 독립이라는 가정을 하지 않으므로
+이 모드도 covariance를 추정하지 않고 `science_measurement=false`를 유지한다.
+
+문법 검사, CLI 도움말, whitespace 점검과 두 합성 tract 위치 대입 확인은 통과했다.
+실제 PDR3 geometry 파일과 원천행은 읽지 않았다. 별도 파일 수신 승인 후 `lageunha`에서
+실제 고정 52표본 분석을 수행한다.
+
+- 실행기 SHA-256: `878a5c6471af2acc2cbd0cf478f56d5ab08f825268ad9390acbe228df269ef2e`

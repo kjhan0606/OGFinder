@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Assess regional influence for the fixed 52-lens S23B weak-lensing sample.
 
-Uses only the previously approved shape-row export, pinned n(z), and saved HSC
-patch-QA centers. Tract-center connected components are approximate regions;
-with only a few occupied components this is an influence audit, never a
-survey-region covariance estimate. The science flag remains false.
+Uses only the previously approved shape-row export and pinned n(z). By default,
+saved HSC patch-QA centers define approximate connected regions. With
+``--geometry-dir``, official HSC PDR3 Wide tract polygons define exact
+single-tract influence blocks. Both modes are influence audits, not
+survey-region covariance estimates. The science flag remains false.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from run_wl_hsc_tract_region_influence import (
     tract_centers_from_patch_qa,
     tract_region_labels,
 )
+from hsc_pdr3_tract_patch_geometry import load_index
 from s19a_shape_stack import load_hsc_y3_nz_sacc
 from submit_s23b_wl_common_shape_rows import DEFAULT_PLAN_DIR, DEFAULT_RESULTS
 
@@ -34,7 +36,10 @@ DEFAULT_NZ = base.NZ_PATH
 DEFAULT_PATCH_QA = DATA / "catalogues_2026-10-13_01/patch_qa.csv"
 DEFAULT_REFERENCE = DATA / "wl_s23b_equal_random_center_spatial_covariance_2026-11-11_02/summary.json"
 DEFAULT_OUTPUT = DATA / "wl_s23b_fixed52_tract_region_influence_2026-11-11_01"
+DEFAULT_EXACT_OUTPUT = DATA / "wl_s23b_fixed52_exact_tract_influence_2026-11-11_01"
 EXPECTED_REFERENCE_SHA256 = "00c8427ef6810b78f0900da1d515e3fca2ed77233bd012ebbeddbf5bc5e5c033"
+UNASSIGNED_GEOMETRY = "__unassigned__"
+CROSS_FIELD_GEOMETRY = "__cross_field_ambiguous__"
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -92,8 +97,110 @@ def center_region_map(pairs: dict, centers_xyz: np.ndarray,
     return lookup, row_values
 
 
+def assign_tract_keys(index, ra_deg, dec_deg) -> tuple[np.ndarray, dict]:
+    """Assign coordinates to official tract polygons and preserve ambiguity counts."""
+    assigned = index.assign(ra_deg, dec_deg, level="tract")
+    keys = np.full(len(ra_deg), UNASSIGNED_GEOMETRY, dtype=object)
+    for row, (field, tract, cross_field) in enumerate(zip(
+            assigned.field, assigned.tract, assigned.cross_field_ambiguous)):
+        if cross_field:
+            keys[row] = CROSS_FIELD_GEOMETRY
+        elif field is not None and int(tract) >= 0:
+            keys[row] = f"{field}:tract-{int(tract)}"
+    return keys, {
+        "n_points": int(len(keys)),
+        "unassigned": int(np.count_nonzero(keys == UNASSIGNED_GEOMETRY)),
+        "cross_field_ambiguous": int(np.count_nonzero(keys == CROSS_FIELD_GEOMETRY)),
+        "multiple_tract_polygon_matches": assigned.overlap_count,
+    }
+
+
+def exact_region_maps(index, lens_pairs: dict, control_pairs: dict) -> tuple[dict, dict]:
+    """Return exact tract IDs for aperture centers and unique source positions.
+
+    Source coordinates are assigned once per unique object_id, then expanded
+    back to center/source pair rows. This avoids repeating point-in-polygon
+    work for sources reused by multiple apertures.
+    """
+    def center_key_map(pairs):
+        ids, first = np.unique(np.asarray(pairs["lens_id"]).astype(str), return_index=True)
+        keys, audit = assign_tract_keys(
+            index,
+            np.asarray(pairs["lens_ra_deg"], dtype=float)[first],
+            np.asarray(pairs["lens_dec_deg"], dtype=float)[first],
+        )
+        return dict(zip(ids.tolist(), keys.tolist())), audit
+
+    lens_center_keys, lens_center_audit = center_key_map(lens_pairs)
+    control_center_keys, control_center_audit = center_key_map(control_pairs)
+    lens_n = len(lens_pairs["object_id"])
+    source_ids = np.concatenate((
+        np.asarray(lens_pairs["object_id"]).astype(str),
+        np.asarray(control_pairs["object_id"]).astype(str),
+    ))
+    source_ra = np.concatenate((
+        np.asarray(lens_pairs["source_ra_deg"], dtype=float),
+        np.asarray(control_pairs["source_ra_deg"], dtype=float),
+    ))
+    source_dec = np.concatenate((
+        np.asarray(lens_pairs["source_dec_deg"], dtype=float),
+        np.asarray(control_pairs["source_dec_deg"], dtype=float),
+    ))
+    unique_ids, first, inverse = np.unique(source_ids, return_index=True, return_inverse=True)
+    unique_source_keys, source_audit = assign_tract_keys(
+        index, source_ra[first], source_dec[first],
+    )
+    all_keys = set(unique_source_keys.tolist())
+    all_keys.update(lens_center_keys.values())
+    all_keys.update(control_center_keys.values())
+    valid_keys = sorted(all_keys - {UNASSIGNED_GEOMETRY, CROSS_FIELD_GEOMETRY})
+    if not valid_keys:
+        raise ValueError("no endpoints were assigned to an official HSC tract")
+    key_to_id = {key: index for index, key in enumerate(valid_keys)}
+
+    def encode(key):
+        return int(key_to_id.get(key, -1))
+
+    def encode_rows(pairs, center_map, source_codes):
+        center_codes = np.fromiter(
+            (encode(center_map[str(value)]) for value in np.asarray(pairs["lens_id"]).astype(str)),
+            dtype=np.int32, count=len(pairs["lens_id"]),
+        )
+        return center_codes, source_codes
+
+    unique_source_codes = np.fromiter(
+        (encode(str(value)) for value in unique_source_keys),
+        dtype=np.int32, count=len(unique_source_keys),
+    )
+    lens_source_codes = unique_source_codes[inverse[:lens_n]]
+    control_source_codes = unique_source_codes[inverse[lens_n:]]
+    lens_center_codes, lens_source_codes = encode_rows(
+        lens_pairs, lens_center_keys, lens_source_codes,
+    )
+    control_center_codes, control_source_codes = encode_rows(
+        control_pairs, control_center_keys, control_source_codes,
+    )
+    return {
+        "lens_center_lookup": {key: encode(value) for key, value in lens_center_keys.items()},
+        "control_center_lookup": {key: encode(value) for key, value in control_center_keys.items()},
+        "lens_center": lens_center_codes,
+        "control_center": control_center_codes,
+        "lens_source": lens_source_codes,
+        "control_source": control_source_codes,
+    }, {
+        "assignment": "official PDR3 Wide tract polygons; nearest containing tract center resolves same-field overlap",
+        "n_unique_source_ids_assigned": int(len(unique_ids)),
+        "lens_centers": lens_center_audit,
+        "control_centers": control_center_audit,
+        "unique_sources": source_audit,
+        "region_labels": {str(value): key for key, value in key_to_id.items()},
+    }
+
+
 def run(args) -> dict:
-    output = args.output.resolve()
+    output = (args.output or (
+        DEFAULT_EXACT_OUTPUT if args.geometry_dir else DEFAULT_OUTPUT
+    )).resolve()
     if output.exists():
         raise FileExistsError(f"refusing to overwrite output: {output}")
     reference_profiles = read_reference(args.reference.resolve())
@@ -113,26 +220,47 @@ def run(args) -> dict:
     control_pairs = base.select_rows(all_controls, control_ids)
     del all_controls
 
-    tract_keys, tract_xyz = tract_centers_from_patch_qa(args.patch_qa.resolve())
-    tract_components = tract_region_labels(tract_xyz, args.adjacency_deg)
-    lens_region_lookup, lens_center_region = center_region_map(
-        lens_pairs, tract_xyz, tract_components,
-    )
-    control_region_lookup, control_center_region = center_region_map(
-        control_pairs, tract_xyz, tract_components,
-    )
-    lens_source_region = nearest_region_labels(
-        lens_pairs["source_ra_deg"], lens_pairs["source_dec_deg"], tract_xyz, tract_components,
-    )
-    control_source_region = nearest_region_labels(
-        control_pairs["source_ra_deg"], control_pairs["source_dec_deg"], tract_xyz, tract_components,
-    )
+    source_reuse = base.verify_repeated_source_rows(lens_pairs, control_pairs)
+    geometry_summary = None
+    geometry_audit = None
+    if args.geometry_dir:
+        geometry_index, geometry_summary = load_index(args.geometry_dir.resolve(), level="tract")
+        exact, geometry_audit = exact_region_maps(geometry_index, lens_pairs, control_pairs)
+        lens_region_lookup = exact["lens_center_lookup"]
+        control_region_lookup = exact["control_center_lookup"]
+        lens_center_region = exact["lens_center"]
+        control_center_region = exact["control_center"]
+        lens_source_region = exact["lens_source"]
+        control_source_region = exact["control_source"]
+        region_label_by_id = {
+            int(key): str(value) for key, value in geometry_audit["region_labels"].items()
+        }
+        tract_keys = list(range(geometry_summary["n_tract_polygons"]))
+        tract_components = None
+    else:
+        tract_keys, tract_xyz = tract_centers_from_patch_qa(args.patch_qa.resolve())
+        tract_components = tract_region_labels(tract_xyz, args.adjacency_deg)
+        lens_region_lookup, lens_center_region = center_region_map(
+            lens_pairs, tract_xyz, tract_components,
+        )
+        control_region_lookup, control_center_region = center_region_map(
+            control_pairs, tract_xyz, tract_components,
+        )
+        lens_source_region = nearest_region_labels(
+            lens_pairs["source_ra_deg"], lens_pairs["source_dec_deg"], tract_xyz, tract_components,
+        )
+        control_source_region = nearest_region_labels(
+            control_pairs["source_ra_deg"], control_pairs["source_dec_deg"], tract_xyz, tract_components,
+        )
+        region_label_by_id = {
+            int(value): f"approx_component_{int(value)}"
+            for value in np.unique(tract_components)
+        }
 
     nz_z, nz_bins = load_hsc_y3_nz_sacc(args.nz_sacc.resolve())
     cosmology = Cosmology(H0=70.0, Om=0.3)
     lens_cache = base.cache_geometry_and_efficiency(lens_pairs, nz_z, nz_bins, cosmology)
     control_cache = base.cache_geometry_and_efficiency(control_pairs, nz_z, nz_bins, cosmology)
-    source_reuse = base.verify_repeated_source_rows(lens_pairs, control_pairs)
     lens_rows_by_set = base.group_indices(lens_pairs["lens_id"])
     control_rows_by_center = base.group_indices(control_pairs["lens_id"])
 
@@ -182,6 +310,12 @@ def run(args) -> dict:
 
     active_lens = lens_cache["active"]
     active_control = control_cache["active"]
+    if (np.any(lens_center_region[active_lens] < 0)
+            or np.any(lens_source_region[active_lens] < 0)):
+        raise ValueError("an active lens endpoint is outside the assignable HSC Wide tract geometry")
+    if (np.any(control_center_region[active_control] < 0)
+            or np.any(control_source_region[active_control] < 0)):
+        raise ValueError("an active control endpoint is outside the assignable HSC Wide tract geometry")
     occupied = np.unique(np.concatenate((
         lens_center_region[active_lens], lens_source_region[active_lens],
         control_center_region[active_control], control_source_region[active_control],
@@ -254,6 +388,7 @@ def run(args) -> dict:
                 rep_t, rep_x = replica[bin_index]
                 profile_rows.append({
                     "region_id": int(region), "estimator": name,
+                    "region_label": region_label_by_id[int(region)],
                     "radial_bin": bin_index, "r_min_mpc": float(lo), "r_max_mpc": float(hi),
                     "common_lens_sets": len(common_ids),
                     "full_delta_sigma_msun_mpc2": float(full_t),
@@ -275,6 +410,7 @@ def run(args) -> dict:
         }
         region_rows.append({
             "region_id": int(region),
+            "region_label": region_label_by_id[int(region)],
             "lens_centers_in_region": lens_set_counts[int(region)],
             "control_centers_in_region": control_counts[int(region)],
             "affected_lens_sets": affected_sets,
@@ -289,10 +425,41 @@ def run(args) -> dict:
     write_tsv(output / "region_deletions.tsv", region_rows)
     write_tsv(output / "region_profile_shifts.tsv", profile_rows)
     reference_sha = sha(args.reference.resolve())
-    patch_sha = sha(args.patch_qa.resolve())
+    patch_sha = sha(args.patch_qa.resolve()) if not args.geometry_dir else None
+    exact_mode = args.geometry_dir is not None
+    method = ({
+        "region_definition": "individual official HSC PDR3 Wide tract polygons",
+        "endpoint_assignment": "point-in-polygon; nearest containing same-field tract center resolves overlaps",
+        "delete_rule": "remove a lens/control pair when either center or source endpoint is assigned to the deleted tract; recompute calibrations and the four-control radial support rule",
+        "estimators": ["pooled_controls", "equal_control_centers", "equal_minus_pooled"],
+        "profile_comparison": "each leave-tract-out profile compared with the fixed 52-set full-sample estimator",
+    } if exact_mode else {
+        "region_definition": "connected components of spherical-mean HSC patch-QA tract centers",
+        "tract_adjacency_deg": float(args.adjacency_deg),
+        "endpoint_assignment": "nearest tract center, then its connected component",
+        "delete_rule": "remove a lens/control pair when either center or source endpoint is assigned to the deleted component; recompute calibrations and the four-control radial support rule",
+        "estimators": ["pooled_controls", "equal_control_centers", "equal_minus_pooled"],
+        "profile_comparison": "each leave-region-out profile compared with the fixed 52-set full-sample estimator",
+    })
+    input_provenance = {
+        "row_plan_sha256": row_provenance["plan_sha256"],
+        "row_status_sha256": row_provenance["row_status_sha256"],
+        "row_summary_sha256": row_provenance["row_summary_sha256"],
+        "row_batch_sha256": row_provenance["batch_sha256"],
+        "fixed_sample_support_summary_sha256": sha(args.support_dir.resolve() / "summary.json"),
+        "fixed_sample_support_rows_sha256": sha(args.support_dir.resolve() / "per_lens_radial_support.tsv"),
+        "hsc_y3_nz_sacc_sha256": sha(args.nz_sacc.resolve()),
+        "reference_spatial_covariance_summary_sha256": reference_sha,
+        "fixed_lens_ids_sha256": fixed_selection["fixed_lens_ids_sha256"],
+    }
+    if exact_mode:
+        input_provenance["official_geometry_directory"] = str(args.geometry_dir.resolve())
+        input_provenance["official_geometry_files"] = geometry_summary["files"]
+    else:
+        input_provenance["patch_qa_sha256"] = patch_sha
     summary = {
-        "schema": "astrafek-s23b-fixed52-tract-region-influence-v1",
-        "status": "complete_exploratory_regional_influence",
+        "schema": "astrafek-s23b-fixed52-tract-region-influence-v2",
+        "status": "complete_exact_tract_influence_only" if exact_mode else "complete_exploratory_regional_influence",
         "science_measurement": False,
         "cas_query_submitted": False,
         "new_data_downloaded": False,
@@ -307,37 +474,25 @@ def run(args) -> dict:
             "control_source_pair_rows": int(len(control_pairs["lens_id"])),
             "source_reuse_audit": source_reuse,
         },
-        "method": {
-            "tract_graph": "connected components of spherical-mean HSC patch-QA tract centers",
-            "tract_adjacency_deg": float(args.adjacency_deg),
-            "endpoint_assignment": "nearest tract center, then its connected component",
-            "delete_rule": "remove a lens/control pair when either center or source endpoint is assigned to the deleted component; recompute calibrations and the four-control radial support rule",
-            "estimators": ["pooled_controls", "equal_control_centers", "equal_minus_pooled"],
-            "profile_comparison": "each leave-region-out profile compared with the fixed 52-set full-sample estimator",
-        },
+        "method": method,
         "tracts_total": len(tract_keys),
-        "tract_components_total": int(len(np.unique(tract_components))),
-        "occupied_active_stack_components": len(occupied),
-        "lens_component_counts": {str(row["region_id"]): row["lens_centers_in_region"] for row in region_rows},
-        "control_component_counts": {str(row["region_id"]): row["control_centers_in_region"] for row in region_rows},
+        "tract_components_total": (None if exact_mode else int(len(np.unique(tract_components)))),
+        "occupied_spatial_blocks": len(occupied),
+        "lens_region_counts": {str(row["region_label"]): row["lens_centers_in_region"] for row in region_rows},
+        "control_region_counts": {str(row["region_label"]): row["control_centers_in_region"] for row in region_rows},
+        "official_geometry_assignment_audit": geometry_audit,
+        "official_geometry_summary": geometry_summary,
         "full_profiles_msun_mpc2": {name: values.tolist() for name, values in full_profiles.items()},
         "region_deletions": region_rows,
-        "inputs": {
-            "row_plan_sha256": row_provenance["plan_sha256"],
-            "row_status_sha256": row_provenance["row_status_sha256"],
-            "row_summary_sha256": row_provenance["row_summary_sha256"],
-            "row_batch_sha256": row_provenance["batch_sha256"],
-            "fixed_sample_support_summary_sha256": sha(args.support_dir.resolve() / "summary.json"),
-            "fixed_sample_support_rows_sha256": sha(args.support_dir.resolve() / "per_lens_radial_support.tsv"),
-            "hsc_y3_nz_sacc_sha256": sha(args.nz_sacc.resolve()),
-            "patch_qa_sha256": patch_sha,
-            "reference_spatial_covariance_summary_sha256": reference_sha,
-            "fixed_lens_ids_sha256": fixed_selection["fixed_lens_ids_sha256"],
-        },
-        "limitations": [
+        "inputs": input_provenance,
+        "limitations": ([
+            "individual tracts are influence blocks, not independent survey regions; covariance is deliberately not estimated",
+            "same-field polygon overlaps are assigned to the nearest containing tract center; this is a spatial block label, not a reconstruction of the catalog's owning tract",
+        ] if exact_mode else [
             "the approved pair rows have coordinates but no tract or patch IDs; endpoint assignment uses nearest patch-QA tract center",
             "the tract-center graph approximates footprint connectivity; it is not a polygon-overlap map or official HSC field label",
             "only a few connected components overlap the sample, so these are influence checks and cannot estimate a stable survey-region covariance",
+        ]) + [
             "the fixed-support sample is selected for radial support; the leave-region-out common sample can change",
             "photo-z uncertainty, reduced shear, magnification, boost/member dilution, shear-selection systematics, and PSF uncertainties remain unpropagated",
         ],
@@ -348,30 +503,37 @@ def run(args) -> dict:
         "output_directory": str(output),
     }
 
+    region_word = "tract" if exact_mode else "approximate region"
+    region_description = (
+        "Official HSC PDR3 Wide tract polygons assign the center and unique source endpoints. Same-field polygon overlaps use the nearest containing tract center; active endpoints that are unassigned or cross-field ambiguous stop the run."
+        if exact_mode else
+        "Connected components of patch-QA tract centers at the configured angular threshold define the approximate regions."
+    )
     assessment = [
-        "# S23B fixed-52 approximate tract-region influence audit",
+        f"# S23B fixed-52 {region_word} influence audit",
         "",
-        "This CPU analysis reuses only the previously approved 20-file HSC S19A shape-row export, the pinned HSC Y3 SACC n(z), and the saved HSC patch-QA table. It makes no CAS request, download, or image read. `science_measurement=false`.",
+        "This CPU analysis reuses only the previously approved 20-file HSC S19A shape-row export and pinned HSC Y3 SACC n(z). It makes no CAS request, additional download, or image read. `science_measurement=false`.",
         "",
-        "Rows are grouped by connected components of patch-QA tract centers at the configured angular threshold. Each lens/control pair is removed if either endpoint maps to the deleted component. The calibrated pooled-control and equal-control-center profiles are recomputed under the same four-control floor.",
+        f"{region_description} Each lens/control pair is removed if either endpoint maps to the deleted {region_word}. The calibrated pooled-control and equal-control-center profiles are recomputed under the same four-control floor.",
         "",
-        "| Component | Lens centers | Control centers | Affected lens sets | Common supported sets after deletion | Minimum positive controls |",
-        "|---:|---:|---:|---:|---:|---:|",
+        "| Region | Lens centers | Control centers | Affected lens sets | Common supported sets after deletion | Minimum positive controls |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
     assessment.extend(
-        f"| {row['region_id']} | {row['lens_centers_in_region']} | {row['control_centers_in_region']} | {row['affected_lens_sets']} | {row['common_supported_lens_sets_after_deletion']} | {row['minimum_positive_control_centers_in_common_sets']} |"
+        f"| {row['region_label']} | {row['lens_centers_in_region']} | {row['control_centers_in_region']} | {row['affected_lens_sets']} | {row['common_supported_lens_sets_after_deletion']} | {row['minimum_positive_control_centers_in_common_sets']} |"
         for row in region_rows
     )
     assessment.extend([
         "",
-        "There are too few occupied connected regions to estimate a stable full covariance. The reported regional shifts are influence diagnostics, not errors or significance. `region_profile_shifts.tsv` gives the per-bin pooled, equal-center, and paired-contrast shifts.",
+        "The reported regional shifts are influence diagnostics, not errors or significance. Individual adjacent HSC tracts are not independent blocks, so this runner does not estimate covariance. `region_profile_shifts.tsv` gives the per-bin pooled, equal-center, and paired-contrast shifts.",
         "",
-        "The source-row export has no tract or patch columns. Nearest-center assignment is approximate and cannot replace actual polygon/field geometry. The sample is support-selected, and the retained common lens sets can vary after deletion. Keep `science_measurement=false`; do not infer a mass or detection.",
+        "The fixed sample is selected for radial support, and the retained common lens sets can change after deletion. Other unresolved limits include n(z) uncertainty, reduced shear, magnification, member dilution/boost, shear-selection systematics, and PSF uncertainty. Keep `science_measurement=false`; do not infer a mass or detection.",
         "",
         f"- Runner SHA-256: `{sha(Path(__file__).resolve())}`",
         f"- Approved row-plan SHA-256: `{row_provenance['plan_sha256']}`",
         f"- Reference estimator/covariance summary SHA-256: `{reference_sha}`",
-        f"- HSC patch-QA SHA-256: `{patch_sha}`",
+        (f"- Official geometry directory: `{args.geometry_dir.resolve()}`" if exact_mode
+         else f"- HSC patch-QA SHA-256: `{patch_sha}`"),
         f"- Result directory: `{output}`",
         "",
     ])
@@ -395,7 +557,10 @@ def main() -> None:
     parser.add_argument("--nz-sacc", type=Path, default=DEFAULT_NZ)
     parser.add_argument("--patch-qa", type=Path, default=DEFAULT_PATCH_QA)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path,
+                        help="new output directory; defaults to an approximate or exact-geometry run directory")
+    parser.add_argument("--geometry-dir", type=Path,
+                        help="directory containing all four local HSC PDR3 Wide tract/patch coordinate files; validates reviewed names and sizes, never downloads")
     parser.add_argument("--adjacency-deg", type=float, default=2.0)
     run(parser.parse_args())
 

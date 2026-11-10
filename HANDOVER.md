@@ -4698,3 +4698,21 @@ tract/patch 다각형에 할당한다. 파일을 자동 다운로드하지 않�
 - 다음 단계: 승인 후 바이트 수·스키마·다각형 중심을 검증하고, 승인된 고정 52렌즈와
   source rows를 tract에 배정해 tract-block 영향도 및 공분산 조건을 평가한다.
 - 그 전까지 weak-lensing 결과는 근사 영역 영향도이며 `science_measurement=false`다.
+
+### 2026-11-11 Astrafek exact-tract 영향도 실행기 준비
+
+기존 고정 52표본 영역 영향도 실행기에 `--geometry-dir` 선택 모드를 추가했다.
+기본 patch-QA 근사 모드는 유지된다. exact 모드는 공식 HSC PDR3 Wide tract polygon으로
+렌즈·대조 중심과 고유 source 좌표를 할당한 뒤 tract 하나씩 제외해 calibrated profile의
+영향도를 계산한다. 반복 object ID의 좌표 대입은 한 번만 수행한다. 활성 행에 미할당 또는
+필드 간 모호한 좌표가 있으면 중단하고, 동일 필드 tract overlap은 가장 가까운 포함 tract
+중심으로 정한다. 겹침 및 geometry-file hash를 결과에 기록한다.
+
+tract 단위 삭제는 영향도만을 보여준다. 인접 tract 간 상관이 남으므로 실행기는 이 값으로
+공분산을 계산하지 않고 `science_measurement=false`를 유지한다. 네 공식 geometry 파일은
+아직 수신하지 않았다. 승인 후 `lageunha`에서 실행할 준비가 됐다.
+
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_fixed52_tract_region_influence.py`
+- 실행기 SHA-256: `878a5c6471af2acc2cbd0cf478f56d5ab08f825268ad9390acbe228df269ef2e`
+- 확인: Python 문법, CLI `--help`, diff whitespace, 2-tract 합성 좌표 대입 검사가 통과했다.
+- 실제 HSC geometry 입력이나 CSV 분석은 실행하지 않았다.
