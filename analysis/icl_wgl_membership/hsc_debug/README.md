@@ -3866,9 +3866,12 @@ It reads only the approved shape-row export and pinned products, and keeps
 the four official PDR3 Wide tract/patch coordinate tables and assigns sky
 coordinates by polygon containment. It records unmatched points, overlapping
 polygons, and cross-field ambiguity. Within a same-field overlap, it chooses
-the nearest containing polygon center deterministically. It performs no
-download; the coordinate files are still awaiting the user's separate receipt
-approval. The official links are listed in the module docstring.
+the nearest containing polygon center deterministically. In `field` mode it
+uses tract polygons to assign the field label and leaves tract/patch IDs unset.
+Static review also fixed stale patch state when parsing a new tract. The parser
+has not yet been run against the official tables. It performs no download; the
+coordinate files are still awaiting the user's separate receipt approval. The
+official links are listed in the module docstring.
 
 The planned files total 49,225,826 bytes. After approval, validate their exact
 sizes and geometry, assign the approved lens/control/source coordinates to

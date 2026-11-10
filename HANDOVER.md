@@ -4680,13 +4680,18 @@ patch-QA 중심 분류를 사용했으며 공식 필드 경계가 아니다.
 - summary SHA-256: `afc151a6b189af182f975b7a70a2e8bc176b85fa62ab09bff7a2b8718cb41326`
 - 상세 per-bin shifts SHA-256: `b2f1e5ac95c42354cca8c3e593c8207527fcc23dae92e136c03f6593f5640d69`
 
-## 2026-11-11 공식 footprint 경계 파서 준비
+## 2026-11-11 공식 footprint 경계 파서 준비 및 정적 점검
 
 근사 중심 배정의 한계를 줄이기 위해
 `analysis/icl_wgl_membership/hsc_debug/hsc_pdr3_tract_patch_geometry.py`를 추가했다.
 HSC PDR3 Wide 4개 tract/patch 좌표 텍스트를 검증·파싱하고, 구면 좌표를 실제
 tract/patch 다각형에 할당한다. 파일을 자동 다운로드하지 않으며 아직 실제 공식 파일로
 실행하지 않았다. 다운로드 승인이 오기 전까지 데이터 폴더에 파일을 받지 않는다.
+
+정적 점검에서 새 tract로 넘어갈 때 이전 patch ID가 남을 수 있는 상태 오류를
+고쳤다. `field` 모드는 tract polygon으로 field만 지정하고 tract/patch ID는
+비워 둔다. 합성 또는 공식 경계 데이터로 실행하지 않았으므로 파싱·다각형의
+실제 검증은 아직 남아 있다.
 
 - 공식 자료 용량: 정확히 49,225,826 bytes (4개 Wide 필드 좌표 파일)
 - 저장 예정: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_pdr3_wide_tract_patch_geometry_2026-11-11_01/`

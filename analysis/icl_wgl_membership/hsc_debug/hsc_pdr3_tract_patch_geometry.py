@@ -185,16 +185,22 @@ def parse_geometry_file(path: Path) -> tuple[list[SkyPolygon], list[SkyPolygon]]
             if TRACT_MARKER.match(text):
                 section = "tract"
                 saw_tract_section = True
+                current_tract = None
+                current_patch = None
                 continue
             if PATCH_MARKER.match(text):
                 section = "patch"
                 saw_patch_section = True
+                current_patch = None
                 continue
 
             tract_match = TRACT_ID.search(text)
             patch_match = PATCH_ID.search(text) if section == "patch" else None
             if tract_match:
-                current_tract = int(tract_match.group(1))
+                next_tract = int(tract_match.group(1))
+                if next_tract != current_tract:
+                    current_patch = None
+                current_tract = next_tract
             if section == "tract" and current_tract is not None:
                 record = tract_records.setdefault(current_tract, {"center": None, "corners": {}})
             elif section == "patch" and current_tract is not None and patch_match:
@@ -298,7 +304,12 @@ def load_wide_geometry(directory: Path) -> tuple[list[SkyPolygon], list[SkyPolyg
 
 
 class PolygonIndex:
-    """Spatial index over tract or patch polygons with deterministic overlap handling."""
+    """Spatial index over HSC polygons with deterministic overlap handling.
+
+    ``field`` mode uses tract polygons only to identify a field and leaves the
+    tract and patch outputs unset. ``tract`` and ``patch`` modes report the
+    nearest containing polygon within an unambiguous field.
+    """
 
     def __init__(self, polygons: Iterable[SkyPolygon]):
         self.polygons = list(polygons)
@@ -354,6 +365,9 @@ class PolygonIndex:
                 if len(match_fields) > 1:
                     cross_field[row_index] = True
                     continue
+                if level == "field":
+                    fields[row_index] = next(iter(match_fields))
+                    continue
                 point_vector = points[row_index]
                 chosen = min(matches, key=lambda index: (
                     math.acos(float(np.clip(
@@ -371,6 +385,8 @@ class PolygonIndex:
 
 
 def load_index(directory: Path, *, level: str = "tract") -> tuple[PolygonIndex, dict]:
+    if level not in {"field", "tract", "patch"}:
+        raise ValueError("level must be field, tract, or patch")
     tracts, patches, summary = load_wide_geometry(directory)
     polygons = patches if level == "patch" else tracts
     summary["indexed_level"] = level

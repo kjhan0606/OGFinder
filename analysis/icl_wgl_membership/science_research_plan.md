@@ -2844,6 +2844,11 @@ nearest patch-QA 중심을 이용했으며 실제 필드 다각형도 검증되�
 구현했다. 구면 좌표를 다각형에 포함하는 방식으로 field/tract/patch를 기록하고,
 겹침·미할당 좌표를 명시한다. 파서는 자동 다운로드하지 않는다.
 
+정적 점검에서 tract 전환 뒤 이전 patch 식별자가 남을 수 있는 상태 오류를
+수정했다. `field` 모드는 tract polygon 포함 여부로 field만 기록하고 tract/patch는
+비워 둔다. 실제 공식 파일은 아직 받아 파싱하지 않았으므로 다각형·배정 검증은
+미완료다.
+
 공식 Wide 좌표 파일 4개(49,225,826 bytes)는 별도 수신 승인 대기다. 승인 뒤 파일
 크기·스키마·geometry를 확인하고, 같은 승인 source rows의 렌즈·대조 중심과 source
 위치에 tract block을 할당한다. 충분한 독립 tract와 매 deletion의 공통 7-bin support가
