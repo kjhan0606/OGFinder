@@ -3995,11 +3995,10 @@ maximum CSV size about 31.4 kB). It would not return source IDs, coordinates,
 shape values, photo-z, images, or PSF data. The exact plan hash was approved
 and submitted through the guarded CAS runner. S16A coverage is a ceiling only
 and must not be combined with S19A without a separate release/calibration
-audit. At the latest verified checkpoint, 31/42 batches returned 775 counts;
-100 centers have positive counts, 675 have zero sources, and the count sum is
-416,948. Batches 25–30 returned zero for every center. Batch 31 is submitted
-and remains in progress. Completed rows match the approved center IDs and
-batch checkpoint hashes.
+audit. At the latest verified checkpoint, 35/42 batches returned 875 counts;
+118 centers have positive counts, 757 have zero sources, and the count sum is
+489,089. Batch 35 is submitted and remains in progress. Completed rows match
+the approved center IDs and batch checkpoint hashes.
 
 `submit_s23b_s16a_shape_counts.py` validates the reviewed plan in `--plan`
 mode without network access. `--submit` requires the exact approved plan
