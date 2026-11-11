@@ -4790,19 +4790,15 @@ for i2, a strong spatial/selection imbalance. Counts do not show usable source
 support, and no cross-release lensing result was formed.
 
 Among the 126 outside-audit centers with S16A raw counts >=1,000, 116 have an
-existing ICL target/control image pair and 10 do not. These controls are unique
-(98 i, 18 i2), but they are not the established five-random-centers-per-lens
-weak-lensing control sample. A count-only S16A plan for these 116 ICL controls
-is prepared but not submitted: 5 batches, 116 integer-count rows, 36,139 SQL
-bytes, and a conservative 4,100-byte result bound. Plan SHA-256:
-`832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`.
-It requires separate approval and would not authorize source-row export.
-
-Among the 126 outside-audit centers with raw S16A counts ≥1,000, 116 have an
-existing ICL target/control image pair and 10 do not. Those 116 saved controls
-are unique (98 i and 18 i2); their S16A shape counts have not been queried.
-They are one-to-one ICL image controls, not the established five-random-centers
-per-lens weak-lensing control set.
+existing ICL target/control image pair and 10 do not. Their 116 controls are
+unique (98 i, 18 i2), but they are one-to-one ICL image controls, not the
+established five-random-centers-per-lens weak-lensing control set. The user
+approved a separate S16A count-only query for these positions. All 5 batches
+completed and all 116 result IDs/counts were verified against the exact plan.
+Controls are positive at 115/116 centers. Median paired target/control counts
+are 4,778/4,727 and the median paired control/target ratio is 0.988. These are
+raw availability counts only; no source rows were returned and
+`science_measurement=false`.
 
 S16A and S19A are separate processing/calibration releases. Aggregate counts
 can identify catalog coverage only; they cannot be interpreted as usable
@@ -4816,6 +4812,9 @@ and the FAQ explains its PDR1 CAS schema.
 - Spatial/release-selection report: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_count_selection_assessment_2026-11-11.md`
 - Spatial/release-selection runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_s16a_shape_count_selection.py`
 - ICL-control count planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_s16a_icl_control_count_plan.py`
+- ICL-control count submitter: `analysis/icl_wgl_membership/hsc_debug/submit_s23b_s16a_icl_control_counts.py`
+- ICL-control count auditor: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_s16a_icl_control_counts.py`
+- ICL-control count assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_icl_control_count_assessment_2026-11-11.md`
 - Prepared SQL and plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
 - Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/`
 - Combined count TSV SHA-256: `0945329119d1100b783211fc128cd0a329b449f5acf6648313a1484ac55a7b12`
@@ -4824,9 +4823,44 @@ and the FAQ explains its PDR1 CAS schema.
 - Spatial/release-selection results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_shape_coverage_selection_audit_2026-11-11_04/`
 - Selection summary SHA-256: `c08602e1b45492a92389dabd074e5f854050e8e14c2cd55b4683b5ae6fc0b398`
 - Candidate ICL control-center TSV SHA-256: `81c702166871e75570918f770ffad44702cebe9a29920c80d3d73d2263c21706`
-- Prepared control-count plan (not submitted): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/`
+- Approved control-count plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/`
 - Control-count plan SHA-256: `832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`
+- Control count results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/results/`
+- Control count TSV SHA-256: `b72d15093bdc3f4ddc6e03a1f85f9911b8999ed5e463e50c1eb7d6d4d4edbcd7`
+- Control count summary SHA-256: `136b86970f15f0d96118420a6ffe9ca9d510ad603b16cdfa28063fb55f4386f2`
+- CAS job IDs: `1074892`, `1074893`, `1074917`, `1074932`, `1074933`
+- Local paired-count audit: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_icl_control_count_audit_2026-11-11_01/`
+- Local audit summary SHA-256: `eb12a650f0718d0fa74f5857eaa7042edd6a18d6798e7688d69fd95a7d9771b2`
+- Paired target/control TSV SHA-256: `4223245a45264063e04fd05f2ed1b648fef239f88872486f754e7facc40eb79d`
 - `science_measurement=false`; aggregate count is a catalog-availability ceiling,
   not a post-cut weak-lensing sample. S16A cannot be merged with S19A without
   separate release/calibration validation.
 - Official references: https://hsc-release.mtk.nao.ac.jp/doc/index.php/s16a-shape-catalog-pdr2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/database/summary_table_usage-2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/faq__pdr3/
+
+## 2026-11-11 S16A WL random-center count plan (awaiting approval)
+
+The saved candidate audit yielded five eligible, globally unique random centers
+for 114 of the 116 ICL-paired S16A expansion lenses (570 positions; `i` 96,
+`i2` 18). Two `i` lenses have only four and three candidates and are excluded.
+The centers pass the local metadata/flag checks, have no CAMIRA cluster within
+2 proper Mpc, and lie more than 6 proper Mpc from their matched lens. The
+upstream candidate audit still marks controls unready for science; these
+coordinates have not passed image, PSF, or mask QA.
+
+The offline S16A PDR1 query plan counts distinct shape-catalog objects within
+3 proper Mpc at each matched lens redshift. It returns only a center ID and
+integer count (570 rows), in 23 batches of at most 25 centers; SQL totals
+186,051 bytes and the conservative result bound is 25,113 bytes. If submitted,
+the center coordinates are sent as CAS cone-search predicates. No source-level
+rows, returned coordinates, shapes, photo-z, images, or PSF data are requested.
+The plan is prepared and locally validated but not submitted;
+`science_measurement=false`.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_wl_random_count_plan_assessment_2026-11-11.md`
+- Selector/plan generator/submitter: `prepare_s23b_s16a_candidate_wl_random_centers.py`, `prepare_s23b_s16a_wl_random_count_plan.py`, `submit_s23b_s16a_wl_random_counts.py`
+- Selection output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_expansion_wl_random_centers_2026-11-11_02/`
+- Selection summary SHA-256: `197dd377f54dd645a0acdaa3059a50c5c6a6a8d87e494faa75f60970981bce33`
+- Random-center TSV SHA-256: `d63bc851903882e8ad21bc85de522ac2722a49d7b8533f7fc1ea8335fe9cac24`
+- Per-lens selection ledger SHA-256: `904744b0d6efd0c7ded8570fe1bc941b9e97367aaaae5282df5448151da5a2f6`
+- Prepared plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_expansion_random_count_plan_2026-11-11_01/`
+- Exact plan SHA-256: `dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`; not submitted, separate explicit approval required.

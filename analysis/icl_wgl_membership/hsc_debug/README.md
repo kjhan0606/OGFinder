@@ -4012,15 +4012,12 @@ diagnostics, not a cross-release lensing sample.
 
 Of the 126 outside-audit centers with S16A raw counts ≥1,000, 116 have a saved
 ICL target/control pair and 10 do not. Their 116 control IDs are unique (98 i,
-18 i2); S16A counts at those controls are unqueried. These one-to-one ICL image
-controls do not replace the five-random-centers-per-lens weak-lensing design.
-
-A separate S16A count-only query plan is prepared for these 116 saved ICL
-control centers (5 batches; 116 integer-count rows; 36,139 SQL bytes; at most
-4,100 result bytes). It is still `prepared_not_submitted`; plan SHA-256
-`832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`.
-Submitting it requires separate approval and would not authorize shape-row
-export.
+18 i2), but these one-to-one ICL image controls do not replace the
+five-random-centers-per-lens weak-lensing design. The separately approved S16A
+count-only query completed for these controls: 115/116 counts are positive.
+Median paired target/control counts are 4,778/4,727; the median paired ratio is
+0.988. This remains a raw catalog-availability diagnostic, not WL support after
+source, mask, and estimator cuts.
 
 `submit_s23b_s16a_shape_counts.py` validates the reviewed plan in `--plan`
 mode without network access. `--submit` requires the exact approved plan
@@ -4038,8 +4035,47 @@ aggregate columns for each center.
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
 - Selection-audit script: [`audit_s23b_s16a_shape_count_selection.py`](audit_s23b_s16a_shape_count_selection.py)
 - ICL-control count-plan generator: [`prepare_s23b_s16a_icl_control_count_plan.py`](prepare_s23b_s16a_icl_control_count_plan.py)
+- ICL-control count submitter: [`submit_s23b_s16a_icl_control_counts.py`](submit_s23b_s16a_icl_control_counts.py)
+- ICL-control count auditor: [`audit_s23b_s16a_icl_control_counts.py`](audit_s23b_s16a_icl_control_counts.py)
+- ICL-control count assessment: [`s23b_s16a_icl_control_count_assessment_2026-11-11.md`](s23b_s16a_icl_control_count_assessment_2026-11-11.md)
 - Selection audit results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_shape_coverage_selection_audit_2026-11-11_04/`
 - Selection audit summary SHA-256: `c08602e1b45492a92389dabd074e5f854050e8e14c2cd55b4683b5ae6fc0b398`
 - Candidate ICL control-center TSV SHA-256: `81c702166871e75570918f770ffad44702cebe9a29920c80d3d73d2263c21706`
-- Prepared ICL-control count plan (not submitted): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/`
+- Approved ICL-control count plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/`
 - ICL-control count plan SHA-256: `832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`
+- ICL-control count results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/results/`
+- ICL-control result TSV SHA-256: `b72d15093bdc3f4ddc6e03a1f85f9911b8999ed5e463e50c1eb7d6d4d4edbcd7`
+- ICL-control result summary SHA-256: `136b86970f15f0d96118420a6ffe9ca9d510ad603b16cdfa28063fb55f4386f2`
+- Local paired-count audit (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_icl_control_count_audit_2026-11-11_01/`
+- Local audit summary SHA-256: `eb12a650f0718d0fa74f5857eaa7042edd6a18d6798e7688d69fd95a7d9771b2`
+- Paired target/control TSV SHA-256: `4223245a45264063e04fd05f2ed1b648fef239f88872486f754e7facc40eb79d`
+
+## 2026-11-11 S16A WL random-center count plan (awaiting approval)
+
+The saved candidate audit yielded five eligible, globally unique random centers
+for 114 of the 116 ICL-paired S16A expansion lenses (570 positions; `i` 96,
+`i2` 18). Two `i` lenses have only four and three candidates and are excluded.
+The centers pass the local metadata/flag checks, have no CAMIRA cluster within
+2 proper Mpc, and lie more than 6 proper Mpc from their matched lens. The
+upstream candidate audit still marks controls unready for science; these
+coordinates have not passed image, PSF, or mask QA.
+
+The offline S16A PDR1 query plan counts distinct shape-catalog objects within
+3 proper Mpc at each matched lens redshift. It returns only a center ID and
+integer count (570 rows), in 23 batches of at most 25 centers; SQL totals
+186,051 bytes and the conservative result bound is 25,113 bytes. If submitted,
+the center coordinates are sent as CAS cone-search predicates. No source-level
+rows, returned coordinates, shapes, photo-z, images, or PSF data are requested.
+The plan is prepared and locally validated but **not submitted**;
+`science_measurement=false`.
+
+- Assessment: [`s23b_s16a_wl_random_count_plan_assessment_2026-11-11.md`](s23b_s16a_wl_random_count_plan_assessment_2026-11-11.md)
+- Selector: [`prepare_s23b_s16a_candidate_wl_random_centers.py`](prepare_s23b_s16a_candidate_wl_random_centers.py)
+- Plan generator: [`prepare_s23b_s16a_wl_random_count_plan.py`](prepare_s23b_s16a_wl_random_count_plan.py)
+- Approval-gated submitter: [`submit_s23b_s16a_wl_random_counts.py`](submit_s23b_s16a_wl_random_counts.py)
+- Selection output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_expansion_wl_random_centers_2026-11-11_02/`
+- Selection summary SHA-256: `197dd377f54dd645a0acdaa3059a50c5c6a6a8d87e494faa75f60970981bce33`
+- Random-center TSV SHA-256: `d63bc851903882e8ad21bc85de522ac2722a49d7b8533f7fc1ea8335fe9cac24`
+- Per-lens selection ledger SHA-256: `904744b0d6efd0c7ded8570fe1bc941b9e97367aaaae5282df5448151da5a2f6`
+- Prepared plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_expansion_random_count_plan_2026-11-11_01/`
+- Exact plan SHA-256: `dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`
