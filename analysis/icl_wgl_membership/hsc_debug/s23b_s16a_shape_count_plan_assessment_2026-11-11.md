@@ -68,3 +68,10 @@ count-only result does not support a 1,043-cluster S23B stack; a selected
 controls, and spatial-selection checks. S16A shape-row transfer and any
 S16A/S19A merge remain separate approval gates requiring release/calibration
 validation.
+
+A later local audit found that among the same 427 targets already counted in
+S19A, only 3 are S16A-positive/S19A-zero; 66 are S19A-positive/S16A-zero. A
+further 142 S16A-positive centers (126 with raw count ≥1,000) are outside that
+427-center S19A audit and have unknown S19A count status. The fixed 52-lens
+sample is also imbalanced by ICL band (S16A-positive for 19/25 i lenses but
+2/27 i2 lenses). See [the spatial and release-selection audit](s23b_s16a_shape_count_selection_assessment_2026-11-11.md).

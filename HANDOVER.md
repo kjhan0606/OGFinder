@@ -4779,6 +4779,31 @@ Within the existing fixed 52-lens S19A sample, 21 have positive S16A counts
 and 31 have zero. Counts are saved outside Git. No credential is saved.
 Source-row export remains a separate scope requiring its own approval.
 
+The follow-up local spatial/property audit found 177 S16A-positive centers
+clustered in a few RA/Dec regions. Among the same 427 targets already counted
+in S19A, 32 are positive in both releases, 66 are S19A-only, and only 3 are
+S16A-only; at the raw-count ≥1,000 screen, 27 are positive in both and 3 are
+S16A-only. Another 142 S16A-positive targets (126 with count ≥1,000) are
+outside that 427-center S19A audit, so their S19A status is unknown. Within the
+fixed 52-lens ICL/WL sample, S16A count support is 19/25 for filter i and 2/27
+for i2, a strong spatial/selection imbalance. Counts do not show usable source
+support, and no cross-release lensing result was formed.
+
+Among the 126 outside-audit centers with S16A raw counts >=1,000, 116 have an
+existing ICL target/control image pair and 10 do not. These controls are unique
+(98 i, 18 i2), but they are not the established five-random-centers-per-lens
+weak-lensing control sample. A count-only S16A plan for these 116 ICL controls
+is prepared but not submitted: 5 batches, 116 integer-count rows, 36,139 SQL
+bytes, and a conservative 4,100-byte result bound. Plan SHA-256:
+`832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`.
+It requires separate approval and would not authorize source-row export.
+
+Among the 126 outside-audit centers with raw S16A counts ≥1,000, 116 have an
+existing ICL target/control image pair and 10 do not. Those 116 saved controls
+are unique (98 i and 18 i2); their S16A shape counts have not been queried.
+They are one-to-one ICL image controls, not the established five-random-centers
+per-lens weak-lensing control set.
+
 S16A and S19A are separate processing/calibration releases. Aggregate counts
 can identify catalog coverage only; they cannot be interpreted as usable
 lensing support and do not authorize mixing S16A rows with the current S19A
@@ -4788,11 +4813,19 @@ and the FAQ explains its PDR1 CAS schema.
 - Planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_s16a_shape_count_plan.py`
 - Submitter: `analysis/icl_wgl_membership/hsc_debug/submit_s23b_s16a_shape_counts.py`
 - Plan report: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_count_plan_assessment_2026-11-11.md`
+- Spatial/release-selection report: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_count_selection_assessment_2026-11-11.md`
+- Spatial/release-selection runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_s16a_shape_count_selection.py`
+- ICL-control count planner: `analysis/icl_wgl_membership/hsc_debug/prepare_s23b_s16a_icl_control_count_plan.py`
 - Prepared SQL and plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
 - Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/`
 - Combined count TSV SHA-256: `0945329119d1100b783211fc128cd0a329b449f5acf6648313a1484ac55a7b12`
 - Count summary JSON SHA-256: `0cf90929c2a69eda0e62f3a9350359fd430b37bf869b2ead53246129ac51bb8b`
 - Exact plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
+- Spatial/release-selection results: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_shape_coverage_selection_audit_2026-11-11_04/`
+- Selection summary SHA-256: `c08602e1b45492a92389dabd074e5f854050e8e14c2cd55b4683b5ae6fc0b398`
+- Candidate ICL control-center TSV SHA-256: `81c702166871e75570918f770ffad44702cebe9a29920c80d3d73d2263c21706`
+- Prepared control-count plan (not submitted): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/`
+- Control-count plan SHA-256: `832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`
 - `science_measurement=false`; aggregate count is a catalog-availability ceiling,
   not a post-cut weak-lensing sample. S16A cannot be merged with S19A without
   separate release/calibration validation.

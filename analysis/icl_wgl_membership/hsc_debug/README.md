@@ -4000,6 +4000,28 @@ combined 1,043 unique IDs match the pinned target manifest. S16A counts remain
 an availability ceiling; they are not post-cut usable WL sources and must not
 be combined with S19A without a separate release/calibration audit.
 
+The local sky/property audit found that the 177 positive-count centers cluster
+in a few RA/Dec regions. Within the same 427 centers already counted in S19A,
+there are 32 positive in both releases, 66 S19A-only, and just 3 S16A-only;
+the ≥1,000-count comparison is 27 both and 3 S16A-only. Of the 1,043 S16A
+targets, 142 positive centers (126 with raw count ≥1,000) lie outside the
+existing 427-center S19A count audit, so their S19A status is unknown. The
+fixed 52-lens sample also has a strong ICL-filter imbalance: S16A is positive
+for 19/25 i lenses but only 2/27 i2 lenses. These are spatial/selection
+diagnostics, not a cross-release lensing sample.
+
+Of the 126 outside-audit centers with S16A raw counts ≥1,000, 116 have a saved
+ICL target/control pair and 10 do not. Their 116 control IDs are unique (98 i,
+18 i2); S16A counts at those controls are unqueried. These one-to-one ICL image
+controls do not replace the five-random-centers-per-lens weak-lensing design.
+
+A separate S16A count-only query plan is prepared for these 116 saved ICL
+control centers (5 batches; 116 integer-count rows; 36,139 SQL bytes; at most
+4,100 result bytes). It is still `prepared_not_submitted`; plan SHA-256
+`832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`.
+Submitting it requires separate approval and would not authorize shape-row
+export.
+
 `submit_s23b_s16a_shape_counts.py` validates the reviewed plan in `--plan`
 mode without network access. `--submit` requires the exact approved plan
 SHA-256, an interactive Lageunha terminal, and one hidden HSC password prompt.
@@ -4007,9 +4029,17 @@ The adapter submits the 42 count-only batches sequentially and stores the two
 aggregate columns for each center.
 
 - Assessment: [`s23b_s16a_shape_count_plan_assessment_2026-11-11.md`](s23b_s16a_shape_count_plan_assessment_2026-11-11.md)
+- Spatial/release-selection audit: [`s23b_s16a_shape_count_selection_assessment_2026-11-11.md`](s23b_s16a_shape_count_selection_assessment_2026-11-11.md)
 - Submitter: [`submit_s23b_s16a_shape_counts.py`](submit_s23b_s16a_shape_counts.py)
 - Prepared plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
 - Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/`
 - Combined count TSV SHA-256: `0945329119d1100b783211fc128cd0a329b449f5acf6648313a1484ac55a7b12`
 - Count summary JSON SHA-256: `0cf90929c2a69eda0e62f3a9350359fd430b37bf869b2ead53246129ac51bb8b`
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
+- Selection-audit script: [`audit_s23b_s16a_shape_count_selection.py`](audit_s23b_s16a_shape_count_selection.py)
+- ICL-control count-plan generator: [`prepare_s23b_s16a_icl_control_count_plan.py`](prepare_s23b_s16a_icl_control_count_plan.py)
+- Selection audit results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_shape_coverage_selection_audit_2026-11-11_04/`
+- Selection audit summary SHA-256: `c08602e1b45492a92389dabd074e5f854050e8e14c2cd55b4683b5ae6fc0b398`
+- Candidate ICL control-center TSV SHA-256: `81c702166871e75570918f770ffad44702cebe9a29920c80d3d73d2263c21706`
+- Prepared ICL-control count plan (not submitted): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_icl_control_count_plan_2026-11-11_01/`
+- ICL-control count plan SHA-256: `832f2de18f5d512396cc84673e458932635c1f766ea91cdc04c7b47125738dfa`
