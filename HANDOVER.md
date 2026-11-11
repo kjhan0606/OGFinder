@@ -4771,12 +4771,12 @@ distinct-shape-object count per center (1,043 rows; estimated maximum CSV
 size about 31.4 kB). It requests no source IDs, positions, shapes, photo-z,
 images, or PSF data. The user approved the exact plan SHA-256 below. The
 guarded submitter was run on LagEunha and verified the plan/hash before CAS
-access. At the latest verified checkpoint, batches 0–24 are complete (625
-center counts; sum 416,948; 100 centers have positive counts and 525 have zero
-sources), and batch 25 is submitted. Completed rows match the approved center
-IDs and each batch checkpoint hash. Counts are saved outside Git. No
-credential is saved. Source-row export remains a separate scope requiring
-its own approval.
+access. At the latest verified checkpoint, batches 0–30 are complete (775
+center counts; sum 416,948; 100 centers have positive counts and 675 have zero
+sources), and batch 31 is submitted. Batches 25–30 returned zero for every
+center. Completed rows match the approved center IDs and each batch checkpoint
+hash. Counts are saved outside Git. No credential is saved. Source-row export
+remains a separate scope requiring its own approval.
 
 S16A and S19A are separate processing/calibration releases. Aggregate counts
 can identify catalog coverage only; they cannot be interpreted as usable
