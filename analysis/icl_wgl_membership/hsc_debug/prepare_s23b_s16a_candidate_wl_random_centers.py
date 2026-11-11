@@ -26,7 +26,7 @@ SELECTION_AUDIT = DATA / "s23b_s16a_shape_coverage_selection_audit_2026-11-11_04
 SELECTION_SUMMARY = SELECTION_AUDIT / "summary.json"
 ICL_CONTROL_TABLE = SELECTION_AUDIT / "s16a_ge1000_outside_s19a_icl_control_centers.tsv"
 TARGET_MANIFEST = DATA / "s23b_icl_target_image_plan_2026-11-07_01" / "target_manifest.json"
-DEFAULT_OUTPUT = DATA / "s23b_s16a_expansion_wl_random_centers_2026-11-11_01"
+DEFAULT_OUTPUT = DATA / "s23b_s16a_expansion_wl_random_centers_2026-11-11_02"
 
 EXPECTED_CANDIDATE_AUDIT_PLAN_SHA256 = "143a1bd0a3a3c341576ce420f77ba0089fbfe80fdf58fbfd7afe30ea8e3f6714"
 EXPECTED_CANDIDATE_AUDIT_SHA256 = "ac9cb72ca769b19ace23e2b90de3f6dd5676c9f3813a525e8f8319f6fae6cb14"
