@@ -4761,7 +4761,7 @@ systematics prevent physical detection claims. `science_measurement=false`.
 - Max-T summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_wl_fixed52_maxt_2026-11-11_01/` (`e1bbe2282adca533791dd3b4a3a82e048e99d74c4c2e1a82b27a85bb69a807c2`)
 - Astrafek reports: `analysis/icl_wgl_membership/hsc_debug/s23b_icl_wl_fixed_support_overlap_assessment_2026-11-11.md`, `s23b_icl_satellite_wl_fixed52_relation_assessment_2026-11-11.md`, and `s23b_icl_satellite_wl_fixed52_max_t_assessment_2026-11-11.md`.
 
-## 2026-11-11 S16A shape coverage count: approved submission in progress
+## 2026-11-11 S16A shape coverage count: complete and verified
 
 To assess whether the ICL sample can be expanded beyond the S19A-supported
 52-cluster overlap, a local planner prepared a count-only S16A CAS plan for all
@@ -4771,12 +4771,13 @@ distinct-shape-object count per center (1,043 rows; estimated maximum CSV
 size about 31.4 kB). It requests no source IDs, positions, shapes, photo-z,
 images, or PSF data. The user approved the exact plan SHA-256 below. The
 guarded submitter was run on LagEunha and verified the plan/hash before CAS
-access. At the latest verified checkpoint, batches 0–37 are complete (950
-center counts; sum 607,616; 141 centers have positive counts and 809 have zero
-sources), and batch 38 is submitted. Completed rows match the approved center
-IDs and each batch checkpoint hash. Counts are saved outside Git. No
-credential is saved. Source-row export remains a separate scope requiring its
-own approval.
+access. All 42 batches completed. Independent QA verified each batch result
+hash, its expected row count and IDs, and all 1,043 unique IDs against the
+pinned target manifest. Counts total 765,197; 177 centers are positive and 866
+are zero. For positive centers, the median count is 4,622 (range 4–10,138).
+Within the existing fixed 52-lens S19A sample, 21 have positive S16A counts
+and 31 have zero. Counts are saved outside Git. No credential is saved.
+Source-row export remains a separate scope requiring its own approval.
 
 S16A and S19A are separate processing/calibration releases. Aggregate counts
 can identify catalog coverage only; they cannot be interpreted as usable
@@ -4788,7 +4789,11 @@ and the FAQ explains its PDR1 CAS schema.
 - Submitter: `analysis/icl_wgl_membership/hsc_debug/submit_s23b_s16a_shape_counts.py`
 - Plan report: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_count_plan_assessment_2026-11-11.md`
 - Prepared SQL and plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
-- Live checkpoint (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/count_status.json`
+- Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/`
+- Combined count TSV SHA-256: `0945329119d1100b783211fc128cd0a329b449f5acf6648313a1484ac55a7b12`
+- Count summary JSON SHA-256: `0cf90929c2a69eda0e62f3a9350359fd430b37bf869b2ead53246129ac51bb8b`
 - Exact plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
-- Query submitted under the exact approved plan; submission is still running.
+- `science_measurement=false`; aggregate count is a catalog-availability ceiling,
+  not a post-cut weak-lensing sample. S16A cannot be merged with S19A without
+  separate release/calibration validation.
 - Official references: https://hsc-release.mtk.nao.ac.jp/doc/index.php/s16a-shape-catalog-pdr2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/database/summary_table_usage-2/ ; https://hsc-release.mtk.nao.ac.jp/doc/index.php/faq__pdr3/

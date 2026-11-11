@@ -3985,20 +3985,20 @@ source-reuse limitations remain. No physical detection is claimed;
 - Max-T summary SHA-256: `e1bbe2282adca533791dd3b4a3a82e048e99d74c4c2e1a82b27a85bb69a807c2`
 - Max-T metrics SHA-256: `c29878527b2bbfdb379e4e4bfdc2fbe4fdee6d38bef67e4b3a204b4a38545010`
 
-## 2026-11-11 S16A shape-catalog coverage count (in progress)
+## 2026-11-11 S16A shape-catalog coverage count (complete)
 
 [`prepare_s23b_s16a_shape_count_plan.py`](prepare_s23b_s16a_shape_count_plan.py)
 prepares 42 count-only SQL batches for all 1,043 pinned S23B cluster centers,
-within 3 proper Mpc. The response would contain only center ID and the integer
-number of distinct S16A weak-lensing shape objects (1,043 rows; estimated
-maximum CSV size about 31.4 kB). It would not return source IDs, coordinates,
-shape values, photo-z, images, or PSF data. The exact plan hash was approved
-and submitted through the guarded CAS runner. S16A coverage is a ceiling only
-and must not be combined with S19A without a separate release/calibration
-audit. At the latest verified checkpoint, 38/42 batches returned 950 counts;
-141 centers have positive counts, 809 have zero sources, and the count sum is
-607,616. Batch 38 is submitted and remains in progress. Completed rows match
-the approved center IDs and batch checkpoint hashes.
+within 3 proper Mpc. The approved plan returned only center ID and the integer
+number of distinct S16A weak-lensing shape objects. It returned no source IDs,
+coordinates, shape values, photo-z, images, or PSF data. All 42 batches
+completed: 765,197 total counts, with 177 centers positive and 866 zero.
+Among positive centers, the median is 4,622 (range 4–10,138). The existing
+fixed S19A 52-lens sample has positive S16A counts at 21 centers and zero at
+31. Independent QA verified every batch hash and expected ID set, and the
+combined 1,043 unique IDs match the pinned target manifest. S16A counts remain
+an availability ceiling; they are not post-cut usable WL sources and must not
+be combined with S19A without a separate release/calibration audit.
 
 `submit_s23b_s16a_shape_counts.py` validates the reviewed plan in `--plan`
 mode without network access. `--submit` requires the exact approved plan
@@ -4009,5 +4009,7 @@ aggregate columns for each center.
 - Assessment: [`s23b_s16a_shape_count_plan_assessment_2026-11-11.md`](s23b_s16a_shape_count_plan_assessment_2026-11-11.md)
 - Submitter: [`submit_s23b_s16a_shape_counts.py`](submit_s23b_s16a_shape_counts.py)
 - Prepared plan (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/`
-- Running checkpoint (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/count_status.json`
+- Results (outside Git): `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_count_plan_2026-11-11_01/results/`
+- Combined count TSV SHA-256: `0945329119d1100b783211fc128cd0a329b449f5acf6648313a1484ac55a7b12`
+- Count summary JSON SHA-256: `0cf90929c2a69eda0e62f3a9350359fd430b37bf869b2ead53246129ac51bb8b`
 - Plan SHA-256: `c426129b150d440c22fca97d1cf2c722414a7f708132a6267563d77ccda997e0`
