@@ -215,7 +215,11 @@
      "--pixel-scale",
      "{pixel-scale}",
      "--profile-output",
-     "{work}/icl_profile_{base}.tsv"
+     "{work}/icl_profile_{base}.tsv",
+     {
+      "if_file": "{work}/mask_{base}_bool.fits",
+      "argv": ["--mask", "{work}/mask_{base}_bool.fits"]
+     }
     ],
     "output": {
      "mode": "set",
@@ -346,6 +350,47 @@
    "output": {
     "mode": "text"
    }
+  },
+  {
+   "id": "s16a-calibration",
+   "label": "Verify saved S16A calibration evidence",
+   "session": "AUTO",
+   "unique_work": true,
+   "needs": [],
+   "cli": [
+    "{python}",
+    "{root}/analysis/icl_wgl_membership/hsc_debug/build_s16a_calibration_evidence.py",
+    "--data-root",
+    "{s23b-evidence-root}",
+    {"if": "s16a-selection-root", "argv": ["--selection-root", "{s16a-selection-root}"]},
+    "--output-dir",
+    "{work}/s16a_calibration"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": ["s16a_calibration/summary.json"]
+   },
+   "done_status": "S16A calibration evidence verified"
+  },
+  {
+   "id": "s23b-evidence",
+   "label": "Replay saved HSC S23B ICL evidence",
+   "session": "AUTO",
+   "needs": [],
+   "cli": [
+    "{python}",
+    "{root}/analysis/icl_wgl_membership/hsc_debug/build_s23b_icl_wl_evidence_report.py",
+    "--current-icl",
+    "--data-root",
+    "{s23b-evidence-root}",
+    "--output-dir",
+    "{work}/s23b_icl_evidence"
+   ],
+   "output": {
+    "mode": "capture",
+    "files": ["s23b_icl_evidence/summary.json", "s23b_icl_evidence/assessment.md"]
+   },
+   "done_status": "S23B evidence replay completed"
   },
   {
    "id": "save_profile",
@@ -631,6 +676,22 @@
    "min": 0,
    "max": 40,
    "unit": "mag/arcsec2"
+  },
+  {
+   "name": "s16a-selection-root",
+   "label": "Saved S16A selection diagnostics directory (optional)",
+   "type": "string",
+   "default": "",
+   "group": "Research replay",
+   "help": "Optional parent directory of all three saved missingness and COSMOS field diagnostics. Empty explicitly records not requested."
+  },
+  {
+   "name": "s23b-evidence-root",
+   "label": "Saved HSC research data directory",
+   "type": "string",
+   "default": "/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13",
+   "group": "Research replay",
+   "help": "Local directory with saved S23B and S16A research products for the evidence replays."
   },
   {
    "name": "mu-levels",

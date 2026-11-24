@@ -462,6 +462,28 @@
           "optional": false
         },
         {
+          "id": "s23b_evidence",
+          "title": "기존 HSC S23B 검증 재현",
+          "detail": "저장된 S23B ICL 스택·위성·PSF 검증 파일을 데스크톱 또는 셸에서 재현합니다. 자료 경로는 ICL 설정에서 지정합니다.",
+          "action": [
+            "icl",
+            "s23b-evidence"
+          ],
+          "optional": true,
+          "web_action": []
+        },
+        {
+          "id": "s16a_calibration",
+          "title": "S16A 적색편이 보정 검증 기록",
+          "detail": "저장된 COSMOS 보정 진단의 산출물과 출처를 검증해 기록합니다.",
+          "action": [
+            "icl",
+            "s16a-calibration"
+          ],
+          "optional": true,
+          "web_action": []
+        },
+        {
           "id": "results",
           "title": "결과 검토·세션 저장",
           "detail": "측정 표·오차·잔차·검증 결과를 확인하고 산출물을 연결한 뒤 연구 세션을 저장합니다. 검토 완료는 과학 검증 통과와 다릅니다.",
@@ -502,6 +524,14 @@
         ],
         [
           "validate",
+          "s23b_evidence"
+        ],
+        [
+          "s23b_evidence",
+          "s16a_calibration"
+        ],
+        [
+          "s16a_calibration",
           "results"
         ]
       ]

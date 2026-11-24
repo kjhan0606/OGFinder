@@ -304,9 +304,10 @@ def mode_background(args):
     # Load mask
     mask = None
     if args.mask:
-        from astropy.io import fits
-        with fits.open(args.mask) as hdul:
-            mask = hdul[0].data.astype(bool)
+        mask_data, _ = load_fits_data(args.mask)
+        if mask_data.shape != data.shape or not np.isfinite(mask_data).all():
+            raise ValueError('background mask must be finite and match the image shape')
+        mask = mask_data != 0
         print(f"Loaded mask: {int(mask.sum())} masked pixels", file=sys.stderr)
     else:
         mask = np.zeros((ny, nx), dtype=bool)
@@ -367,6 +368,12 @@ def mode_background(args):
 def mode_profile(args):
     """Measure surface brightness profile."""
     data, header = load_fits_data(args.fits)
+
+    if args.mask:
+        mask, _ = load_fits_data(args.mask)
+        if mask.shape != data.shape or not np.isfinite(mask).all():
+            raise ValueError('profile mask must be finite and match the image shape')
+        data[mask != 0] = np.nan
 
     mag_zp = resolve_mag_zeropoint(args, header)
 
@@ -765,7 +772,7 @@ def main():
                         help='External mask FITS to import')
 
     # Background args
-    parser.add_argument('--mask', help='Mask FITS file for background fitting')
+    parser.add_argument('--mask', help='Mask FITS file for background fitting or profile (nonzero pixels excluded)')
     parser.add_argument('--bkg-method', default='polynomial',
                         choices=['polynomial', 'chebyshev', 'sep_large'])
     parser.add_argument('--bkg-order', type=int, default=3)

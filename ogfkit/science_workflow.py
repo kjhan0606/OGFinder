@@ -73,6 +73,12 @@ def recipes():
         node('profile', '표면밝기 프로파일', 'PSF·소광·밴드와 면적을 확인합니다.', ['icl', 'profile']),
         node('stack', '은하단별 프로파일 결합', '같은 은하단 가중, 참여 ID, 반경별 면적을 기록합니다. 스택 입력 manifest를 먼저 준비합니다.'),
         node('validate', 'PSF·주입 회수·공분산', '배경/마스크 변화와 은하단 단위 공분산을 검증합니다.'),
+        dict(node('s23b_evidence', '기존 HSC S23B 검증 재현',
+                  '저장된 S23B ICL 스택·위성·PSF 검증 파일을 데스크톱 또는 셸에서 재현합니다. 자료 경로는 ICL 설정에서 지정합니다.',
+                  ['icl', 's23b-evidence'], True), web_action=[]),
+        dict(node('s16a_calibration', 'S16A 적색편이 보정 검증 기록',
+                  '저장된 COSMOS 보정 진단의 산출물과 출처를 검증해 기록합니다.',
+                  ['icl', 's16a-calibration'], True), web_action=[]),
     ]))
     result.append(recipe('lsbg', 'LSBG · 탐색과 구조',
         '넓은 시야 또는 대상 영상, PSF·영점·마스크와 sky 처리 이력.',

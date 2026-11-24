@@ -1,6 +1,8 @@
 # icl/icl.tcl -- moved from ds9/library/layout.tcl (procs unchanged; see docs/architecture.md section 6).
 # Loaded through the "tcl" field of plugins/icl/plugin.json.
 
+namespace eval ::ogf {variable icl_bgsub_sources; array set icl_bgsub_sources {}}
+
 proc CatalogPanelICLUpdateFiles {fn} {
     if {$fn eq {}} return
     set base [CatalogPanelFitsBaseName $fn]
@@ -143,6 +145,9 @@ proc CatalogPanelICLBackground {method} {
     # per-frame panel state, so grab the path first.)
     set _bgsub [::ogf::cat::get icl,bgsub_file]
     if {[file exists $_bgsub]} {
+	# CreateFrame changes the selected FITS; preserve the source and the
+	# actual mask used for subsequent profile measurements on this result.
+	set ::ogf::icl_bgsub_sources([file normalize $_bgsub]) [list $fn [::ogf::cat::get icl,mask_file]]
 	CreateFrame
 	if {![catch {LoadFitsFile $_bgsub {} {}}]} {
 	    global scale
@@ -345,16 +350,24 @@ proc CatalogPanelICLProfile {} {
 	return
     }
 
-    # Use bgsub image if available, otherwise raw
+    # Resolve the shared mask against the original image, before choosing bgsub.
     set fn [CatalogPanelGetFITS]
-    if {[file exists [::ogf::cat::get icl,bgsub_file]]} {
-	set fn [::ogf::cat::get icl,bgsub_file]
-    }
     if {$fn eq {}} {
 	::ogf::cat::set status "ICL: No image available"
 	return
     }
-    CatalogPanelICLUpdateFiles $fn
+    set source_key [file normalize $fn]
+    if {[info exists ::ogf::icl_bgsub_sources($source_key)]} {
+	lassign $::ogf::icl_bgsub_sources($source_key) source_fn profile_mask
+	CatalogPanelICLUpdateFiles $source_fn
+    } else {
+	CatalogPanelICLUpdateFiles $fn
+	set profile_mask [::ogf::cat::get icl,mask_file]
+	# Use bgsub image if available, otherwise raw.
+	if {[file exists [::ogf::cat::get icl,bgsub_file]]} {
+	    set fn [::ogf::cat::get icl,bgsub_file]
+	}
+    }
 
     set script [CatalogPanelGetScript ds9_icl.py]
     if {![file exists $script]} {
@@ -378,6 +391,7 @@ proc CatalogPanelICLProfile {} {
 	--mag-zeropoint [::ogf::cat::get icl,param,mag-zeropoint] \
 	--pixel-scale [::ogf::cat::get icl,param,pixel-scale] \
 	--profile-output [::ogf::cat::get icl,profile_file]]
+    if {[file exists $profile_mask]} {lappend args --mask $profile_mask}
 
     CatalogPanelCmdLog icl $args
     if {[catch {set data [exec {*}$args 2>@stderr]} err]} {
@@ -393,7 +407,11 @@ proc CatalogPanelICLProfile {} {
     # Draw annulus markers
     CatalogPanelICLDrawAnnuli
 
-    ::ogf::cat::set status "ICL: SB profile measured"
+    if {[file exists $profile_mask]} {
+	::ogf::cat::set status "ICL: SB profile measured with source mask; validate sky, PSF and errors"
+    } else {
+	::ogf::cat::set status "ICL: SB profile measured without source mask; validate before use"
+    }
 }
 
 proc CatalogPanelICLDrawAnnuli {} {
@@ -869,8 +887,12 @@ proc CatalogPanelICLLoadProfile {} {
 proc OGFIclBkgHeadlessAfter {} {
     CatalogPanelICLUpdateFiles [CatalogPanelGetFITS]
     ::ogf::cat::set icl,has_bkg 1
+    if {[::ogf::params::get icl bkg-iterative] && [file exists [OGFMaskRefinedPath icl]]} {
+	::ogf::cat::set icl,mask_file [OGFMaskRefinedPath icl]
+    }
     set _bgsub [file join [OGFSessWorkDir] icl_bgsub_[CatalogPanelFitsBaseName [CatalogPanelGetFITS]].fits]
     if {[file exists $_bgsub]} {
+	set ::ogf::icl_bgsub_sources([file normalize $_bgsub]) [list [CatalogPanelGetFITS] [::ogf::cat::get icl,mask_file]]
 	CreateFrame
 	if {![catch {LoadFitsFile $_bgsub {} {}}]} {global scale; set scale(mode) zscale; ChangeScaleMode}
     }

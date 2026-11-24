@@ -345,3 +345,169 @@ def test_desktop_bundled_inference_bridge_and_checkpoint(tmp_path):
     saved=checkpoint(tmp_path/'saved',{'recipe':'agn_spectrum','selected':'inference','parameters':cfg},files,[fitted])
     resumed=restore(saved,tmp_path/'resume')
     assert len(resumed['artifacts'])==4 and resumed['state']['parameters']==cfg
+
+
+def test_workflow_python_export_uses_recorded_session_and_blocks_busy():
+    script = r'''
+source ds9/library/ogf_json.tcl
+source ds9/library/ogf_core.tcl
+source plugins/workflow_designer/workflow_designer.tcl
+rename ::ogf::job::busy ::ogf::job::old_busy
+proc ::ogf::job::busy {} {return $::working}
+proc CatalogPanelSessionSave {} {incr ::calls; return /tmp/session.py}
+set ::working 1
+set ::calls 0
+::ogf::workflow::export_python
+if {$::calls != 0} {error "exported while a job was active"}
+set ::working 0
+::ogf::workflow::export_python
+if {$::calls != 1 || ![string match *Python* $::ogf::workflow::message]} {error "session export not connected"}
+puts OK
+'''
+    result = subprocess.run(['tclsh'], input=script, text=True, cwd=ROOT, capture_output=True)
+    assert result.returncode == 0 and result.stdout.strip() == 'OK' and not result.stderr, result.stderr
+
+
+def test_s16a_evidence_repeated_desktop_runs_record_distinct_outputs(tmp_path):
+    script = r'''
+source ds9/library/ogf_json.tcl
+source ds9/library/ogf_core.tcl
+set fd [open plugins/icl/plugin.json]
+set ::manifest [::ogf::json::parse [read $fd]]
+close $fd
+rename ::ogf::reg::get ::ogf::reg::original_get
+proc ::ogf::reg::get {id} {return $::manifest}
+rename ::ogf::reg::missing ::ogf::reg::original_missing
+proc ::ogf::reg::missing {id} {return {}}
+rename ::ogf::step::context ::ogf::step::original_context
+proc ::ogf::step::context {id {catname {}}} {
+    return [dict create python python3 root $::env(ASTRAF_CASE_ROOT) work $::env(ASTRAF_CASE_WORK)]
+}
+rename ::ogf::params::get ::ogf::params::original_get
+proc ::ogf::params::get {id name} {
+    if {$name eq "s23b-evidence-root"} {return /data}
+    return {}
+}
+rename ::ogf::job::run ::ogf::job::original_run
+proc ::ogf::job::run {argv args} {
+    set output [lindex [dict get $args -outputs] 0]
+    set out_index [lsearch -exact $argv --output-dir]
+    if {$out_index < 0 || [file join [lindex $argv [expr {$out_index+1}]] summary.json] ne $output} {
+        error "recorded output differs from command"
+    }
+    lappend ::outputs $output
+    return 1
+}
+set ::outputs {}
+if {![::ogf::step::run icl s16a-calibration]} {error "first launch failed"}
+if {![::ogf::step::run icl s16a-calibration]} {error "second launch failed"}
+if {[lindex $::outputs 0] eq [lindex $::outputs 1]} {error "outputs collide"}
+foreach output $::outputs {
+    if {![file isdirectory [file dirname [file dirname $output]]]} {error "work directory missing"}
+}
+puts OK
+'''
+    import os
+    env = dict(os.environ, ASTRAF_CASE_ROOT=str(ROOT), ASTRAF_CASE_WORK=str(tmp_path))
+    result = subprocess.run(['tclsh'], input=script, text=True, cwd=ROOT,
+                            capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'OK'
+
+
+def test_s16a_evidence_async_job_records_each_output(tmp_path):
+    script = r'''
+source ds9/library/ogf_json.tcl
+source ds9/library/ogf_core.tcl
+set fd [open plugins/icl/plugin.json]
+set ::manifest [::ogf::json::parse [read $fd]]
+close $fd
+rename ::ogf::reg::get ::ogf::reg::original_get
+proc ::ogf::reg::get {id} {return $::manifest}
+rename ::ogf::reg::missing ::ogf::reg::original_missing
+proc ::ogf::reg::missing {id} {return {}}
+rename ::ogf::step::context ::ogf::step::original_context
+proc ::ogf::step::context {id {catname {}}} {
+    return [dict create python python3 root $::env(ASTRAF_CASE_ROOT) work $::env(ASTRAF_CASE_WORK)]
+}
+rename ::ogf::params::get ::ogf::params::original_get
+proc ::ogf::params::get {id name} {return /data}
+rename ::ogf::step::build_argv ::ogf::step::original_build_argv
+proc ::ogf::step::build_argv {id step ctx} {
+    return [list python3 -c {import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.mkdir(); (p/'summary.json').write_text('{}')} [file join [dict get $ctx work] s16a_calibration]]
+}
+proc OGFSessWorkDir {} {return $::env(ASTRAF_CASE_WORK)}
+proc OGFSessLog {step class argv args} {
+    lappend ::records [dict create step $step argv $argv outputs [dict get $args -outputs]]
+    return [llength $::records]
+}
+proc OGFSessSet {seq key value} {dict set ::fields $seq $key $value}
+proc OGFSessCrc {text} {return 1}
+set ::records {}
+set ::fields {}
+for {set i 0} {$i < 2} {incr i} {
+    if {![::ogf::step::run icl s16a-calibration]} {error "launch failed"}
+    set deadline [expr {[clock milliseconds] + 10000}]
+    while {[::ogf::job::busy]} {
+        if {[clock milliseconds] > $deadline} {error "job timeout"}
+        after 10 {set ::tick 1}
+        vwait ::tick
+    }
+}
+if {[llength $::records] != 2} {error "missing session records"}
+set paths {}
+foreach record $::records {
+    set path [lindex [dict get $record outputs] 0]
+    if {![file isfile $path]} {error "recorded output missing"}
+    lappend paths $path
+}
+if {[lindex $paths 0] eq [lindex $paths 1]} {error "outputs collide"}
+if {![dict exists $::fields 1 stdout_crc] || ![dict exists $::fields 2 stdout_crc]} {
+    error "missing completion records"
+}
+puts OK
+'''
+    import os
+    env = dict(os.environ, ASTRAF_CASE_ROOT=str(ROOT), ASTRAF_CASE_WORK=str(tmp_path))
+    result = subprocess.run(['tclsh'], input=script, text=True, cwd=ROOT,
+                            capture_output=True, env=env, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'OK'
+
+
+def test_s16a_evidence_session_records_file_not_output_directory(tmp_path):
+    script = r'''
+source ds9/library/ogf_json.tcl
+source ds9/library/ogf_core.tcl
+source ds9/library/ogf_session.tcl
+set fd [open plugins/icl/plugin.json]
+set manifest [::ogf::json::parse [read $fd]]
+close $fd
+set step {}
+foreach entry [dict get $manifest steps] {
+    if {[dict get $entry id] eq "s16a-calibration"} {set step $entry; break}
+}
+if {$step eq {}} {error "missing step"}
+set template [dict get $step cli]
+if {[lsearch -exact $template --output-dir] < 0 ||
+    [lsearch -exact $template --output] >= 0} {error "directory flag changed"}
+rename OGFSessWorkDir OGFSessWorkDir_original
+proc OGFSessWorkDir {} {return $::env(ASTRAF_CASE_WORK)}
+proc OGFPython {} {return python3}
+proc OGFSextractBin {} {return /no/sextract}
+OGFSessInit
+set output [file join [OGFSessWorkDir] s16a_calibration]
+file mkdir $output
+set summary [file join $output summary.json]
+set fd [open $summary w]; puts $fd "{}"; close $fd
+set seq [OGFSessLog icl.s16a-calibration auto [list python3 /tool.py --output-dir $output] -outputs [list $summary]]
+set recorded [dict get [lindex $::ogfsess(steps) 0] outputs]
+if {$seq != 1 || $recorded ne [list $summary]} {error "unexpected outputs: $recorded"}
+puts OK
+'''
+    import os
+    env = dict(os.environ, ASTRAF_CASE_WORK=str(tmp_path))
+    result = subprocess.run(['tclsh'], input=script, text=True, cwd=ROOT,
+                            capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'OK'

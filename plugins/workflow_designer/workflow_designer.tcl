@@ -55,7 +55,8 @@ proc OGFWorkflowOpen {} {
     ttk::frame $w.controls
     ttk::button $w.controls.resume -text "저장 세션 열기" -command ::ogf::workflow::resume
     ttk::button $w.controls.save -text "현재 단계까지 저장" -command ::ogf::workflow::save
-    pack $w.controls.resume $w.controls.save -side left -padx 5 -pady 3
+    ttk::button $w.controls.python -text "분석 세션 Python 저장" -command ::ogf::workflow::export_python
+    pack $w.controls.resume $w.controls.save $w.controls.python -side left -padx 5 -pady 3
     pack $w.controls -fill x
     bind $w.top.pick <<ComboboxSelected>> ::ogf::workflow::choose
     ttk::label $w.summary -wraplength 540 -justify left
@@ -85,6 +86,18 @@ proc OGFWorkflowOpen {} {
         ::ogf::workflow::choose 0
     } else {
         ::ogf::workflow::draw
+    }
+}
+
+proc ::ogf::workflow::export_python {} {
+    variable busy; variable message
+    if {$busy || [::ogf::job::busy]} {set message "작업 완료 후 Python 스크립트를 저장하세요."; return}
+    if {![llength [info commands CatalogPanelSessionSave]]} {set message "세션 스크립트 저장 기능이 없습니다."; return}
+    if {[catch {set path [CatalogPanelSessionSave]} err]} {set message "Python 저장 오류: $err"; return}
+    if {$path ne {}} {
+        set message "전체 분석 세션의 기록을 Python으로 저장했습니다. 수동 단계는 일괄 실행에서 자동 수행되지 않습니다."
+    } else {
+        set message "저장할 세션 기록이 없거나 저장을 취소했습니다."
     }
 }
 

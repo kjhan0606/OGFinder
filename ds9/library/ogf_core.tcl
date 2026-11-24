@@ -1067,6 +1067,12 @@ proc ::ogf::step::run {id sid {mode gui}} {
     if {$catname eq {} && [lsearch -glob [::ogf::json::get $step cli] *\{catalog\}*] >= 0} {set catname $sid}
     if {[catch {
 	set ctx [context $id $catname]
+        if {[::ogf::json::get $step unique_work 0]} {
+            set runWork [file join [dict get $ctx work] run-$id-$sid-[pid]-[clock clicks]]
+            if {[file exists $runWork]} {error "work directory already exists: $runWork"}
+            file mkdir $runWork
+            dict set ctx work $runWork
+        }
         if {[dict exists $m personal_digest]} {
             set personalWork [file join [dict get $ctx work] personal-$id-[clock clicks]]
             file mkdir $personalWork
