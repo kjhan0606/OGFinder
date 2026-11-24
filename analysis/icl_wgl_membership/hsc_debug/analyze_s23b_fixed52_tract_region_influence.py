@@ -198,12 +198,46 @@ def exact_region_maps(index, lens_pairs: dict, control_pairs: dict) -> tuple[dic
     }
 
 
+def group_exact_regions_by_field(exact: dict, audit: dict) -> tuple[dict, dict]:
+    """Group already-assigned tract endpoints by their parent footprint field."""
+    labels = {int(k): str(v) for k, v in audit['region_labels'].items()}
+    if not labels or any(':tract-' not in value for value in labels.values()):
+        raise ValueError('invalid exact tract labels')
+    fields = sorted({value.split(':tract-', 1)[0] for value in labels.values()})
+    if any(not field for field in fields):
+        raise ValueError('empty footprint field')
+    field_id = {field: i for i, field in enumerate(fields)}
+    remap = {key: field_id[value.split(':tract-', 1)[0]] for key, value in labels.items()}
+
+    def convert(value):
+        value = int(value)
+        if value == -1:
+            return -1
+        if value not in remap:
+            raise ValueError('unknown tract region code')
+        return remap[value]
+
+    result = {}
+    for key in ('lens_center_lookup', 'control_center_lookup'):
+        result[key] = {name: convert(value) for name, value in exact[key].items()}
+    for key in ('lens_center', 'control_center', 'lens_source', 'control_source'):
+        result[key] = np.fromiter((convert(v) for v in exact[key]), dtype=np.int32,
+                                  count=len(exact[key]))
+    details = dict(audit)
+    details['tract_region_labels'] = dict(audit['region_labels'])
+    details['region_labels'] = {str(i): field for field, i in field_id.items()}
+    details['field_grouping'] = 'parent field of the assigned official patch polygon'
+    return result, details
+
+
 def run(args) -> dict:
     output = (args.output or (
         DEFAULT_EXACT_OUTPUT if args.geometry_dir else DEFAULT_OUTPUT
     )).resolve()
     if output.exists():
         raise FileExistsError(f"refusing to overwrite output: {output}")
+    if args.exact_group == 'field' and not args.geometry_dir:
+        raise ValueError('field grouping requires official geometry')
     reference_profiles = read_reference(args.reference.resolve())
 
     lens_ids, fixed_selection = base.fixed_sample_ids(args.support_dir.resolve())
@@ -227,6 +261,8 @@ def run(args) -> dict:
     if args.geometry_dir:
         geometry_index, geometry_summary = load_index(args.geometry_dir.resolve(), level="tract")
         exact, geometry_audit = exact_region_maps(geometry_index, lens_pairs, control_pairs)
+        if args.exact_group == 'field':
+            exact, geometry_audit = group_exact_regions_by_field(exact, geometry_audit)
         lens_region_lookup = exact["lens_center_lookup"]
         control_region_lookup = exact["control_center_lookup"]
         lens_center_region = exact["lens_center"]
@@ -324,7 +360,7 @@ def run(args) -> dict:
     if len(occupied) < 2:
         raise ValueError("fewer than two spatial regions overlap the active stack")
 
-    region_rows, profile_rows = [], []
+    region_rows, profile_rows, region_lens_rows = [], [], []
     for region in occupied:
         keep_lens = (lens_center_region != region) & (lens_source_region != region)
         keep_control = (control_center_region != region) & (control_source_region != region)
@@ -370,6 +406,14 @@ def run(args) -> dict:
                 accepted["equal_control_centers"][lens_id] = equal_delta
                 accepted["equal_minus_pooled"][lens_id] = equal_delta - pooled_delta
                 min_center_support.extend(n_centers.tolist())
+                if getattr(args, 'write_per_lens', False):
+                    for k, (pooled, equal_center) in enumerate(zip(pooled_delta, equal_delta, strict=True)):
+                        region_lens_rows.append(dict(
+                            region_label=region_label_by_id[int(region)], matched_lens_id=lens_id,
+                            radial_bin=k, n_controls=int(n_centers[k]),
+                            pooled_t=float(pooled[0]), pooled_cross=float(pooled[1]),
+                            equal_t=float(equal_center[0]), equal_cross=float(equal_center[1]),
+                        ))
 
         common_ids = set(accepted["pooled_controls"])
         if any(set(accepted[name]) != common_ids for name in accepted):
@@ -425,6 +469,8 @@ def run(args) -> dict:
     output.mkdir(parents=True, exist_ok=False)
     write_tsv(output / "region_deletions.tsv", region_rows)
     write_tsv(output / "region_profile_shifts.tsv", profile_rows)
+    if region_lens_rows:
+        write_tsv(output / 'region_lens_profiles.tsv', region_lens_rows)
     reference_sha = sha(args.reference.resolve())
     patch_sha = sha(args.patch_qa.resolve()) if not args.geometry_dir else None
     exact_mode = args.geometry_dir is not None
@@ -442,6 +488,10 @@ def run(args) -> dict:
         "estimators": ["pooled_controls", "equal_control_centers", "equal_minus_pooled"],
         "profile_comparison": "each leave-region-out profile compared with the fixed 52-set full-sample estimator",
     })
+    if exact_mode and args.exact_group == 'field':
+        method['region_definition'] = 'official HSC PDR3 Wide footprint fields, derived from assigned patch polygons'
+        method['delete_rule'] = 'remove a lens/control pair when either endpoint lies in the deleted field; recompute calibrations and the four-control radial support rule'
+        method['profile_comparison'] = 'each leave-field-out profile compared with the fixed 52-set full-sample estimator'
     input_provenance = {
         "row_plan_sha256": row_provenance["plan_sha256"],
         "row_status_sha256": row_provenance["row_status_sha256"],
@@ -463,7 +513,8 @@ def run(args) -> dict:
         input_provenance["patch_qa_sha256"] = patch_sha
     summary = {
         "schema": "astrafek-s23b-fixed52-tract-region-influence-v2",
-        "status": "complete_exact_tract_influence_only" if exact_mode else "complete_exploratory_regional_influence",
+        "status": ("complete_exact_field_influence_only" if exact_mode and args.exact_group == 'field'
+                   else "complete_exact_tract_influence_only" if exact_mode else "complete_exploratory_regional_influence"),
         "science_measurement": False,
         "cas_query_submitted": False,
         "new_data_downloaded": False,
@@ -489,10 +540,13 @@ def run(args) -> dict:
         "full_profiles_msun_mpc2": {name: values.tolist() for name, values in full_profiles.items()},
         "region_deletions": region_rows,
         "inputs": input_provenance,
-        "limitations": ([
+        "limitations": (([
+            "few occupied fields: field deletion is an influence check, not a stable covariance or significance estimate",
+            "endpoints inherit the field of the nearest containing official patch polygon; cross-field ambiguity is rejected",
+        ] if args.exact_group == 'field' else [
             "individual tracts are influence blocks, not independent survey regions; covariance is deliberately not estimated",
             "tract IDs are assigned from the nearest containing official patch polygon; patch overlap handling creates a deterministic spatial block label, not a reconstruction of the catalog's owning patch at source-row query time",
-        ] if exact_mode else [
+        ]) if exact_mode else [
             "the approved pair rows have coordinates but no tract or patch IDs; endpoint assignment uses nearest patch-QA tract center",
             "the tract-center graph approximates footprint connectivity; it is not a polygon-overlap map or official HSC field label",
             "only a few connected components overlap the sample, so these are influence checks and cannot estimate a stable survey-region covariance",
@@ -506,8 +560,10 @@ def run(args) -> dict:
         },
         "output_directory": str(output),
     }
+    if region_lens_rows:
+        summary['outputs']['region_lens_profiles_sha256'] = sha(output / 'region_lens_profiles.tsv')
 
-    region_word = "tract" if exact_mode else "approximate region"
+    region_word = ("field" if args.exact_group == 'field' else "tract") if exact_mode else "approximate region"
     region_description = (
         "Official HSC PDR3 Wide patch polygons assign the center and unique source endpoints to their parent tract IDs. Same-field patch overlaps use the nearest containing patch center; active endpoints that are unassigned or cross-field ambiguous stop the run."
         if exact_mode else
@@ -529,7 +585,7 @@ def run(args) -> dict:
     )
     assessment.extend([
         "",
-        "The reported regional shifts are influence diagnostics, not errors or significance. Individual adjacent HSC tracts are not independent blocks, so this runner does not estimate covariance. `region_profile_shifts.tsv` gives the per-bin pooled, equal-center, and paired-contrast shifts.",
+        "The reported regional shifts are influence diagnostics, not errors or significance. Adjacent tracts are correlated and the number of fields is small; this runner does not estimate covariance. `region_profile_shifts.tsv` gives the per-bin pooled, equal-center, and paired-contrast shifts.",
         "",
         "The fixed sample is selected for radial support, and the retained common lens sets can change after deletion. Other unresolved limits include n(z) uncertainty, reduced shear, magnification, member dilution/boost, shear-selection systematics, and PSF uncertainty. Keep `science_measurement=false`; do not infer a mass or detection.",
         "",
@@ -567,7 +623,10 @@ def main() -> None:
                         help="new output directory; defaults to an approximate or exact-geometry run directory")
     parser.add_argument("--geometry-dir", type=Path,
                         help="directory containing all four local HSC PDR3 Wide tract/patch coordinate files; validates reviewed names and sizes, never downloads")
+    parser.add_argument("--exact-group", choices=('tract', 'field'), default='tract',
+                        help="group exact polygon assignments by parent tract or footprint field")
     parser.add_argument("--adjacency-deg", type=float, default=2.0)
+    parser.add_argument('--write-per-lens', action='store_true', help='save the surviving per-lens profiles for each deletion')
     run(parser.parse_args())
 
 

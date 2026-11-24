@@ -4079,3 +4079,244 @@ The plan is prepared and locally validated but **not submitted**;
 - Per-lens selection ledger SHA-256: `904744b0d6efd0c7ded8570fe1bc941b9e97367aaaae5282df5448151da5a2f6`
 - Prepared plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_expansion_random_count_plan_2026-11-11_01/`
 - Exact plan SHA-256: `dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`
+
+## S23B member outer-profile retention (2026-11-17)
+
+[`audit_s23b_member_profile_retention.py`](audit_s23b_member_profile_retention.py)
+checks pinned saved tables, reconciles frame/member/bin counts and writes a
+radial attrition ledger, filter totals, retained/lost covariate balance and
+quartile retention. It uses no network or image pixels. See the
+[assessment](s23b_member_profile_retention_assessment_2026-11-17.md) for results,
+reproduction command and hashes. Outer candidate retention is 4.57% (i) and
+9.21% (i2), conditional on the upstream selected population. These fractions
+are not completeness corrections; `science_measurement=false`.
+
+### Per-bin failure diagnostics and local full rerun
+
+The member stack now writes `member_profile_bin_diagnostics.tsv` for every
+selected candidate/bin, including overlapping target-area and control-support
+failures. Raw control flux/area values allow offline threshold sensitivity.
+New summary schema is v2; old products remain intact.
+[`audit_s23b_member_bin_diagnostics.py`](audit_s23b_member_bin_diagnostics.py)
+reconstructs retained fluxes, verifies diagnostic coverage and compares the
+rerun with the pinned historical selected subset.
+[`run_s23b_member_bin_diagnostics.sh`](run_s23b_member_bin_diagnostics.sh)
+runs all eligible images on LagEunha CPU into a new path, followed by the
+audit. The [assessment](s23b_member_bin_diagnostics_assessment_2026-11-17.md)
+records the verified pilot, active full-run path and scientific limits.
+
+### Coverage sensitivity with fixed samples
+
+[`analyze_s23b_member_coverage_sensitivity.py`](analyze_s23b_member_coverage_sensitivity.py)
+compares 0.4/0.6/0.8 cuts on native clusters, common clusters and common
+individual candidates using completed, audited v2 diagnostics. It retains the
+existing adjusted spatial-block model and estimates paired slope changes on
+fixed samples. See [methods and reproduction command](s23b_member_coverage_sensitivity_methods_2026-11-17.md).
+The two-frame pilot is a workflow check only; full-sample association results
+require the full diagnostic run and historical audit to finish.
+
+### Checkpointed member measurements
+
+The member-profile measurement saves each completed frame atomically with
+input/code/settings hashes. Use `--resume` for an existing checkpoint directory
+and `--max-new-frames 100` for a bounded invocation. The full wrapper uses
+successive bounded batches, with a historical audit after completion.
+`member_profile_checkpoint.py` prevents incompatible resumes, corrupted
+payloads and concurrent writers. The current full run is `_03` in tmux session
+`astrafek_member_diag_20261117`; earlier `_01`/`_02` attempts are interrupted.
+See the [updated execution assessment](s23b_member_bin_diagnostics_assessment_2026-11-17.md)
+for exact resume paths and commands. The standalone
+[`plot_s23b_member_coverage_sensitivity.py`](plot_s23b_member_coverage_sensitivity.py)
+exports verified sensitivity summaries as PNG/PDF without image or network access.
+
+### Gated automatic coverage follow-up
+
+[`run_s23b_member_coverage_after_diagnostics.py`](run_s23b_member_coverage_after_diagnostics.py)
+waits for the exact diagnostic runner lifetime, requires its successful full
+historical audit and unchanged pinned sources, then runs the coverage
+sensitivity and figure export. The current `_03` run has a live follow-up
+in tmux session `astrafek_member_followup_20261117`; its status and outputs
+live under `coverage_followup/` in that run root. See the method note before
+launching another analysis. Waiting is not a completed analysis result.
+
+### Full diagnostic/coverage results completed
+
+The `_03` run and its automatic follow-up are complete. All 979 frames were
+reproduced exactly against the historical profiles; 115,521 bin diagnostics
+record the failures as well as retained measurements. Across six layouts,
+all 66 supported slope intervals and 24 paired-change intervals include zero.
+The strict 80% cut leaves no i candidates and only 113 i2 candidates in 60
+clusters. See the [completed assessment](s23b_member_coverage_sensitivity_assessment_2026-11-17.md)
+for counts, interval tables, hashes and interpretation. The outer-light
+association remains unresolved; these are exploratory sensitivity products.
+
+### Outer support ceiling and two-floor comparison
+
+The [two-floor assessment](s23b_member_two_floor_support_assessment_2026-11-17.md)
+records the joint target/third-control coverage ceiling and the post hoc
+40%/60% fixed-support i comparison. The 80% i cut has no joint candidate
+passes; all supported i block intervals in the two-floor analysis include
+zero. These are exploratory, conditional results with open science gates.
+
+### Member-mask component pilot
+
+[`audit_s23b_member_mask_components_pilot.py`](audit_s23b_member_mask_components_pilot.py)
+reconstructs mask component unions on a deterministic local image pilot and
+checks retained fluxes against historical results. See the [assessment](s23b_member_mask_components_pilot_assessment_2026-11-17.md)
+for overlapping and exclusive area counts and interpretation limits.
+
+### Member base-mask reasons and image edges
+
+The [16-frame pilot assessment](s23b_member_base_mask_reasons_pilot_assessment_2026-11-17.md)
+separates selected quality bits, bright-object bits, invalid pixels and exact
+discrete edge loss. It verifies mask unions and reproduces saved photometry.
+Results are conditional descriptive cluster medians, not population estimates
+or a basis for relaxing flags.
+
+### Spatially balanced member-mask audit
+
+The [96-frame assessment](s23b_member_mask_spatial_assessment_2026-11-17.md)
+records a predeclared sky-cell-balanced sample, exact mask/photometry
+reproduction, equal-cluster fractions and sampled-cell bootstrap intervals.
+These descriptive results are not survey-population fractions or support for
+relaxing quality masks.
+
+### Paired mask and ICL context
+
+The [paired mask assessment](s23b_member_mask_paired_assessment_2026-11-17.md)
+uses cluster-level target/control pairs and shared sky-cell resampling in the
+predeclared 96-frame sample. Component differences and 24 unadjusted,
+exploratory ICL/support correlations are not causal or population-weighted
+estimates; all science gates remain open.
+
+### Member-mask and prior injection overlap
+
+The [overlap assessment](s23b_mask_injection_overlap_assessment_2026-11-17.md)
+joins 34 spatial-sample clusters to earlier unconvolved injection-recovery
+results. It records failures and exploratory cluster-mask correlations. The
+sample is small, post hoc and uncalibrated; no correction or completeness
+claim is supported.
+
+## 2026-11-17 S16A random-count completion and local support review
+
+The previously pending 570-center count-only query is complete and independently
+verified. See the [count verification](wl_s23b_s16a_random_count_verification_assessment_2026-11-17.md)
+and the [support/calibration assessment](s23b_s16a_wl_random_support_assessment_2026-11-17.md).
+`audit_s23b_s16a_wl_random_support.py` reproduces the local count diagnosis from
+pinned inputs and writes full per-center/per-lens ledgers, sensitivities and
+PNG/PDF figures in a new output directory. PDR3 polygon membership labels the
+parent field; it does not determine S16A usable aperture area. Of 114 lenses,
+96 have all five raw-positive controls; count-floor and ratio sensitivities
+give 86 and 67 and are not new science selections. The original ledger and
+the 18 incomplete groups are preserved. Science remains false.
+
+`prepare_s23b_s16a_shape_qa_pilot.py` prepares **only unsubmitted SQL** for a
+diagnostic 11-lens pilot: 43 positive centers, 5 batches, 12 columns and
+169,535 expected source-pair rows (25.9–58.2 MiB estimated; 128 MiB hard cap).
+The 23 known-zero controls remain in the 66-center ledger but are not queried.
+Plan SHA-256: `7af70c2be81f83e61bc6f74caf98b66a6309ae1b0caed0b9b7d1a32f42bd3f10`.
+The assessment lists the exact selected centers, paths, calibration gaps and
+required intake checks. Twenty focused tests and the independent scope/hash
+review passed. **A separate user approval is required before this new transfer.**
+
+## 2026-11-17 Approved S16A pilot receipt and intake QA completed
+
+The user approved the pilot. The first request was rejected without a CAS job
+or CSV because the overview's weight-column shorthand is absent from the
+actual schema. The [receipt assessment](s23b_s16a_shape_qa_pilot_intake_assessment_2026-11-17.md)
+records the exact identifier-only correction, public schema evidence and
+unchanged approved data scope. Executed plan hash:
+`1e3ac9451e519761e0f773915de79728d5443808efedc74155963a79c3ae4b30`;
+authorization scope remains the original `7af70c2b...` plan above.
+
+All 5 CSVs completed: **169,535 pairs, 115,993 unique objects, 27.9 MiB**.
+All numeric columns are finite and weights positive, with matching columns,
+center counts, unique pairs, degree cones and hashes. However, 34,482 objects
+are reused in multiple random centers, only three diagnostic lens groups
+support every 0.1–3 proper-Mpc bin, and post hoc extreme-value flags remain.
+These are diagnostic observations, not a final source selection, calibrated
+lensing measurement, covariance or population-retention rate. Science is false.
+
+Use `submit_s23b_s16a_shape_qa_pilot.py --plan` to validate the corrected default
+plan without network. The approved `--submit --approved-plan-sha256
+7af70c2be81f83e61bc6f74caf98b66a6309ae1b0caed0b9b7d1a32f42bd3f10` command
+also verifies this already-completed receipt locally without credentials or
+resubmission. The rejected original is refused for new submissions.
+`audit_s23b_s16a_shape_qa_pilot.py --output NEW_DIR` writes intake tables and
+PNG/PDF figures; `audit_s23b_s16a_shape_qa_tails.py` preserves post hoc flags.
+Twenty receiver, seven intake and one tail tests plus actual transfer/intake
+and independent reconciliation passed. Full paths, hashes, code snapshots and
+limitations are in the assessment. Await user approval for the next local Y1
+selection/redshift input-contract and minimal additional-transfer planning
+stage; no further query or science measurement starts automatically.
+
+## 2026-11-18 Y1 input contract and ID-only supplement plan prepared
+
+The user approved the local contract/planning stage above. It is complete;
+**new CAS submission/receipt still requires separate approval**.
+[Assessment and exact scope](s16a_y1_input_contract_and_supplement_plan_2026-11-18.md)
+documents the 31-field, 115,993-object, 24-batch quality/Ephor_AB supplement.
+Only existing pilot IDs are used; original 169,535 center/object pairs remain
+intact. Estimated CSV 14.2–56.7 MiB, cumulative cap 128 MiB. No repeated source
+coordinates/shapes, images, PSFs, full PDFs or COSMOS files are requested.
+Plan hash: `44b9d4df4904dac295f08a426abb20aa536ae85fc2c91239ac599f39deb412a1`.
+
+`s16a_y1_source_contract.py` implements diagnostic Table-4 conditions with
+explicit missing values, raw/derived sigma separation, two-of-four multiband
+detection and strict exact-ID joins. This is not a complete scientific source
+selection or calibration. Existing rows all remain unknown for full Table-4
+diagnosis because 28 required inputs are absent; no bad-source fraction is
+inferred. Point photo-z does not supply dilution/efficiency calibration.
+
+`prepare_s23b_s16a_quality_supplement.py --verify` verifies the frozen local
+plan without credentials/network; no submission option exists. All 31 fields
+were checked against public schema documents. Independent SQL/ID/pair audit,
+network-forbidden validation and overwrite/SQL-change rejection passed;
+77 focused new/regression tests passed. SQL has not run on CAS. Science remains
+false; await exact-plan approval. Paths, reproducibility and remaining Y1
+area/mask, PSF/selection, source-z and covariance gates are in the assessment.
+
+The user subsequently approved this exact 31-column/115,993-object plan and
+local diagnostics. `submit_s23b_s16a_quality_supplement.py --submit
+--approved-plan-sha256 44b9d4df4904dac295f08a426abb20aa536ae85fc2c91239ac599f39deb412a1`
+is the tested serial/resumable receiver. `--plan` validates locally; a completed
+receipt also revalidates without credentials or network. Do not start another
+receiver while the existing process runs. First-batch SQL compatibility passed
+without amendments. Live checkpoint: the plan directory's
+`results/quality_supplement_status.json`.
+
+`audit_s23b_s16a_quality_supplement.py` requires verified receipt completion and
+preserves NULLs, all original center/object pairs, all five randoms per lens
+and 23 known-zero controls. It reports diagnostic object-cut attrition/tails,
+radial support and point-z/risk completeness without a source-z cut or science
+measurement. Ninety-five focused tests (including 13 receiver and 5 QA cases)
+passed. Final counts/QA will be recorded below when the approved receipt ends.
+
+## 2026-11-18 Approved supplement received and local QA completed
+
+[Receipt assessment](s16a_quality_supplement_receipt_assessment_2026-11-18.md):
+all 24 batches completed without amendments/retries, **115,993 objects, 31
+columns, 45,335,621 bytes (43.2 MiB)**. Saved, confirmed and charged bytes agree,
+under 128 MiB. Exact columns/IDs/counts/hashes passed; original 169,535 pairs
+and all 66 centers (23 known-zero controls) were preserved. Completed repeat
+submission was proven local-only with network/credential access forbidden.
+
+Diagnostic object conditions: 115,978 unique pass, 4 fail, 11 unknown; pairs
+169,518/4/13. Only the two-of-four multiband condition differs; other object
+conditions all pass. Of the 429 prior m/derived-sigma tail objects, 428 pass,
+including one m<=-1 object: object cuts do not validate calibration tails.
+Common radial support remains unchanged (all 0.1–3 bins: three pilot groups).
+
+Finite Ephor_AB point-z/risk inputs exist for 109,321/115,993 (94.25%); 6,672
+are missing. Completeness across nonzero centers ranges **47.79–100%**, with
+different coverage in the ICL-image i/i2 diagnostic strata. Point-z was not
+used as a source cut. This spatial incompleteness needs review before lensing.
+
+Ninety-five tests, actual full receipt/QA and independent stdlib reconciliation
+passed; 528 radial profiles, source reuse and completeness were cross-checked.
+Code snapshots, approval/runtime evidence and per-center photo-z tables are at
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_quality_supplement_evidence_2026-11-18_01/`.
+The assessment lists all paths/hashes and remaining area/mask, source-z, Y1
+calibration/PSF and covariance gates. Science is false. This approved stage is
+complete; await next-stage approval. No new sample/query or commit/push starts
+automatically.

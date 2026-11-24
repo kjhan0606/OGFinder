@@ -18,6 +18,7 @@ import math
 import os
 import tempfile
 import time
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from scipy.spatial import cKDTree
 
 import measure_satellite_outer_profiles as core
 import prepare_detection_psf as prep
+from member_profile_checkpoint import FrameCheckpoint
 from download_pilot import BAD_BIT_POSITIONS, BRIGHT_OBJECT_BIT, validate_fits
 
 DATA = Path('/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13')
@@ -168,8 +170,77 @@ def select_sample(pair_rows, member_rows, frame_by_id, record_by_id, cosmo,
     return sorted(selected, key=lambda item: (item['filter'], item['target_id'])), candidate_info
 
 
+
+BIN_DIAGNOSTIC_FIELDS = [
+    'target_id', 'filter', 'member_index', 'source_row', 'cluster_radius_kpc',
+    'radial_bin_kpc', 'sep_matched', 'target_profile_available',
+    'target_coverage', 'target_n_pixels', 'target_sb_njy_arcsec2',
+    'n_control_centers', 'n_control_profiles', 'n_valid_controls',
+    'target_coverage_pass', 'control_count_pass', 'retained', 'failure_reason',
+    'control_bin_measurements_json', 'science_measurement',
+]
+
+
+def bin_support(target_profile, control_profiles, bin_index, n_control_centers,
+                coverage_floor, control_coverage_floor, min_controls, matched=True):
+    """Record both independent support gates, including failed candidate bins.
+
+    Control-center rejection happens upstream. These diagnostics distinguish
+    an insufficient accepted-center pool from per-bin masked-area failures;
+    they cannot identify why the center generator rejected a rotation.
+    """
+    available = target_profile is not None
+    target_coverage = float(target_profile['coverage'][bin_index]) if available else None
+    valid = [r for r in control_profiles if r['coverage'][bin_index] >= control_coverage_floor]
+    target_ok = available and target_coverage >= coverage_floor
+    control_ok = len(valid) >= min_controls
+    reasons = []
+    if not matched:
+        reasons.append('no_unique_sep_match')
+    else:
+        if not available:
+            reasons.append('target_profile_unavailable')
+        elif not target_ok:
+            reasons.append('target_coverage_below_floor')
+        if n_control_centers < min_controls:
+            reasons.append('too_few_accepted_control_centers')
+        elif len(control_profiles) < min_controls:
+            reasons.append('too_few_available_control_profiles')
+        elif not control_ok:
+            reasons.append('control_bin_coverage_below_floor')
+    return {
+        'sep_matched': matched,
+        'target_profile_available': available,
+        'target_coverage': target_coverage,
+        'target_n_pixels': int(target_profile['n_pixels'][bin_index]) if available else None,
+        'target_sb_njy_arcsec2': finite_float(target_profile['sb'][bin_index]) if available else None,
+        'n_control_centers': n_control_centers if matched else None,
+        'n_control_profiles': len(control_profiles) if matched else None,
+        'n_valid_controls': len(valid) if matched else None,
+        'target_coverage_pass': bool(target_ok) if matched else None,
+        'control_count_pass': bool(control_ok) if matched else None,
+        'retained': bool(matched and target_ok and control_ok),
+        'failure_reason': '|'.join(reasons) if reasons else 'retained',
+        'control_bin_measurements_json': json.dumps([
+            {'coverage': float(r['coverage'][bin_index]),
+             'sb_njy_arcsec2': finite_float(r['sb'][bin_index]),
+             'n_pixels': int(r['n_pixels'][bin_index])}
+            for r in control_profiles
+        ], allow_nan=False),
+        'science_measurement': False,
+    }
+
+
+def append_bin_diagnostic(rows, item, member_index, source_row, radius_kpc, radial, support):
+    if rows is not None:
+        rows.append(dict(target_id=item['target_id'], filter=item['filter'],
+            member_index=member_index, source_row=source_row,
+            cluster_radius_kpc=radius_kpc, radial_bin_kpc=radial, **support))
+
+
 def process_frame(item: dict, cosmo, coverage_floor: float,
-                  min_controls: int, control_coverage_floor: float):
+                  min_controls: int, control_coverage_floor: float,
+                  bin_diagnostics: list[dict] | None = None):
     frame = dict(item['frame'])
     record = item['record']
     ident = item['target_id']
@@ -232,6 +303,11 @@ def process_frame(item: dict, cosmo, coverage_floor: float,
     for member_index, radius_kpc in selected_members:
         match = matched_by_member.get(member_index)
         if match is None:
+            for j, (lo, hi) in enumerate(zip(core.R_EDGES_KPC[:-1], core.R_EDGES_KPC[1:])):
+                append_bin_diagnostic(bin_diagnostics, item, member_index,
+                    member_rows[member_index]['source_row'], radius_kpc, f'{lo:g}-{hi:g}',
+                    bin_support(None, [], j, 0, coverage_floor, control_coverage_floor,
+                                min_controls, matched=False))
             diagnostics.append({
                 'target_id': ident, 'filter': item['filter'],
                 'member_index': member_index,
@@ -266,12 +342,15 @@ def process_frame(item: dict, cosmo, coverage_floor: float,
                 control_profiles.append(result)
         kept = 0
         for bin_index, (lo, hi) in enumerate(zip(core.R_EDGES_KPC[:-1], core.R_EDGES_KPC[1:])):
-            if target_profile is None or target_profile['coverage'][bin_index] < coverage_floor:
+            support = bin_support(target_profile, control_profiles, bin_index,
+                                  len(control_xy), coverage_floor,
+                                  control_coverage_floor, min_controls)
+            append_bin_diagnostic(bin_diagnostics, item, member_index,
+                member_rows[member_index]['source_row'], radius_kpc, f'{lo:g}-{hi:g}', support)
+            if not support['retained']:
                 continue
             controls = [row for row in control_profiles
                         if row['coverage'][bin_index] >= control_coverage_floor]
-            if len(controls) < min_controls:
-                continue
             control_sb = float(np.mean([row['sb'][bin_index] for row in controls]))
             target_sb = float(target_profile['sb'][bin_index])
             profile_rows.append({
@@ -427,9 +506,16 @@ def main() -> None:
     parser.add_argument('--control-coverage-floor', type=float, default=0.60)
     parser.add_argument('--min-controls', type=int, default=3)
     parser.add_argument('--output', type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument('--checkpoint-dir', type=Path)
+    parser.add_argument('--resume', action='store_true')
+    parser.add_argument('--max-new-frames', type=int, help='stop cleanly after this many new frames; resume to finish')
     args = parser.parse_args()
-    if args.n_per_filter < 1 or args.min_controls < 1:
-        parser.error('n-per-filter and min-controls must be positive')
+    if args.n_per_filter < 1 or not 1 <= args.min_controls <= core.N_CONTROLS_MAX:
+        parser.error('n-per-filter must be positive; min-controls must be within the rotation limit')
+    if not (0 < args.coverage_floor <= 1 and 0 < args.control_coverage_floor <= 1):
+        parser.error('coverage floors must be finite and in (0, 1]')
+    if args.max_new_frames is not None and args.max_new_frames < 1:
+        parser.error('max-new-frames must be positive')
     output = args.output.resolve()
     if output.exists():
         parser.error(f'refusing to overwrite existing output: {output}')
@@ -471,16 +557,44 @@ def main() -> None:
         raise ValueError('selected sample does not match the requested per-filter counts')
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    tmp = Path(tempfile.mkdtemp(prefix=output.name + '.partial.', dir=output.parent))
+    checkpoint_dir = args.checkpoint_dir or output.with_name(output.name + '.checkpoints')
+    configuration = {
+        'schema': 'astrafek-member-profile-checkpoint-v1',
+        'inputs': hashes,
+        'script_sha256': sha256(Path(__file__)),
+        'dependency_sha256': {Path(m.__file__).name: sha256(Path(m.__file__)) for m in (core, prep)},
+        'checkpoint_helper_sha256': sha256(Path(__file__).with_name('member_profile_checkpoint.py')),
+        'python': sys.version, 'numpy': np.__version__,
+        'coverage_floor': args.coverage_floor, 'control_coverage_floor': args.control_coverage_floor,
+        'min_controls': args.min_controls,
+        'selected_frames': [[item['target_id'], item['filter']] for item in selected],
+    }
+    checkpoints = FrameCheckpoint(checkpoint_dir, configuration, resume=args.resume)
+    n_new_frames = 0
     selection_rows = []
     all_profiles, all_diagnostics, frame_records = [], [], []
+    all_bin_diagnostics = []
     for i, item in enumerate(selected, 1):
         print(f'[{i}/{len(selected)}] {item["filter"]} {item["target_id"]}: '
               f'{item["n_member_positions_50_500_kpc_in_frame"]} candidate positions', flush=True)
-        profiles, diagnostics, frame_record = process_frame(
-            item, cosmo, args.coverage_floor, args.min_controls,
-            args.control_coverage_floor,
-        )
+        cached = checkpoints.load(item['target_id'], item['filter'])
+        if cached is None:
+            if args.max_new_frames is not None and n_new_frames >= args.max_new_frames:
+                print(json.dumps({'status': 'checkpointed_incomplete',
+                    'completed_frames_loaded': len(frame_records), 'n_selected': len(selected),
+                    'checkpoint_dir': str(checkpoint_dir), 'science_measurement': False}), flush=True)
+                return
+            frame_bin_diagnostics = []
+            profiles, diagnostics, frame_record = process_frame(
+                item, cosmo, args.coverage_floor, args.min_controls,
+                args.control_coverage_floor, frame_bin_diagnostics,
+            )
+            cached = dict(profiles=profiles, diagnostics=diagnostics,
+                frame_record=frame_record, bin_diagnostics=frame_bin_diagnostics)
+            checkpoints.save(item['target_id'], item['filter'], cached)
+            n_new_frames += 1
+        profiles, diagnostics, frame_record = cached['profiles'], cached['diagnostics'], cached['frame_record']
+        all_bin_diagnostics.extend(cached['bin_diagnostics'])
         all_profiles.extend(profiles)
         all_diagnostics.extend(diagnostics)
         frame_records.append(frame_record)
@@ -491,6 +605,7 @@ def main() -> None:
             'n_member_positions_50_500_kpc_in_frame': item['n_member_positions_50_500_kpc_in_frame'],
             'image_sha256': frame_record['image_sha256'],
         })
+    tmp = Path(tempfile.mkdtemp(prefix=output.name + '.partial.', dir=output.parent))
     write_tsv(tmp / 'selected_target_frames.tsv', selection_rows)
     write_tsv(tmp / 'member_profile_bins.tsv', all_profiles, [
         'target_id', 'filter', 'member_index', 'source_row', 'detection_number',
@@ -503,6 +618,7 @@ def main() -> None:
         'target_id', 'filter', 'member_index', 'source_row', 'cluster_radius_kpc',
         'sep_match_arcsec', 'profile_bins_retained', 'n_valid_controls', 'status',
     ])
+    write_tsv(tmp / 'member_profile_bin_diagnostics.tsv', all_bin_diagnostics, BIN_DIAGNOSTIC_FIELDS)
     cluster_bins, by_filter = summarize(all_profiles, selected, tmp / 'member_outer_profiles_and_icl_relation.png')
     write_tsv(tmp / 'cluster_profile_relation.tsv', cluster_bins, [
         'target_id', 'filter', 'radial_bin_kpc', 'n_member_positions',
@@ -510,7 +626,7 @@ def main() -> None:
         'icl_contrast_50_300_minus_300_800_njy_arcsec2', 'science_measurement',
     ])
     summary = {
-        'schema': 'astrafek-s23b-camira-member-outer-profile-stack-v1',
+        'schema': 'astrafek-s23b-camira-member-outer-profile-stack-v2',
         'status': 'complete_exploratory_source_aware_profile_stack',
         'science_measurement': False,
         'images_ready_for_science': False,
@@ -539,6 +655,7 @@ def main() -> None:
             'member_positions_in_selected_cluster_radius': int(sum(row['n_member_positions_50_500_kpc_in_frame'] for row in selection_rows)),
             'unique_sep_matches_all_in_frame': int(sum(row['n_unique_sep_matches_all_in_frame'] for row in frame_records)),
             'member_candidate_diagnostics': len(all_diagnostics),
+            'member_bin_diagnostics': len(all_bin_diagnostics),
             'member_profile_bin_rows_retained': len(all_profiles),
             'filter_results': by_filter,
         },
@@ -550,6 +667,17 @@ def main() -> None:
             'Coadd pixel covariance, source Poisson noise, Galactic-extinction correction, and spatially blocked uncertainty are not calibrated here.',
             'Targets without successful masks or at least four in-frame CAMIRA positions are outside this eligible analysis sample.',
         ],
+        'checkpoint_directory': str(checkpoint_dir),
+        'new_frames_measured_in_this_invocation': n_new_frames,
+        'diagnostics': {
+            'per_bin_table': 'member_profile_bin_diagnostics.tsv',
+            'failure_reasons': 'Independent target and control gates; multiple failures use |.',
+            'unmatched': 'No target/control profile attempted; support fields are null.',
+            'control_pool': 'Accepted rotations only; upstream rotation rejection reasons are unavailable.',
+            'raw_controls': 'Per-bin coverage, flux and pixel counts permit offline support-threshold sensitivity.',
+        },
+        'output_sha256': {p.name: sha256(p) for p in tmp.iterdir() if p.is_file()},
+        'dependency_sha256': {Path(m.__file__).name: sha256(Path(m.__file__)) for m in (core, prep)},
         'input_sha256': hashes,
         'analysis_script_sha256': sha256(Path(__file__).resolve()),
         'elapsed_seconds': time.time() - started,

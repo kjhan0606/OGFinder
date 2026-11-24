@@ -7,9 +7,13 @@ It makes no network requests, downloads no data, and does not open image pixels.
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
+import math
 from pathlib import Path
+import shlex
+import sys
 
 
 DATA_ROOT = Path("/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13")
@@ -32,6 +36,22 @@ SOURCES = {
 APPROVED_GAIA_PLAN_SHA256 = "c00eda5f896f8160022a7e4198b3f8ce69803f0e30adc8f560ce04c8beba0e7d"
 GAIA_RESPONSE_SHA256 = "151f7c3f227ab7a16b1a6015563afd46fd53ccf4067d44d0264e27be75f665fb"
 WL_COUNT_PLAN_SHA256 = "b713eebded489c280fd9ce1b5840bc8d7d3e42d029035f8dbd414b72fb31e984"
+
+MEMBER_DIAGNOSTICS = "s23b_member_bin_diagnostics_full_2026-11-17_03"
+MEMBER_PSF = "s23b_member_psf_injection_run_2026-11-17_01"
+CURRENT_ICL_SOURCES = {
+    "stack": (SOURCES["icl_stack"], "c8bac8dbdd0a886604c216b2410725eb97883b0cdc1a91fd47e7a7cfcaaaa20b"),
+    "contrasts": (SOURCES["icl_contrasts"], "a47c6679ad318abcbee5ee5ab46e1a984976bd01c6f1dcbbe3d6de99b89306a8"),
+    "covariance": (SOURCES["icl_covariance"], "9c1ef1740490f7cbc4811a9bd2573d69405f5482d7ce754a09642108507fc94e"),
+    "candidate_density": (SOURCES["direct_member_relation"], "fab29d7aef464707c31e2616fe1db9fc3bad9d281ad6d5dfa6d63f2b484bbb39"),
+    "measurement": (f"{MEMBER_DIAGNOSTICS}/measurement/summary.json", "23b376b26ea7355c94cf1d556f437f32525998561bd3a94b057afe45b44c3b4c"),
+    "audit": (f"{MEMBER_DIAGNOSTICS}/audit/summary.json", "50a158970521616dc0c9ce29826b1c2e98f15f260e69d30a578fc8479805db28"),
+    "coverage": (f"{MEMBER_DIAGNOSTICS}/coverage_followup/analysis/summary.json", "f530bf87a59e45205cbc85ff7fec9c7929058e3090ad59fdaa1e9fe2e3404ccf"),
+    "unconvolved_injection": (SOURCES["member_injection"], "e9d4cced59f0b0f8ea3f189989886f28af74a339cc5a9b3421f8bca187defc77"),
+    "core_injection": (f"{MEMBER_PSF}/injection/summary.json", "7cdd34b10f3e976a1ecd94518c338e286aaa59fd4b42c310c3607da4c27431c4"),
+    "paired_comparison": (f"{MEMBER_PSF}/comparison/summary.json", "3ecb1ad6900ac6255b4143b461782a3978e020e3dbed9e22b9209e534bec19cf"),
+    "normalization": ("s23b_member_psf_common_normalization_2026-11-17_01/summary.json", "cfb3d8fc5422fad350939ec762b5e58533efc731209eebedfa2af784069e27a8"),
+}
 
 
 def sha256(path: Path) -> str:
@@ -344,22 +364,201 @@ def render_markdown(report: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def current_icl_report(data_root: Path) -> dict:
+    """Replay the current ICL evidence from exact saved local products."""
+    products = {}
+    provenance: dict[str, str] = {}
+
+    def verify(path: Path, expected: str) -> None:
+        actual = sha256(path)
+        if actual != expected:
+            raise ValueError(f"ICL evidence SHA-256 differs: {path}")
+        provenance[str(path)] = actual
+
+    for name, (relative, digest) in CURRENT_ICL_SOURCES.items():
+        path = data_root / relative
+        verify(path, digest)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("science_measurement") is not False:
+            raise ValueError(f"Missing diagnostic science flag in {path}")
+        products[name] = payload
+
+    stack = products["stack"]
+    contrasts = products["contrasts"]
+    covariance = products["covariance"]
+    measurement = products["measurement"]
+    audit = products["audit"]
+    coverage = products["coverage"]
+    injection = products["core_injection"]
+    norm = products["normalization"]
+    source_hashes = {name: digest for name, (_, digest) in CURRENT_ICL_SOURCES.items()}
+    contrast_inputs = [digest for name, digest in contrasts["inputs_sha256"].items()
+                       if Path(name).parent.name == Path(SOURCES["icl_stack"]).parent.name
+                       and Path(name).name == "summary.json"]
+    if contrast_inputs != [source_hashes["stack"]]:
+        raise ValueError("Relative-contrast stack lineage differs")
+    if (coverage["measurement_summary_sha256"] != source_hashes["measurement"]
+            or audit["measurement_summary_sha256"] != source_hashes["measurement"]
+            or coverage["audit_summary_sha256"] != source_hashes["audit"]
+            or not audit["historical_profile_rows_identical"]
+            or not audit["historical_candidate_diagnostics_identical"]
+            or audit["max_flux_reconstruction_difference"] != 0):
+        raise ValueError("Member coverage results do not match the audited profile replay")
+    if (norm["input_sha256"]["new_summary"] != source_hashes["core_injection"]
+            or norm["input_sha256"]["old_summary"] != source_hashes["unconvolved_injection"]
+            or norm["input_sha256"]["paired_summary"] != source_hashes["paired_comparison"]
+            or injection["psf_convolution_applied"] is not True
+            or injection["n_frames_failed"] != 0):
+        raise ValueError("PSF normalization lineage or receipt differs")
+
+    interval_checks = {}
+    coverage_dir = data_root / Path(CURRENT_ICL_SOURCES["coverage"][0]).parent
+    for filename in ("coverage_slope_layouts.tsv", "paired_slope_changes.tsv"):
+        path = coverage_dir / filename
+        verify(path, coverage["output_sha256"][filename])
+        counts = {"supported": 0, "insufficient_sample": 0, "intervals_excluding_zero": 0}
+        with path.open(encoding="utf-8", newline="") as stream:
+            for row in csv.DictReader(stream, delimiter="\t"):
+                if row["status"] == "insufficient_sample":
+                    if row["ci_low"] or row["ci_high"] or row["slope"]:
+                        raise ValueError(f"Unsupported row contains an estimate in {path}")
+                    counts["insufficient_sample"] += 1
+                elif row["status"] == "complete":
+                    low, high = float(row["ci_low"]), float(row["ci_high"])
+                    if not all(map(math.isfinite, (low, high))) or low > high:
+                        raise ValueError(f"Invalid interval in {path}")
+                    counts["supported"] += 1
+                    counts["intervals_excluding_zero"] += int(not low <= 0 <= high)
+                else:
+                    raise ValueError(f"Unexpected sensitivity status in {path}")
+        interval_checks[filename] = counts
+
+    for label, filename, expected in (
+        ("contrasts", "paired_relative_contrasts.tsv", contrasts["outputs"]["paired_relative_contrasts.tsv"]["sha256"]),
+        ("normalization", "common_normalization_paired.tsv", norm["output_sha256"]["common_normalization_paired.tsv"]),
+    ):
+        verify(data_root / Path(CURRENT_ICL_SOURCES[label][0]).parent / filename, expected)
+
+    return {
+        "schema": "astrafek-s23b-icl-current-evidence-v1",
+        "status": "complete_exploratory_evidence_replay",
+        "science_measurement": False,
+        "images_ready_for_science": False,
+        "psf_approved": False,
+        "this_report_network_used": False,
+        "this_report_image_pixels_read": False,
+        "this_report_data_downloaded": False,
+        "runner": {"path": str(Path(__file__).resolve()), "sha256": sha256(Path(__file__))},
+        "provenance": provenance,
+        "icl_stack": {
+            "targets": stack["n_targets_available"],
+            "controls": stack["n_matched_controls_available"],
+            "pairs_by_filter": stack["n_by_filter"],
+            "relative_contrast": contrasts["estimand"],
+            "primary_intervals": contrasts["primary_5deg_profiles"],
+            "conditional_covariance": covariance["filter_summary"],
+        },
+        "satellite_candidate_density": products["candidate_density"]["primary_layout_results"],
+        "member_coverage": {
+            "frames": coverage["n_frames"],
+            "measurements": measurement["sample"],
+            "coverage_floors": coverage["coverage_floors"],
+            "native_primary_layout": [row for row in coverage["primary_layout"] if row["mode"] == "native"],
+            "interval_checks": interval_checks,
+            "historical_flux_reconstruction_max_difference": audit["max_flux_reconstruction_difference"],
+        },
+        "psf_core_normalization": {
+            "frames_completed": injection["n_frames_complete"],
+            "frames_failed": injection["n_frames_failed"],
+            "member_amplitude_rows": injection["n_member_amplitude_rows"],
+            "paired_supported_rows": norm["n_paired_supported"],
+            "unit_amplitude_results": [row for row in norm["results"] if row["amplitude"] == 1.0],
+        },
+        "open_science_gates": [
+            "Extended PSF wings and residual sky transfer",
+            "Source Poisson noise and effective coadd weights",
+            "Long-range and shared-image covariance",
+            "Mask-selection effects and photometric membership completeness/purity",
+        ],
+    }
+
+
+def render_current_icl(report: dict, data_root: Path, output: Path) -> str:
+    stack = report["icl_stack"]
+    coverage = report["member_coverage"]
+    psf = report["psf_core_normalization"]
+    parts = [
+        "# S23B ICL and satellite evidence replay", "",
+        f"The local replay verified {len(report['provenance'])} saved summaries and tables. "
+        "The work supports exploratory ICL and satellite diagnostics. `science_measurement=false`, "
+        "`images_ready_for_science=false`, and `psf_approved=false`.", "",
+        f"The stack uses {sum(stack['pairs_by_filter'].values()):,} matched target/control pairs "
+        f"from {stack['targets']:,} targets and {stack['controls']:,} controls. The relative metric "
+        "subtracts the 300–800 proper-kpc annulus, which may retain cluster light.", "",
+        "| Filter | 50–300 minus 300–800 kpc (nJy arcsec⁻²) | 95% spatial-block interval |",
+        "|---|---:|---:|",
+    ]
+    for row in stack["primary_intervals"]:
+        if row["contrast"] == "50-300_minus_300-800":
+            parts.append(f"| {row['filter']} | {row['mean_contrast_njy_arcsec2']:.2f} | "
+                         f"[{row['block_bootstrap_ci95_low']:.2f}, {row['block_bootstrap_ci95_high']:.2f}] |")
+    slope = coverage["interval_checks"]["coverage_slope_layouts.tsv"]
+    change = coverage["interval_checks"]["paired_slope_changes.tsv"]
+    parts += ["", f"The audited {coverage['frames']:,}-frame member profile replay reproduced the saved "
+              "fluxes exactly. For member outer-light association, "
+              f"{slope['intervals_excluding_zero']}/{slope['supported']} supported slope intervals "
+              f"and {change['intervals_excluding_zero']}/{change['supported']} supported paired-change intervals "
+              "exclude zero. The remaining configurations had insufficient support to estimate intervals.", "",
+              "| Filter | Clusters at 40% coverage | 60% | 80% |",
+              "|---|---:|---:|---:|"]
+    for band in ("i", "i2"):
+        values = {row["coverage_floor"]: row["n_target_clusters"] for row in coverage["native_primary_layout"]
+                  if row["filter"] == band}
+        counts = " | ".join(str(values[floor]) for floor in coverage["coverage_floors"])
+        parts.append(f"| {band} | {counts} |")
+    parts += ["", f"The PSF-core experiment completed {psf['frames_completed']} frames. "
+              f"The normalization comparison uses {psf['paired_supported_rows']:,} member–amplitude rows "
+              "supported in both variants. At 1 nJy arcsec⁻², holding the original nominal input fixed gives:", "",
+              "| Filter | Supported pairs | Response change | 95% sky-cell interval |",
+              "|---|---:|---:|---:|"]
+    for row in psf["unit_amplitude_results"]:
+        if row["metric"] == "common_denominator_response_change":
+            parts.append(f"| {row['filter']} | {row['n_both']} | {row['median']:+.5f} | "
+                         f"[{row['ci_low']:+.5f}, {row['ci_high']:+.5f}] |")
+    parts += ["", "Changing the denominator offsets much of the measured recovery change in the "
+              "original ratios. These conditional simulations address compact PSF cores. The observational "
+              "calibration still requires:", ""]
+    parts.extend(f"- {gate}" for gate in report["open_science_gates"])
+    command = shlex.join([sys.executable, str(Path(__file__).resolve()), "--current-icl",
+                          "--data-root", str(data_root), "--output-dir", str(output) + "_replay"])
+    parts += ["", "Replay from the pinned summaries and tables into a fresh directory.", "", "```bash",
+              command, "```", ""]
+    return "\n".join(parts)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-root", type=Path, default=DATA_ROOT)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--current-icl", action="store_true", help="replay current saved ICL and satellite evidence")
     args = parser.parse_args()
     output = args.output_dir.resolve()
     if output.exists():
         raise FileExistsError(f"refusing to overwrite evidence report: {output}")
-    payloads, provenance = load_sources(args.data_root.resolve())
-    report = summarize(payloads, provenance)
+    data_root = args.data_root.resolve()
+    if args.current_icl:
+        report = current_icl_report(data_root)
+        assessment = render_current_icl(report, data_root, output)
+    else:
+        payloads, provenance = load_sources(data_root)
+        report = summarize(payloads, provenance)
+        assessment = render_markdown(report)
     output.mkdir(parents=True)
     (output / "summary.json").write_text(
         json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n",
         encoding="utf-8",
     )
-    (output / "assessment.md").write_text(render_markdown(report), encoding="utf-8")
+    (output / "assessment.md").write_text(assessment, encoding="utf-8")
     print(f"status={report['status']} science_measurement={report['science_measurement']}")
     print(f"summary={output / 'summary.json'} sha256={sha256(output / 'summary.json')}")
     print(f"assessment={output / 'assessment.md'} sha256={sha256(output / 'assessment.md')}")
