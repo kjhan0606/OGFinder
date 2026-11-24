@@ -4864,3 +4864,2632 @@ The plan is prepared and locally validated but not submitted;
 - Per-lens selection ledger SHA-256: `904744b0d6efd0c7ded8570fe1bc941b9e97367aaaae5282df5448151da5a2f6`
 - Prepared plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_expansion_random_count_plan_2026-11-11_01/`
 - Exact plan SHA-256: `dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`; not submitted, separate explicit approval required.
+
+## 2026-11-17 S23B member outer-profile retention (local only)
+
+The exact approved 116-center S16A ICL-control plan `832f2de1...` was already
+complete; its saved jobs/results were verified without a duplicate submission.
+The 570-center S16A WL random count plan remains awaiting its own approval.
+
+A new saved-table audit reconciles all 979 member-profile frames, 16,503
+candidates and 13,269 retained candidate/bin measurements. At 50–75 kpc,
+retained candidate counts are 160/3,504 (i) and 1,197/12,999 (i2), in 62/226
+and 365/753 clusters. Most outer-bin losses follow successful SEP matching
+but fail combined area/rotated-control support; existing diagnostics cannot
+separate these causes. The i retained/lost log-richness standardized difference
+is 0.336 (i2 0.072); i lowest/highest richness-quartile cluster retention is
+15.79%/38.60%, without a strictly monotonic quartile trend. These fractions
+are conditional retention, not satellite completeness. Science status remains
+false. No images or new catalog data were read or received.
+
+- Runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_member_profile_retention.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_member_profile_retention_assessment_2026-11-17.md`
+- Outputs: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_profile_retention_2026-11-17_01/`
+- Summary SHA-256: `1a12dd5bdde8adf4a67a9c72f0a8352d6ae074fbadc47d12be905b0cdbcc4c0d`
+- Next local implementation: preserve per-bin target coverage and valid-control
+  counts for failures before measuring common-support threshold sensitivity.
+- Existing image/PSF/Poisson/covariance gates remain unresolved. No commit/push
+  was performed during this local audit.
+
+## 2026-11-17 Member bin failure diagnostics and full CPU rerun
+
+The source-aware S23B member measurement now saves one diagnostic row per
+candidate/radial bin, including failures and unmatched candidates. Target
+area and rotated-control failures are independently recorded, with raw
+per-control flux/area/pixel counts for offline support-threshold analysis.
+Existing retained measurement columns and the process_frame return interface
+are preserved; new summary schema is v2. Coverage/control CLI ranges are
+validated, and new outputs include dependency/product hashes.
+
+Six new support-gate tests and nine existing shared-profile tests passed.
+Two real pilot frames (i S23B_10882, i2 S23B_7961) produced 168 diagnostics for
+24 candidates. All 19 retained profile rows and candidate diagnostics match
+the old full-sample subset exactly; raw-control flux reconstruction differs
+by 0.0. The pilot is not a representative sample for scientific conclusions.
+
+The first detached full rerun (_01, PID 3742503) stopped after four
+frame-start logs. Both runner and child were confirmed absent. Its partial
+files were preserved and status corrected to INTERRUPTED; cause unconfirmed.
+The replacement 979-frame serial CPU run uses persistent exec session 30421,
+runner PID 3746049 and child PID 3746134, confirmed live with advancing logs.
+Root: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_bin_diagnostics_full_2026-11-17_02/`.
+Recheck PID and child process, log and terminal products before claiming
+completion. The wrapper writes COMPLETE only after measurement plus the
+automated historical/diagnostic audit succeed. Do not relaunch based only
+on a stale status file. No GPU, Slurm, query or new data transfer was used.
+
+- Measurement: `analysis/icl_wgl_membership/hsc_debug/measure_s23b_camira_member_outer_profiles.py`
+- Audit: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_member_bin_diagnostics.py`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/run_s23b_member_bin_diagnostics.sh`
+- Tests: `analysis/icl_wgl_membership/hsc_debug/test_s23b_member_bin_support.py`
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_bin_diagnostics_assessment_2026-11-17.md`
+- Pilot measurement summary SHA-256: `9c1e5b28ed7c456269e62e95137413fdeb46e0c8a2306eeb9ee6a2b01487e1de`
+- Pilot audit summary SHA-256: `27b2f75d0cc352ffe17098b44b6166729f6ca7938f514309c798f2b3a2cd0e13`
+- Science status false; 570-center S16A random-count approval remains pending.
+- These pipeline/assessment edits have not been committed or pushed.
+
+## 2026-11-17 Coverage sensitivity implementation while full rerun continues
+
+A new table-only runner `analyze_s23b_member_coverage_sensitivity.py` compares
+0.4/0.6/0.8 target/control area cuts using native, common-cluster and
+common-candidate samples. The original 0.6 candidate fluxes must reconstruct.
+Fixed modes freeze coverage nuisance covariates at 0.6 and fit paired outcome
+differences with the same design and connected sky blocks. The existing
+six-layout, 5,000-draw block regression is reused; unsupported estimates are
+recorded as null. Four focused regression tests passed, including recovery
+of a known paired slope difference. A complete two-frame pilot produced
+valid tables and insufficient-sample statuses without scientific claims.
+
+- Method: `analysis/icl_wgl_membership/hsc_debug/s23b_member_coverage_sensitivity_methods_2026-11-17.md`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_member_coverage_sensitivity.py`
+- Tests: `analysis/icl_wgl_membership/hsc_debug/test_s23b_member_coverage_sensitivity.py`
+- Pilot outputs: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_coverage_sensitivity_pilot_2026-11-17_01/`
+- Full diagnostic run remains session 30421, root `s23b_member_bin_diagnostics_full_2026-11-17_02`; poll its live handle before any relaunch.
+- Next: once the full measurement and historical audit pass, execute the
+  full command in the method note and assess paired slope changes with
+  candidate counts and all layout failures. No new download/query approval
+  is implied. Science status remains false; changes are uncommitted.
+
+## 2026-11-17 Full-run interruption, per-frame resume and current tmux run
+
+Session 30421 terminated with exit 143; runner 3746049 and child 3746134 were
+confirmed absent. Attempt _02 stopped after the 662nd frame-start log and had
+no completed measurement/audit. Its stale RUNNING status was changed to
+INTERRUPTED; all partial files are preserved. Cause is unconfirmed.
+
+The measurement now writes atomic per-frame checkpoints through
+`member_profile_checkpoint.py`, with payload/configuration hashes and an
+exclusive writer lock. Existing directories require --resume. Configurations
+bind sample, input/source/dependency hashes and settings; changed code or
+inputs reject resume. --max-new-frames permits clean bounded invocations.
+Three integrity/resume tests passed. A real stop-after-one-frame/resume pilot
+matched all 19 historical retained rows and original diagnostics exactly.
+
+Current full run is _03, launched in tmux session
+`astrafek_member_diag_20261117`, runner PID 3767575. The wrapper uses successive
+100-new-frame invocations and then executes the historical audit. Root:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_bin_diagnostics_full_2026-11-17_03/`.
+Completed frames persist in `measurement.checkpoints/` even if a later
+invocation is interrupted. Poll tmux/live processes, checkpoint count, log
+and terminal products; do not infer completion from status alone or relaunch
+while a writer is live. Direct bounded resume instructions are in the updated
+bin-diagnostics assessment. Do not change measurement/helper sources mid-run.
+
+The coverage-sensitivity method command now points to _03. A new standalone
+`plot_s23b_member_coverage_sensitivity.py` verifies analysis product hashes
+and exports support/slope PNG/PDF panels. It was executed and visually checked
+on the completed pilot, correctly labeling insufficient samples without
+plotting slopes. Full-sample scientific outputs are still pending. Science
+status remains false; no new query/download, commit or push was performed.
+
+## 2026-11-17 Automatic gated coverage follow-up scheduled
+
+The current _03 tmux diagnostic run remains live (runner 3767575). A separate
+local follow-up is now live in tmux session `astrafek_member_followup_20261117`,
+PID 3776762, waiting on that runner's PID + kernel start-time identity. This
+Python build lacks os.pidfd_open, so the script checks /proc identity every
+five seconds and terminates the wait if the PID disappears or is reused.
+Four targeted wait/protection tests passed.
+
+The follow-up requires terminal COMPLETE, a 979-frame matching historical
+audit and unchanged pinned sensitivity/plot/helper source hashes. It then
+executes the existing 5,000-draw six-layout sensitivity and PNG/PDF export.
+Sources are pinned in `coverage_followup/plan.json`; do not edit them mid-wait
+or launch a duplicate analysis. Current status was WAITING_FOR_DIAGNOSTIC_RUNNER,
+with no downstream analysis products yet and 370 completed frame checkpoints.
+
+- Controller: `analysis/icl_wgl_membership/hsc_debug/run_s23b_member_coverage_after_diagnostics.py`
+- Tests: `analysis/icl_wgl_membership/hsc_debug/test_s23b_member_followup_wait.py`
+- Root: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_bin_diagnostics_full_2026-11-17_03/coverage_followup/`
+- Monitor both tmux sessions, actual processes and terminal products. A failed
+  or waiting status does not establish completion. No query or new download
+  is involved; science status remains false. All edits remain uncommitted.
+
+## 2026-11-17 Full member diagnostics and coverage sensitivity COMPLETE
+
+The _03 measurement, historical audit, automatic sensitivity and figures all
+completed successfully. Both original process handles are now terminal; the
+terminal products and all recorded output hashes were independently checked.
+The 979 frames contain 16,503 candidates, 115,521 bin diagnostics and 13,269
+retained measurements. All original profile/candidate rows match exactly;
+raw-control flux reconstruction differs by 0.0. The 979-frame audit contains
+a generic pilot limitation string, but its explicit scope and actual full
+comparisons confirm the full run.
+
+At 60% outer-bin coverage, joint target/control area failure accounts for
+1,625 i and 5,138 i2 candidates, in addition to unmatched candidates and
+single-gate failures. At floors .4/.6/.8, native cluster counts are 133/62/0
+for i and 609/365/60 for i2. The strict common set is empty for i and has
+113 candidates across 60 clusters for i2. All 66 supported six-layout slope
+intervals and all 24 supported paired-change intervals include zero; the
+remaining configurations are insufficient samples, not measured zeros.
+The outer-light association remains unresolved; science_measurement=false.
+
+- Completed report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_coverage_sensitivity_assessment_2026-11-17.md`
+- Root: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_bin_diagnostics_full_2026-11-17_03/`
+- Measurement summary SHA-256: `23b376b26ea7355c94cf1d556f437f32525998561bd3a94b057afe45b44c3b4c`
+- Audit summary SHA-256: `50a158970521616dc0c9ce29826b1c2e98f15f260e69d30a578fc8479805db28`
+- Sensitivity summary SHA-256: `f530bf87a59e45205cbc85ff7fec9c7929058e3090ad59fdaa1e9fe2e3404ccf`
+- Figures summary SHA-256: `faee11db9885b4856a9f6e04d11cf9ebf8e46b918de869a5523a30a93f2493db`
+- Figure: `coverage_followup/figures/coverage_sensitivity.png` (PDF alongside).
+- Next local work: joint area-support ceiling/mask diagnostics and a separately
+  labeled i common-support comparison at .4/.6. Existing PSF/Poisson/sky/
+  covariance/membership gates remain open. The S16A random-count plan is still
+  separately approval-gated. No new query/transfer or commit/push occurred.
+
+## 2026-11-17 Member joint-coverage ceiling and two-floor sensitivity
+
+The audited outer-bin diagnostics show that, among uniquely matched candidates,
+i has 31/2,223 targets with >=80% target area and 17 with >=80% third-best
+control area, but none meet both. i2 has 434/8,730 target, 406 control and 113
+joint passes. Joint ceiling medians are 0.1611 (i) and 0.2638 (i2); this
+identifies joint coverage constraints, not the individual mask components or
+completeness.
+
+A separately labeled post hoc 0.4/0.6 comparison keeps the same 62 i clusters;
+the common-candidate sample contains 160 members. At the 5-degree phase-zero
+layout, paired slope changes (0.4 minus 0.6) are -0.0288 [-0.2523, 0.1674]
+for common clusters and -0.0120 [-0.0695, 0.0264] for common candidates.
+All 36 i slope intervals and 12 paired-change intervals across six layouts
+include zero. This does not prove zero physical association or zero selection
+bias. Science status remains false and PSF/Poisson/sky/covariance gates remain.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_two_floor_support_assessment_2026-11-17.md`
+- Runners: `audit_s23b_outer_support_ceiling.py`, `analyze_s23b_member_two_floor_sensitivity.py`
+- Ceiling summary SHA-256: `573bd016e4aabec3387f42e7e53670f4a15417c8142cf62f456167a9b7ad1420`
+- Two-floor summary SHA-256: `363c05231943d6d79d28912a59803a720c9579f86fb1a8bcb87b654c9929a311`
+- Next: attribute missing area to individual mask components using already
+  approved images and ensure any sensitivity does not alter science gates.
+  The S16A random-center count plan remains separately approval-gated.
+- No new image/shape transfer, CAS query, commit or push occurred.
+
+## 2026-11-17 Four-frame member-mask component pilot
+
+An image-local CPU pilot decomposed actual member-centered and rotated-control
+masks into quality/invalid base, neighbor segmentation, neighbor source shapes,
+and unmatched-member fallback circles. Mask-component union reproduced the
+original mask exactly on all 297 stamps, and all 20 retained profile rows
+matched historical flux/coverage within 1e-9. No network request occurred.
+
+Pooled in-image 50–75 kpc pixels: i target/control base footprints 45.43%/
+66.80%, i2 29.35%/56.19%; base-exclusive fractions 21.57%/44.85% and
+21.92%/43.49%. Neighbor-shape exclusive fractions are 13.01%/7.90% and
+20.82%/12.27%, respectively. Mask components overlap and control stamps share
+images, so these are descriptive, pixel-weighted pilot counts; they are not
+additive, causal, independent or representative of the 979-frame sample.
+The base includes quality bits, bright-object bit and invalid pixels, whose
+individual contributions remain unresolved. Science status remains false.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_mask_components_pilot_assessment_2026-11-17.md`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_member_mask_components_pilot.py`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_mask_components_pilot_2026-11-17_01/`
+- Summary SHA-256: `f83d1919f3c7607296e62e31bd243f786afa9e0e53ef585f60c367c2295bdf7e`
+- Next: split base-mask reasons and image-boundary loss; sample more clusters
+  under a declared selection, with cluster-level uncertainty. No commit/push.
+
+## 2026-11-17 Sixteen-frame member base-mask and boundary pilot
+
+A deterministic 8 i + 8 i2 frame pilot split the existing base mask into
+selected quality-bit union, bright-object bit, nonfinite image and invalid
+variance. It recorded individual header-named bit footprints and exact
+inside/outside counts on the full discrete 50–75 kpc annulus. The four base
+components reconstruct the base mask, the broader components reconstruct the
+original source mask, and all 179 retained profile rows reproduce the saved
+full-sample result to absolute 1e-9. There were 1,636 target/control stamps.
+Saved FITS review headers for all 1,043 target frames share the mask-bit
+positions assumed by this specific measurement. This does not validate those
+fixed assumptions for arbitrary future FITS files.
+
+Medians of eight cluster-level pooled in-image fractions for i target/control
+are 10.63%/10.75% selected-quality-bit coverage and 7.40%/34.02%
+bright-object coverage; i2 target/control are 8.55%/7.59% and 35.28%/24.77%.
+The components overlap. All measured pilot annuli have zero nonfinite image,
+invalid variance and outside-image discrete pixels, but this is conditional
+on the selected stamps and is not a full-sample conclusion. Do not relax
+masks or interpret these values as independent or causal. Science remains
+false; PSF/sky/Poisson/covariance/membership gates remain open.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_base_mask_reasons_pilot_assessment_2026-11-17.md`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_member_base_mask_reasons.py`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_base_mask_reasons_pilot_2026-11-17_01/`
+- Summary SHA-256: `d37955ec4b6698fce76c86b9e5221e6aefa0c2bbf21cb2962499f41f6b23f7e8`
+- Target download-status SHA-256: `6c2d086d2aa960eabc7ee347921ec775c41fb6d60fbbf6655f677adc74b514ad`
+- Next: predeclare larger spatially balanced cluster sample, quantify
+  cluster-level uncertainty and source/base mask overlap, and assess possible
+  selection effects without removing quality flags. No new transfer, commit
+  or push in this local pilot.
+
+## 2026-11-17 Spatially balanced 96-frame member mask audit
+
+A predeclared deterministic plan selected 48 i (33 occupied 5-degree cells)
+and 48 i2 (48 of 76 occupied cells) from the existing 979 eligible frames.
+This is sky-balanced, not a population-proportional sample. The 9,349 local
+member/control annuli reproduce exact base/full mask unions and discrete
+inside/outside geometry; 953 saved retained flux/coverage rows reproduce
+within 1e-9. No new transfer or query occurred.
+
+Equal-cluster mean target/control quality-bit fractions are 13.05%/22.60% in i
+and 9.53%/12.70% in i2. Bright-object fractions are 44.53%/43.76% and
+35.32%/37.40%; neighbor-shape fractions 46.21%/41.27% and 43.21%/39.82%.
+Masks overlap. Intervals in the report use 5,000 sampled-sky-cell bootstrap
+replicates, preserving all clusters per cell; they are descriptive for this
+selected sample. There were zero outside-image and nonfinite-image pixels in
+measured annuli, and 90 invalid-variance pixels in one i control stamp; this
+is not a population upper bound. All 48 selected clusters in each filter had
+target and control stamps. Science status remains false; do not relax masks.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_mask_spatial_assessment_2026-11-17.md`
+- Runners: `prepare_s23b_mask_spatial_sample.py`, `audit_s23b_member_mask_spatial_sample.py`, `summarize_s23b_member_mask_spatial_sample.py`
+- Plan SHA-256: `c32033e8108fa2d09b419e4aec785793882f5145a029ef3efa9f5af1a49d69ed`
+- Audit summary SHA-256: `3e66d7d026f121322a8b4a76722dd0dfe7f09b3a9c7765a954d7a74c2845fe85`
+- Sky-cell summary SHA-256: `b80bfbbe0b0982566be98bada466b32680b4395189fa46d2b49955894e5f5138`
+- Next local step: paired target/control component differences using the same
+  cluster and sky-cell draws, and selection/ICL comparison with explicit
+  sampling caveats. Existing science gates and separate S16A approval remain.
+- All edits are uncommitted; no push occurred.
+
+## 2026-11-17 Paired member-mask differences and exploratory ICL context
+
+Using the predeclared spatial sample, target and rotated-control mask fractions
+were paired at the cluster level (48 i/33 cells; 48 i2/48 cells). A shared
+5-degree-cell bootstrap gives mean control-minus-target quality-bit fractions
+of +9.56 pp [5.43, 14.33] for i and +3.18 pp [0.56, 6.47] for i2. Neighbor
+shape differences are -4.94 pp [-7.38, -2.60] and -3.39 pp [-5.78, -1.15].
+Total unmasked-area intervals include zero in both bands. The intervals are
+marginal and sample-conditional; component footprints overlap, controls share
+images, and no population-weighted or causal interpretation is justified.
+
+Among 24 exploratory rank-correlation intervals against ICL contrast or ICL
+support, one marginal interval excludes zero (i neighbor-shape difference vs
+ICL contrast rho 0.338 [0.009, 0.611]). It is unadjusted for multiplicity or
+covariates and is not a physical detection. The other 23 include zero. Science
+status remains false and the PSF/sky/Poisson/covariance/membership gates remain.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_mask_paired_assessment_2026-11-17.md`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_member_mask_paired.py`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_mask_paired_2026-11-17_01/`
+- Summary SHA-256: `32d0cb99149a5234bc630c369703923f45646ec2fe41f6f0776ac7144597d33c`
+- Next: fixed-sample injected-signal response with PSF and source Poisson,
+  preserving target/control selection. Avoid treating rank correlations as
+  causal; obtain separate approval for any new PSF/data request.
+- No new transfer/query, commit or push occurred.
+
+## 2026-11-17 Existing member injection / spatial mask overlap
+
+The saved unconvolved member-injection sample overlaps 13 i and 21 i2 of the
+96 spatial-mask clusters, 102 unique cluster/amplitude records. At 1.0 nJy
+arcsec^-2, 12/13 i and 20/21 i2 recover with coverage; supported median
+recovered/input is 0.518 and 0.606. One target per filter fails the coverage
+cut. These are small post hoc, prior-supported subsets, not completeness or
+science correction estimates. The pooled per-cluster mask fractions do not
+represent the injected member's particular mask.
+
+Exploratory Spearman intervals for cluster quality/unmasked differences vs
+recovery all include zero; i has only 9 sky cells and i2 20. Intervals are
+broad, unadjusted and noncausal. The original injections omit PSF convolution,
+source Poisson and effective coadd weighting. Science status remains false.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_mask_injection_overlap_assessment_2026-11-17.md`
+- Runner: `analysis/icl_wgl_membership/hsc_debug/audit_s23b_mask_injection_overlap.py`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_mask_injection_overlap_2026-11-17_01/`
+- Summary SHA-256: `79f52d8f8b3a3052925083117635039ba442c648f0e46f29ca5a169dc9d690b6`
+- Position-specific 427-member PSF plan SHA-256 `03f974ad24ead32eabd103ef7a6e0d6b52317aa2647023a5f7402003a2e3b25d`
+  was separately presented for user approval; no new request submitted yet.
+  The user requires explicit approval for downloads.
+- No image read, network transfer, commit or push occurred during this audit.
+
+## 2026-11-17 Approved position-specific member PSFs and injection run
+
+The user approved only the 427 HSC PDR3 HSC-I model PSFs in plan SHA-256
+`03f974ad24ead32eabd103ef7a6e0d6b52317aa2647023a5f7402003a2e3b25d`.
+All 427 files were received (7,819,200 bytes) and locally audited: positions,
+FITS data and normalization passed. The audit SHA-256 is
+`451c2bc41005282f05f4893266de9fc03f9fd0c357c54b485a9353d086c33c81`.
+These are finite PSF cores, not a validation of extended wings.
+
+- PSFs and audit: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_profile_psf_download_2026-11-17_01/`
+- Approved plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_camira_member_profile_psf_plan_2026-11-07_03/`
+- CPU-only injection and matched-baseline comparison run:
+  `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_psf_injection_run_2026-11-17_01/`
+- Running tmux session: `astrafek_member_psf_inject_20261117`; check its real
+  process, `status`, `injection/progress.json` and `run.log` before resuming.
+- Scripts: `analysis/icl_wgl_membership/hsc_debug/run_s23b_member_psf_injection_and_compare.sh`
+  and `analysis/icl_wgl_membership/hsc_debug/compare_s23b_member_psf_injection.py`.
+- Comparison begins automatically only after all injections complete. At the
+  time of writing the run is ongoing; do not infer completion from this entry.
+  PSF wings, source Poisson, effective coadd weights and covariance still need
+  validation; `science_measurement` remains false. New downloads need explicit
+  approval for their exact scope.
+
+## 2026-11-17 Guided workflow shell plan
+
+`ogfkit/workflow_cli.py` maps recipe steps to the same desktop plugin CLI
+manifests, reports unsupported manual/GUI/merge stages, and can run one step or
+an explicit ordered offline plan. The plan runner stores command receipts,
+input/output SHA-256 hashes and logs, connects declared earlier products by
+verified hash, stops on error and refuses to overwrite a run directory.
+`docs/workflow_cli.md` describes the schema and limits. The selected steps do
+not constitute an automatically completed science recipe, and every receipt
+has `science_validated=false`. Current inventory: 11 recipes / 111 displayed
+steps, 25 with a direct CLI mapping; the rest need further adapters or manual
+review. Real small-FITS execution, dependency handling and failure behaviour
+are covered by `plugins/workflow_designer/test_workflow_cli.py`.
+
+## 2026-11-17 ICL profile mask correction and shell adapter
+
+The desktop single-band ICL profile previously did not pass its shared source
+mask to `ds9_icl.py`; masked sources could therefore contaminate a profile.
+The CLI now excludes finite nonzero mask pixels and rejects a mask with the
+wrong shape or nonfinite values. Desktop resolves the mask using the original
+image before selecting its background-subtracted image and passes that mask;
+if absent it reports an unmasked measurement in its status. The manifest's
+headless profile path passes the shared work-directory mask when present.
+
+The shell workflow `icl/profile` uses the same profile command with an explicit
+image, mask and zero-based BCG centre, writing `icl_profile.tsv` with hashes and
+logs. Shape is checked; WCS registration is not. Existing per-pixel-scatter
+errors are not covariance-calibrated and the output is not a validated science
+measurement. Tests cover an injected bright pixel, mismatched mask, required
+centre and the desktop's original-mask/background-subtracted-image selection.
+See `docs/workflow_cli.md`. The research injection run remains independent of
+this GUI/CLI change and must be monitored separately.
+
+### Background-result frame association
+
+The ICL background command opens its result in a new selected frame. An
+in-memory mapping now keeps that output path associated with the input image
+and the actual profile mask, including a refined mask for iterative background
+runs. `CatalogPanelICLProfile` resolves the original mask even when the selected
+frame is the generated background-subtracted image; the headless background
+hook also records the refined mask. Tests exercise both the source-frame and
+background-result-frame selections and the headless refined-mask hook. This
+mapping does not persist across app restarts or independent file reopening;
+users must reconnect the mask in that case. It does not certify WCS alignment,
+background preservation, per-pixel errors, or a science measurement.
+
+### PSF comparison preflight
+
+Before completion, 1,173 completed PSF injection rows were independently paired
+with the pinned unconvolved ledger. Exact member/amplitude keys and baseline
+replay checks passed; 1,116 rows passed the paired support condition. These
+are an intermediate consistency check, not a final result or an unbiased
+recovery fraction. `analysis/icl_wgl_membership/hsc_debug/test_s23b_member_psf_comparison.py`
+checks paired support, changed/missing input rejection, and seeded sky-cell
+bootstrap behavior. Verify the full 427-frame run and comparison status before
+using the final product.
+
+## 2026-11-17 PSF-core injection and paired comparison completed
+
+The 427-frame member-PSF-core injection run and paired baseline comparison
+completed with zero failed frames; 1,281 amplitude rows, 1,219 PSF-supported
+rows. All recorded product hashes were checked. At 1.0 nJy arcsec^-2 amplitude,
+58/62 i and 351/365 i2 pairs are supported in both runs. The paired normalized
+response difference (PSF core minus unconvolved) is -0.00146 [-0.00581, 0.00196]
+for i and +0.00200 [0.00083, 0.00329] for i2 (median and 5-degree-cell 95%
+bootstrap interval). Selection changes, conditional support, different nominal
+input denominators, PSF wings, source Poisson, coadd weights, sky and covariance
+limit interpretation; these exploratory results are not science calibration.
+`science_measurement=false`.
+
+- Report: `analysis/icl_wgl_membership/hsc_debug/s23b_member_psf_core_injection_assessment_2026-11-17.md`
+- Run products: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_psf_injection_run_2026-11-17_01/`
+- Injection summary SHA-256: `7cdd34b10f3e976a1ecd94518c338e286aaa59fd4b42c310c3607da4c27431c4`
+- Comparison summary SHA-256: `3ecb1ad6900ac6255b4143b461782a3978e020e3dbed9e22b9209e534bec19cf`
+
+## 2026-11-17 PSF common-denominator sensitivity
+
+Reanalyzed the pinned 427-member × three-amplitude paired injection ledgers
+without image reads or network. 1,218 pairs pass support in both variants.
+A row-level algebraic decomposition distinguishes recovered-flux change on the
+original nominal-input denominator from the change caused by each variant's
+own nominal denominator. At 1.0 nJy arcsec^-2, nominal input increases by median
+0.923% i and 1.014% i2; common-denominator recovered-response changes are
++0.00784 [0.00547, 0.00976] and +0.00906 [0.00828, 0.01001]. Median denominator
+contributions are -0.00742 and -0.00766. Intervals are marginal 5-degree-cell
+bootstrap intervals conditional on support, and the medians of the separate
+terms do not generally add. The earlier small ratio difference must not be read
+as proof of negligible PSF effects. Extended wings, source Poisson, sky,
+coadd weights, covariance and selection remain unresolved; science remains false.
+
+- Analysis: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_member_psf_common_normalization.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_member_psf_common_normalization_assessment_2026-11-17.md`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_psf_common_normalization_2026-11-17_01/`
+- Summary SHA-256: `cfb3d8fc5422fad350939ec762b5e58533efc731209eebedfa2af784069e27a8`
+
+## 2026-11-17 Exact HSC footprint-field WL influence (running)
+
+Extended `analyze_s23b_fixed52_tract_region_influence.py` with
+`--exact-group field`: each endpoint is assigned via the same official HSC PDR3
+patch polygons as the pinned exact-tract run, then tracts are grouped by their
+parent footprint field. For each field, center/source pairs with either
+endpoint in that field are removed together, and the paired lens/control
+estimators, responsivity and four-control radial support are recalculated.
+Results are influence diagnostics, not an estimate of survey covariance or a
+mass/detection; the retained lens sets may change and science remains false.
+
+All four existing geometry-file hashes were checked against the prior exact
+tract summary; the script uses only existing approved S19A shape rows and HSC
+Y3 n(z). No CAS/network/download/image read. The 570-random-center S16A count
+plan `dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`
+still needs its own explicit user approval and was not submitted.
+
+- CPU-only Lageunha tmux session: `astrafek_wl_exact_field_20261117`;
+  worker PID at launch `3916786`; check the process and session before retrying.
+- Log: `/tmp/astrafek_wl_exact_field_20261117.log`
+- New output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_field_influence_2026-11-17_01/`
+- Runner SHA-256 at launch:
+  `ba41ca56f4b56964bdb3c3754a9391edf217ea2c4d7e0a8d7db958b4510c9a37`.
+- Field grouping and existing S19A estimator tests: 26 passed. At this entry,
+  all 20 approved row batches loaded and the worker remained active; no result
+  should be inferred before the output summary is complete and verified.
+
+### Exact HSC footprint-field WL influence complete
+
+The above local CPU run completed (`complete_exact_field_influence_only`),
+with all three full-sample estimators exactly equal to the pinned prior tract
+run, output hashes verified and no new CAS/data/image access. Official-polygon
+parent fields have 21 AUTUMN, 3 HECTOMAP and 28 SPRING lens centers. Under
+same four-control selection, 31, 49 and 24 sets remain when each field is
+deleted. In 1.5–2.0 proper Mpc, the equal-center full sample is 0.7726;
+omitting AUTUMN gives 1.5422, HECTOMAP 0.6684 and SPRING -0.0087 (all in
+10^13 M_sun Mpc^-2). The two large-field shifts are +99.6% and -101.1% of the
+full result. The 0.1–0.2 Mpc SPRING omission shifts the cross-component by
+-10.6462 in the same units. These are influence diagnostics combining field
+and sample changes, not uncertainty or detection significances; three fields
+cannot support a stable survey covariance. `science_measurement=false`.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_fixed52_exact_field_influence_assessment_2026-11-17.md`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_field_influence_2026-11-17_01/`
+- Summary SHA-256: `422afe04d11cd10f5bb047f02dae35d0990a1890615ab7b5c49e3abb716c7d33`
+
+## 2026-11-17 WL fixed-52 field component decomposition
+
+Using the pinned saved per-lens WL profiles and official footprint polygons,
+assigned the 52 lens centers to the three fields and decomposed each lens-only
+field omission into the mean lens-term shift and minus the mean random-term
+shift. All 42 aggregated shifts match the saved full endpoint-deletion run
+within 0.0625 M_sun/Mpc² (relative to the 10^13 scale), but numerical agreement
+does not establish identical individual support membership. For 1.5–2.0 Mpc,
+omitting AUTUMN gives lens +0.6603, minus-random +0.1093, total +0.7696;
+omitting SPRING gives -0.7269, -0.0544, total -0.7813. The 0.1–0.2 Mpc cross
+SPRING shift is lens -7.0662 and minus-random -3.5800, total -10.6462 (units
+10^13 M_sun/Mpc²). Descriptive decomposition, not a causal attribution or
+uncertainty; three fields and unresolved systematics, science false.
+
+- Runner: `analysis/icl_wgl_membership/hsc_debug/analyze_s23b_wl_field_component_influence.py`
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/wl_s23b_fixed52_field_component_influence_assessment_2026-11-17.md`
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_field_component_influence_2026-11-17_01/`
+- Summary SHA-256: `4fbb668d73ad6866d24f0e438a8d356f198f67cebf874239176b6179b444a026`.
+
+## 2026-11-17 Approved S16A 570 random-center count query started
+
+The user explicitly approved the already reviewed count-only S16A plan
+`dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`.
+The submitter revalidated the plan and began the exact 23 batches for 114
+lens sets / 570 random centers. Only random-center IDs and integer source
+counts are returned; coordinates/radii are submitted as predicates. This is
+not approval to transfer source rows, shape, image, PSF or photo-z products.
+As of this entry, `s16a_wl_random_counts_000` was submitted and CAS reported it
+running; worker PID `3928369` was live. Do not start a duplicate while the
+process is active. Check the saved `count_status.json`, PID, and live execution
+session before resuming; submitted job identifiers and results are checkpointed.
+Credentials were entered only through a hidden prompt and are not recorded
+here. Source-count support is not lensing measurement; science remains false.
+
+- Plan/results directory: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_expansion_random_count_plan_2026-11-11_01/`
+- Submitter: `analysis/icl_wgl_membership/hsc_debug/submit_s23b_s16a_wl_random_counts.py`
+- Live execution session at launch: `49956` (may not survive all client restarts).
+- Separately retained field decomposition summary:
+  `4fbb668d73ad6866d24f0e438a8d356f198f67cebf874239176b6179b444a026`.
+
+## 2026-11-17 ICL automatic mask to shell profile
+
+The shell workflow now supports `icl/mask` through the desktop's shared
+`ds9_mask.py --mode auto` engine, with an explicitly fresh mask and ICL preset
+parameters. It produces `mask.fits` and `mask_bool.fits`; `run-plan` can pass
+its verified boolean artifact to `icl/profile`. An actual synthetic FITS test
+verifies detection, masking, profile execution and linked hashes. Automatic
+masking may remove BCG/diffuse light, does not include manual GUI edits and is
+not the science-validated HSC source-aware mask; receipts carry a warning and
+`science_validated=false`. The sky, WCS registration, BCG mask, PSF and noise
+remain user/research validation requirements. See `docs/workflow_cli.md`.
+
+## 2026-11-17 ICL explicit background shell adapter
+
+The shell workflow `icl/sky` now invokes the desktop `ds9_icl.py` background
+engine with explicit `bkg-method`, a supplied image and finite same-shape mask.
+It records `icl_background.fits`, `icl_bgsub.fits`, and the actual
+`background_mask.fits` (copied input mask for standard fitting; expanded mask
+for iterative fitting). `run-plan` passes both image and mask by hash to the
+following profile step. The adapter fits the supplied image directly, whereas
+the GUI may first interpolate masked pixels; no byte-identical GUI replay is
+claimed. A local background fit can remove diffuse ICL and iterative refinement
+can mask the BCG or whole annulus. In the latter case profile measurement fails
+and the plan stops rather than silently ignoring the mask. `science_validated`
+remains false; validate sky transfer, WCS, PSF and covariance separately.
+
+Real FITS tests exercise standard/iterative output, exact subtraction, explicit
+method, shape mismatch and all-masked failure. `docs/workflow_cli.md` records
+the contract. The HSC S16A approved count query also progressed: first batch
+verified 25/570 centers and batch 2 is running; the live process and checkpoint
+must be inspected before any restart.
+
+## 2026-11-17 Shell workflow pause and verified resume
+
+`ogfkit/workflow_cli.py run-plan` supports `--stop-after STEP` and `--resume`.
+A plan lock prevents concurrent resume; v2 plan results store the exact plan,
+a fingerprint of in-tree workflow source and known shared-core source,
+interpreter, installed distribution versions and selected environment, plus
+receipt hashes. Resume verifies the plan, prior receipts, input hashes and
+output hashes/sizes before skipping completed steps. A changed input, output,
+receipt or recorded execution environment is refused. A failed plan or
+incomplete step directory must be preserved and investigated; no automatic
+rerun/overwrite is attempted. Older v1 result directories cannot be resumed.
+This fingerprint does not cover every external library or scientific choice.
+Actual FITS-based tests cover pause, resume, no rerun, changed input/output,
+changed code fingerprint and concurrent lock. See `docs/workflow_cli.md`.
+
+Verified pause/resume end to end using generated FITS images for both the
+`icl/mask` → profile chain and the `icl/sky` → profile chain, including standard
+and iterative background variants: the prior receipt is not rewritten and the
+recorded image/mask hashes are checked. The dedicated workflow CLI suite passed
+19 tests; the prior combined workflow/ICL regression passed 46 tests. These
+checks validate operation and history integrity, not scientific sky or mask
+choices. The separately approved S16A count query remains active; inspect its
+live process and checkpoint for current progress rather than restarting it.
+
+## 2026-11-17 Workflow Python launcher and desktop access
+
+`python3 -m ogfkit.workflow_cli export-python PLAN --output pipeline.py`
+validates and embeds an explicit selected plan in a Python launcher. The launcher
+imports OGFinder from its recorded path or `--ogfinder-root`, and supports the
+same work directory, `--stop-after` and verified `--resume` options. It does not
+automatically execute missing/manual steps or validate science. A separate
+working-directory test exported the script, paused after a real FITS audit and
+resumed to the second audit. The desktop science-workflow panel now has
+`분석 세션 Python 저장`, a shortcut to the existing **entire recorded session**
+exporter; it blocks while a job runs and explains manual steps are not
+automatically replayed. See `docs/workflow_cli.md` and the existing
+`docs/session_python_script.md`.
+
+## 2026-11-17 Related web-local Python replay
+
+The independently identified `ds10-web` project now offers browser-local
+**로컬 분석 Python 재실행 ZIP**. It includes the checksummed browser checkpoint,
+exact matching builtin core/manifest, a Python launcher and instructions. The
+native launcher replays each successful builtin job from its own saved input
+snapshot in a fresh directory; failed jobs are listed as skipped, and output
+hashes are compared without claiming numerical or scientific equivalence.
+Personal imported tools and manual review are excluded; it is not a new-data
+batch pipeline. The actual browser profile import+stack → ZIP → native Python
+replay passed, with all numeric TSV cells matching to 1e-12 but hashes differing
+because of formatting and floating-point details. Browser source and docs are in
+`../ds10-web/docs/browser_local_python_replay.md`. Existing OGFinder plan and
+session Python launchers remain separate.
+
+The preceding browser replay limitation is partly superseded: the browser kit's
+launcher now has `--pipeline --input-map`, which can replace explicitly named
+saved inputs and route a verified recorded catalog dependency from one builtin
+job to the next. Real browser ICL profile import → stack was tested with new
+input (the expected +10 shift was reproduced). Other input snapshots remain
+unchanged unless individually overridden. Personal tools, manual steps and
+unsupported dependencies are still not inferred, and the result remains
+unvalidated. Native Python/NumPy/SciPy versions and input lineage are recorded.
+Details: `../ds10-web/docs/browser_local_python_replay.md`.
+
+## 2026-11-17 Verification boundary requested by the user
+
+Continue the already approved verification, finish it, then await approval for
+the next stage. Do not automatically launch further analysis, source-row
+exports or downloads. The existing S16A random-center count-only plan remains
+the only active remote scope: 570 centers, 114 lenses, five centers per lens,
+23 sequential batches, plan SHA-256
+`dfd2fc75650fc08ce4acfe1eef6d0ed476a7bdf8c84b5d083b607f4009678de0`.
+The interrupted submitter was resumed using the recorded CAS job ID rather
+than resubmitting the pending batch. Inspect `results/count_status.json` in
+the established plan directory for the live state; final completion and audit
+will be recorded below.
+
+Offline verification confirmed the pinned hashes of six existing PSF/injection/
+WL summaries and all 438 recorded output files, including 427 PSF cores.
+No science gate was promoted. The desktop workflow/ICL regression previously
+passed 48 tests and its code has not changed during this final review. The
+separate web replay review found and corrected a zero-exit/missing-required-
+output failure case; its focused runtime checks passed 10 tests and the real
+browser ZIP/native replay E2E passed once after the correction. See the web
+project's own `HANDOVER.md` for the implementation and validation record.
+
+## 2026-11-17 Verification completed; await next-stage approval
+
+The approved S16A random-center count-only submitter exited zero: **570/570
+centers, 23/23 batches**, with exactly five planned centers per 114 lenses.
+The independent offline audit verified the approved plan and SQL hashes,
+CSV IDs/schema/integers/sizes/hashes, exact combined TSV bytes and final
+checkpoint/summary arithmetic. There are **525 positive-count centers and 45
+zero-count centers**. Of 114 lenses, 96 have positive raw counts at all five
+random centers, 8 at four, 1 at three, 5 at two and 4 at none. The 2,442,267
+summed cone counts are not unique sources or retained scientific sources.
+
+Audit code and JSON are preserved under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_random_count_verification_2026-11-17_01/`.
+Audit JSON SHA-256:
+`8394aeeda9b1d4f885b2a884bd7be14fde9278ed2dcf750aebe8d601d937578f`.
+Full assessment and result hashes:
+`analysis/icl_wgl_membership/hsc_debug/wl_s23b_s16a_random_count_verification_assessment_2026-11-17.md`.
+All science gates remain false; there was no new source-row/image/PSF transfer.
+
+**Await user approval before the next stage.** Proposed next work is an offline
+target/random raw-count and footprint/support diagnosis, including the 18
+incomplete five-random groups and the S16A calibration path, followed by an
+unsubmitted source-row plan only if justified. This next work has not started.
+No new CAS query, download or selection change is authorized by the completed
+verification. Current code and handover edits remain uncommitted.
+
+## 2026-11-17 Approved offline S16A support/calibration review completed
+
+The user approved the proposed **existing-data-only** next stage. It is now
+complete; no new CAS request, source-row transfer, calibration-data download,
+image or PSF receipt occurred. Public official documentation was read for the
+calibration review. The original 114-lens/570-random selection was preserved.
+
+`audit_s23b_s16a_wl_random_support.py` joins the verified count results to the
+original target/center ledgers, checks identities, all five slots, angular and
+proper separations, and applies the existing pinned PDR3 patch polygons only
+as parent-field labels. All 684 lens/random centers are contained and every
+random remains in its lens's parent PDR3 field. This is not S16A usable area.
+There are 96 lenses with five positive raw-count controls, 86 with all five
+counts >=1000, and 67 with all five raw count ratios in [0.5, 2]. The last two
+are diagnostic sensitivities, not validated cuts or a new selection. For i/i2
+the three numbers are 84/75/60 and 12/11/7, respectively. The 18 incomplete
+groups and the original two pre-query exclusions were retained separately.
+Per-center random/target ratio median is 0.9267 [Q16=0.4018,Q84=1.1730]; the
+median of per-lens fixed-five mean ratios is 0.8974 [0.5609,1.1102]. Empty
+centers contribute their zero raw count to this descriptive count mean; no
+zero shear is assigned. No boost correction or significance is inferred.
+
+Official S16A documentation provides a Y1 factor/estimator and photo-z
+calibration path. The existing local `s19a_shape_stack.py` uses S19A/Y3 cuts,
+selection-bias coefficients and tomographic n(z), and is not validated for
+S16A. S16A source values/units, selection-matched redshifts, source masks,
+radial/weighted support, covariance and release combination remain open.
+Science remains false. The review read the HSC-linked Y1 calibration source
+without importing or executing it; no calibration dataset was received.
+
+The prepared **unsubmitted diagnostic** pilot has 11 lenses and all 55 paired
+random centers in its ledger. It selects up to two count-rank positions per
+i/i2 × five-positive/partial-positive/all-zero stratum, giving 11 lenses across
+AUTUMN, SPRING and HECTOMAP. The 23 previously zero-count centers are recorded
+but omitted from SQL. Proposed scope: **43 positive centers, 5 sequential
+batches, 12 columns, 169,535 expected raw source-pair rows**, estimated
+27,125,600–61,032,600 bytes (25.9–58.2 MiB), **128 MiB hard received-byte cap**.
+It includes IDs, source coordinates, e1/e2 and sigma_e/rms_e/weight/m/c1/c2;
+no photo-z, PDFs, images, PSFs or extra selection/PSF fields. This pilot only
+checks basic catalog/coordinate/calibration and radial-support behavior; it
+cannot validate a complete Y1 selection or a lensing measurement. New SQL has
+not been tested on the server. A later submitter must stop on errors and
+enforce the exact plan hash and byte cap.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_wl_random_support_assessment_2026-11-17.md`.
+- Audit output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_wl_random_support_audit_2026-11-17_01/`.
+- Audit summary SHA-256: `56c463d81b7c099dec6380aa1feb84efacd2625d6fbf16e8c189eec7719dea79`.
+- Plan: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_qa_pilot_plan_2026-11-17_01/shape_qa_plan.json`.
+- Plan SHA-256: `7af70c2be81f83e61bc6f74caf98b66a6309ae1b0caed0b9b7d1a32f42bd3f10`.
+- Independent scope review, executed-source snapshots, runtime/command record and calibration readiness: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s16a_wl_random_support_review_2026-11-17_01/`.
+- Validation: 13 support tests + 7 pilot tests passed; independent plan/SQL/input-hash, coordinate, column and row-budget audit passed. PNG/PDF figure inspected.
+
+**Await separate user approval for this exact new pilot transfer.** The latest
+approval covered offline diagnosis and plan preparation only. No new query or
+measurement should start automatically. Changes remain uncommitted.
+
+## 2026-11-17 S16A diagnostic pilot approved and receiving
+
+The user subsequently approved the described pilot transfer: original scope
+hash `7af70c2be81f83e61bc6f74caf98b66a6309ae1b0caed0b9b7d1a32f42bd3f10`,
+43 positive centers, 12 output fields, 169,535 expected pairs, five serial
+batches and a cumulative 128 MiB CSV cap. No science measurement is authorized.
+`submit_s23b_s16a_shape_qa_pilot.py` reuses the established CAS client, checks
+the plan/SQL/input hashes, refuses ambiguous resubmission, validates each CSV's
+exact columns/counts/IDs/degree-valued cone coordinates and preserves partial
+files. Budget is reserved before reads, so interruption cannot undercount it.
+No credential is stored. Its 20 focused tests passed.
+
+The first original-plan request received HTTP 406: the overview-documentation
+name `ishape_hsm_regauss_derived_weight` is absent. No CAS job was created and
+zero CSV bytes were received. That original plan/result checkpoint is retained.
+The public schema-browser JSONs for all three S16A tables confirm the actual
+same weight field is `ishape_hsm_regauss_derived_shape_weight`, and confirm
+all other requested fields and degree units. Public schema documentation was
+read; no additional CAS metadata query or astronomical data scope was used.
+
+`prepare_s23b_s16a_shape_qa_schema_fix.py` preserves the original and makes
+exactly that identifier substitution. Centers, joins, predicates, output
+aliases, row counts and byte cap are unchanged. All SQLs are compared to the
+original after reversing the substitution. The correction was announced to
+the user and proceeds under the already approved semantic data scope; it is
+not recorded as a new user approval of a different hash.
+
+- Executed corrected plan SHA-256: `1e3ac9451e519761e0f773915de79728d5443808efedc74155963a79c3ae4b30`.
+- Corrected plan/public schema snapshots: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_qa_pilot_plan_2026-11-17_02/`.
+- Live checkpoint: the above directory's `results/shape_qa_status.json`.
+- Inspect the existing process and checkpoint before any restart; no duplicate submitter.
+
+The corrected request was accepted as a CAS job and the first batch is running.
+The offline intake code `audit_s23b_s16a_shape_qa_pilot.py` is ready, with seven
+tested diagnostics for radial accounting, numeric-only support, catalog-weight
+identity and exact large object IDs/source reuse. It must wait for verified
+download completion. It retains prior count-only zeros explicitly and computes
+no shear, responsivity, mass, boost or covariance. Final receipt/QA will be
+recorded below. Do not expand beyond this pilot automatically.
+
+## 2026-11-17 S16A pilot received; intake verified; next-stage approval wait
+
+All five corrected-plan batches completed normally. Exactly **169,535 source-
+pair rows** were received in **29,274,595 bytes (27.9 MiB)**, below the 128 MiB
+cap. Confirmed bytes, charged bytes and saved CSV sizes agree. Every positive
+center matches its prior raw count; 23 known-zero centers were not requeried.
+All ten numeric columns are finite and all shape weights positive. Exact columns,
+center IDs, unique center/object pairs, degree-valued cone membership and file
+hashes passed. Credentials were not saved; this pilot received no images, PSFs,
+photo-z or PDFs. No further source scope was added after the one identifier fix.
+
+The catalog weight identity holds in all rows: maximum relative residual
+2.53e-7 versus a diagnostic tolerance 5e-6. This is arithmetic consistency, not
+a physical shear-calibration error bound. There are **115,993 unique objects**;
+34,482 occur in multiple random centers (up to five). Reuse in this pilot is
+within random centers of the same lens group; cross-lens-group and lens/random
+sharing are zero, and repeated source properties are consistent. The random
+centers cannot be assumed independent without handling this reuse.
+
+Radial common raw/numeric-only support is 2 groups at 0–0.1 proper-Mpc,
+3 at 0.1–0.2, 0.2–0.4 and 0.4–0.7, and 4 in each 0.7–1, 1–1.5, 1.5–2 and
+2–3 bin. The same three groups support every 0.1–3 bin: S23B_3012, S23B_3620,
+S23B_9131. Including the central bin leaves two. These are weak count-support
+diagnostics in a deliberately stratified 11-lens pilot, not a population
+retention fraction or a newly approved scientific selection.
+
+Finite numbers do not ensure valid scientific selection. A separate post hoc
+tail QC found **m<=-1 in 2 pairs / 2 unique objects** and **derived sigma_e>0.4
+in 547 pairs / 427 objects**; distortion norm>=2 occurred in none. No row was
+deleted or repaired. The m flag is not asserted to invalidate an ensemble m
+correction, and derived sigma_e is not the raw HSM sigma used in Y1 selection
+recipes. Full Y1 selection, selection bias, background-redshift calibration,
+usable area and covariance remain open. No shear, mass, boost or correlation
+measurement was performed; science remains false.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s23b_s16a_shape_qa_pilot_intake_assessment_2026-11-17.md`.
+- Original CSVs: corrected `_02` plan directory's `results/`.
+- QA products: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_qa_pilot_intake_2026-11-17_01/`.
+- Evidence, actual receiver snapshot, current code snapshots, runtime, independent CSV/radial reconciliation and tail records: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_shape_qa_pilot_evidence_2026-11-17_01/`.
+- Download summary SHA-256: `373b1bca841d733bd4269421dd00fb2b6afb89295cc2f39dbab3d8424bd45c6c`.
+- QA summary SHA-256: `fd04520cc46254c09c2dc3e011e1e376f8f0169d33412057edc635db119fa40d`.
+- Independent verification SHA-256: `f369a9edacad0e6b48f011c97efd3ebe62c54443d72477cdacf2591bfcf0f3e0`.
+- Validation: 20 receiver tests + 7 intake tests + 1 tail test passed; actual transfer/intake and independent reconciliation passed; figure inspected.
+
+The receiver now defaults to the corrected `_02` plan; explicitly submitting
+the rejected original plan is refused. Repeating the completed default request
+was verified to use no credentials or network. The exact receiver version used
+for download is preserved separately from this later default-path change.
+
+**Await approval before the next stage.** Proposed next work is a local Y1
+selection/calibration input contract and a minimal additional source-quality/
+photo-z transfer plan, prepared but not submitted. Do not automatically enlarge
+the source sample, add queries, combine S16A/S19A, or promote science. Current
+changes are uncommitted.
+
+## 2026-11-18 S16A/Y1 local input contract completed; supplement approval wait
+
+The user's subsequent approval covered the proposed local Y1 input-contract
+and minimum-transfer planning stage. That work is now complete. **No new CAS
+query or astronomical download was submitted.** Public schema documentation
+was read and saved separately; no CAS schema probes or calibration data files
+were fetched.
+
+`s16a_y1_source_contract.py` reconstructs diagnostic Y1 Table-4 object cuts,
+keeping missing/invalid inputs unknown, raw HSM sigma separate from calibrated
+sigma_e, and requiring two of four grzy detections rather than all four. It
+does not clip m<=-1 or calibrated sigma_e>0.4 tails. Exact-bigint supplement
+joins retain original source-pair membership and refuse duplicates, extras,
+missing IDs or property replacement. Of the existing pilot fields only e1/e2
+directly meet this diagnostic's inputs; 28 selection inputs are absent, so
+all 169,535 pairs remain unknown for the full object check, not failed science
+sources. No source-retention fraction or lensing measurement is claimed.
+
+The proposed supplement uses **only 115,993 unique objects already received**,
+31 columns (object_id, 28 raw quality/photometry inputs, two Ephor_AB point-z/
+risk values), 24 sequential batches of up to 5,000 IDs. Expected rows 115,993,
+estimated CSV 14,895,104–59,436,416 bytes (14.2–56.7 MiB), cumulative cap
+134,217,728 bytes (128 MiB), including retries/interruption. Exact ID VALUES
+and LEFT JOINs preserve NULLs; no new centers/objects, repeated source
+positions/shapes/weights, images/PSFs/PSF moments, full PDFs, COSMOS files or
+S19A/Y3 data. Original 169,535 center/object pairs and all 66 centers remain.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s16a_y1_input_contract_and_supplement_plan_2026-11-18.md`.
+- Plan, SQLs, ID/pair ledgers, contract/readiness and public schema checks: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_quality_supplement_plan_2026-11-18_01/`.
+- Plan SHA-256: `44b9d4df4904dac295f08a426abb20aa536ae85fc2c91239ac599f39deb412a1`.
+- Independent audit, forbidden-network/credential check, test/runtime record and code snapshots: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_quality_supplement_review_2026-11-18_01/`.
+- Evidence `verification.json` SHA-256: `fdc61521aeed3dc030213f1f9f027f29e8e52c7f5364a34d60af0e041d46048c`.
+- Validator: `prepare_s23b_s16a_quality_supplement.py --verify`, local-only; no submit option.
+- Verification: 29 new + 48 existing focused tests = 77 passed. Independent original CSV/SQL/ID/pair/hash/schema audit passed. Actual local validation attempted no network/credentials; output overwrite and changed SQL were refused.
+
+SQL compatibility is not established by local checks. Following a later exact
+scope approval, implement/test a serial resumable cap-enforcing receiver and
+use the first approved batch to check compatibility; stop on errors/ambiguous
+submission, no automatic expansion. Receipt must have exact 31 columns and
+one row per requested ID. NULLs stay visible. Then run identical object-cut
+diagnostics, tail and radial-support checks, retaining known-zero controls.
+Only point-z/risk completeness is planned, no uncalibrated background cut.
+
+**Wait for approval of this exact supplement before submission/receipt.**
+Ephor_AB was chosen as a possible route to S16A-matched S17A COSMOS calibration,
+not a verified calibration. Same-cut source-z/dilution, usable S16A area/Sirius
+mask, Y1 selection-bias/PSF and redshift responsivity, radial support, source
+reuse and spatial covariance remain open. Do not import Y3 coefficients/n(z),
+combine releases, enlarge the sample or promote science. Changes are uncommitted;
+no commit/push was requested in this stage. Preserve all pre-existing work.
+
+## 2026-11-18 S16A quality supplement approved; serial receipt running
+
+The user explicitly approved the exact plan above, SHA-256
+`44b9d4df4904dac295f08a426abb20aa536ae85fc2c91239ac599f39deb412a1`,
+including the 31-column/115,993-object receipt and subsequent local diagnostics.
+The new `submit_s23b_s16a_quality_supplement.py` reuses the established CAS
+client and conservative 128 MiB cumulative download implementation. It pins
+the exact plan and receiver dependencies, serializes with a file lock, retains
+partial bytes and existing jobs, refuses ambiguous submissions, and validates
+all 31 columns and exact requested IDs without discarding NULLs. Credentials
+are entered through hidden input and not saved. Thirty-three focused new and
+existing receiver tests passed before submission.
+
+The first approved batch succeeded without a SQL/schema correction: 5,000
+objects, 31 columns, 1,953,938 CSV bytes, no missing/duplicate/extra IDs. At this
+checkpoint six batches/30,000 objects are complete, 11,742,564 confirmed and
+charged bytes; the seventh is running. This is a progress snapshot, not the
+final receipt. The live state is authoritative:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_quality_supplement_plan_2026-11-18_01/results/quality_supplement_status.json`.
+The active root exec session is 25634. Inspect process/state before restarting;
+never start another receiver concurrently. The resume command is
+`/home/kjhan/miniconda3/bin/python3 analysis/icl_wgl_membership/hsc_debug/submit_s23b_s16a_quality_supplement.py --submit --approved-plan-sha256 44b9d4df4904dac295f08a426abb20aa536ae85fc2c91239ac599f39deb412a1`.
+
+`audit_s23b_s16a_quality_supplement.py` is prepared for completed local files
+only. Its five tests plus 29 contract cases passed. It will report unique/pair
+object-cut attrition, nonexclusive failure reasons, existing tails, point-z/
+risk completeness and radial support with the original five randoms and known
+zero controls. No source-z cut/calibration, shear/mass/boost or covariance is
+authorized. Append final counts/QA below after verified completion. No new
+sample expansion or commit/push is authorized by this approval.
+
+## 2026-11-18 S16A quality supplement COMPLETE; verified local diagnosis
+
+The approved receipt and local QA completed normally. All 24 SQL batches
+succeeded unchanged on CAS, returning exactly 115,993 unique IDs and 31
+columns in **45,335,621 CSV bytes (43.2 MiB)**. Saved bytes, confirmed bytes
+and charged budget all equal that number, below 134,217,728. No failed or
+repeated download, scope change or additional astronomical request occurred.
+All columns/IDs/counts/hashes passed. Hidden credentials were not saved. A
+completed repeat of the same submit command was verified to use no network
+or credentials under forbidden-access hooks. Receiver and guarded QA sessions
+25634/95819 have exited successfully; no receiver restart is needed.
+
+The original 169,535 source–center pairs and 66-center ledger, including 23
+known-zero controls, remain unchanged. Local diagnostic Table-4 object checks
+give **115,978 pass / 4 fail / 11 unknown unique objects**; pair counts are
+169,518 / 4 / 13. Only the two-of-four grzy S/N condition differs; all other
+object cuts pass. No point-z/risk cut, missing-value fill or arbitrary m/derived
+sigma clipping was applied. Prior tails total 429 objects; 428 pass, including
+one m<=-1 object. Raw HSM sigma and calibrated sigma_e remain distinct; basic
+object conditions do not establish the calibration's domain of validity.
+
+Ephor_AB best/risk are finite for **109,321/115,993 (94.2479%)** and missing
+for 6,672 unique sources (8,483 pairs). Among Table-4 pass sources, 109,307 have
+finite point inputs and 6,671 do not. Across the 43 nonzero centers, completeness
+ranges **47.79–100%**. The lowest is random RC-cbf934142d614f978176 paired to
+S23B_3620: 2,633/5,509 finite. ICL-image strata i lens/random: 99.35/99.68%;
+i2 lens/random: 87.95/88.25%. These are diagnostic ICL filter labels, not a
+demonstrated physical cause. Global completeness cannot replace spatial
+selection/coverage validation, and finite point-z is not calibrated n(z)/beta.
+
+Radial raw versus object-selected common support is unchanged: 2,3,3,3,4,4,4,4
+groups in the existing eight annuli. Same-group intersection at 0.1–3 Mpc is
+S23B_3012/S23B_3620/S23B_9131; 0–3 leaves 3012/9131, .7–3 adds S23B_9828.
+This stratified 11-lens pilot is not a representative retention fraction.
+Selected sources still include 34,480 reused objects, 53,540 extra pairs and
+up to five centers/object; random overlap cannot be ignored in covariance.
+
+- Assessment: `analysis/icl_wgl_membership/hsc_debug/s16a_quality_supplement_receipt_assessment_2026-11-18.md`.
+- CSV/checkpoint/receipt: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_s16a_quality_supplement_plan_2026-11-18_01/results/`.
+- Receipt SHA-256: `bb9ee55540a3f7acdafff1f6778f190ea3b9807a071df9c821d5ff74ac92c27d`.
+- Object/tail/radial/point-z tables and inspected PNG/PDF: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_quality_supplement_qa_2026-11-18_01/`.
+- QA summary SHA-256: `d7e474ea88260e6ae5bc1f70c086ae0b4b7753a9d0224ce5e746cca540210474`.
+- Approval record, actual-code snapshots, runtime/tests, independent reconciliation and spatial photo-z diagnostics: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_quality_supplement_evidence_2026-11-18_01/`.
+- Final evidence `verification.json` SHA-256: `c8447e0e6f7deec8af0782a81a8f2db20e89774edd8001e7475517279cf1ea91`.
+- Validation: 95 tests passed, full receipt/QA passed, independent stdlib CSV/ID/pair/criteria/tail/point-z and all 528 radial-profile reconciliation passed. Independent distances used Simpson integration rather than the QA's Astropy implementation. Figure inspected.
+
+**Stage complete; wait for next-stage approval.** Proposed local follow-up is
+spatial point-z availability, S16A usable-area/Sirius mask and Y1 calibration
+input/provenance review using existing files and official documents. New data
+would need an exact separate plan/approval. No science measurement is approved
+or performed: selection-bias/PSF, dilution/efficiency/redshift responsivity,
+usable area and spatial covariance remain open. Do not add queries, expand
+the sample, combine S16A/S19A, apply Y3 n(z)/coefficients or promote science
+automatically. Preserve old data/work; changes remain uncommitted/unpushed.
+
+## 2026-11-18 Annular photo-z coverage, ICL replay and joint field influence
+
+The active goal resumed. Three local checks ran on the existing HSC data and
+saved distinct products. They retain `science_measurement=false`.
+
+`audit_s16a_photoz_radial_support.py` uses the verified S16A receipt and saved
+Table 4 selection. Both Ephor_AB values are finite for 161,036 of 169,518
+selected pairs and 109,307 of 115,978 selected unique objects. Shape-weight
+coverage averages 95.11% for lenses and 94.99% for randoms. Two S23B_3620
+random annuli have selected sources but no finite photo-z inputs. In particular,
+`RC-cbf934142d614f978176` loses all 65 selected pairs at 0.2–0.4 proper Mpc.
+Common support across every 0.1–3 Mpc bin falls from three groups to two
+(S23B_3012 and S23B_9131). This is an input-availability check before any
+background cut. Independent chord-angle/Simpson-distance calculations matched
+all 528 annuli and their shape-weight sums. The [input review](analysis/icl_wgl_membership/hsc_debug/s16a_photoz_radial_support_and_calibration_2026-11-18.md)
+includes the plot, Y1 calibration requirements and archive metadata scope.
+
+`build_s23b_icl_wl_evidence_report.py --current-icl` verifies the lineage and
+hashes of 15 saved products and builds the current ICL report. For the 1,022
+paired stacks, the 50–300 minus 300–800 proper-kpc contrast is 6.56 [3.84, 8.67]
+in i and 7.61 [5.72, 8.88] in i2 nJy/arcsec² (95% spatial-block intervals).
+The 979-frame member audit reproduces saved fluxes. All 66 supported outer-light
+slope intervals and all 24 supported paired-change intervals include zero.
+The 427-frame compact PSF experiment gives +0.00784/+0.00906 i/i2 changes in
+recovery at common normalization for 1 nJy/arcsec². Extended PSF wings, sky
+transfer, source Poisson propagation and long-range covariance remain open.
+Repeat current summary and both historical-mode outputs matched byte for byte.
+The replay rejected an altered input and an existing output directory.
+
+`audit_s23b_fixed52_relation_field_omission.py` refits the existing 116 relation
+models when lenses from each of three official HSC fields are omitted, using
+each retained lens's original profile and matched control contributions.
+Of 348 rows, 232 retained the original minimum of 12 lenses and produced an
+estimate. Thirty-five change sign. The largest shift is the 0.4–0.7 Mpc
+tangential WL–satellite relation in i with at least 10% ICL support. Omitting
+the single HECTOMAP lens S23B_9925 changes partial r from +0.102 to +0.828
+(18 to 17 lenses). Independent QR reproduced all 232 fits to 2.94e−15.
+This quantifies lens omission sensitivity. Endpoint deletion, survey
+covariance and detection significance are separate calculations.
+
+Each command below runs from `/home/kjhan/BACKUP/Astrafek/OGFinder` with the
+existing research Python at `/home/kjhan/miniconda3/bin/python3`. Replay requires
+a fresh output directory. The original runs are saved under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`.
+
+| Command arguments | Output directory | `summary.json` SHA-256 |
+|---|---|---|
+| `analysis/icl_wgl_membership/hsc_debug/audit_s16a_photoz_radial_support.py --output NEW_DIR` | `s16a_photoz_radial_support_2026-11-18_01` | `89e0f8728fa8d1097ac77d107e0401f05892a20c2bb07dd7eeec7a7366c88a75` |
+| `analysis/icl_wgl_membership/hsc_debug/build_s23b_icl_wl_evidence_report.py --current-icl --output-dir NEW_DIR` | `icl_s23b_current_evidence_2026-11-18_01` | `4bbeebf206ae641f65c34038e36a39695617e9c1188614a4a9bed05b91aa1737` |
+| `analysis/icl_wgl_membership/hsc_debug/audit_s23b_fixed52_relation_field_omission.py --output NEW_DIR` | `s23b_icl_satellite_wl_fixed52_lens_field_omission_2026-11-18_01` | `45a9e50cfb32d76294f4cb5bb9134b2835b14f2d194bd8b5b87bbce0fd1ba464` |
+
+Authenticated HEAD returned 200 for three baseline Ephor_AB FITS tables.
+Files `pdf-s17a_wide-9812.cat.fits`, `pdf-s17a_wide-9813.cat.fits`, and
+`Afterburner_reweighted_COSMOS_photoz_FDFC.fits` total exactly 69,298,560 bytes
+(66.09 MiB). FITS body bytes received were zero. Exact URLs, sizes and ETags
+are pinned in `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_ephor_ab_cosmos_plan_2026-11-18_01/plan.json`,
+plan SHA-256 `73a28a83e9a2579b290ab68347702e0f2d28adfa9de162bf37e97df360727975`.
+Wait for explicit user approval before receiving these three FITS payloads.
+Exact Y1 accepted-pixel and Sirius geometry, calibrated redshift efficiency,
+and full-sample WL/joint validation remain open.
+
+## 2026-11-18 ICL control radial residual and paired uncertainty
+
+`audit_s23b_icl_control_radial_residual.py` separates the target and matched
+control contributions to the existing 50–300 minus 300–800 proper-kpc
+contrast using the same valid pixels in each radial bin. All 1,022 pairs are
+listed, with supported contrasts for 232 `i` and 756 `i2` pairs. The pairwise
+target-minus-control identity and aggregate 6.561/7.611 nJy arcsec⁻² were
+reproduced. The 5-degree, zero-phase primary layout gives control means and
+95% block intervals of 0.719 [−0.470, 2.253] (`i`) and 0.124 [−0.487, 1.152]
+(`i2`) nJy arcsec⁻². All six layouts per filter include zero. These intervals
+bound the mean contrast of the saved controls under the tested layouts. Sky
+transfer, residual sources, masks and resampling can all contribute.
+
+The same 20,000 block draws propagate target-control covariance. At the
+primary layout, paired standard deviations exceed the independence shortcut
+by 13.5% (`i`) and 12.3% (`i2`). Across all layouts the ratios range from
+1.112–1.192 and 0.996–1.201 respectively. A separate check verified the saved
+tables' hashes, pair counts, aggregate means and variance identity in all 12
+layouts. `science_measurement=false`.
+
+- Run from OGFinder with `/home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_control_radial_residual.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_control_radial_residual_2026-11-18_01/`.
+- Summary SHA-256: `24bdf0f8e4cac0e35fc592193a5f7c901fd26d8c4059c88ff2998a759288fd5f`.
+
+## 2026-11-18 S23B evidence replay in the ICL workflow
+
+The optional `icl/s23b_evidence` stage is available in the desktop workflow
+and the shell. Both use the `icl.s23b-evidence` manifest action and run
+`build_s23b_icl_wl_evidence_report.py --current-icl` on saved research files.
+Set the ICL parameter `s23b-evidence-root` to relocate the pinned data tree.
+The generic PSF/injection/covariance review remains separate. The synchronized
+web catalogue displays the desktop/shell stage with no web execution action.
+
+Real shell execution completed successfully. Its summary exactly matches the
+earlier standalone report. The desktop Tcl dispatch was checked with the job
+launcher stubbed and produced identical argv and both declared output paths.
+The actual shell receipt and report are under
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/icl_s23b_workflow_evidence_2026-11-18_01/`.
+The replay and receipt retain their exploratory science flags.
+
+From OGFinder, replay into a fresh directory with
+`/home/kjhan/miniconda3/bin/python3 -B -m ogfkit.workflow_cli run-step icl s23b_evidence --work-dir NEW_DIR`.
+
+## 2026-11-18 Target and control contributions to the ICL–satellite slope
+
+`audit_s23b_icl_satellite_control_slope.py` joins the pinned CAMIRA relation
+table to the saved target/control contrasts by exact target, control and
+filter. Its 988 rows match every supported contrast in the 1,022-pair ledger.
+The original adjustment model is applied to both outcomes with shared block
+draws so their difference preserves the paired covariance. All 12 positive-
+support fits match the saved difference slopes, sample sizes and block counts.
+Twenty-four total fits cover six spatial layouts per filter at each of two
+support floors. Intervals are percentile intervals from 5,000 block draws.
+
+With at least 10% common support in both annuli, the primary 5-degree layout
+gives the following slopes in nJy arcsec⁻² dex⁻¹.
+
+| Filter | Pairs | Target | Control | Target minus control (95% interval) |
+|---|---:|---:|---:|---:|
+| i | 103 | 7.54 | 3.71 | 3.84 [−2.34, 9.69] |
+| i2 | 525 | 4.51 | 1.18 | 3.33 [−0.95, 7.19] |
+
+All six layouts per filter include zero for the paired slope at 10% support.
+The control outcome uses the matched target's member-density predictor.
+Its point estimate can capture sky, masks, selection or other coupled effects.
+This decomposition leaves `science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_satellite_control_slope.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_control_slope_2026-11-18_01/`.
+- Summary SHA-256: `891c8a5e15f5c65efe5cb9a192fac29c850b202e874d2954433085a01fd6888a`.
+
+## 2026-11-18 S16A Y1 resolution selection edge diagnostic
+
+`audit_s16a_y1_resolution_edge.py` measures the one-sided finite-bin density
+above the Y1 resolution cut R2=0.3 using catalog shape weights. The verified
+quality supplement supplies R2. The pair and selection ledgers retain the
+original 528 center-annulus counts. The output has 108 rows by lens/random,
+Table 4/finite photo-z, annulus and three edge widths. The eight annuli sum
+to each full-aperture weight and count, and all output hashes match.
+
+For widths 0.01/0.02/0.05 the full-aperture densities are 0.962/0.993/1.111
+for lenses and 1.037/1.127/1.190 for randoms. Requiring available Ephor_AB
+best and risk changes them to 0.969/0.998/1.123 and 1.034/1.122/1.187.
+Finite-bin width sensitivity is larger than the aggregate availability-only
+change. The pilot still needs the calibrated background cut and final pair
+weights before the resolution-selection correction can be estimated and
+applied. See [Mandelbaum et al. §5.6](https://arxiv.org/html/1710.00885).
+`science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_y1_resolution_edge.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_resolution_edge_2026-11-18_01/`.
+- Summary SHA-256: `df68fa42249dc21c47a5180cff642c90cb2b5dec10469602e1c153584c4dae3a`.
+
+## 2026-11-18 Point-photo-z response kernel
+
+`ogfkit/wl_photoz.py` computes the fixed-lens source-redshift response
+using proper inverse critical surface density and `shape × SOM × beta_est²`
+calibration weights. The numerator replaces one `beta_est` with `beta_ref`.
+Estimated foreground pairs have zero estimator weight. Reference foregrounds
+that appear behind the lens according to photo-z contribute to the denominator
+with zero true signal. The reciprocal response multiplies the uncorrected
+DeltaSigma. The stack helper combines lens responses using observed pair
+denominators per radial bin. See [Nakajima et al. §7.1](https://academic.oup.com/mnras/article/420/4/3240/973217).
+
+Reproduction from OGFinder uses `python3 -m ogfkit.wl_photoz SELECTED.tsv
+--lens-z Z --h0 H0 --omega-m OM --output NEW.json`. Input columns are `photo_z`,
+`reference_z`, `shape_weight` and `som_weight`, after the measurement's same
+background and shape cuts. Three kernel tests and a CLI replay passed. A
+synthetic case with 75% of the usable weight on reference foregrounds gives
+response 0.25 and correction 4. The real catalog join and calibrated cuts await
+the approved calibration inputs. The response is conditional on the adopted
+lens redshift and does not include lens-redshift uncertainty or member boost.
+
+## 2026-11-18 Pinned COSMOS FITS receiver prepared
+
+`receive_s16a_ephor_ab_cosmos.py --plan` reads and checks the pinned plan
+locally. Once the user explicitly approves the three-file transfer, the
+`--receive --approved-plan-sha256` mode can use the approved hash recorded
+above. It checks the planned `If-Match` ETag, response ETag and content length,
+limits each read to the remaining file budget, records a reservation before
+sending GET, and validates FITS structure before publishing the file. The
+receipt records byte sizes, SHA-256, HDUs and columns. It does not save the
+credential. A stopped GET retains the partial file and its reservation. An
+unchanged completed receipt is checked locally without authentication.
+
+Four loopback tests passed for a valid FITS, changed ETag, truncation and
+redirect. The fixture includes integer ID 2^53+1. Tests also verified the
+budget gate, no repeat requests, and rejection of a modified completed file.
+The real plan was checked offline. No HSC FITS GET was issued in this stage.
+Actual schema, calibration weights and S17A ID join remain to be verified
+after receiving the approved files.
+
+## 2026-11-18 Local COSMOS intake prepared
+
+`intake_s16a_ephor_ab_cosmos.py` verifies the complete receipt and hashes of
+all three pinned files, then uses the point-table ID and reference S17a_objid
+for an exact integer join. It rejects duplicates and floating-point IDs and
+retains unmatched reference IDs, invalid-column counts and candidate rows.
+The coverage summary includes the fractions of original positive shape×SOM
+weight that join and pass basic numeric eligibility. Optional point-z risk,
+low-68 bound and width are preserved when present. This uses the schema in
+the [dsigma HSC example](https://dsigma.readthedocs.io/en/v0.6.0/application_hsc.html).
+The actual headers and S16A/S17A method compatibility remain to be verified
+on the received files. No background selection or response correction is
+applied by intake.
+
+The synthetic end-to-end FITS fixture preserved IDs greater than 2^53 and
+reported distinct matched and usable weight fractions of 7/8 and 6/8.
+To replay after receipt, run `python3 analysis/icl_wgl_membership/hsc_debug/intake_s16a_ephor_ab_cosmos.py --output NEW_DIR` from OGFinder.
+
+## 2026-11-18 Y1 ensemble shape response and DeltaSigma kernel
+
+`ogfkit/wl_y1.py` computes one bin with explicit lens and shape weights,
+proper inverse critical density, and distortions and additive terms in
+the same tangential/cross frame. Responsivity and catalog mean m use the
+same pair weights. The additive calibration is subtracted in shear units
+after the distortion is divided by 2R. Selection and photo-z response are
+explicit caller inputs. Redshift-dependent responsivity and random subtraction
+remain separate validations. See [Y1 Appendix C](https://arxiv.org/html/1705.06745v3)
+and [Murata et al. §3.2](https://academic.oup.com/pasj/article/71/5/107/5567254).
+
+The synthetic test recovered both injected DeltaSigma components with varying
+weights, nonzero additive bias, and explicit selection/photo-z responses.
+Five Y1/point-z kernel tests passed. The local pilot response audit uses only
+catalog shape weights. For the Table 4 sample, lens/random R=0.83977/0.83979
+and mean m=−0.10442/−0.10196. The random aggregate includes one pair with
+m<=−1 and retains a positive ensemble response. The four row counts and
+weight sums match the previously verified resolution-edge product. The audit
+computed no shear or DeltaSigma and keeps `science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_y1_ensemble_response.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_ensemble_response_2026-11-18_01/`.
+- Summary SHA-256: `4dc16e2d8ae264b23fa2627214d9b634ff52a7460f5ae89c3ed9b80478e2ad79`.
+
+## 2026-11-18 S16A source-frame pair geometry
+
+`prepare_s16a_y1_pair_geometry.py` saves the 169,535 verified center–object
+pairs with exact IDs, proper radii, annular bins and source-local pair angles.
+The north/east great-circle projection agrees with the independent Astropy
+source-to-center position angle modulo pi to 1.81e−10 rad. Proper radii agree
+to 8.49e−13 Mpc and the 528 selected center/annulus counts match. The angle
+is in the tangent plane of the source, where catalog shapes are defined.
+On these pairs, the median/95th/max difference from the previous lens-centered
+angle is 2.30/198.99/437.23 arcsec. No prior S19A result was recomputed.
+
+`ogfkit/wl_y1.py` can rotate both distortion and additive calibration using
+the same east/north convention. Six tests passed, including RA wrap, synthetic
+tangential sign, and rejection of an undefined coincident pair. Observed shape
+values were not rotated for the current geometry audit. `science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/prepare_s16a_y1_pair_geometry.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_pair_geometry_2026-11-18_01/`.
+- Summary SHA-256: `3a9a8aff8aaabcf4adcb56facc9655f001de422ae5369a92f4b59cfc5c2b963e`.
+
+## 2026-11-18 S16A shared-source shape-noise diagnostic
+
+`audit_s16a_y1_reuse_shape_noise.py` propagates two uncorrelated sky shape
+components per unique object with variance 1/catalog weight. It uses the
+saved source-frame pair angles and exact IDs, weighted center means, equal
+matched groups and equal weight across each group's five random centers.
+The finite point-z subset retains the previously verified support. Four
+32×32 tangential/cross covariance matrices cover fixed and per-annulus support,
+with either shared object noise or independent pair noise. Analytic fixtures
+verify angle-dependent cross covariance and cancellation with opposite weights.
+Both tests, matrix symmetry/PSD, and TSV-to-matrix diagonal checks passed.
+
+For fixed S23B_3012 and S23B_9131, reuse changes the random-only tangential
+standard deviation by −0.23% to +13.56% across the eight annuli. The largest
+increase is at 2–3 proper Mpc. Lens-minus-random changes by −0.07% to +2.66%.
+The largest absolute cross-annulus tangential correlation is 0.0698 for
+randoms alone and 0.0133 for lens minus random. Allowing support to vary by
+annulus gives maximum increases of 8.72% and 1.78%, respectively. Geometry,
+weights and sample are held fixed. A survey covariance still requires the
+final efficiency weights, usable-area model and spatial correlations.
+`science_measurement=false` and no observed shapes enter this calculation.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_y1_reuse_shape_noise.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_reuse_shape_noise_2026-11-18_01/`.
+- Summary SHA-256: `166996dd7220282353b2a73aef62b2019fc3eb22e56b492804b93042513d0ba3`.
+
+## 2026-11-18 S16A point-z background support sensitivity
+
+`audit_s16a_pointz_background_support.py` tests strict `z_best > z_lens + gap`
+with gaps 0, 0.1 and 0.2 on the verified Table 4 and finite best/risk pairs.
+There is no risk threshold. The saved pair geometry and supplement hashes
+are checked. The diagnostic weight is shape weight times the squared proper
+inverse critical density. The 1,584 center/annulus/gap records reconcile with
+all six role totals. Pair counts and weights decrease monotonically with gap.
+The output pair N_eff treats repeated sources as separate rows and measures
+weight concentration only.
+
+At gap 0.2 relative to gap 0, 21,352/28,148 lens pairs and 81,465/103,386
+random pairs remain. The corresponding retained weight fractions are 96.42%
+and 96.77%. The radial common-group counts shift from 2,3,2,3,4,4,4,4 to
+1,2,2,3,4,4,4,4. All three gaps retain S23B_3012 and S23B_9131 in every
+0.1–3 proper-Mpc bin. This is an input sensitivity calculation. It contains
+no observed shapes, shear or COSMOS-derived correction. The frozen final
+background cut and calibration still require the approved input files.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_pointz_background_support.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_pointz_background_support_2026-11-18_01/`.
+- Summary SHA-256: `9d69cd60216c593bdce2f937297e17e89b833abdc1a3525ddcb8e140a731046b`.
+
+## 2026-11-18 S16A end-to-end Y1 profile injection
+
+`verify_s16a_y1_profile_injection.py` injects a decreasing tangential
+DeltaSigma profile, zero cross, nonzero additive calibration, and a known
+selection response on the real supported coordinates. The matched random
+sample receives zero shear. The input shapes and reference redshifts are
+synthetic. An independent distance calculation and Astropy position angles
+generate the input. The runner recovers the signal using the Y1 source-local
+rotation, ensemble calibration and per-lens point-z response combined by
+the measurement pair weights.
+
+Counts across 48,852 pairs and 14 role/annulus outputs match the previous
+point-z support table for gap 0.1 and the two fixed groups. The lens photo-z
+response ranges 0.8421–0.9035 in the synthetic setup. The worst relative
+tangential recovery error is 8.89e−16. The largest absolute cross residual
+is 1.11 Msun per proper Mpc² compared with an injected scale around 1e13.
+This checks the noiseless, separable ensemble model and numerical path.
+Real background selection, representative calibration and survey covariance
+remain open. `science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/verify_s16a_y1_profile_injection.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_profile_injection_2026-11-18_01/`.
+- Summary SHA-256: `8a0b8df37a650bc43978cf04265e5dbfaaebee7aecf54513ee39af31adc93230`.
+
+## 2026-11-18 S16A pilot observed cross-component null
+
+`audit_s16a_y1_cross_null.py` uses the 48,852 fixed-support pairs from the
+injection check, point-z gap 0.1 and seven annuli from 0.1–3 proper Mpc. It
+rotates the observed distortion and additive terms and uses Y1 ensemble
+responsivity and mean m with physical efficiency pair weights. Tangential
+distortion was not evaluated. Selection response, redshift responsivity and
+COSMOS dilution were omitted from this diagnostic. The covariance propagates
+catalog 1/weight per sky shape component at fixed geometry, sharing noise
+by exact source ID. It does not model spatial survey covariance.
+
+The lens/random/difference cross chi-square values are 6.43/0.79/4.71 for
+7 degrees of freedom each. The shape-only p-values are 0.491/0.998/0.695.
+The largest marginal difference is 1.33 shape-noise standard deviations.
+The independent-pair diagonal agrees with the analytic formula. File hashes,
+pair counts and the full covariance subtraction were independently reconciled.
+This is a diagnostic for two pilot groups. `science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_y1_cross_null.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_y1_cross_null_2026-11-18_01/`.
+- Summary SHA-256: `cf282ca5b5698338f28ffdb57fc418df5a693dff0e9c1cc71ca62668c43ba55f`.
+
+## 2026-11-18 S19A fixed-52 source-frame rotation sensitivity
+
+`audit_s23b_s19a_source_frame_rotation.py` replays all 20 previously received
+S19A batches and reproduces the pinned fixed-52 profile before changing the
+pair angle. It holds the Y3 n(z), radii, paired controls, shape selection,
+responsivity, correction and weight definitions fixed. The only change is
+using the angle in the source tangent frame for both shape and additive
+terms, computed by the geometry helper verified on S16A.
+
+Across the seven matched annuli, the largest relative shift of the mean
+tangential profile is 0.02584%. Compared with the existing 2.5° and 5°
+spatial jackknife errors, the maximum absolute shift in either component
+is below 0.00059 standard deviations. The independent product check
+reconciled all 364 per-lens rows and the averaged profile. This diagnostic
+establishes the numerical sensitivity for this sample. It leaves the
+published baseline in place and does not recompute survey covariance.
+`science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s23b_s19a_source_frame_rotation.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_s19a_source_frame_rotation_2026-11-18_01/`.
+- Summary SHA-256: `e8fd0006eef4195eb95407b43d6e25c99f60ad8fe75d9bab47bdb738827a9b88`.
+
+## 2026-11-18 Fixed-52 joint relation after exact WL endpoint deletion
+
+The field replay now offers `--write-per-lens` in
+`analyze_s23b_fixed52_tract_region_influence.py`. With the existing official
+geometry directory and `--exact-group field`, the local replay reproduced
+the previous region/aggregate profile tables and exported 728 surviving
+lens/annulus profiles. Delete any WL pair whose center or source belongs
+to the omitted field. The all-annulus supported group counts are 31, 49 and
+24 for AUTUMN, HECTOMAP and SPRING omissions. The original field outputs
+remain intact. The replay summary SHA-256 is
+`c84e72eb3e516cfcccaa5b1fe9ab339dc2441dc59f4ebf3d99921333b7f84bb6`.
+
+`audit_s23b_fixed52_relation_endpoint_omission.py` reconciles the per-lens
+export with the aggregate profiles, then refits the 112 prior WL relations
+at all three omissions. It preserves the ICL/member inputs and uses the
+same pooled-control WL estimator as the joined relation. Of 336 comparisons,
+224 are evaluable and 112 fall below the original 12-lens floor. The exact
+WL endpoint deletion preserves all memberships and estimates from lens-only
+omission to numerical precision. On the same retained lenses, the maximum
+change in partial r is 3.3e−16. Relative to the full sample, there are 32
+sign reversals. The largest shift remains the HECTOMAP omission for the
+i-band ≥10% support WL–satellite tangential relation at 0.4–0.7 Mpc
+(r=0.102 to 0.828, 18 to 17 lenses). These shifts arise from sample
+composition in this stored matched dataset. No ICL endpoints were deleted,
+and three fields do not provide survey covariance. `science_measurement=false`.
+
+- Field replay directory: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/wl_s23b_fixed52_exact_field_lens_profiles_2026-11-18_01/`.
+- Refits: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_fixed52_relation_endpoint_omission_2026-11-18_01/`.
+- Refits summary SHA-256: `a3890a790260941dc03cf78c8c86e130ec2ea61f73540f9a4ba7d5a0afdeeca2`.
+- Refit from OGFinder with `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_fixed52_relation_endpoint_omission.py --field-replay REPLAY_DIR --output NEW_DIR`.
+
+## 2026-11-18 ICL–satellite official-field omission on all supported pairs
+
+`audit_s23b_icl_satellite_field_omission.py` assigns both endpoints of the
+988 ICL–member pairs to verified HSC polygons. No pair crosses a field.
+The i endpoints number 3/76/13/140 in AEGIS/AUTUMN/HECTOMAP/SPRING;
+i2 numbers are 0/225/33/498. Target-only and either-endpoint field deletion
+match exactly across both filters and all three support floors (0/10/20%).
+The six full-sample point slopes reproduce the saved fits. New 5° phase-zero
+connected-block percentile intervals use 5,000 seeded replicas.
+
+At the 10% floor, omitting any field retains point slopes in the range
+1.22–4.92 for i and 3.02–4.49 for i2 in nJy arcsec⁻² dex⁻¹. All 95% intervals
+include zero. The permissive i2 fit gives 4.24 [0.98, 7.70] before omission
+and 4.92 [−1.21, 12.26] after omitting SPRING (258 pairs). The wider
+interval is consistent with reduced coverage. The all-support i lower
+bound is near zero and varies with bootstrap seeds as expected. The
+omission check uses existing profile measurements and retains
+`science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_satellite_field_omission.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_field_omission_2026-11-18_01/`.
+- Summary SHA-256: `c06deb42fcd060b262df31f968cca3ebf2deef7db1226f5dc09f47ee18cba0fd`.
+
+## S23B ICL–satellite slopes with official-field intercepts
+
+`audit_s23b_icl_satellite_within_field.py` joins the pinned paired-profile table
+to the pinned official-field ledger by target, control, and filter. It compares
+the original adjusted pooled slope with a common slope fitted with separate
+field intercepts. Independent field demeaning reproduced all six within-field
+point estimates, and the pooled estimates reproduced the previous field audit.
+Each of the six spatial layouts uses 5,000 shared connected-block draws per
+filter and support floor. The two models use the same valid draws (4,644–5,000)
+to form percentile intervals for the change in slope.
+
+At the 10% support floor, 103 `i` and 525 `i2` pairs give pooled → within-field
+slopes of 3.84 → 4.00 and 3.33 → 3.33 nJy arcsec⁻² dex⁻¹, respectively. All
+12 within-field intervals at that floor include zero. All 36 paired intervals
+for the change include zero. Field intercepts therefore leave the 10% support
+conclusion unchanged. These intervals quantify spatial-resampling sensitivity
+of the existing profiles. The fits retain `science_measurement=false`.
+
+- Run from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_satellite_within_field.py --output NEW_DIR`.
+- Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_within_field_2026-11-19_01/`.
+- Summary SHA-256: `6c0d79d5c78a9fa5613ee6a3b1df7994f4169889eacad4f6f1b3b6f19c939de7`.
+
+## 2026-11-19 Approved COSMOS FITS receipt and local intake
+
+Received the three approved FITS files (69,298,560 bytes) under plan
+`73a28a83e9a2579b290ab68347702e0f2d28adfa9de162bf37e97df360727975`.
+The receiver verified the files and wrote receipt SHA-256
+`6cc3bcce1aedfab1f77c9e6789cc1b9522ebfc5d8cc59accf7144fbef0a4a475`.
+Local intake joined 18,768 of 18,852 reference IDs to the S17A point tables,
+covering 99.496% of positive reference shape×SOM weight. All joined rows
+passed numeric eligibility. The 84 unmatched reference IDs are retained in
+the audit. Intake applied no lens selection or photo-z calibration, and
+`science_measurement=false`. Next validate S16A/S17A selection compatibility
+and lens-specific redshift efficiency before using these data for calibration.
+
+- Intake summary: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_ephor_ab_cosmos_intake_2026-11-19_01/summary.json`.
+
+## 2026-11-19 S16A–COSMOS selection compatibility and lens response
+
+The official S17A Wide-COSMOS reference reweights to the baseline S16A
+shape population. The joined data support the same finite Ephor_AB
+best/risk check and point-z gap cut. They lack the inputs needed to replay
+the full local Table 4 checks, accepted-pixel mask and missing-photo-z
+selection. Release-level equivalence is unverified. See
+https://hsc-release.mtk.nao.ac.jp/doc/index.php/s17a-wide-cosmos/.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_lens_response.py --output NEW_DIR`.
+Existing inputs produce 99 diagnostics for 11 lenses, three gap cuts, and
+combined plus separate COSMOS tracts. At gap 0.2 the combined multiplier
+is 1.01772–1.02994. S16A retains 94.50–97.33% of its weight and COSMOS
+96.37–97.34%. The largest gap-0.2 difference between tract multipliers is
+0.00981. Tracts share a field and do not measure independent-field errors.
+Combined responses reconcile to the two tract responses weighted by
+their estimator denominators for all 33 lens/gap combinations.
+
+Output: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_lens_response_2026-11-19_01/`.
+No correction was applied to observed shear. Science remains false.
+
+## 2026-11-20 S16A lens and random radial gap comparison
+
+`audit_s16a_radial_gap_comparison.py` compares gap 0.1 and 0.2 selection
+against gap 0 for each of 11 lenses and 8 annuli, pooling the five paired
+random centers within each group. Inputs are the saved point-z radial
+diagnostics and their recorded digest. Results contain 176 lens/annulus/gap
+rows. At each gap, 53/88 rows have nonzero baseline weight in both roles.
+Only 25/88 (gap 0.1) and 24/88 (gap 0.2) retain weight at all five random
+centers. For gap 0.2, the median lens-minus-random retained-weight fraction
+is -0.00769 among the 53 evaluable rows. Values range -0.992 to 0.0929,
+reflecting sparse support. This comparison does not establish equality or
+supply uncertainty, and pooling excludes no zero-weight centers. Source
+reuse, differing footprint coverage, and reference-calibration selection
+remain unresolved. No shear correction was applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_gap_comparison.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_gap_comparison_2026-11-20_01/`.
+Summary SHA-256 `c141a1a4a2fb4ff28502cbbd83e84b0b9d52adaf314297c7842a8609ec501dc3`.
+
+## 2026-11-20 S16A radial gap extreme diagnosis
+
+The largest gap-0.2 retained-weight discrepancy, -0.99173, comes from
+S23B_9828 at 0–0.1 proper Mpc. The lens has five baseline pairs and zero
+after the cut, while three random centers retain nine pooled pairs.
+Among 24 lens-annulus cases with weight at all five random centers, the
+median difference is -0.00253 and the range -0.02579 to +0.03301.
+These are descriptive post-hoc subsets, not error estimates or evidence
+that calibration selection is equivalent. Source reuse remains relevant.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_gap_extremes.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_gap_extremes_2026-11-20_01/summary.json`.
+
+## 2026-11-20 S16A and COSMOS weighted point-z distributions
+
+`audit_s16a_cosmos_photoz_distribution.py` compares empirical point-z CDFs
+after the same z_best > lens_z+0.2 selection, using shape times squared
+lensing efficiency weights and COSMOS SOM weights. Eleven lens and 32
+nonzero random centers are evaluable. Maximum absolute CDF differences
+have median 0.0780 (range 0.0413–0.1158) for lens centers and median
+0.0485 (range 0.0205–0.1453) for random centers. Values describe mismatch,
+not significance or a correction uncertainty. Reused sources, selection
+mismatch, missing point-z and cosmic variance are not resolved. No shear
+calibration applied; science_measurement=false.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_photoz_distribution.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_photoz_distribution_2026-11-20_01/`.
+Summary SHA-256 `e0a7b46a87fe758878b0d05cbea28127d12ef3ba392f9a79021975ace393731d`.
+
+## 2026-11-20 Matched S16A lens and random COSMOS CDF distances
+
+`audit_s16a_cosmos_paired_distances.py` groups the prior weighted
+point-z CDF distances by paired lens ID. Eight of 11 lenses have at least
+one random center with positive selected weight; four have all five.
+Seven of the eight have a lens distance greater than the median of their
+available random distances. The median within-lens difference is 0.01649.
+These distances are nonnegative magnitudes whose maximizing redshifts may
+differ. Sample sizes, missing centers and reused sources preclude a
+significance interpretation. This does not establish calibration bias.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_paired_distances.py --output NEW_DIR`.
+Results `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_paired_distances_2026-11-20_01/`.
+
+## 2026-11-20 S16A calibration evidence checkpoint
+
+`build_s16a_calibration_evidence.py` verifies seven saved diagnostic
+summaries, their listed output hashes, five inter-product links and the
+common pilot lineage before producing a single machine-readable checkpoint.
+The output remains exploratory and records calibration_applied=false.
+Run `python3 analysis/icl_wgl_membership/hsc_debug/build_s16a_calibration_evidence.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_calibration_evidence_2026-11-20_01/summary.json`.
+This is a shell entry point; desktop workflow integration remains pending.
+
+## 2026-11-20 S16A evidence workflow stage
+
+Added optional `icl/s16a_calibration` to the desktop workflow recipe and
+the matching CLI action. It invokes the same S16A evidence builder, captures
+its summary and fingerprints the builder for workflow plans. The web recipe
+is synchronized and labels this step unavailable in web action. Current
+builder inputs are the original fixed GPFS research paths. The shell stage
+completed with a verified receipt and summary in
+`/tmp/astrafek_s16a_calibration_workflow_20261120/`. Existing workflow tests
+passed (39). Interactive desktop clicking was not exercised.
+
+## 2026-11-20 Configurable S16A evidence root
+
+The S16A evidence builder accepts `--data-root`, defaulting to the original
+GPFS directory. The desktop plugin and shell workflow use the existing HSC
+research directory setting `s23b-evidence-root`. An alternate root containing
+symlinks to the seven existing products completed through the shell workflow,
+including summary and execution receipt. The symlink test verifies path
+selection, not a fully copied archive. Targeted workflow tests passed (21).
+Interactive desktop execution remains unverified in this environment.
+
+## 2026-11-20 Copied S16A evidence portability check
+
+Copied the seven summary files and their declared output artifacts (3,152,095
+bytes) to an independent temporary directory. The configured data-root replay
+completed successfully, and intentional modification of a copied table was
+rejected before report creation. The copied table was restored. This checks
+saved evidence replay, not availability of the original raw catalogs needed
+to rerun each scientific diagnostic. Desktop interactive execution remains
+unverified.
+
+## 2026-11-20 Desktop S16A repeated execution
+
+The desktop step runner previously reused the same session work directory,
+so rerunning the S16A evidence action would encounter the existing output.
+The S16A action now requests a unique per-run work directory and declares the
+result within that directory to the session recorder. A Tcl harness exercised
+the real step runner with stubbed registry and job services, executing the
+actual evidence builder twice and checking distinct declared output files.
+Interactive GUI clicking and the real asynchronous job service remain
+unverified.
+
+## 2026-11-20 S16A desktop async regression coverage
+
+Added two desktop Tcl regression tests for the S16A action. One uses the
+actual plugin manifest and verifies distinct declared outputs and commands.
+The other exercises the real async job runner twice, with an isolated
+synthetic output command and a stub session recorder, and verifies both
+completion records and distinct existing outputs. Both tests pass.
+Interactive GUI clicking and the actual session persistence implementation
+remain unverified by these isolated tests.
+
+## 2026-11-20 S16A session output-directory recording fix
+
+The actual session recorder automatically treats a `--output` value as a
+file product. The evidence builder's value is a directory, so the workflow
+save would reject that directory. Added a compatible `--output-dir` alias
+and used it in the desktop manifest, while keeping the original CLI alias.
+The explicit summary file remains the recorded output. A real OGFSessLog
+harness confirmed it records only that file, both repeated/async workflow
+tests passed, and the shell workflow completed against the real evidence.
+A complete interactive save-and-restore remains unverified.
+
+## 2026-11-20 S16A evidence save and restore
+
+The workflow save/restore bridge was exercised with the actual successful
+S16A shell step receipt and its verified summary file. The saved snapshot
+restored the selected step and completion record, and the restored artifact
+matched the source byte-for-byte with no input changes. Test session:
+`/tmp/astrafek_s16a_session_verify_20261120/`. This uses the real bridge
+and checkpoint backend with a constructed request containing the shell
+receipt; desktop UI collection and interactive clicks remain unverified.
+
+## 2026-11-20 S16A session recorder regression
+
+Added a persistent regression exercising the real Tcl session recorder and
+the plugin manifest. It asserts the directory-valued output flag is
+`--output-dir` and only the declared summary file is recorded. This and
+the two prior repeated and async execution tests pass. Python export replay
+was inspected at the template level but has not been exercised end to end.
+
+## 2026-11-20 S16A exported Python replay
+
+Used the real Tcl session exporter with a constructed S16A step record,
+then ran the generated Python in replay mode against a synthetic FITS field
+and the independently copied real evidence products. One step ran with
+zero failures and its generated summary verified 11 lenses and
+science_measurement=false. Exported script and run products are in
+`/tmp/astrafek_s16a_export_20261120.py` and
+`/tmp/astrafek_s16a_export_result_20261120/`. The record was constructed
+via OGFSessLog, so interactive GUI launching remains unverified.
+
+## 2026-11-20 S16A workflow Tk button execution
+
+A Tk harness opened the actual workflow panel, selected the ICL recipe and
+S16A calibration node, invoked its real button, and waited for the real async
+runner and actual evidence builder. The session recorder showed one completed
+`icl.s16a-calibration` record, an existing summary file and a captured report.
+The isolated harness stubbed DS9 environment paths and plugin registry access;
+it was not a full launched DS9 application or a manual mouse test.
+Output: `/tmp/astrafek_s16a_gui_work_20261120/`.
+
+## 2026-11-20 S16A COSMOS numerical distance precision
+
+Compared the existing 512-point trapezoid distance-grid photo-z multipliers
+with Astropy direct FLRW distances at the same cosmology and same COSMOS
+selection. All 33 lens/gap cases were checked. The maximum absolute fractional
+multiplier difference is 8.63e-7 (0.0000863%). This tests numerical distance
+precision only, leaving selection, reference redshift, cosmic variance and
+covariance open. No calibration applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_distance_precision.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_distance_precision_2026-11-20_01/`.
+
+## 2026-11-20 S16A COSMOS estimated-z reweighting sensitivity
+
+For each of 11 pilot lenses, the COSMOS sample was reweighted to the
+observed lens-pair estimated-z weighted histogram after z_best > z_lens+0.2.
+The diagnostic uses width-0.2 bins below z=4 and one z=4–8 bin, with no
+factor clipping. All observed weighted bins had COSMOS support. Resulting
+multipliers shift fractionally by -1.02% to +1.09% relative to the saved
+baseline, which was independently matched for all 11 lenses. Maximum
+bin factors range 1.37–2.25. This is post-hoc 1D matching, sensitive to bin
+choice and finite reference sample, and does not resolve selection, reference
+redshift or field variance. It is not a measurement or applied correction.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_photoz_reweight.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_photoz_reweight_2026-11-20_01/`.
+
+## 2026-11-21 S16A photo-z reweighting bin-width sensitivity
+
+Re-ran the estimated-z reweighting at widths 0.1 and 0.4, compared with
+the prior 0.2 run, retaining the common 4–8 high-z bin. All 11 lenses have
+observed weight supported in every bin for all three layouts. Across widths,
+the largest per-lens multiplier max/min spread is 0.2892% (S23B_6290).
+This layout sensitivity is not a statistical or total systematic error.
+The baseline remains exploratory and no correction is applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_photoz_reweight.py --bin-width 0.1 --output NEW_DIR`
+or use 0.4. Output directories:
+`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_photoz_reweight_width_01_2026-11-20_01/`
+and `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_photoz_reweight_width_04_2026-11-20_01/`.
+
+## 2026-11-21 S16A COSMOS bin support
+
+The reweighting script now also emits COSMOS raw and weighted effective
+counts per estimated-z bin. At width 0.1 (and the 4–8 tail), all 11 prior
+multipliers reproduce within 1e-12. Across bins with observed weight,
+the smallest reference raw count is 10 and smallest effective count is 9.45.
+Per lens, at most 0.391% of observed weight falls in bins with reference
+N_eff <10, and 0.120–1.006% falls in bins with N_eff <20. The 4–8 bin has
+at most 1.172% of the observed weight. These thresholds describe support
+and do not measure influence or calibration uncertainty.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_photoz_reweight.py --bin-width 0.1 --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_bin_support_2026-11-21_01/`.
+
+## 2026-11-21 S16A COSMOS single-object influence
+
+Analytically removed each positive-weight COSMOS object in turn and refit the
+0.1-wide photo-z reweighting, holding the observed lens histogram fixed.
+All 11 lens baselines reproduce the previous multipliers. The most influential
+deletion for each lens was independently recomputed with the production
+response estimator. No single removal destroyed an occupied bin's support.
+The maximum absolute fractional multiplier shift across the 11 lenses is
+0.00079375 (0.0794%). This is a conditional influence diagnostic, not an
+uncertainty or a correction; correlations and cosmic variance remain open.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_object_influence.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_object_influence_2026-11-21_01/`.
+
+## 2026-11-21 Shared COSMOS object bootstrap
+
+Generated 2,000 fixed-size object bootstrap samples shared across all 11
+lenses, recomputing bin weights with each lens histogram fixed. All 2,000
+samples retained joint support. Conditional multiplier standard deviations
+are 0.00197–0.00401 and pairwise correlations 0.718–0.965. The 11×11
+covariance is symmetric, positive definite numerically and its diagonal
+matches the reported variances. This conditional IID diagnostic omits COSMOS
+spatial/cosmic variance, reference-z error, observed-histogram uncertainty,
+and selection mismatch. It is not a total science covariance and was not
+applied to the lensing stack.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_bootstrap_covariance.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_bootstrap_covariance_2026-11-21_01/`.
+
+## 2026-11-21 COSMOS tract-only reweighting support
+
+Reweighted each COSMOS tract separately to each lens's fixed 0.1-wide
+estimated-z histogram. Tract 9813 supports all 11 histograms, with
+multipliers differing by -0.018% to +0.140% from the full COSMOS result.
+Tract 9812 supports none completely: 0.347–1.624% of each observed histogram
+weight lies in bins absent from that tract. No multiplier is produced for
+the unsupported tract. These subsets share one COSMOS field, so this is not
+an independent-field cosmic variance estimate. No correction applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_tract_reweight.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_tract_reweight_2026-11-21_01/`.
+
+## 2026-11-21 COSMOS tract common-support comparison
+
+The tract audit now also intersects supported estimated-z bins and
+renormalizes each fixed observed lens histogram on that intersection.
+Retained weight is 98.376–99.653% for the 11 lenses. On this restricted
+sample, 9812/9813 multiplier differences range from -1.144% to +0.755%.
+The original full-support table is byte-identical to the previous run.
+These post-selection results omit the unsupported 0.347–1.624% and lack
+uncertainty; the two tracts are parts of one field. No correction applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_tract_reweight.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_tract_common_support_2026-11-21_01/`.
+
+## 2026-11-21 COSMOS common-support tract bootstrap
+
+For each of 11 lenses, 2,000 within-tract, within-estimated-z-bin
+object-resampling draws retain the original number of reference objects in
+each common bin and hold the lens histogram fixed. All point estimates match
+the prior common-support tract comparison. All 11 conditional percentile
+95% intervals for the tract multiplier ratio minus one include zero, with
+conditional standard deviations 0.00711–0.01429. Fixed bin counts and
+independent objects are assumptions. Spatial clustering, cosmic variance,
+reference redshift and selection uncertainty and excluded bins are not
+covered; these intervals are not a total science uncertainty.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_tract_bootstrap.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_tract_bootstrap_2026-11-21_01/`.
+
+## 2026-11-21 Expanded S16A evidence workflow
+
+The S16A evidence checkpoint now automatically verifies six additional
+diagnostics when all are available: distance precision, bin support,
+single-object influence, shared reference covariance, common-tract comparison
+and tract bootstrap. It verifies outputs and their summary lineage. Existing
+seven-product copies remain usable and explicitly report additional diagnostics
+not available; an incomplete added set is rejected. The real shell workflow
+verified 13 products, the earlier copied seven-product archive remained usable,
+and a partial-set test was rejected. This is a diagnostic evidence checkpoint,
+not a promotion of the research measurement.
+
+## 2026-11-21 Conditional calibration covariance propagation to radial stacks
+
+Propagated the 11-lens shared COSMOS multiplier covariance to each matched
+S16A annulus using diagnostic lens pair-weight sums and inverse-response
+weighting. For 0.1–3 proper Mpc, 2–4 supported lenses per annulus give
+conditional multiplier SD 0.00233–0.00258. Retaining shared-COSMOS covariance
+increases SD by factors 1.075–1.897 relative to using diagonal terms alone.
+The derivative was checked by numerical differentiation and the covariance
+input checked for symmetry and positive semidefiniteness. This is a diagnostic:
+overall lens responses are reused for all annuli; source selection, radial
+photo-z variation, cosmic variance and full shear covariance are not included.
+No correction was applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_calibration_stack_covariance.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_calibration_stack_covariance_2026-11-21_01/`.
+
+## 2026-11-21 S16A annulus-specific photo-z response sensitivity
+
+Reweighted COSMOS to each selected lens/annulus point-z histogram for the
+24 matched-support pairs at gap 0.2 and 0.1-wide z bins. All had COSMOS
+support. Compared with each lens's full-radius multiplier, shifts range
+-7.45% to +2.42%. The -7.45% case is S23B_3012 at 0.1–0.2 Mpc with only
+four selected source pairs (N_eff 3.74). In the post-hoc subset with at least
+50 pairs, 20 lens/annulus cases range -1.98% to +2.42%. This is a diagnostic
+of radial-sample sensitivity, not an applied correction or a validated
+uncertainty; sparse bins, source reuse, calibration selection and cosmic
+variance remain unresolved.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_photoz_response.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_photoz_response_2026-11-21_01/`.
+
+## 2026-11-21 S16A radial stack photo-z sensitivity
+
+Combined the annulus-specific and full-radius per-lens responses with the
+same saved diagnostic pair weights and matched-support lens sets. All eight
+full-radius stack multipliers reproduce the preceding propagation audit.
+Over 0.1–3 Mpc the annular multiplier differs by -1.090% to +0.694%;
+0–0.1 Mpc differs by -2.739%, with only one lens and seven selected pairs.
+This compares effective response factors under the shared-signal assumption,
+not measured corrected shear. Radial uncertainty, sample selection and
+cosmic variance remain unresolved. No correction applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_stack_photoz.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_stack_photoz_2026-11-21_01/`.
+
+## 2026-11-21 Fixed common-lens radial calibration sensitivity
+
+The radial stack sensitivity script now supports `--fixed-common`, using
+the existing gap-0.2 common membership S23B_3012 and S23B_9131 across all
+seven 0.1–3 Mpc annuli. The radial-vs-full-radius effective multiplier shift
+ranges -1.090% to +0.694%. At 0.4–0.7 Mpc the fixed-two result is -0.859%,
+versus +0.197% in the previous varying-membership diagnostic. Different
+membership and pair weights can affect the profile; this is not an applied
+calibration or a complete uncertainty.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_stack_photoz.py --fixed-common --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_stack_fixed_common_2026-11-21_01/`.
+
+## 2026-11-21 Observed-pair bootstrap for annular photo-z response
+
+Added 2,000 observed-pair resamples per lens/annulus to the radial response
+diagnostic, holding the COSMOS bin response fixed. The 24 point estimates
+exactly reproduce the prior output. Conditional multiplier standard deviations
+range 0.00246–0.03847; 21/24 marginal percentile intervals include the
+corresponding full-radius point multiplier. The sparse four-pair S23B_3012
+0.1–0.2 Mpc case gives 0.9427–0.9626. That narrow conditional interval cannot
+validate a distribution estimated from four pairs. Baselines and annuli are
+dependent, and the calculation omits COSMOS uncertainty, source reuse,
+spatial correlations, and selection systematic effects. No calibration applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_photoz_response.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_photoz_observed_bootstrap_2026-11-21_01/`.
+
+## 2026-11-21 Joint observed-source and COSMOS radial bootstrap
+
+Ran 2,000 independent Poisson-weight resamples with the same weight reused
+for every appearance of each observed source and each COSMOS reference.
+Among 24 lens/annulus cases, 1,960 draws had common support in every case;
+40 were excluded jointly. The 24x24 covariance is symmetric and numerically
+positive semidefinite and its diagonal matches reported SDs. Multiplier SDs
+are 0.00326–0.04213. The four-pair S23B_3012 inner case gives conditional
+95% bounds 0.9359–0.9674; this tiny sample cannot support a robust uncertainty
+estimate. The Poisson-object model omits spatial clustering, reference-z
+errors, cosmic variance and selection uncertainties. No correction applied.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_joint_bootstrap.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_radial_joint_bootstrap_2026-11-21_01/`.
+
+## 2026-11-21 Joint radial calibration covariance propagation
+
+Propagated the 24-case joint observed-source/COSMOS bootstrap covariance to
+eight exploratory radial effective multipliers via linearization, using fixed
+observed pair weights. The eight prior annular point multipliers reproduce.
+At 0.1–3 Mpc conditional SD ranges 0.00326–0.02005, compared with
+0.00233–0.00258 from the earlier full-radius, fixed-histogram reference-only
+diagnostic. The 0.1–0.2 Mpc result includes the four-pair lens and is unstable.
+The resulting 8x8 covariance is symmetric, positive semidefinite and matches
+the listed diagonal errors. This propagation holds pair weights fixed and
+omits their covariance with multipliers, measured shear, selection error,
+spatial clustering and cosmic variance. It is not the science covariance.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_joint_radial_stack_covariance.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_joint_radial_stack_covariance_2026-11-21_01/`.
+
+## 2026-11-21 Joint radial stack bootstrap with changing pair weights
+
+Extended the joint source/COSMOS Poisson bootstrap to recompute each lens's
+annular total pair weight and the effective stack multiplier on every draw.
+The original 24-case bootstrap tables are byte-identical; 1,960/2,000 joint
+draws remain valid. Saved annular pair-weight sums normalize each lens's
+within-annulus interpolated-distance weights, so all eight baseline stacks
+reproduce the earlier direct-distance stack to <1e-10. The initial separate
+run using grid normalization alone differed by up to 1.95e-7 and is superseded.
+For 0.1–3 Mpc the jointly varying-weight SD is 0.00326–0.02031; on the same
+resamples with weights fixed it is 0.00326–0.02003. The 8x8 covariance is
+symmetric, positive semidefinite and its diagonal matches the reported SD.
+These are conditional Poisson diagnostics, not full science errors; spatial
+clustering, reference-z uncertainty, selection and cosmic variance remain.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_joint_bootstrap.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_joint_stack_weight_bootstrap_2026-11-21_02/`.
+
+## 2026-11-21 Joint bootstrap exclusion sensitivity
+
+Replayed the 2,000 seeded joint source/COSMOS resamples and recorded validity
+per annulus. The existing four scientific tables reproduce byte-for-byte.
+The 40 joint rejections are zero-observed-pair cases: four in 0–0.1 Mpc and
+36 in 0.1–0.2 Mpc. No sampled COSMOS support failures or zero-response cases
+occurred. Recomputing each radial marginal SD with every draw valid for that
+annulus changes it by at most 0.501% relative to the jointly valid subset.
+This conditions on available data and is not a complete treatment of sparse
+samples or full covariance.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s16a_radial_joint_bootstrap.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_joint_bootstrap_support_2026-11-21_01/`.
+
+## 2026-11-21 S23B ICL–satellite image-quality sensitivity
+
+Added target depth, target–control depth difference, target seeing and seeing
+ratio to the existing adjusted ICL/member-density model. At 10% common
+support, image-quality-adjusted slopes are 3.78 [-3.22, 9.38] for i (103
+pairs) and 2.72 [-1.39, 6.61] for i2 (525 pairs), nJy arcsec⁻² dex⁻¹.
+The baseline slopes 3.84 and 3.33 were reproduced for the same samples.
+Intervals use 5,000 connected-block draws at 5 degrees and one phase.
+At 20% support in i there are too few connected blocks for the expanded
+model, so the fit is marked not estimable. This exploratory adjustment does
+not address PSF wings, pixel covariance or selection systematics and is not
+a science measurement.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_satellite_image_quality.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_satellite_image_quality_2026-11-21_01/`.
+
+## 2026-11-21 ICL image-quality paired spatial bootstrap
+
+Compared the quality-adjusted and baseline member-density slopes with
+identical connected-block draws at three grid widths and two phases. At
+the 10% support floor, 5/6 i and 6/6 i2 layouts have sufficient jointly
+valid draws; all 11 completed intervals for the slope change include zero.
+For the 5-degree zero-phase layout, the changes are -0.0585 [-2.810, 1.734]
+(i) and -0.6134 [-1.405, 0.217] (i2), nJy arcsec^-2 dex^-1. Across all
+floors 30/36 layouts complete; remaining layouts fail block/valid-draw
+thresholds and are explicitly flagged. Full-model slopes reproduce the
+previous quality audit where that audit reported a fit. This exploratory
+comparison does not resolve selection, PSF wings or pixel covariance.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_icl_quality_paired_bootstrap.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_icl_quality_paired_bootstrap_2026-11-21_01/`.
+
+## 2026-11-21 Satellite concentration and image-quality covariates
+
+At the 10% common-support floor, after the existing richness, redshift,
+extinction, support and footprint terms, adding target depth, depth
+difference, target seeing and seeing ratio reduces in-sample residual
+sum of squares for the member concentration predictor by 3.03% in i
+(103 pairs, 17 connected blocks) and 0.91% in i2 (525 pairs, 44 blocks).
+The diagnostic is incremental in-sample R-squared. Its nonnegative bootstrap
+percentiles are not a null-hypothesis test and do not measure causal
+confounding or independent predictive performance. Science remains false.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_member_image_quality_confounding.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_image_quality_confounding_2026-11-21_01/`.
+
+## 2026-11-21 Spatial holdout of member concentration quality predictors
+
+Extended the image-quality association diagnostic with leave-one-connected-
+block-out prediction on the fixed 10% support sample. All folds preserve
+full rank and partition the original 103 i / 525 i2 pairs exactly. Relative
+to the existing covariates, adding four image-quality variables increases
+total held-out squared prediction error by 9.81% for i (17 folds) and 1.19%
+for i2 (44 folds). This contrasts with in-sample residual reductions of
+3.03% and 0.91%; the result is exploratory, uses one 5-degree layout and
+does not prove independence of neighboring blocks or causal absence.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_member_image_quality_confounding.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_member_quality_spatial_holdout_2026-11-21_01/`.
+
+## 2026-11-21 S23B PSF-core member injection and concentration
+
+Joined the existing 1 nJy arcsec^-2, 50-kpc member-halo injection ledger
+to the S23B ICL/member concentration table by target and filter. At 10%
+ICL common support, there are 44 i and 291 i2 clusters with both the
+PSF-core and unconvolved injections supported. Spearman correlations of
+PSF-core normalized recovery with cluster member concentration are 0.104
+[-0.229, 0.415] and -0.034 [-0.137, 0.058]. Correlations for the paired
+PSF-minus-unconvolved response are -0.007 [-0.392, 0.342] and +0.024
+[-0.096, 0.142]. Marginal 95% intervals use 5,000 target-sky-cell draws.
+These are unadjusted, post-hoc, conditional correlations from one member and
+one halo model per cluster; they neither establish selection completeness nor
+bound PSF wings or covariance. Science remains false.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_injection_concentration.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_injection_concentration_2026-11-21_01/`.
+
+## 2026-11-21 Injection support versus member concentration
+
+Joined all 427 one-amplitude injection results, including unsupported
+outcomes, to the ICL relation sample. With at least 10% ICL common support,
+47 i and 302 i2 clusters match; 44 and 291 respectively have both injection
+variants supported, reproducing the prior supported-only sample counts.
+Comparing the highest with lowest concentration quartile, supported-fraction
+differences are +0.64 percentage points [-30.0, +27.3] for i and -1.32
+[-8.04, +5.20] for i2. Marginal 95% intervals resample 5-degree target sky
+cells 5,000 times with original quartile boundaries fixed. These are
+post-hoc unadjusted conditional diagnostics on one injected member per
+cluster, not population completeness or proof of no selection bias.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_injection_support_selection.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_injection_support_selection_2026-11-21_01/`.
+
+## 2026-11-21 Matched injection support across amplitudes
+
+Extended the concentration/support audit to 0.5 and 2.0 nJy arcsec^-2
+amplitudes, then compared their high-minus-low quartile support gaps with
+the 1.0 amplitude using identical sky-cell draws and the same 349 matched
+clusters. The four paired contrast intervals all include or touch zero.
+The i 0.5-minus-1.0 gap is -8.33 percentage points [-30.0, 0.0] over
+25 extreme-quartile clusters; i2 at 2.0-minus-1.0 is -3.95 [-8.75, 0.0]
+over 152. Bootstrap intervals can end at zero because failures are sparse.
+These are marginal post-hoc conditional diagnostics, not multiplicity-
+adjusted tests or population completeness estimates.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_injection_support_amplitude.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_injection_support_amplitude_2026-11-21_01/`.
+
+## 2026-11-21 PSF injection sample covariate comparison
+
+Compared the existing 349 injected clusters with the remaining 279 matched
+ICL pairs at the 10% support floor, separately by filter and using 5,000
+target-sky-cell bootstrap draws. In i, injected clusters have mean log10
+richness higher by 0.0576 dex [0.0213, 0.0949] (47 vs 56 clusters).
+The i2 richness difference is 0.0116 dex [-0.0190, 0.0384] (302 vs 223).
+Concentration and redshift difference intervals include zero in both bands.
+These are six marginal, post-hoc comparisons with no multiplicity adjustment.
+Matching observed means does not establish that a one-member injection
+represents the full population; the i richness discrepancy matters when
+transporting recovery results.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_injection_representativeness.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_injection_representativeness_2026-11-21_01/`.
+
+## 2026-11-21 Injection recovery versus richness
+
+Extended the injection correlation diagnostic with `--predictor richness`.
+At 10% ICL support, Spearman correlation of PSF-core recovery with log
+richness is -0.0073 [-0.344, 0.304] for 44 i clusters and +0.0389
+[-0.0856, 0.1587] for 291 i2 clusters. The paired PSF-minus-unconvolved
+correlations also have intervals including zero. Marginal 5,000-draw sky-cell
+intervals are unadjusted, post-hoc and conditional on both injection variants
+passing. They do not remove the observed injection-sample richness mismatch
+or establish transportability. Default concentration correlation output was
+reproduced byte-for-byte after the extension.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_injection_concentration.py --predictor richness --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_injection_richness_2026-11-21_01/`.
+
+## 2026-11-21 Richness-standardized member injection sensitivity
+
+Reweighted supported 1 nJy PSF-core member injection responses to the full
+10%-support ICL sample in four full-sample richness quartiles. All quartiles
+have supported injections (minimum six in i, 67 in i2). The standardized
+minus unweighted mean recovery is +0.00566 [-0.1594, +0.1768] for i and
++0.000823 [-0.01797, +0.02240] for i2. Intervals use 5,000 shared
+target-sky-cell draws with fixed quartile boundaries; 4,993 i and 5,000 i2
+draws have support. This is post-hoc richness-only sensitivity of conditional
+one-member injection means, not a population recovery correction. Selection,
+other covariates, PSF wings and uncertainty remain.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_injection_richness_reweight.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_injection_richness_reweight_2026-11-21_02/`.
+
+## 2026-11-21 Richness-standardized recovery influence
+
+For the 10%-support sample, retained the full target richness distribution
+and removed one supported PSF-core injection response at a time, refitting
+the within-quartile weights. All 44 i and 291 i2 deletions retain bin support.
+The largest change to the standardized mean is 0.1054 for i (S23B_2073)
+and 0.0240 for i2 (S23B_8620), compared with previous full-sample reweighting
+changes of +0.00566 and +0.000823. The unweighted/weighted response medians
+are 0.8330/0.8087 for i and 0.8251/0.8251 for i2. The signed recovery
+estimator has wide tails; this does not justify discarding outliers or choosing
+a calibration estimator post hoc. These are conditional influence diagnostics,
+not population uncertainties or completeness.
+
+Run `python3 analysis/icl_wgl_membership/hsc_debug/audit_s23b_richness_reweight_influence.py --output NEW_DIR`.
+Output `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s23b_richness_reweight_influence_2026-11-21_01/`.
+
+## 2026-11-21 S16A–S17A background selection recheck
+
+Re-executed `analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_lens_response.py` on the existing local inputs. All 99 lens/gap/tract rows are byte-identical to the previous result (SHA-256 `7a15ce87b7f9e55fdd6a1a91794a7d11c4d5dbedaba6eaa0ad6ac5e6266ac898`); response reciprocity agrees to 1.11e-16. The 11 gap-0.2 lens multipliers are 1.01772–1.02994, exploratory and not applied. Official S17A SOM weighting targets the baseline S16A shape population, but local full selection, accepted pixels, photo-z missingness and release-level method equivalence remain unverified. Reference-z errors, field variance, contamination, responsivity and full covariance remain unresolved. `science_measurement=false`.
+
+Assessment: `analysis/icl_wgl_membership/hsc_debug/s16a_s17a_compatibility_recheck_2026-11-21.md`. Recheck output: `/home/kjhan/BACKUP/Astrafek/s16a_s17a_recheck_20261121/`. No new HSC query or download. User requested to stop and await approval before the next step.
+
+## 2026-11-23 업무인수인계 — S16A/S17A 선택·결측 검증 현황
+
+### 작업 환경과 연구 목표
+
+- 2026-11-23 확인 호스트는 `LagEunha`, 작업 루트는 `/home/kjhan/BACKUP/Astrafek`이다. CPU 분석은 이 호스트에서 진행했고, Slurm 작업은 사용자가 지정한 `syntax` 환경에서만 검토한다.
+- 이 저장소는 `/home/kjhan/BACKUP/Astrafek/OGFinder`, 현재 `master` HEAD는 `37e4685498f2777172fbe56946930c726388eb22`다. Web은 별도 저장소 `/home/kjhan/BACKUP/Astrafek/ds10-web`이며 HEAD는 `741e6e4bd1437622f51e3053738737c0b92375c3`다. 두 곳 모두 여러 미커밋 변경이 있으므로 다음 담당자는 먼저 각 저장소의 상태를 확인한다.
+- 장기 목표는 HSC 은하단 영상으로 ICL–위성은하 외곽구조 연관성을 연구하고, 배경은하 스택으로 약중력을 연구하는 것이다. 분석 도구와 실행 이력은 Astrafek에 남기며 GUI 파이프라인은 Unix shell에서 재현할 수 있는 Python 실행기에 대응해야 한다.
+- 기존 과학 자료의 주 루트는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/`다. 아래 두 최신 진단 출력은 별도로 작업 루트 아래에 있으므로 Git clone만으로 재생성할 수 없으며, 다음 작업에서 경로를 임의로 옮기지 않는다.
+
+### 승인 범위와 이번 인계의 경계
+
+사용자는 S16A/S17A 배경은하 선택과 렌즈별 적색편이 효과를 검증한 뒤 다음 단계에서 승인 대기를 지시했다. 그 뒤 2026-11-21 음성 대화의 **“다음 단계 승인”**으로 기존 로컬 자료의 품질·결측 선택 검증을 승인했다. 현재는 그 분석이 결과를 남긴 상태이며, 추가 과학 분석·새 자료 수신 승인을 의미하지 않는다. 2026-11-23 요청은 인수인계서 작성이다. 이번 문서 작성 과정에서 신규 CAS 질의·HSC 다운로드·보정 적용·커밋·푸시는 하지 않았다. 추가 데이터 수신은 사용자가 정한 다운로드별 사전 승인을 계속 적용한다. 인증정보는 문서나 실행 기록에 넣지 않는다.
+
+### 완료된 S16A/S17A 검증과 해석
+
+S17A Wide-COSMOS의 SOM×shape 가중치는 기본 S16A shape 표본의 색–등급 분포에 맞추는 자료다. 동일 Ephor_AB 명칭과 `z_best > z_lens + gap` 절단은 비교할 수 있지만, 로컬 Table 4 전체 품질 조건·accepted-pixel/Sirius 별 마스크·photo-z 결측 선택·릴리스별 알고리즘 동등성은 아직 모두 재현되지 않았다. 따라서 전체 선택 함수의 호환성이 검증됐다고 간주하지 않는다.
+
+- 기존 COSMOS 기준 객체 18,852개 중 18,768개가 결합됐다. 기준 shape×SOM 양의 가중치의 99.496%를 포함하고, 미결합 84개는 원장에 보존한다.
+- 11개 렌즈 × gap 3개 × 전체/두 tract의 99개 진단을 2026-11-21 재실행했다. 기존 `lens_response.tsv`와 바이트가 같고 SHA-256은 `7a15ce87b7f9e55fdd6a1a91794a7d11c4d5dbedaba6eaa0ad6ac5e6266ac898`다. gap 0.2에서 탐색적 ΔΣ 곱셈계수는 1.01772–1.02994다. 재현성 확인은 독립적인 물리적 정확성 검증과 구분한다.
+- 실행기는 `/home/kjhan/BACKUP/Astrafek/OGFinder/analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_lens_response.py`, 평가서는 같은 폴더의 `s16a_s17a_compatibility_recheck_2026-11-21.md`, 최신 재실행 출력은 `/home/kjhan/BACKUP/Astrafek/s16a_s17a_recheck_20261121/`다.
+- 기존 반경별 진단에서 0.1–3 Mpc 스택의 annulus별 계수와 전체 반경 렌즈별 계수 차이는 −1.090%~+0.694%였다. 이 값은 선택된 표본의 민감도이며 총오차나 측정된 전단이 아니다.
+
+### 자료 접근 대기 후 완료된 결측 분석
+
+2026-11-21 마지막 응답 때 분석과 테스트가 자료 접근을 기다렸으나, 2026-11-23 조회에서 당시 분석 PID `2505416`과 테스트 PID `2505845`는 존재하지 않았다. 분석의 `summary.json` 및 66개 중심의 `center_missingness.tsv`가 남아 있다. 보존된 산출물·실행기 해시와 집계를 대조해 완료 산출물을 확인했다. 당시 테스트 실행의 세션 핸들은 유실돼 원래 테스트의 성공 종료 여부는 복구하지 못했다.
+
+| 구분 | 유한한 photo-z best/risk | best 또는 risk 결측/비유한 |
+|---|---:|---:|
+| Table 4·수치 조건 통과 고유 객체 | 109,307 | 6,671 |
+| 소광 보정 i 등급 중앙값 | 23.5923 | 23.5602 |
+| i-band S/N 중앙값 | 45.1700 | 44.1171 |
+| shape 가중치 중앙값 | 5.3566 | 5.3350 |
+
+총 선택 객체는 115,978개이고 결측 비율은 **5.752%**다. 같은 객체가 여러 중심에 포함될 수 있어 아래 pair 수는 고유 객체 수와 다르다.
+
+| 역할 | 선택 pair | 결측 pair | 결측 pair 비율 | 결측 shape 가중치 비율 |
+|---|---:|---:|---:|---:|
+| 렌즈 중심 11개 | 37,023 | 1,815 | 4.902% | 4.891% |
+| 비어 있지 않은 random 중심 32개 | 132,495 | 6,667 | 5.032% | 5.005% |
+
+고정 원장은 렌즈 11개와 random 55개, 총 66개 중심을 유지한다. 비어 있는 random 23개도 제거하지 않았다. 전체 선택 pair 169,518개 중 161,036개에 유한한 photo-z 입력이 있어 기존 가용성 진단과 맞는다. 중앙값 비교만으로 결측이 무작위이거나 보정 표본에 그대로 적용 가능하다고 결론내리지 않는다. 결측 객체에는 거리 효율이 없어 **shape 가중치 결측률을 약중력 estimator 가중치 결측률 또는 보정 오차로 바꿀 수 없다.** COSMOS에 같은 결측 선택을 재현할 입력이 부족해 이 단계에서 보정 계수 변화를 식별하지 않았다.
+
+### 실행기·출력·재현 절차
+
+새 분석 실행기는 `/home/kjhan/BACKUP/Astrafek/OGFinder/analysis/icl_wgl_membership/hsc_debug/audit_s16a_selection_missingness.py`다. 승인된 보충 자료의 receipt, 객체 선택 원장 및 해시를 검증하고, 객체가 여러 중심에 재사용될 때 shape 가중치가 같은지 확인한 뒤 고유 객체/역할/중심별 집계를 쓴다. 출력 덮어쓰기는 거부한다.
+
+| 증거 | 경로 또는 SHA-256 |
+|---|---|
+| 출력 디렉터리 | `/home/kjhan/BACKUP/Astrafek/s16a_selection_missingness_20261121_01/` |
+| 요약 `summary.json` | `755e1dbf6ff721da772d6765f96434efa318eb3f64d7d672141272f3a2cb4d9b` |
+| 중심별 `center_missingness.tsv` | `2d1062dfc6469acf1f50c14985225c611bce9af6543a2037b2505a8b6cb4ebab` |
+| 분석 실행기 | `d5e3a4e900ecbe5d826a23476678843fd69e982f6f378e8607bf17190932ae53` |
+| 기존 입력 계획 | `44b9d4df4904dac295f08a426abb20aa536ae85fc2c91239ac599f39deb412a1` |
+
+2026-11-23 별도 stdlib 확인에서 66개 중심의 중복 부재, 역할별 pair/결측 수 합, 고유 객체 합, 기록된 산출물 해시와 실행기 해시가 일치했다. 전체 입력 receipt 재검증은 분석 실행기가 완료한 결과이며 이번 문서 확인 과정에서 CAS 조회를 다시 실행하지 않았다.
+
+과거 테스트 핸들과 별개로 2026-11-23 `test_s16a_y1_source_contract.py`, `test_s23b_s16a_quality_supplement_qa.py`, `ogfkit/test_wl_photoz.py`를 현재 작업 트리에서 다시 실행해 **37 passed in 9.59s**, 종료코드 0을 확인했다. 실행 환경은 `OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. /home/kjhan/miniconda3/bin/python3 -B -m pytest -q -p no:cacheprovider`다. 이 테스트는 기존 선택 규약·보충자료 QA·적색편이 응답의 검증이며 새 결측 분석 전체 또는 과학적 타당성의 검증과 동일시하지 않는다.
+
+```bash
+cd /home/kjhan/BACKUP/Astrafek/OGFinder
+OPENBLAS_NUM_THREADS=1 PYTHONPATH=. /home/kjhan/miniconda3/bin/python3 -B \
+  analysis/icl_wgl_membership/hsc_debug/audit_s16a_selection_missingness.py \
+  --output /home/kjhan/BACKUP/Astrafek/s16a_selection_missingness_NEW
+```
+
+`NEW` 출력 경로는 실제로 존재하지 않는 새 디렉터리로 바꾼다. 이 실행은 기존 로컬 파일만 읽는다.
+
+### 다음 담당자가 이어갈 순서
+
+1. 이번 결과를 사용자에게 보고하고 다음 과학 단계의 승인을 기다린다. 이미 승인된 결측 분석 결과를 “계속 실행 중”이라고 보고하지 않는다.
+2. 승인되면 우선 기존 중심별 원장의 결측률을 렌즈별·공간별로 비교해 전역 중앙값이 가리는 차이를 진단한다. 원래 66개 중심과 23개 빈 random을 유지하며 표본선택을 사후로 바꾸지 않는다.
+3. COSMOS에 필요한 품질·밝기·색·마스크 입력이 실제로 존재하는지 확인하고 재현 가능한 선택과 불가능한 선택을 명시한다. 필요한 새 자료가 있으면 정확한 파일·열·범위·예상 용량을 제시해 별도 수신 승인을 받는다.
+4. 그 뒤 selection bias, 적색편이별 shear responsivity, 참조-z 오차, COSMOS field variance, 구성원 오염, 재사용 source 및 공간 공분산을 검증한다. 현재 `science_measurement=false`, `calibration_applied=false`이며 적색편이 계수를 실제 전단·질량에 적용하지 않는다.
+
+ICL 측의 기존 10% 지지 표본·PSF 코어 주입 검증·풍부도 재가중 민감도는 위 2026-11-21 기록을 따른다. PSF 확장 날개, source-Poisson, sky 전달 및 영상 공분산 관문은 남아 있다. 이번 인계에서 ICL 결과를 추가 계산하거나 과학 측정으로 승격하지 않았다. Web/standalone 파이프라인의 공유 실행기와 Python 재현 구현도 양쪽 저장소의 미커밋 변경으로 남아 있으며, 이번 문서 작성으로 UI 종단간 검증까지 완료됐다는 뜻은 아니다.
+
+## 2026-11-24 S16A matched-center missingness
+
+After the user reactivated the research goal, added and ran the offline Astrafek runner `analysis/icl_wgl_membership/hsc_debug/audit_s16a_missingness_matched_centers.py`. It verifies the preceding missingness summary/table hashes and compares each lens against its five fixed random centers, pooling random missing/selected pair counts. All 66 centers and 23 empty randoms remain explicit; an empty center has undefined missingness rather than zero. Only four of 11 lenses have selected pairs at all five random centers. Lens-minus-pooled-random missing-input fractions range −0.4307 to +2.5094 percentage points. The maximum is S23B_3012: lens 3.4088%, random 0.8995%. These are descriptive source-pair fractions, not lensing-weight loss, significance tests, corrections or proof of spatial matching. Reused sources, absent random support and selection compatibility remain unresolved; `science_measurement=false`, `calibration_applied=false`.
+
+Output: `/home/kjhan/BACKUP/Astrafek/s16a_missingness_matched_centers_20261124_01/`. The runner records input/output/code hashes and refuses overwrite. A separate stdlib re-read reconciled all 11 groups and 23 empty centers to the preceding table. Run from OGFinder: `/usr/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_missingness_matched_centers.py --output NEW_DIRECTORY`. No remote query or download occurred. Next: inspect local COSMOS field availability for replayable quality/photometry selection; any new data receipt still requires the user's scope-specific approval.
+
+## 2026-11-24 COSMOS selection-input inventory
+
+Added and ran `analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_selection_fields.py` on the three already-received FITS files, checking all three hashes against the pinned intake summary. The two Ephor_AB point tables have 54,339/689,598 rows and 22 columns each; the reference has 18,852 rows and eight columns (S17a_objid, RA/Dec, SOM/shape weights, reference redshift, whichfile and idx_in_file). The files provide point-z best/risk and reference-weight inputs, but contain none of the 30 literal field names in the local Table-4 input contract. Their actual schemas also contain no photometric flux/error/magnitude, raw shape quality or pixel/primary flags. Thus the current receipt alone cannot replay those cuts. A blank-input contract gives 20 unknown criteria; this is a capability statement, not a failed selection for all COSMOS galaxies. Do not infer shape properties from weight_source or mask eligibility from reference membership.
+
+Output: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_selection_fields_20261124_01/` (`fits_schema.json`, `required_selection_fields.tsv`, `summary.json`). An independent stdlib read verified both output hashes, 30 distinct required-field rows and the three schema inventories. The runner preserves input hashes, code hash and limitations and refuses overwrite. Reproduce from OGFinder with `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_cosmos_selection_fields.py --output NEW_DIRECTORY`.
+
+No new remote query or download. Full selection compatibility, missing-photo-z transport, accepted-pixel/Sirius geometry and release equivalence remain unresolved. `science_measurement=false`, `calibration_applied=false`. Next investigate documented companion photometry catalogs and their field definitions before proposing a precise, separately approved receipt. No size or available quality fields for those unreceived catalogs have yet been verified; do not promise they resolve the full selection mismatch.
+
+## 2026-11-24 COSMOS companion metadata probe
+
+The official S17A Wide-COSMOS page (`https://hsc-release.mtk.nao.ac.jp/doc/index.php/s17a-wide-cosmos/`) names `target_wide_s17a_9812.fits` and `target_wide_s17a_9813.fits` as companion photometry and describes `whichfile`/zero-based `idx_in_file` for locating reference objects. These are candidate sources, not proof that all missing quality/mask inputs exist. No companion FITS body was requested.
+
+Added `analysis/icl_wgl_membership/hsc_debug/probe_s16a_cosmos_companion_metadata.py`: two pinned URLs, HEAD only, no redirects, no response-body reads, no automatic credential prompt or file lookup. Optional `--use-env-auth` uses already-set HSC_USER/HSC_PASSWORD in memory without recording them. Authenticated HEAD is not automatically invoked and does not authorize any subsequent GET. Current unauthenticated HEAD results were HTTP 401 for both URLs; error-page length 188 is not a FITS size and is deliberately excluded. Sizes, ETags and schemas remain unknown, so a size-pinned receipt plan is not yet ready. Do not download either file based on earlier three-file approval.
+
+Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_01.json`. Four simulated response cases (200 numeric length, 401, redirect, malformed length) verified HEAD-only behavior, no body reads and no error/redirect size acceptance. Run `python3 -B analysis/icl_wgl_membership/hsc_debug/probe_s16a_cosmos_companion_metadata.py --output NEW_JSON` from OGFinder. The current run did not use credentials or save them. This authentication boundary applies to companion metadata; independent local ICL/WL pipeline and validation work can continue. Any new scientific data receipt remains subject to explicit approval of its concrete scope.
+
+## 2026-11-24 S16A 결측의 하늘 위치 진단과 증거 단계 선택 진단 연결
+
+이 절은 Claude 세션의 작업이다. 직전 세 절(01:21–01:26)은 다른 세션이 남겼고, 사용자가 그 세션을 멈춘 뒤 이어받았다. 원격 조회·다운로드·보정 적용·커밋·푸시는 하지 않았다. `science_measurement=false`, `calibration_applied=false`.
+
+**결측의 하늘 위치.** 새 실행기 `analysis/icl_wgl_membership/hsc_debug/audit_s16a_missingness_geometry.py`(SHA-256 `ec722c65…305c87`)는 2026-11-21 결측 요약 해시와 pilot 계보를 확인한 뒤 기존 보충자료만 읽는다. 출력은 `/home/kjhan/BACKUP/Astrafek/s16a_missingness_geometry_20261124_01/`(`patch_missingness.tsv`, `lens_spatial_clustering.tsv`, `missing_sky.png`, `summary.json`)이다. 덮어쓰기는 거부한다.
+
+- 결측 6,671개 중 6,306개(94.5%)가 S23B_3620 주변이다. 이 렌즈의 고유 객체 결측률은 25.7%이고, 나머지 렌즈는 0–1.7%다.
+- 결측은 공간적으로 뭉쳐 있다. S23B_3620에서 결측 객체의 최근접 이웃이 결측일 확률은 0.924이고, 유한 객체의 경우는 0.027이다. S23B_3012는 0.870과 0.002다.
+- `object_id`에서 풀어 낸 tract/patch 157개 중 결측이 없는 것은 116개, 부분 결측 41개, 전부 결측 0개다. patch 전체가 photo-z 표에서 빠진 경우는 없다. 결측은 patch 안에서 RA·Dec 축에 평행한 띠와 사각 블록으로 나타난다(`missing_sky.png`). S23B_3620은 tract 10048·10049다.
+- 0.05° 셀 중 결측률이 0.1–0.9인 셀 안에서 결측 객체와 유한 객체의 소광 보정 i 등급, cmodel 5밴드 S/N, extendedness, blendedness, resolution, shape 가중치 분위수는 사실상 같다. cmodel 플럭스 결측률도 두 집단이 같다(i 0%, 기타 ≤0.3%).
+- 해석: 객체 속성 선택이 아니라 하늘 위치 선택이다. Ephor_AB 입력은 cmodel이 아니라 afterburner `{g,r,i,z,y}parent_flux_convolved_2_1`이다(`schema_photoz_ephor_ab.json`). 띠와 블록이 노출 수가 적은 영역(CCD 간격, 밴드별 커버리지)과 대응한다는 가설은 **검증하지 않았다**. 그 열이나 `countinputs` 계열은 로컬에 없다. tract/patch 해독은 HSC coadd `object_id` 비트 배치를 가정했고 skymap으로 확인하지 않았다.
+- 함의(독립 검토 후 수정): S23B_3620의 가중 결측률은 렌즈 26.2%, random 5개 합산 25.6%로 비슷하다. 다른 것은 random 중심별 분포(약 1–52%)와 반경 분포다. 위치에 따른 결측은 그 자체로는 주로 S/N 손실이다. 다만 source 수 기반 boost·희석 보정, 방위각 불완전성과 가법 계통오차의 결합, 또는 결측과 적색편이의 상관(검증 불가)을 통해 편향이 생길 수 있다. Ephor 가용성을 source 마스크의 일부로 렌즈·random 쌍에 똑같이 적용하고, 이 집단을 따로 보고한다. 결측 객체도 cmodel 5밴드는 유한하므로 "커버리지 부족" 원인은 근거가 없다. afterburner 처리·적재 공백도 같은 정도로 열린 가설이다.
+
+**증거 단계 연결 마무리.** 앞선 세션이 `build_s16a_calibration_evidence.py`에 `--selection-root`를, `plugins/icl/plugin.json`에 `s16a-selection-root`를 추가하던 중 멈췄다. 매니페스트 인자를 조건부 요소 `{"if": "s16a-selection-root", "argv": [...]}`로 바꿔, 값이 비면 옵션 자체를 넘기지 않게 했다(빈 값이면 `selection_diagnostics.status=not_requested`). 새 테스트 `test_build_s16a_calibration_evidence.py`는 7건이다(CLI 확장 2건 포함). 계보 검증 통과, 산출물 변경·pilot 계보·intake 계보 불일치 거부, 제품 누락 거부, 빈 값/설정 값의 CLI 확장을 확인한다. `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13`과 `--selection-root /home/kjhan/BACKUP/Astrafek`로 실제 빌더를 스크래치 출력에 돌려 `verified`를 확인했다. 함께 돌린 기존 회귀(`test_workflow.py`, `test_s16a_y1_source_contract.py`, `test_s23b_s16a_quality_supplement_qa.py`, `ogfkit/test_wl_photoz.py`)를 포함해 **66 passed**다. 데스크톱 GUI 종단간 실행은 하지 않았다.
+
+**동반 카탈로그 인증 HEAD.** 사용자가 2026-11-24 인증 HEAD 조회를 허용했다. `probe_s16a_cosmos_companion_metadata.py`에 기존 수신기와 같은 방식의 `--prompt-auth`(대화형 터미널에서 숨김 입력 1회, `--user` 기본 `kjhan0606`, 비TTY면 거부)를 추가했다. HEAD 전용, 리다이렉트 거부, 본문 미판독은 그대로다. 사용자가 tmux 창에서 직접 암호를 입력해 2026-11-23T16:37:00Z(UTC)에 실행했다. 두 URL 모두 HTTP 200, `application/octet-stream`이다. `target_wide_s17a_9812.fits`는 40,368,960 B, ETag `"5cde22d8-267fb40"`이고, `target_wide_s17a_9813.fits`는 511,899,840 B, ETag `"5cde22dc-1e82f8c0"`이다. Last-Modified는 둘 다 2019-05-17이고, 합계는 552,268,800 B(약 527 MiB)다. 결과 파일은 `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_02.json`(SHA-256 `6957f069…5bfdc5`)이며 `credentials_saved=false`, `fits_body_requests=0`이다. FITS 스키마는 아직 보지 않았으므로, 이 파일들에 Table 4 품질·마스크 열이 있다는 것은 **미검증**이다. HEAD 결과는 FITS 수신 승인이 아니다.
+
+재현(OGFinder에서): `OPENBLAS_NUM_THREADS=1 PYTHONPATH=. /home/kjhan/miniconda3/bin/python3 -B analysis/icl_wgl_membership/hsc_debug/audit_s16a_missingness_geometry.py --output NEW_DIRECTORY`.
+
+다음: (1) 크기와 ETag가 고정됐으므로, 두 동반 FITS(약 527 MiB, `/gpfs` 여유 121 TB)의 크기·ETag 고정 수신 계획을 만들고 별도 승인을 받는다. 수신 뒤에는 스키마를 Table 4 입력 계약 30개 필드와 대조한다. (2) 결측 원인을 가리려면 afterburner 플럭스나 밴드별 입력 노출 수를 결측 객체와 대조해야 한다. 필요한 열·행 범위를 정한 조회 계획은 별도 승인 대상이다. (3) 그 전까지 렌즈–random 비교는 S23B_3620을 포함한 경우와 뺀 경우를 함께 보고하는 민감도로만 다룬다.
+
+## 2026-11-24 COSMOS 동반 측광 수신, 스키마 대조, afterburner–Ephor 관계
+
+이 절은 Claude 세션의 작업이다. 커밋과 푸시는 하지 않았다. `science_measurement=false`, `calibration_applied=false`.
+
+**승인과 인증 방식.** 사용자가 인증 HEAD 결과(위 절)를 보고 두 파일 수신을 승인했다. 사용자 요청에 따라, 실행마다 비밀번호를 묻는 대신 tmux 창 `Astrafek:hsc_auth`를 인증 셸로 둔다. history를 끈 bash에 사용자가 비밀번호를 한 번 입력하고 `HSC_USER`/`HSC_PASSWORD`를 그 셸 메모리에만 export한다. 이후 조회는 그 창에 명령을 보내 `--use-env-auth`로 실행한다. 디스크·로그·receipt에는 남기지 않으며, 창을 닫으면 사라진다. 그 셸의 `python3`은 astropy가 없는 시스템 3.9이므로 반드시 `/home/kjhan/miniconda3/bin/python3`를 쓴다.
+
+**수신.** 계획은 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cosmos_companion_plan_2026-11-24_01/plan.json`(plan_sha256 `29e3cb62…4fa8788`)이다. 두 파일의 URL·크기·ETag를 인증 HEAD 증거에서 고정했다. 이전 3파일 계획의 제외 항목("Additional S17A photometry files")은 이번 승인으로 이 두 파일에 한해 해제했다. 수신기 `receive_s16a_cosmos_companion.py`(`6130b01e…`)는 기존 `receive_s16a_ephor_ab_cosmos.py`의 `receive_file`/`verify_state`를 재사용한다(If-Match, 길이 고정, 리다이렉트 거부, `.part`, FITS checksum 검사, 실패 시 예약 유지). 수신 전에는 같은 인증으로 HEAD 사전점검을 다시 했다(`/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_03.json`, 200/크기/ETag 일치). 실행 전 독립 검토 워크플로(7개 에이전트)에서 확인된 결함은 bare `python3` 인터프리터 문제 하나였다. 0바이트 실패 시 재시도 불가는 의도된 fail-closed 동작이라 기각됐다. 수신 결과는 `results/receipt.json`(`299f14f1…`)이며, 2/2 complete, 552,268,800 B, `credentials_saved=false`다. 파일 SHA-256은 `target_wide_s17a_9812.fits` `7a7300d7…b5f565`(54,351행), `target_wide_s17a_9813.fits` `21c0065e…37d9d2`(689,836행)다. 두 파일 모두 218열이다.
+
+**스키마 대조.** `audit_s16a_cosmos_companion_schema.py`(`8e755830…`)의 출력은 `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_schema_20261124_01/`(summary `09fd8d57…`)이다. 필수 30개 필드를 S16A 원천 열 이름(보충 SQL의 meas/meas2/forced, shape 맵)으로 대조했다.
+- S16A 원천 열 이름이 그대로 있는 것은 11개다(`icmodel_flux`·`_err`, `a_i`, g/r/z/y `cmodel_flux`·`_err`). 나머지 19개는 없다.
+- `i_mag`는 플럭스 단위가 erg/s/cm²/Hz라면 −2.5 log10(f) − 48.6으로 정확히 계산된다(중앙값 i 25.19로 일관). 이 단위 규약은 오프라인으로 확인하지 않았다.
+- 정확한 대응이 없는 것: e1/e2, is_primary, deblend/centroid/7개 픽셀 플래그, HSM regauss flags/sigma/resolution, extendedness, blendedness. extendedness는 PSF/cmodel 비로만 근사할 수 있다(0.925–0.985 사이에서 66,555개가 분류를 바꾼다). SDSS 모멘트는 regauss와 다르다. is_primary는 tract 간 ID 중복 0, 날카로운 RA 경계, 근접쌍 희소로 보아 이미 primary로 추정되지만 미검증이다.
+- 동반 측광은 S17A 처리다(forced일 가능성). 이 플럭스로 다시 계산하면 참조 객체 중 i S/N<10이 8개, 소광 보정 i>24.5가 18개, 2밴드 S/N 조건 탈락이 5개다. 따라서 참조 선택을 정확히 재현할 수 없다.
+- `_isnull` 열은 모든 행에서 False이고, 결측은 NaN으로만 나타난다. `np.array(FITS_rec)`로 읽으면 논리열이 원시 바이트(70/84)로 남아 `astype(bool)`이 전부 True가 되는 함정이 있으니, `FITS_rec[col]`로 읽는다.
+- 결합: 참조 18,852행 중 `whichfile` 9812는 1,189, 9813은 17,579, −99는 84다. 0-기반 `idx_in_file`이 가리키는 동반 행의 `object_id`가 int64로 18,768/18,768 일치하고, ±1·±2 이동에서는 0이다. float64로 비교하면 ±1 이동에서 거짓 일치가 생긴다. `idx_in_file`은 Ephor pdf 표의 행 번호가 아니므로 Ephor는 ID로 결합한다. `whichfile=−99` 84개는 tract 9813 ID지만 동반·Ephor 어디에도 없고, SOM×shape 가중치의 0.50%를 차지한다.
+
+**afterburner–Ephor 관계.** `audit_s16a_cosmos_afterburner_photoz.py`(`798103d2…`)의 출력은 `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_afterburner_photoz_20261124_01/summary.json`(`b837e9b1…`)이다. tract 9812/9813에서 동반 객체에 Ephor_AB 행이 없는 경우는, 다섯 밴드 `parent_flux_convolved_2_1` 중 하나라도 NaN인 경우와 정확히 같다. 12/12와 238/238이고, 행이 있는 743,937개 중 NaN은 0개다(250/744,187 = 0.034%).
+- 0 이하 플럭스는 행을 잃지 않는다. cmodel NaN도 행 부재를 예측하지 못한다(행 없음 46/250, 행 있음 18,237).
+- COSMOS의 이 250개는 어둡고(중앙 i S/N 2.7), 191개가 한 밴드(주로 y/z)만 빠졌다. 참조 18,852행에는 0개, Table-4 근사 선택 통과 약 224k 중 11개(0.005%)다. S16A의 띠·블록 양상(Table-4 선택 source의 5.75%)과는 다른 양상이다.
+- 해석: Ephor_AB가 afterburner 5밴드를 모두 요구한다는 기전은 COSMOS에서 확인됐다. S16A 렌즈장 결측의 원인으로는 **검증되지 않았다**. S16A afterburner 플럭스를 조회한 적이 없고, 보충 SQL이 `z.object_id` 없이 LEFT JOIN해서 "행 부재"와 "NULL 값"을 구별할 수 없기 때문이다.
+- COSMOS 참조는 이 결측 양상을 포함하지 않으므로 그 양상의 보정을 경험적으로 검증할 수 없다. 결측 source를 제외하면 보정은 남은 source만 기술하면 된다. 위치에 따른 결측이라면 남은 n(z)는 대표성을 유지한다.
+
+독립 재현 워크플로(4개 에이전트, 원본 FITS에서 직접 계산)가 위 수치를 모두 재현했다. 해석 문구는 그 검토로 고쳤다.
+
+**테스트.** `test_receive_s16a_cosmos_companion.py` 5건, `test_audit_s16a_cosmos_companion.py` 3건, `test_build_s16a_calibration_evidence.py` 7건을 함께 실행해 15 passed다. 새 수신기 테스트와 기존 수신기 전송 테스트 4건을 함께 실행한 결과는 9 passed다.
+
+**재현(OGFinder/analysis/icl_wgl_membership/hsc_debug에서).** `OPENBLAS_NUM_THREADS=1 /home/kjhan/miniconda3/bin/python3 -B audit_s16a_cosmos_companion_schema.py --output NEW`, 같은 방식으로 `audit_s16a_cosmos_afterburner_photoz.py --output NEW`. 수신 재검증(무인증, 무네트워크): `… receive_s16a_cosmos_companion.py --receive --approved-plan-sha256 29e3cb624a420b44244ce793674b1561fe1c8041b2d3cce01ed64f5fb4fa8788`. pending이 없으면 로컬 검증만 한다.
+
+**다음(사용자 승인 필요).** S16A 결측 원인을 직접 가리는 CAS 조회가 필요하다. 결측 6,671개와 같은 셀 대조군에 대해 `s16a_wide` afterburner `{g,r,i,z,y}parent_flux_convolved_2_1`과 `photoz_ephor_ab` 행 존재(`z.object_id`)를 조회하는 것이다. 열·행·예상 크기를 고정한 계획은 별도 승인 대상이다. `whichfile=−99` 84개(가중치 0.50%)를 제외할지 가중치에 반영할지도 결정이 필요하다.
+
+## 2026-11-24 S16A afterburner·Ephor 행 존재 조회 계획(제출 전)
+
+이 절은 Claude 세션의 작업이다. CAS 제출·커밋·푸시는 하지 않았다. `science_measurement=false`, `calibration_applied=false`.
+
+**사용자 결정(2026-11-24).** (1) 위 S16A 조회를 원칙적으로 승인했다. 실행은 아래 계획 해시의 최종 승인 뒤에 한다. (2) `whichfile=−99` 84개는 **제외**한다. 기존 `intake_s16a_ephor_ab_cosmos.py`가 Ephor 행과 ID 교집합(18,768개)만 쓰므로 코드 변경은 없다. 보고하는 참조 가중치 범위는 양의 SOM×shape 가중치의 99.496%이고, n(z)는 결합된 행에서만 정규화한다.
+
+**공개 스키마 문서.** `https://hsc-release.mtk.nao.ac.jp/schema/schemata/pdr1.s16a_wide.afterburner.json`을 인증 없이 받아 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_afterburner_schema_sources_2026-11-24_01/`(`schema_afterburner.json` SHA-256 `85454048…1c03`, `sources.json`)에 두었다. 카탈로그 조회가 아니다. afterburner는 `"_ab:flux"` 위의 view이고 스키마에 색인이 없어 CAS에서의 결합 비용은 모른다.
+
+**범위.** 행은 이미 수행한 품질 보충 조회(plan `44b9d4df…`)의 115,993개 ID와 24개 배치(5,000개) 경계를 그대로 쓴다. VALUES 목록이 바이트 단위로 같고, 새 객체는 없다. 결측 0.05° 셀만 고르면 24,200개(대조군 17,529개)지만, 대조군을 사후에 정의하지 않고 "행 있음 ⇒ afterburner 유한"을 전 표본에서 검사하려고 전체 장부를 택했다. 열은 35개다.
+- `r.object_id`, `b.object_id`(afterburner 행 존재), `z.object_id`(Ephor 행 존재), `z.photoz_best`, `z.photoz_risk_best`.
+- grizy 각각: afterburner `parent_flux_convolved_2_1`, `_2_1_flags`, `parent_flux_convolved_flag`, `parent_flux_convolved_2_deconv`, `parent_flux_convolved_seeing`, 그리고 forced `countinputs`.
+
+세 표 모두 `object_id` LEFT JOIN이고 필터는 없다. SQL NULL은 빈 칸, NaN은 `nan`으로 와서 구별된다. 예상 CSV는 32–65 MB(이전 31열 보충 45,335,621 B, 391 B/행 기준), 누적 상한은 128 MiB다.
+
+**계획과 실행기.**
+- 계획: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_afterburner_photoz_rows_plan_2026-11-24_02/plan.json`(`query_plan_sha256` **`951a81fbcf6ead170ba64903ade114988636c3105da00bcad90d8aada33ecf94`**)과 SQL 24개.
+- 생성기: `prepare_s16a_afterburner_photoz_rows.py`(`40dd7812…`). 기존 보충 계획을 전부 재검증한 뒤 SQL을 만들고, `--verify`로 오프라인 재검사한다.
+- 수신기: `submit_s16a_afterburner_photoz_rows.py`(`8bba48ca…`). 기존 CAS 클라이언트·누적 바이트 예산·제출 장부를 재사용하고, 직렬로 처리하며 재개할 수 있다. 인증은 `--use-env-auth`(tmux `hsc_auth`) 또는 숨김 입력 1회다.
+- 사후 분석 초안: `audit_s16a_afterburner_photoz_rows.py`(`3fb573cf…`). 아직 실행하지 않았다.
+
+**제출 전 독립 검토(워크플로 6개 에이전트).** SQL 렌즈의 결함은 0건이다. 확인된 결함 2건을 고쳤다.
+1. 기형 CSV에서 나는 `csv.Error`가 `downloaded_invalid` 관문을 건너뛰어, 재실행마다 다시 받고 예산을 다시 차감했다. 예외 목록에 `csv.Error`를 추가했다. 같은 결함이 이미 실행된 `submit_s23b_s16a_quality_supplement.py:129`에도 있으나, 그 파일은 완료 receipt의 코드 해시에 묶여 있어 고치지 않았다.
+2. 첫 계획(`c483c8ca…`, 25열)에는 1.09″ 목표보다 국소 PSF가 넓을 때 측정을 건너뛰었다는 `_2_deconv` 플래그와 `seeing`이 없었다. 그러면 띠·블록 결측의 유력한 원인(CCD·방문 경계의 PSF 변화)과 일반 NaN을 구별할 수 없었다. 두 열을 넣어 계획을 다시 만들었다. 승인·제출되지 않은 `_01` 계획 디렉터리는 지웠다.
+
+경미 항목도 반영했다.
+- 이스케이프된 비밀번호(JSON·HTML·repr) 가림.
+- 전이적으로 import한 로컬 모듈 14개의 해시 고정. 예산 검사에 쓰는 `require`가 `audit_s23b_s16a_wl_random_support.py`에서 오기 때문이다.
+- 고정된 계획 디렉터리 밖의 사본에서는 실행 거부. 사본이면 예산이 초기화되기 때문이다.
+- 제출 직전과 검증 시마다 SQL SHA-256 재확인.
+
+`test_submit_s16a_afterburner_photoz_rows.py`(23건)와 기존 `test_submit_s23b_s16a_quality_supplement.py`를 함께 실행해 **36 passed**다.
+
+**실행(승인 뒤, tmux `Astrafek:hsc_auth`에서).** `cd /home/kjhan/BACKUP/Astrafek/OGFinder/analysis/icl_wgl_membership/hsc_debug && OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 /home/kjhan/miniconda3/bin/python3 -B submit_s16a_afterburner_photoz_rows.py --submit --use-env-auth --approved-plan-sha256 951a81fbcf6ead170ba64903ade114988636c3105da00bcad90d8aada33ecf94`. 첫 배치가 SQL 호환성 검사이며, 오류가 나면 범위를 바꾸지 않고 멈춘다. 오프라인 확인은 `… submit_s16a_afterburner_photoz_rows.py --plan`이다.
+
+## 2026-11-24 S16A photo-z 결측 원인: afterburner PSF 정합 측광의 deconv 생략
+
+이 절은 Claude 세션의 작업이다. 커밋·푸시는 하지 않았다. `science_measurement=false`, `calibration_applied=false`. 선택·보정은 바꾸지 않았다.
+
+**수신.** 사용자가 2026-11-24 위 계획(`951a81fb…`)을 승인했다. tmux `hsc_auth`에서 `--use-env-auth`로 실행했고, 비밀번호는 다시 묻지 않았다. CAS 작업 1086414–1086437(24개)이 모두 첫 시도에 끝났다. 결과는 115,993행, 38,752,722 B(상한 128 MiB의 29%)이고, 예약 바이트와 수신 바이트가 같다. receipt는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_afterburner_photoz_rows_plan_2026-11-24_02/results/download_summary.json`(`67d054aa…`)이며 `credentials_saved=false`다. results 파일에서 인증 문자열은 검출되지 않았다. 코드 해시 14개가 고정됐고, 무인증·무네트워크 재검증(`--submit --approved-plan-sha256 …`, 이미 complete이면 로컬 검증만 한다)도 통과했다.
+
+**분석.** 실행기는 `audit_s16a_afterburner_photoz_rows.py`(`3ad08017…`)다. 출력은 `/home/kjhan/BACKUP/Astrafek/s16a_afterburner_photoz_rows_20261124_01/`이며, `summary.json` `291e928d…`, 분할표 2개, `band_status.tsv`, `band_inputs_seeing.tsv`로 이뤄진다.
+- 새 photo-z는 이전 보충 조회와 객체 단위로 같다. 유한 109,321개 집합이 같고 값 불일치는 0이다. 이전의 빈 6,672칸은 모두 **Ephor_AB 행 부재**(`z.object_id` NULL)였다. "값 NULL"이 아니었다.
+- afterburner 행은 115,993개 모두 있다. 플럭스 NULL은 0이고 결측은 `nan`뿐이다.
+- Table-4 선택 115,978개에서 Ephor 행 부재 6,671 ⇔ afterburner 5밴드 중 하나 이상 NaN 6,671이 정확히 일치한다. 어긋나는 쪽은 양방향 모두 0이다. S17A COSMOS(250/250, 0/743,937)와 같은 규칙이 두 릴리스에서 성립한다. 다만 이는 동시 발생이며, Ephor_AB가 5밴드를 요구한다는 문서상 인과로 확인한 것은 아니다.
+- 결측 객체 6,672개는 모두 정확히 한 밴드만 빠졌다.
+  - r에서 `parent_flux_convolved_2_deconv`와 `_2_1_flags`가 True인 경우 6,576개(98.6%).
+  - y에서 같은 플래그가 선 경우 90개.
+  - y에서 `seeing`이 NaN이고 플래그가 없는 경우 5개.
+  - g에서 같은 경우(seeing NaN, 플래그 없음) 1개.
+  - `parent_flux_convolved_flag`는 모두 False다.
+- deconv 플래그는 `parent_flux_convolved_seeing`의 한 값에서 정확히 갈린다. r은 미설정 최대 2.7602868, 설정 최소 2.7602973이고, y는 2.7602632와 2.760364다. 6.5 px FWHM을 가우스 σ로 바꾼 값 2.7602959와 맞는다. 0.168″/px이면 1.092″ FWHM, 곧 afterburner 1.09″ 목표다. 스키마에 단위가 없으므로 이 해석은 경계값에서 추론한 것이다.
+- seeing NaN 6건은 "PSF가 목표보다 넓음"이 아닌 별개의 실패다. (정정: 아래 "afterburner 비의존 photo-z 수신" 절에서 6건 모두 그 밴드의 `countinputs=0`, 즉 coadd 입력 없음으로 확인했다.)
+
+**독립 검증(워크플로 2개 에이전트).** stdlib만 쓴 재현이 위 수치를 모두 원본 CSV에서 재현했다. 심사자 관점의 비판으로 다음과 같이 해석을 고쳤다.
+- **기전 문구.** "Ephor_AB 행이 없는 것은 그 위치의 afterburner PSF 크기가 1.09″ 목표를 넘는 밴드(주로 r)에서 deconv 플래그와 함께 NaN이 되기 때문이다." 데이터가 보여 주는 것은 정확한 동시 발생이다.
+- **위치.** tract 10048/10049가 6,301/6,671(94.5%)이다. 다른 렌즈장에도 370개가 있다(S23B_3012 269, S23B_8206 52, S23B_8310 38, 기타 6). r-deconv 중 적어도 274개가 10048/10049 밖에 있다. S23B_3620만의 국소 결함이 아니다.
+- **선택의 성격.** 은하 고유 속성으로 하는 선택은 아니다. 혼합 셀(0.05°, 5,274 결측 대 7,855 유한)에서 i 등급, i S/N, resolution, shape 가중치, extendedness는 1–2% 안에서 같다. 그러나 깊이·관측조건과는 상관한다.
+  - 결측 쪽은 모든 밴드에서 coadd 입력이 약 1개 적다(i/z/y 중앙값 6 대 7).
+  - 혼합 셀의 y S/N은 5–11% 낮다(대략 2–4.5σ, 독립 객체 가정의 거친 추정).
+  - 전체적으로 i PSF는 +2.2%, y PSF는 +12% 넓다.
+  - 혼합 셀은 r seeing 대비가 2%뿐이라, r seeing과 source 품질의 무관함은 검정하지 못한다.
+- **COSMOS 보정의 적용성.** COSMOS 참조는 COSMOS 관측조건에서 afterburner가 완전한 객체를 나타낸다. 렌즈장의 생존 source, 특히 r PSF가 경계 바로 아래인 다수(전체 유한 r FWHM q75 약 1.02″)를 대표하는지는 **검증되지 않았다**. "적색편이와 무관한 결측"은 이 자료로 검정할 수 없다. 옹호할 수 있는 형태는 "위치·선택이 주어졌을 때의 무작위 결측(MAR)"이다.
+- **렌즈–random 처리.** Ephor 가용성을 source 마스크로 렌즈·random에 똑같이 적용하면 평균 마스크 비율만 맞는다(pair 가중치 결측 렌즈 4.89%, random 5.01%). 렌즈별로는 다르다. S23B_3012는 3.4% 대 0.9%, S23B_8206은 2.65% 대 0.19%이고, S23B_3620의 random은 1–52%에 걸친다. 렌즈 3개는 쓸 수 있는 random이 없다. boost·random 항은 annulus별 마스크 면적으로 정규화해야 한다. S23B_3620 제외 비교는 source 21%를 빼는 효과와 섞인다.
+
+**테스트.** `test_submit_s16a_afterburner_photoz_rows.py`는 24건이다. 분석 분류기 테스트를 추가했고, 실제 수신 뒤에는 "results 없음" 대신 "checkpoint 불변"을 확인하도록 고쳤다. 관련 5개 테스트 파일을 함께 실행해 **52 passed**다.
+
+**다음(오프라인, 승인 대기).** 새 원격 조회는 필요 없다.
+1. 결측 규칙(afterburner PSF σ > 2.7603 px in any band)을 명시적 source/sky 마스크로 만들고, annulus별 마스크 면적 정규화로 boost·random 항을 진단한다.
+2. 같은 셀에서 cmodel g−i, i−z, z−y 색(r 제외)을 결측과 유한 객체 사이에서 비교한다. z와 무관한 결측인지에 대한 대리 검정이다.
+3. r PSF FWHM 약 1.0″ 초과 source를 자르는 변형으로 경계 바로 아래 생존자의 민감도를 본다.
+4. 렌즈별 jackknife와 마스크 이식 null 검정을 한다. 마지막 것은 S23B_3620의 렌즈 중심 마스크를 다른 렌즈에 적용하는 것이다.
+
+## 2026-11-24 afterburner 마스크의 boost·photo-z 영향 진단(오프라인)
+
+이 절은 Claude 세션의 작업이다. 사용자가 위 1–4를 승인했다("진행하시오"). 원격 조회·커밋·푸시는 없다. `science_measurement=false`, `calibration_applied=false`. 선택·보정은 바꾸지 않았다.
+
+**실행기와 출력.** 실행기는 `analysis/icl_wgl_membership/hsc_debug/audit_s16a_afterburner_mask_effects.py`(`daf79c9c…`)이고 테스트는 `test_audit_s16a_afterburner_mask_effects.py` 5건이다. 출력은 `/home/kjhan/BACKUP/Astrafek/s16a_afterburner_mask_effects_20261124_02/`(`summary.json` `f658b605…`)에 있다. 표는 `annulus_boost.tsv`, `transplant_boost.tsv`, `multiplier_sensitivity.tsv`, `multiplier_lens_jackknife.tsv`, `transplant_multiplier.tsv`, `proxy_tests.tsv`다.
+
+실행기는 입력 receipt·보충·pair geometry·COSMOS 계보의 해시를 모두 검증한다. 또 렌즈별 전 반경 multiplier가 기록된 `lens_photoz_reweight.tsv`와 1e-9 안에서 같아야만 진행한다. 임계값과 seed는 사전에 고정했고, 다음 두 가지는 사후에 바꿨으며 `summary.json`에 그렇게 적었다.
+- 근임계 per-lens 지지 규칙(유지 가중치 ≥ 0.5). 시험 실행에서 근임계 컷이 두 렌즈장의 가중치를 94–99.9% 지워 per-lens 변화가 정의되지 않음을 본 뒤 넣었다.
+- 스택의 matched pooling. 독립 검토 뒤 바꿨다.
+- 처음 출력 `_01`은 이 두 변경 전 것이라 지웠다. multiplier·proxy·이식 multiplier 표는 `_02`와 바이트가 같다.
+
+정의는 다음과 같다.
+- 마스크: Ephor 결측. afterburner 플럭스 NaN과 동일하다.
+- 면적: 4″ 격자 점을 같은 중심의 최근접 선택 source로 표지하고, footprint를 30″(20/45″ 민감도)로 잡는다.
+- boost: (렌즈 수/면적)/(합친 random 수/면적)이다. pre는 마스크 전, naive는 마스크 후 source를 footprint 면적으로 나눈 것, area는 마스크 후 source를 비마스크 면적으로 나눈 것이다. 스택은 각 annulus에서 렌즈와 random 모두 footprint가 있는 그룹만 합친다. random이 있는 렌즈는 8개이고, 0.7 Mpc 안쪽은 6개다.
+
+**결과(독립 재현 후 검토로 고친 문구).**
+1. **boost.**
+   - naive boost(마스크 무시)의 pre 대비 편향: 0–0.1 Mpc +9.0%, 0.1–0.2 Mpc +5.8%, 0.4 Mpc 밖 −2.5~+0.4%. S23B_3620 하나만 보면 안쪽 두 annulus에서 +45%, +54%다. 이는 random 쪽이 31–46% 마스크된 데서 오며, 렌즈 source 11개·36개(Poisson SE 35%·23%)에 기댄다.
+   - 면적 정규화 뒤 잔차: −2.6~+2.1%. 안쪽 편향은 없어지지만, annulus별 잔차가 naive 오프셋보다 큰 곳도 있다.
+   - **"오차 안"이라고 하지 않는다.** Poisson SE는 차이가 아닌 boost 자체의 오차다. lens jackknife는 S23B_3620 하나가 효과를 다 가져서 구별력이 없다. 기하 thinning null로 보면 1.5–2 Mpc 잔차(+2.1%)는 경험적으로 부풀린 오차로도 약 3.6σ다. S23B_3620의 area 잔차는 −12.9%(0–0.1 Mpc), +7.3%(1.5–2 Mpc, thinning z=3.5)다.
+   - 다른 비교 기준과 대조하면 다음과 같다. footprint 20→45″만 바꿔도 pre boost가 최대 6% 움직인다. naive 편향은 footprint와 무관한데, 이는 구성상 당연하다. 렌즈장별 pre boost가 2–3 Mpc에서 0.87–1.21이라 렌즈–random 밀도 불일치(약 Poisson의 5배)가 마스크 효과보다 크다.
+   - 4″ 격자는 0–0.2 Mpc 원판을 덜 분해한다. 1″ 독립 검산에서 그곳 잔차가 0.005–0.007 움직였다.
+2. **마스크 이식(boost).**
+   - S23B_3620 렌즈 중심 마스크를 random이 있는 렌즈 7개의 렌즈 쪽에만 기하적으로 씌웠다. 0.7 Mpc 안쪽은 5개이고, 0–0.1 Mpc에는 이식된 마스크가 없다.
+   - 면적 보정 후 boost 비(after/before)는 0.97–1.06이다. 최대 이탈은 +5.6%와 −3.1%이고, 경험적 잡음의 약 1.5–2σ다. 렌즈 쪽 기하 마스크는 1.5 Mpc 안에서 약 3–6%(2σ), 밖에서 1–2% 정밀도로 복원된다.
+   - naive 비가 이식 비율만큼 떨어지는 것은 항등식이다.
+   - 이 검정은 실제 S23B_3620 상황을 검증하지 않는다. random 쪽 마스크, 최근접 source 면적 추정, 마스크–source 밀도 상관을 시험하지 않기 때문이다.
+   - 40–98%가 마스크된 random을 공여자로 쓰면 안쪽이 무의미하다(0.51–1.29). 바깥도 3–5% 낮다.
+3. **마스크 이식(multiplier).**
+   - 공여자 2 × 수용 렌즈 10, 20쌍에서 |Δm| ≤ 0.57%(렌즈 공여 ≤ 0.28%)다. 무작위 thinning SD의 2.1배 이내이고, rms z는 0.82와 1.06이다.
+   - 이식 마스크는 구성상 z와 무관하므로, 이 검정은 기하적 제거의 잡음을 보정할 뿐이다. 실제 마스크가 z와 무관하다는 증거로 쓰지 않는다.
+4. **근임계(r FWHM > 1.0″).**
+   - S23B_3620(중앙 1.085″, q05 1.049″)과 S23B_3012(1.036″)의 장 전체 성질이다. 다른 렌즈는 0.48–0.82″다.
+   - 컷은 사실상 두 렌즈를 빼는 것과 같다. 스택 변화 −0.004%는 +0.055%와 −0.059%가 상쇄된 값이다(lens jackknife SE 0.093%).
+   - multiplier가 고정 COSMOS bin 평균을 쓰므로 seeing 의존 photo-z 편향은 이 검정으로 잡을 수 없다. 장 내부 근임계 검정은 이 자료로 불가능하다.
+   - 같은 셀 비교(77셀, 두 렌즈 주변): 근임계 쪽 z_best가 0.036–0.074 낮고(1.1–1.8σ), i−z가 0.025–0.037 mag 푸르다(raw p 0.012–0.12, Holm ≥ 0.12). 같은 방향의 약한 경향이며, z 또는 photo-z 0.1 수준 이동을 배제하지 못한다.
+5. **색 대리 검정(혼합 셀, 결측 대 유한).**
+   - g−i, i−z, z−y, r−i의 층화 평균 차가 ≤ 0.008 mag이다(null SD 0.005–0.015, p ≥ 0.12, Holm ≥ 0.96).
+   - "차이 없음"이 아니라 "검출된 차이 없음"이다. 2σ 상한은 0.015–0.035 mag이고, 공간 상관 때문에 낙관적이다.
+   - 색–z 모형 없이는 평균 z 차 0.04–0.15를 배제하지 못한다.
+   - 셀 사이 색 변동이 셀 안 신호의 5–40배이고, 고결측 영역은 혼합 셀이 아니라 빠져 있다. redshift 무관 결측과 **모순되지 않으나 확립하지는 않는다**.
+6. **lens jackknife.** 스택 multiplier는 1.0232이고 leave-one-out 범위는 1.022–1.025(SE 0.0020)다. S23B_3620을 빼면 +0.055%로, 렌즈 간 산포(SD 0.77%) 안이다. S23B_3620 고유의 1.5% 미만 편향(스택에서 약 0.2%)은 이 jackknife로 보이지 않는다. COSMOS 보정 오차는 포함하지 않는다.
+
+**독립 검증(워크플로 3개 에이전트).**
+- 재현 에이전트가 별도 코드로 마스크, 중심, 계수 분율, 격자 boost(1e-12), 렌즈 multiplier(<1e-6), 이식 Δm(<1.3e-7), 색 검정 통계를 재현했다.
+- 코드 검토는 검증 가능한 결함을 보고하지 않았다. 그 에이전트가 Edit/Write 도구를 썼으나, 저장소·출력 파일은 바뀌지 않았음을 해시로 확인했다.
+- 지적된 정의 문제 하나는 matched pooling으로 고쳤다. random 면적을 렌즈 footprint가 없는 annulus까지 합치던 문제다.
+- 해석 문구는 심사자 비판으로 위와 같이 고쳤다.
+
+**함의.**
+- Ephor 가용성은 source 마스크로서 boost와 random 항에 annulus별 면적 정규화를 요구한다.
+- 이 표본에서 그 효과(안쪽 +6–9%, 바깥 ±2–3%)는 렌즈–random 장 불일치와 footprint 정의의 계통오차보다 작거나 비슷하다.
+- photo-z multiplier에 대한 마스크 영향은 직접 측정할 수 없다. 기하적 대리로는 잡음 수준(≤ 0.6%)이고, z 무관성은 약하게만 지지된다.
+
+**테스트.** 관련 6개 테스트 파일을 함께 실행해 **57 passed**다.
+
+**다음 후보(승인 대기).**
+- (a) afterburner와 무관한 S16A photo-z(예: cmodel 기반 코드)로 결측 source의 z를 직접 비교하는 CAS 조회. 새 조회이므로 별도 승인 대상이다.
+- (b) random 쪽 마스크까지 포함한 이식 검정과 4″보다 세밀한 격자.
+- (c) 렌즈–random 장 밀도 불일치를 다루는 boost 정의(장별 정규화)의 별도 검토.
+
+## 2026-11-24 afterburner 비의존 S16A photo-z 조회 계획(제출 전)
+
+이 절은 Claude 세션의 작업이다. CAS 제출·커밋·푸시는 하지 않았다. 사용자가 위 (a)를 원칙적으로 승인했다("승인함"). 실행은 아래 계획 해시의 최종 승인 뒤에 한다.
+
+**코드 선택.** 공개 스키마 문서는 인증 없이 받아 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_photoz_schema_sources_2026-11-24_01/`(`sources.json`)에 두었다. 카탈로그 조회는 아니다.
+- `photoz_ephor`: 스키마가 입력을 `{g,r,i,z,y}cmodel_{dev,exp}_flux` 10개로 명시한다. Ephor_AB와 같은 신경망에서 입력 측광만 다르므로 직접 대조에 맞다.
+- `photoz_mizuki`: 독립 템플릿 코드다. 입력 측광이 스키마에 없으므로, 결측 source에 행이 있는지 자체가 결과다.
+- DEmP·FRANKEN-Z·MLZ·NNPZ는 입력 측광을 로컬에서 확인할 수 없어 뺐다.
+- 두 표 모두 `object_id` unique index를 문서화한다.
+
+**범위.** 이전과 같은 115,993개 ID와 24개 배치다. VALUES가 바이트 단위로 같고, 새 객체는 없다. 열은 13개다.
+- `r.object_id`.
+- Ephor: `object_id`, `photoz_best`, `photoz_risk_best`, `photoz_std_best`.
+- Mizuki: 같은 4개와 `reduced_chisq`, `prob_star`, `prob_gal`, `prob_qso`.
+
+예상 CSV는 14–28 MB이고, 검토자가 실측 문자열 폭으로 모의하니 약 13.8 MB였다. 누적 상한은 128 MiB다.
+
+**계획·실행기.**
+- 계획: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_cmodel_photoz_rows_plan_2026-11-24_01/plan.json`. `query_plan_sha256`는 **`35265ee4e1fc7f1ada9fa8c7851f70493835b783d4d892e6e0148116580abe24`**다.
+- 생성기: `prepare_s16a_cmodel_photoz_rows.py`(`2efdebc7…`).
+- 수신기: `submit_s16a_cmodel_photoz_rows.py`(`031072b0…`). afterburner 수신기의 검토된 함수(credentials, code_hashes, redact, batch_text/batch_ids)를 그대로 쓴다. 안전장치도 같다: 고정 디렉터리, 사용 시점 SQL 해시 재확인, csv.Error 관문, 누적 예산, 인증 비저장.
+- 테스트: `test_submit_s16a_cmodel_photoz_rows.py`(`729264b4…`).
+
+**분석 계획(plan에 기록).**
+1. Ephor(cmodel)–Ephor_AB z_best 관계를 local r FWHM의 함수로 본다. 유한 source는 r FWHM ≤ 1.092″이고 결측은 1.092–1.171″라 범위가 겹치지 않는다. 그래서 근임계 유한 source(1.0–1.092″, 28,558개)로 보고, 전 표본 보정을 결측 source에 적용하지 않는다.
+2. 같은 셀 층화 순열로 결측 대 유한의 Ephor(cmodel)·Mizuki z_best를 비교한다.
+3. 렌즈별로 선택 source 전체와 Ephor_AB 가용 source만의 렌즈 효율 가중 평균 z를 비교한다.
+
+**독립 검토(워크플로 2개 에이전트).** 중요 결함은 0건이다. 경미 3건을 반영했다. 첫째, 위 1의 r FWHM 조건화를 명시했다. 둘째, Mizuki fit 진단 4열을 추가했다(두 번째 조회 방지). 셋째, `--submit` 관문 테스트에서 `results/` 미생성을 확인하고 `-B`를 쓰게 했다. 검토자는 결측 source의 r cmodel 플럭스가 6,663/6,672(99.87%)로 유한함도 확인했다. 따라서 Ephor(cmodel) 행이 있을 것으로 기대한다. 반영 전 계획(`220ea693…`, 9열)은 제출·승인되지 않았으므로 지웠다. 관련 테스트 41건이 통과했다.
+
+**실행(승인 뒤, tmux `Astrafek:hsc_auth`).** `cd /home/kjhan/BACKUP/Astrafek/OGFinder/analysis/icl_wgl_membership/hsc_debug && OPENBLAS_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 /home/kjhan/miniconda3/bin/python3 -B submit_s16a_cmodel_photoz_rows.py --submit --use-env-auth --approved-plan-sha256 35265ee4e1fc7f1ada9fa8c7851f70493835b783d4d892e6e0148116580abe24`.
+
+## 2026-11-24 afterburner 비의존 photo-z 수신과 결측 source의 적색편이 비교
+
+이 절은 Claude 세션의 작업이다. 사용자가 위 계획 `35265ee4…`를 승인했다("승인"). 커밋·푸시는 없다. `science_measurement=false`, `calibration_applied=false`. 선택·보정은 바꾸지 않았다.
+
+**수신.**
+- tmux `Astrafek:hsc_auth`에서 `--use-env-auth`로 24배치를 직렬로 받았다. 첫 배치가 SQL 호환성 검사를 통과했고, 오류·재시도는 없었다.
+- 115,993개 ID가 각각 정확히 한 행씩 왔고, 새 객체는 없다.
+- 15,432,619 B를 받았고 예산 계상도 같다(상한 128 MiB).
+- receipt는 `results/download_summary.json`(`cdf4ad0e…`)다. 자격증명 없이 로컬에서 다시 검증해 통과했다.
+- NULL 행은 Ephor(cmodel) 433, Mizuki 32이고, NaN은 0이다. 값 범위는 정상이며 음수 sentinel은 없다.
+- Mizuki `prob_star`는 전부 0, `prob_gal`은 전부 1이라 정보가 없다.
+
+**실행기와 출력.**
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/audit_s16a_cmodel_photoz_missingness.py`(`5eb68292…`).
+- 테스트: `test_audit_s16a_cmodel_photoz_missingness.py` 7건(`0e2af325…`).
+- 출력: `/home/kjhan/BACKUP/Astrafek/s16a_cmodel_photoz_missingness_20261124_02/`(`summary.json` `17ffae1d…`). 표는 `row_existence.tsv`, `fwhm_comparison.tsv`, `fit_diagnostics.tsv`, `stratified_tests.tsv`, `lens_mean_redshift.tsv`다.
+- 첫 출력 `_01`은 검토 전 것이라 지웠다. `_02`는 열과 행을 더했을 뿐 공유 값이 모두 같고, `fit_diagnostics`·`stratified_tests`는 바이트까지 같다.
+- 사전 고정 범위: plan `analysis_plan`의 세 분석만 해시에 들어 있다. FWHM 구간, 이차 비교, Mizuki 렌즈 행, 스택은 수신 중, 분석 결과를 보기 전에 정했다. tract jackknife, core 기울기, 고정 가중치 스택은 검토 뒤에 더했다.
+
+**결과(검토 반영).**
+1. **행 존재와 결측 원인.**
+   - 결측 6,671개 중 Ephor(cmodel) 행이 있는 것은 6,631개(99.4%), Mizuki는 6,665개(99.9%)다.
+   - 원인별로는 r FWHM > 1.092″가 6,575개다. r은 문턱 아래지만 y FWHM > 1.092″인 것이 90개, 한 밴드의 seeing이 NaN인 것이 6개다.
+   - **seeing NaN 6건은 모두 그 밴드의 `countinputs=0`(coadd 입력 없음)이다(y 5, g 1).** 115,993개 × 5밴드 전체에서 seeing NaN과 `countinputs=0`이 정확히 일치한다.
+   - 유한 source 중 어느 밴드라도 문턱을 넘는 것은 0개다.
+2. **코드 z − Ephor_AB z(둘 다 있는 source, r FWHM 구간별).**
+   - Ephor(cmodel): median dz +0.002~+0.005, 근임계(1.0–1.092″) +0.0031 ± 0.0003이다. NMAD(dz/(1+z))는 0.021–0.025다. outlier(> 0.15) 비율은 7.8–9.8%로 FWHM과 함께 대체로 늘지만 단조는 아니다.
+   - Mizuki: median dz +0.006~+0.009(근임계 +0.0071), NMAD 0.034–0.039다.
+   - 기울기(0.8–1.092″, winsorised 평균)는 Ephor −0.071, Mizuki −0.051 /arcsec다.
+     - source 단위 부트스트랩 SE(0.023, 0.022)는 장 군집을 무시한다. **tract jackknife SE는 0.078, 0.100(8 tract)이라 유의하지 않다.**
+     - 이 추세는 outlier 꼬리에서 온다. core(|scaled dz| ≤ 0.15) 기울기는 Ephor −0.0015 ± 0.0059, Mizuki −0.018 ± 0.001이다(tract 하나씩 빼도 −0.017~−0.019).
+     - 결측 source의 FWHM은 근임계 유한 source보다 0.043″ 크다(중앙 1.098″ 대 1.055″). core 기준 외삽 이동은 ≤ 0.001이지만, 문턱 위는 어디까지나 외삽이다.
+   - 결측 source의 code z 중앙값은 0.71–0.72(1.092–1.15″)이고, 근임계 유한 source는 0.77이다. 이 차이는 대부분 셀 간 구성 차이다(아래 3).
+3. **같은 셀 층화 검정(결측 − 유한, winsorised 평균).**
+   - 주 검정(혼합 셀 79개, 객체 13,129개):
+     - Ephor(cmodel): 셀 −0.014 ± 0.014, 셀×i등급 −0.012 ± 0.013.
+     - Mizuki: −0.011 ± 0.014, −0.012 ± 0.013.
+     - Holm p는 모두 1이다.
+   - 이차 검정(r FWHM > 1.0″ 유한 source와 비교): −0.030~+0.035, Holm ≥ 0.27이다. 셀 수준 값은 결측 ≤ 5개인 셀에 크게 기대므로 방향 정보가 약하다.
+   - 비평 에이전트의 추가 점검:
+     - 셀 간 과분산 χ²/dof는 1.28(Ephor)이다. 셀 부트스트랩 SE 0.0149는 permutation SD보다 약 10% 크다.
+     - 역분산 가중으로는 −0.019 ± 0.013(Ephor), −0.023 ± 0.014(Mizuki)다.
+     - 점추정은 모두 음수지만 유의하지 않다. 95% 범위는 대략 [−0.041, +0.013]이다.
+   - **혼합 셀의 89%(11,631/13,129)가 tract 10048(S23B_3620 장)에 있어, 사실상 한 장의 결과다.**
+     - S23B_8206의 결측 47개는 혼합 셀에 하나도 없다.
+     - S23B_3012에서는 결측 부분집합의 eff² 가중 평균 z가 생존자보다 높다(2.02 대 1.71, 약 +0.3 ± 0.17, 비평 에이전트 계산). 부호가 반대다.
+   - 혼합 셀 안에서 결측과 유한 source의 FWHM 차는 0.034″뿐이다. 그래서 코드 자체의 seeing 편향이 주는 교란은 ≤ 0.005다. 다만 셀보다 작은 규모에서 seeing과 묶인 z 의존은 배제하지 못한다.
+4. **렌즈별 효율 가중 평균 z(같은 코드, 같은 컷 z > z_l + 0.2).**
+   - 결측 source가 쓰이는 렌즈는 Ephor 기준 3개다: S23B_3620(1,010), S23B_3012(58), S23B_8206(27). Mizuki 기준으로는 S23B_10600(3)이 더해져 4개다.
+   - S23B_3620은 eff² 가중치의 26%를 잃는다.
+     - 평균 z 변화는 −0.0011 ± 0.0082(Ephor), −0.0007 ± 0.0081(Mizuki)다.
+     - 평균 효율 변화는 −0.009% ± 0.18%다.
+   - S23B_3012의 평균 z 변화는 −0.0097 ± 0.0052다.
+   - 스택:
+     - 합산 스택(`STACK:all`)은 평균 z +0.0008 ± 0.0015, 평균 효율 −0.25%다. 이 −0.25%의 약 91%는 렌즈 구성 변화, 즉 S23B_3620의 비중 감소에서 온다.
+     - 렌즈 가중치를 고정한 스택은 평균 z −0.0010 ± 0.0017, 평균 효율 −0.022% ± 0.037%다(Mizuki는 −0.0005, −0.016%).
+   - 이 통계는 결측 source z의 오프셋에 둔감하다.
+     - S23B_3620에서 1σ는 결측 전체 z의 균일 이동 약 0.15(평균 z) 또는 0.07(평균 효율)에 해당한다. 감쇠의 대부분은 z 컷에서 온다.
+     - 즉 표본이 얼마나 바뀌는지를 보여 줄 뿐 오프셋의 상한은 아니다. 오프셋 제약은 3에서 읽는다.
+
+**해석(독립 비판으로 고친 문구).**
+- 같은 셀 안에서 결측 source의 cmodel·Mizuki z_best는 유한 source와 검출될 만큼 다르지 않다. 1σ는 약 0.013–0.015이고, 대부분 한 장에서 나온 결과다. 셀 규모에서 z와 무관한 thinning과 모순되지 않으나 확립하지는 않는다.
+- 결측 source를 빼도 렌즈 안의 효율 가중 표본은 거의 변하지 않는다. 평균 효율 변화는 렌즈당 ≤ 0.23%, 고정 가중 스택에서 −0.02%다.
+- **multiplier를 "지지"한다고 말하지 않는다.** multiplier는 생존 source의 Ephor_AB z와 COSMOS bin 평균으로 계산된다. 그래서 마스크 때문에 정의를 바꿀 필요는 없다. 남은 위험은 COSMOS 보정이 근임계 seeing의 생존자에게도 성립하는지이고, 이 감사는 그것을 시험하지 않는다.
+- **새로 드러난 열린 문제: COSMOS 보정 표본의 seeing.**
+  - S17A COSMOS 동반 파일(tract 9812/9813)의 `rshape_sdss_psf_11/22`에서 r PSF FWHM 대리값(2.3548·√평균 모멘트)을 만들었다. 보정 객체 18,768개에서 중앙 0.77–0.81″, 99%가 0.89–0.94″, 최대 1.01″다(> 1.0″는 1개).
+  - 반면 S16A 유한 source는 26%(28,558개)가 1.0–1.092″에 있고, S23B_3620·S23B_3012 가중치의 대부분이 이 구간에 있다.
+  - COSMOS 안에는 대리값이 1.092″를 넘는 객체가 없다. 따라서 이 대리값과 afterburner seeing 눈금의 대응은 검증하지 못했다. COSMOS의 afterburner NaN 객체도 대리값이 0.55–0.91″라 deconv가 아닌 다른 실패다.
+  - 근임계에서 Ephor(cmodel)–Ephor_AB의 NMAD와 outlier가 FWHM과 함께 늘어나는 것(0.022→0.025, 7.8→9.8%)은 조심할 이유다.
+
+**독립 검증(워크플로, 에이전트 8개).**
+- 재현 에이전트는 실행기를 import하지 않은 별도 코드로 다음을 8e-15 안에서 재현했다: `row_existence` 전부, 근임계 dz, 혼합 셀 수, 층화 통계 8개, 11개 렌즈 평균 z. ogfkit `Cosmology`와 astropy의 차(≤ 5.4e-5)는 결론에 영향이 없다.
+- 코드 검토의 계산 결함은 0건이다. 해석 문제 2건(스택 구성, 기울기 SE)은 반박 검증을 통과해 위에 반영했다.
+- 해석 비평:
+  - "multiplier 지지"라는 비약은 중요 판정을 받았고 반박되지 않아 고쳤다.
+  - 렌즈 평균 z의 둔감성은 경미 판정을 받아 문구에 반영했다.
+  - "S23B_3620 검정력이 0.5% 수준으로 부족하다"는 지적은 반박됐다. 배경 source만의 평균 효율로 보면 결측 부분집합의 1σ는 0.6–0.85%이고, S23B_3620에 희석하면 약 0.17%다.
+
+**테스트.** 관련 4개 테스트 파일을 함께 실행해 **48 passed**다.
+
+**다음 후보(승인 대기).**
+- (a) seeing에 따른 photo-z 보정의 전이 시험. HSC PDR1에 COSMOS Wide 깊이 best/median/worst seeing 스택이 있는 것으로 알고 있으나, 스키마와 Ephor_AB·afterburner 열의 존재는 **확인하지 않았다**. 있다면 worst seeing에서 bin 평균을 다시 재어 근임계 생존자에게 보정이 성립하는지 직접 시험할 수 있다. 새 조회이므로 별도 승인 대상이다.
+- (b) 그 전까지 multiplier 민감도에서 근임계 생존자(r FWHM 1.0–1.092″)를 별도 계통으로 표시한다.
+- (c) S23B_3012 결측 부분집합의 높은 z(+0.3, 약 1.9σ)를 확인한다.
+
+## 2026-11-24 COSMOS 보정의 seeing 전이와 장별 점검(오프라인), seeing별 COSMOS photo-z 부재
+
+이 절은 Claude 세션의 작업이다. 사용자가 위 다음 후보 (a)–(c)를 승인했다("승인합니다"). CAS 조회·커밋·푸시는 없다. `science_measurement=false`, `calibration_applied=false`. 선택·보정은 바꾸지 않았다.
+
+**(a) 공개 CAS 확인: seeing별 COSMOS photo-z는 없다.**
+- 인증 없이 공개 문서 두 개를 받았다: 스키마 브라우저의 `schemata.json`과 S17A Wide-COSMOS 문서 페이지. 카탈로그 조회는 아니다.
+- 보관 위치는 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_schema_list_2026-11-24_01/`(`sources.json`; `schemata.json` `5209e808…`, 문서 HTML `5b69d2e3…`)다.
+- seeing별 스키마에는 photo-z 표와 afterburner 표가 하나도 없다.
+  - `pdr1_cosmos_widedepth_{best,median,worst}`: `forced`, `meas`, `meas2`, `specz`.
+  - `pdr2_cosmos_wide_depth_*`: `forced*`, `meas*`.
+  - `pdr3`/`s19a` `*_dud_wide_depth_*`: `forced*`, `meas*`, `specz` 등.
+- 이름에 cosmos나 wide_depth가 들어간 스키마 가운데 photo-z 표가 있는 것은 없다. afterburner 표는 deep 스택인 `pdr1_ssp_uh_cosmos`에만 있다. 표 이름만 보았고 열은 확인하지 않았다.
+- 따라서 worst seeing에서 Ephor_AB를 다시 보정하는 CAS 조회는 불가능하다. 승인받을 조회 계획도 없다.
+- S17A Wide-COSMOS 문서에는 seeing 변형이 없다. 다만 같은 COSMOS 객체에 대한 Ephor(cmodel), Mizuki, DEmP, MLZ, NNPZ 점추정 파일이 제공된다.
+- 검증 에이전트가 제안한 가능한 경로(**미검증**): `s16a_udeep`에는 `afterburner`와 `photoz_ephor_ab`가 함께 있다. 여기에 seeing과 PSF 모멘트 열이 같이 있다면 대리값과 afterburner seeing의 눈금을 맞추는 데 쓸 수 있다.
+
+**실행기와 출력.**
+- 실행기: `analysis/icl_wgl_membership/hsc_debug/audit_s16a_seeing_transfer_field_tests.py`(`577fbb85…`).
+- 테스트: `test_audit_s16a_seeing_transfer_field_tests.py` 7건(`ab2fbe93…`).
+- 출력: `/home/kjhan/BACKUP/Astrafek/s16a_seeing_transfer_field_tests_20261124_02/`(`summary.json` `d20da3eb…`). 표는 `cosmos_seeing_split.tsv`, `cosmos_placebo_splits.tsv`, `tract_tests.tsv`, `lens_weighted_tests.tsv`다.
+- `_01`은 검토 전 출력이라 지웠다. `_02`에서 공유 값은 바이트까지 같다. RNG 순서를 유지했고 placebo는 별도 RNG를 쓴다.
+- 실행기는 렌즈별 multiplier가 기록값 `lens_photoz_reweight.tsv`와 1e-9 안에서 같고 COSMOS bin 평균이 1e-12 안에서 같을 때만 진행한다.
+- 검토 뒤 추가한 것: 양쪽 지지 범위 분율, 지지 범위별 스택, placebo 분할, 셀 내 직접 차이 추정량, z 컷 없는 비교.
+
+**(b) COSMOS 안에서의 seeing 분할.**
+- 설정:
+  - 보정 객체 18,768개를 shape×SOM 가중 중앙값(r 대리 FWHM 0.809″)에서 둘로 나눴다. 유효 FWHM은 0.77″와 0.86″다.
+  - 각 절반으로 bin 평균을 다시 만들어 렌즈마다 자기 source에 적용했다.
+  - 오차는 0.2° 하늘 블록 56개를 리샘플한 부트스트랩이다.
+- 결과:
+  - 스택 m_high/m_low − 1은 +0.77% ± 0.58%다. 렌즈별 +0.5~+1.4%는 같은 COSMOS 절반을 쓰므로 서로 독립이 아니다.
+  - 기울기는 +0.09 ± 0.07 /arcsec다.
+- **이 분할은 seeing을 분리하지 못한다**(placebo 분할, 독립 비평 뒤 추가).
+  - COSMOS에서 r 대리 FWHM은 RA와 상관(+0.60)한다.
+  - 위치나 다른 변수로 나눈 결과: RA 중앙 분할 +0.77%, Dec 분할 +0.81%(높은 쪽의 r seeing이 오히려 좋음), 블록 평균을 뺀 r 분할 +0.22%, g/i/z/y 분할 +0.12/−0.20/−0.31/−0.27%.
+  - 블록을 무작위로 반씩 나누면 SD 0.64%이고, 23%가 |0.77%| 이상이다.
+  - 1.0″를 넘는 보정 객체는 1개뿐이므로 문턱 근처에서 시작되는 효과는 시험할 수 없다.
+- **지지 범위.** r 대리 FWHM의 COSMOS q01/q99는 0.717″/0.939″다.
+  - S23B_3620과 S23B_3012는 eff 가중치의 99.9%가 q99 위에 있다.
+  - 8개 렌즈(9131, 9013, 8627, 6290, 10600, 8310, 8206, 9307)는 82–100%가 q01 아래에 있다.
+  - 범위 안에 있는 렌즈는 S23B_9828(0.82″) 하나다.
+  - 선형 외삽값은 위쪽 두 렌즈 +2.0% ± 1.8%, 아래쪽 8개 −1.9% ± 1.5%다. 전체 스택 −0.9%는 둘이 상쇄된 값이다.
+  - 외삽은 위의 placebo 결과 때문에 **제약이 없다고 읽는다**(부호도 정해지지 않는다). 대리값과 afterburner seeing의 눈금도 맞춰 보지 못했다. 대리값의 arcsec² 단위는 추정이다(TUNIT 없음).
+- **해석.**
+  - COSMOS 보정의 seeing 전이는 S23B_9828(r 기준)을 빼면 **모든 렌즈에서 시험되지 않았다**. 이 검정은 효과를 검출하지도, 상한을 두지도 못한다.
+  - 다만 afterburner 측광은 같은 1.092″ 목표 PSF로 맞춘 것이다. 그래서 seeing은 주로 잡음을 통해 들어갈 것으로 보인다. COSMOS 두 절반은 photo-z 품질(NMAD, outlier), 깊이, S/N이 같았다(비평 에이전트 확인).
+  - "모든 렌즈의 계통오차"라는 초안 문구는 비평에 따라 버렸다.
+  - 기록된 COSMOS 재가중 변화는 렌즈별 0.07–1.22%이고, 스택 lens jackknife SE는 0.20%다.
+
+**(c) 장별 점검.**
+1. **tract별 같은 셀 검정**(혼합 셀; 결측 6,671개 중 5,274개, 79%만 포함).
+   - 어느 tract에서도 유의한 차이가 없다(Holm 1).
+   - tract 10048의 Ephor(cmodel) 차이는 −0.021 ± 0.015다.
+   - 나머지 tract(9557, 10049, 9314)는 null SD가 0.05–0.19라 검정력이 거의 없다.
+   - S23B_8206의 결측(tract 9368)은 혼합 셀이 없어 시험되지 않았다.
+2. **렌즈별 셀 내 직접 차이**(사용 source, 즉 code z > z_l + 0.2, eff² 가중).
+   - S23B_3012(결측 58개, 모두 r-deconv): Ephor(cmodel) +0.36 ± 0.15(셀, p 0.018, Holm 0.087), +0.39 ± 0.14(셀×i등급, p 0.008, Holm 0.048). Mizuki는 +0.17~+0.21(p 0.10–0.20)이다.
+   - S23B_3620과 S23B_8206은 0과 맞는다(|차이| ≤ 0.06).
+   - 처음 쓴 pooled − null 평균 열은 셀 내 이동을 0.76–0.94배로만 반영해서 바꿨다. pooled 값은 참고용으로 남겼다.
+3. **z 컷 없는 비교(S23B_3012)**: 사용 부분집합 통계는 자기가 비교하는 code z로 컷을 걸기 때문이다.
+   - 평균 z 차이는 −0.011 ± 0.058(Ephor), −0.056 ± 0.061(Mizuki)로 0과 맞는다.
+   - 컷 아래(z ≤ z_l + 0.2) 비율이 +9.8 ± 4.8 pp(Ephor, p 0.043), +10.1 pp(Mizuki, p 0.034) 높다.
+   - z > 2 비율은 Ephor에서만 +3.7–4.0 pp(p 0.05–0.09)다.
+   - source당 렌즈 효율은 −0.031 ± 0.022(n.s.)다. 이 계열의 Holm은 모두 ≥ 0.8이다.
+   - **해석:** "결측 source가 더 높은 z에 있다"가 아니라 photo-z 산포가 넓은 것으로 읽는다. 컷 아래로도, z > 2로도 더 많이 간다.
+     - 비평 에이전트는 같은 code z에서 Mizuki χ²와 Ephor risk가 더 높고 S/N은 같음을 보였다.
+     - 원인이 seeing인지는 확립되지 않았다. 생존 source에서는 z > 2 비율이 r FWHM 0.90–1.09″에서 평평하고, S23B_3620의 결측에는 이런 현상이 없다.
+   - 렌즈 표본에 주는 영향은 평균 효율 −0.23%로 작다(cmodel 감사 표).
+
+**독립 검증(워크플로, 에이전트 8개).**
+- 재현 에이전트: 실행기를 import하지 않은 코드로 (a)–(f)를 약 1e-15 안에서 재현했다. 지정한 수치는 COSMOS 분위수, 렌즈 multiplier와 분할 변화, 근임계 분율, S23B_3012 통계, tract 10048 통계, 스키마 표 목록이다.
+- 코드 검토: 계산 결함은 0건이다. 중요 2건(위쪽만 본 지지 진단, 감쇠된 셀 내 효과 열)은 반박 검증을 통과했고 위와 같이 고쳤다.
+- 해석 비평:
+  - 중요 판정: "모든 렌즈 계통오차" 문구. 문구를 고쳤다.
+  - 경미 판정: 분할이 위치 분할이라는 점, z 컷에 의한 착시. 둘 다 placebo와 컷 없는 비교로 반영했다.
+- 수정 뒤 수치(직접 추정량 0.363/0.389, placebo 분할, 컷 아래 비율 +9.8 pp)는 검증 에이전트들이 따로 계산한 값과 맞는다. 수정본 전체에 대한 두 번째 검토는 하지 않았다.
+
+**테스트.** 관련 5개 테스트 파일을 함께 실행해 **55 passed**다.
+
+**함의와 다음 후보(승인 대기).**
+- 근임계 생존자의 COSMOS 보정 전이는 이 자료로 시험할 수 없다. seeing이 좋은 8개 렌즈도 COSMOS 범위 밖이다. 그러니 multiplier 오차 예산에는 "seeing 전이: 미시험"을 따로 적어 두어야 하고, 지금 있는 수치로 대신 채우면 안 된다.
+- (a′) 대안 경로: S16A UDeep COSMOS(`s16a_udeep`)의 afterburner와 Ephor_AB를 쓴다.
+  - 그 표들에 seeing과 PSF 모멘트 열이 있는지 공개 스키마로 먼저 확인한다.
+  - 열이 있으면 대리값 눈금을 맞추고, UD 자료로 seeing 의존성을 보는 조회 계획을 만든다. 조회 자체는 별도 승인 대상이다.
+- (b′) PDR1 wide-depth worst 스택의 forced 측광으로 같은 COSMOS 객체의 색 이동을 보는 간접 시험이 가능한지, 열 목록을 확인한다(공개 스키마만).
+
+## 2026-11-24 (a′)(b′) 공개 스키마 점검과 PSF 모멘트 조회 계획(제출 전, 실행 비권고)
+
+**공개 스키마(인증 없음).** 표별 스키마 JSON 19개를 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/hsc_schema_tables_2026-11-24_01/`에 받았다(`sources.json` sha `d85fb3de…`). 카탈로그 조회는 아니다.
+- `s16a_udeep.afterburner`의 열 구성은 `s16a_wide.afterburner`와 같다(밴드만 n921/n816 추가). 다음 열이 있다.
+  - `{b}parent_flux_convolved_seeing` ("original seeing at position", 단위 없음).
+  - `_0/_1/_2_deconv` (목표 0.59/0.84/1.09″).
+  - `s16a_udeep.forced`에는 `{b}shape_sdss_psf_11/22/12`가 있다.
+- `s16a_wide.forced`에도 같은 PSF 모멘트 열이 arcsec²로 있다. 품질 보충 조회가 고정한 `schema_forced.json`과 오늘 받은 사본은 바이트가 같다.
+  - S16A 쪽 단위는 이것으로 문서 확인됐다.
+  - S17A COSMOS 동반 FITS는 TUNIT이 없어 단위가 여전히 추정이다.
+- 동반 FITS에는 PSF 모멘트와 `rparent_flux_convolved_2_1`만 있고 seeing 열은 없다. 로컬 어디에도 같은 객체에 두 값이 함께 있는 파일은 없다.
+- (b′) `pdr1_cosmos_widedepth_{best,median,worst}.forced`의 측광 열은 cmodel, psf, kron, 고유 PSF 개구다. PSF 정합 afterburner 플럭스와 photo-z는 없다(worst에는 specz가 있다).
+  - 색-seeing 시험을 해도 Ephor_AB 입력으로 옮겨지지 않는다. 조회하지 않는다.
+
+**계획(제출 안 함).** `prepare_s16a_psf_moment_rows.py`로 만들었다.
+- 계획 위치: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_psf_moment_rows_plan_2026-11-24_01/`, plan hash `34d306b54fede5950bffff500063869df466356ee4f2fdf20d9c7f8d01742e4e`.
+- 기존 115,993 ID 원장과 24 batch를 쓴다. `s16a_wide.forced`를 LEFT JOIN해 grizy `shape_sdss_psf_11/22/12`(17열, 약 25 MB)를 받는다.
+- 수신기 `submit_s16a_psf_moment_rows.py`는 `APPROVED_SHA=None` 상태다.
+  - 검토 뒤 승인 게이트를 이중으로 고쳤다.
+  - forced 행 없이 모멘트가 오는 행은 거부하도록 했다.
+- 테스트 `test_submit_s16a_psf_moment_rows.py`는 13 passed다.
+
+**독립 검증(워크플로, 에이전트 3개).**
+- SQL·ID·스키마·주장: 결함 없음. 부수 확인으로 r/y deconv 경계가 seeing × 2.3548 = 6.5 px와 예외 없이 일치했다.
+- 수신기: 경미 3건 중 2건을 반영했다. 남은 1건은 plan.json을 두 번 읽는 문제로, 형제 수신기와 같은 패턴이다.
+- 과학적 가치: 중요 3건(아래). 주 결과를 내가 직접 다시 계산했다.
+  - **결정 관련성이 거의 없다.** 렌즈 지지 판정(eff 가중 평균 r FWHM 대비 COSMOS q01/q99 0.717/0.939)은 proxy/afterburner 비 s가 0.907–1.036 사이면 바뀌지 않는다. 판정은 "S23B_9828만 안, 10/11 미시험"이다.
+    - s ≥ 1.037이면 S23B_9013이, s ≥ 1.040이면 S23B_9307이 들어온다(좋은 seeing 쪽).
+    - 근임계 S23B_3012는 s ≤ 0.907, S23B_3620은 s ≤ 0.869가 필요하다.
+  - **오프라인 한쪽 경계.** 동반 FITS에서 r proxy가 가장 큰 객체(trace 1.072, 1.0716″; det 1.0587″)도 convolved 2_1 플럭스가 유한하다. proxy > 1.0″인 23개도 모두 유한하다. S17A afterburner 목표가 S16A처럼 6.5 px이고 deconv 시 NaN이라면, afterburner/proxy ≤ 1.019(trace), ≤ 1.031(det)이다. 그러면 근임계 두 렌즈는 어떤 교차보정 결과로도 COSMOS 지지 안에 들어오지 못한다. S17A 설정은 확인하지 않았다.
+  - 이 조회는 S16A 쪽 관계만 잰다. S17A 쪽은 정의가 같다는 가정으로 남는다.
+- **결론:** "seeing 전이: 미시험"을 그대로 적는다.
+  - 근임계(3012, 3620)는 지지가 구조적으로 없다.
+  - 좋은 seeing 8개는 외삽이다. 외삽이 덜 위험한 쪽이라는 물리 논증은 확인하지 않았다.
+- 조회가 필요하면 전체 24 batch 대신 1 batch 시험이 낫다.
+  - batch 000은 r 0.54–1.10″를 덮는다.
+  - `shape_sdss_flags_psf`와 `shape_sdss_flags`를 추가한다. 동반 FITS에서 모멘트 NaN은 대부분 객체 SdssShape 실패와 함께 나온다.
+  - 판정 규칙을 미리 적는다. 지지 판정은 중앙 afterburner/proxy 비가 [0.966, 1.10] 밖일 때만 바꾼다.
+  - 그런 시험 계획은 새 hash로 만들고 따로 승인받는다.
+- plan.json analysis_plan 2번의 "(Ephor_AB missing)"은 정확하지 않다. 6,672개 중 6개는 countinputs=0 때문이다. 실행하지 않는 계획이라 고치지 않았다.
+- byte 상한 128 MiB는 계획 디렉터리별(재시도 포함)이다. 지금까지 네 수신의 합은 128,795,557 B다.
+
+## 2026-11-24 결정: PSF 모멘트 조회 안 함, multiplier 오차 예산의 seeing 전이 항목 확정
+
+**결정.** 사용자가 "권장대로 합니다"라고 답했다.
+- 계획 `34d306b54fede5950bffff500063869df466356ee4f2fdf20d9c7f8d01742e4e`는 승인하지 않았고 제출하지 않았다.
+  - 계획 디렉터리는 기록으로 남긴다. `results/`는 없다.
+  - 수신기 `submit_s16a_psf_moment_rows.py`는 `APPROVED_SHA=None` 그대로다.
+- 1 batch 시험 계획은 만들지 않았다.
+- 이 결정으로 CAS 조회, 다운로드, 인증 사용은 없었다.
+
+**multiplier 오차 예산의 항목(확정).** "COSMOS 보정의 seeing 전이: 미시험."
+- 수치로 채우지 않는다. 다른 계통의 수치로 대신하지도 않는다.
+- 렌즈 seeing은 eff 가중 평균 r FWHM(afterburner 눈금)이다. 기준은 COSMOS 가중 q01/q99 0.717/0.939″(PSF 모멘트 trace 대리 눈금)다.
+- 두 눈금은 교차보정하지 않았다.
+  - 비 s = proxy/afterburner가 0.907–1.036 사이면 아래 분류는 바뀌지 않는다.
+  - 정의상 예상 차이가 약 1% 안이라는 근거는 확인하지 않았다.
+- 렌즈는 세 부류로 나눠 적는다.
+  1. **지지 안(1개):** S23B_9828(0.8245″).
+  2. **지지가 구조적으로 없음(근임계 2개):** S23B_3012(1.0357″), S23B_3620(1.0809″).
+     - 이 seeing의 COSMOS 보정 객체가 없어 이 자료로는 시험할 수 없다.
+     - 오프라인 한쪽 경계(afterburner/proxy ≤ 1.019 trace, ≤ 1.031 det)에 따르면 눈금 차이로 지지 안에 들어올 수도 없다. 들어오려면 s ≤ 0.907 또는 s ≤ 0.869가 필요하다.
+     - 이 경계는 S17A afterburner 목표가 6.5 px이고 deconv 시 NaN이라는 가정에 기댄다. 그 가정은 확인하지 않았다.
+  3. **외삽(seeing이 좋은 8개):** COSMOS q01보다 작다. S23B_9013(0.6920″)과 S23B_9307(0.6896″)이 포함된다.
+     - 이 둘은 s ≥ 1.037, s ≥ 1.040일 때만 지지 안에 들어온다.
+     - 좋은 seeing 쪽 외삽이 덜 위험하다는 물리 논증은 확인하지 않았다.
+- 이 항목은 S16A 쪽 관계도 S17A 쪽 관계도 재지 않은 상태다. 나중에 측정하려면 새 계획 hash와 별도 사전 승인이 필요하다.
