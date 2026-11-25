@@ -7757,3 +7757,15 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
 - 수신(2026-11-26): 사용자 승인 후 tmux `hsc_auth`, CAS 작업 1097038–1097048 중 8개, 재시도 없음. 43,748,169 B. random 고리 점 21,708/20,593/12,899/19,914(10600/3620/8206/8310), 격자 73,937/74,687/53,723/71,242칸. `credentials_saved=false`, 인증 문자열 없음.
 - 선택기 v4(`select_s16a_random_centres.py` `6e14f88f…`): 후보를 거리로 배정(겹침 수정; 확장 전 단독 효과는 8310 2→5, 8206 3→2), 네 렌즈 원뿔 180′, 180′ 격자를 89′ 안쪽 칸에서 90′ 격자와 비교(네 렌즈 모두 불일치 0칸) 후 대체.
 - 최종 선택 `/home/kjhan/BACKUP/Astrafek/s16a_random_centre_selection_20261126_01/`(summary `b12b346d…`, tsv `c30e0383…`, `selected_pending_user_approval`): 76개, 11개 렌즈 모두 ≥5(3012·3620·8206·8310·9828·10600 8개, 8627·9013·9131 6개, 6290·9307 5개). 군집 여유 2–3 Mpc 62개, >3 Mpc 14개. FDFC 최소 0.953. 네 렌즈의 random은 렌즈에서 36–166′ 떨어져 있다(먼 random의 PSF·깊이는 허용 범위로만 맞췄다).
+- 커밋 `85f9e1873`(확장 계획 코드 3개, 선택기 v4, HANDOVER).
+
+### 2026-11-26 76개 random 중심의 S16A source 조회 계획(제출 전)
+
+- 사용자 결정(2026-11-26, "커밋하고 진행"): 선택 `_20261126_01`을 승인하고 source 조회 계획으로 진행.
+- 계획 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_random_source_rows_plan_2026-11-26_01`, plan sha `c1dfe5a4860ceb830281e1444b90b438a99e93702726490518fa32a90073b211`(미제출). `prepare_s16a_random_source_rows.py`(`a6c654ad…`), 수신기 `submit_s16a_random_source_rows.py`(승인 반영 후 `7025503e…`), 테스트 12개 통과. 사용자 승인(2026-11-26, "1,2 모두 승인"): 계획 hash 제출과 커밋.
+- 렌즈 그룹당 2배치, 22배치:
+  - pairs: 실행된 pilot pair 조회(`_02`, shape_weight 식별자 수정본)를 그대로 쓰고(pilot SQL과 10/10 중심 문자열 일치 확인), 중심별 `count(*) OVER ()`(LIMIT 전)·LIMIT 20,000·배치 합계 `n_batch`로 감쌌다. 12+2열.
+  - inner: 실행된 P3(`e8b05d6e`) 조회 그대로, 0.4 Mpc+30″, 35열.
+- 추정: pair 약 41만 행(렌즈 source 수 ÷ 렌즈 원판 FDFC 비율(하한 0.2) × random FDFC 비율), inner 점 약 9.4만, 약 101 MB(128 MiB 상한 이내; 넘으면 수신기가 멈춘다).
+- 수신 검사: 모든 중심이 행을 내야 함, 중심별 행 수 = n_matched < LIMIT, 배치 합계 = n_batch, (중심, object) 유일, pair는 3 Mpc 원뿔 안(pilot과 같은 0.01″), inner는 원뿔 안.
+- 렌즈 11개는 두 산물이 이미 있다. Y1 품질 보충·cmodel photo-z·forced/meas 플래그는 돌려받은 ID가 있어야 하므로 별도 ID 계획으로 나중에 만든다(별도 승인·별도 128 MiB 예산; pilot 기준 행당 391+133+168 B라 약 40만 ID면 한 계획에 다 안 들어가 둘로 나눠야 할 수 있다).
