@@ -2,7 +2,10 @@
 """Deterministic S16A random-centre selector for the 11 pilot lenses (local only; never contacts CAS).
 
 Candidates are the deduplicated thinned S16A random points of the approved candidate query. Rules (fixed here):
-- geometry: 2 R <= d(lens) <= 90 arcmin - R, R = the lens 3-proper-Mpc radius; a disc may not overlap any pilot
+- candidates for a lens: every held S16A random point (candidate plan cdd04062 and, for the four lenses of the wide
+  extension plan 7f72e4fb, its 90-180 arcmin annulus), deduplicated by object_id and taken by distance from the lens,
+  not by the lens label of the query that returned it (the 8206 and 8310 cones overlap);
+- geometry: 2 R <= d(lens) <= cone - R (cone 90 arcmin, 180 for the wide-extension lenses), R = the lens 3-proper-Mpc radius; a disc may not overlap any pilot
   lens disc (separation > R + R_lens) or any already accepted disc of any lens (> R + R_other; within one lens
   this is the 6-Mpc pairwise separation);
 - CAMIRA: zero overlap of the 3-Mpc disc with any S20A or S23B CAMIRA cluster's aperture of radius R_c proper Mpc
@@ -39,6 +42,9 @@ DATA = Path('/gpfs/kjhan/Astrafek/data')
 CAMIRA = {DATA/'catalog/camira_s20a_wide_sm.tbl': 'd929985d7f6ee38c4435fc12099e9df1e5dbfd9ce9603cea319d5704129d22aa',
           DATA/'catalogue_s23b_camira_2026-10-20_01/camira_s23b_wide_sm.tbl': '5af057028feab7976cd3ed389a7246cbe73add8bbb96891101f0f692b1de4d71'}
 FDFC_GRID = DATA/'sample_800_2026-10-13/s16a_fdfc_grid_plan_2026-11-25_01'
+WIDE = DATA/'sample_800_2026-10-13/s16a_wide_extension_plan_2026-11-25_01'
+WIDE_SHA = '7f72e4fb0d163628232c91896ae02a04bf0487b2e4dd1457aa4b90285b39ee79'
+WIDE_ARCMIN = 180.0
 ACCEPTANCE = Path('/home/kjhan/BACKUP/Astrafek/s16a_fdfc_grid_validation_20261125_01/user_acceptance.json')
 H0, OM0 = 70.0, 0.3
 CAMIRA_LADDER = (2.0,)
@@ -62,8 +68,30 @@ def chord(deg):
     return 2*math.sin(math.radians(deg)/2)
 
 
-def load_points():
+def load_wide():
+    """Receipt-verified wide-extension rows split by batch kind; None if the download is absent."""
+    file = WIDE/'results'/'download_summary.json'
+    if not file.is_file():
+        return None
+    s = json.loads(file.read_text())
+    if s['approved_scope_plan_sha256'] != WIDE_SHA or s.get('credentials_saved') is not False:
+        raise ValueError('wide-extension receipt differs')
+    out = dict(random=[], fdfc=[], summary_sha256=sha(file), lenses=sorted({v['lens_id'] for v in s['per_batch'].values()}))
+    for name, digest in sorted(s['output_sha256'].items()):
+        path = WIDE/'results'/name
+        if sha(path) != digest:
+            raise ValueError('wide-extension CSV changed '+name)
+        with path.open() as stream:
+            reader = csv.reader(stream)
+            head = [h.lstrip('# ').strip() for h in next(reader)]
+            out[s['per_batch'][Path(name).stem]['kind']].extend(dict(zip(head, r)) for r in reader)
+    return out
+
+
+def load_points(wide=None):
     _, rows = load_rows(CAND)
+    if wide is not None:
+        rows = rows+wide['random']
     seen, pts = set(), []
     for r in rows:
         if r['object_id'] in seen or i_null(r) or not inner_ok(r):
@@ -99,13 +127,34 @@ def fdfc_fraction(lens, ra, dec, radius_deg, grid):
     return float(np.mean([grid.get((i, j), False) for i, j in zip(cx, cy)]))
 
 
+def fdfc_cell(n, f):
+    from prepare_s16a_fdfc_grid import FDFC_FRACTION, MIN_CELL_OBJECTS
+    return n >= MIN_CELL_OBJECTS and f/n >= FDFC_FRACTION
+
+
+def merge_wide_fdfc(grids, wide):
+    """Replace the 90-arcmin grid of each wide lens by its 180-arcmin grid after checking that every cell whose
+    centre lies inside 89 arcmin has the same FDFC decision in both."""
+    cells, report = {}, {}
+    for r in wide['fdfc']:
+        cells.setdefault(r['lens_id'], {})[(int(r['cell_x']), int(r['cell_y']))] = fdfc_cell(int(r['n_primary']), int(r['n_fdfc']))
+    for g, new in cells.items():
+        old = grids.get(g, {})
+        keys = [k for k in set(old) | set(new) if math.hypot(k[0]+0.5, k[1]+0.5) < RADIUS_ARCMIN-1]
+        diff = sum(old.get(k, False) != new.get(k, False) for k in keys)
+        report[g] = dict(checked_cells=len(keys), differing=diff, cells=len(new))
+        if diff:
+            raise ValueError(f'wide FDFC grid disagrees with the 90-arcmin grid for {g}: {diff} cells')
+        grids[g] = new
+    return report
+
+
 def load_fdfc():
     """FDFC cells per lens from a completed, receipt-verified grid download; None if absent."""
     summary = FDFC_GRID/'results'/'download_summary.json'
     if not summary.is_file():
         return None
     s = json.loads(summary.read_text())
-    from prepare_s16a_fdfc_grid import FDFC_FRACTION, MIN_CELL_OBJECTS
     grids = {}
     for name, digest in s['output_sha256'].items():
         path = FDFC_GRID/'results'/name
@@ -117,7 +166,7 @@ def load_fdfc():
             for r in reader:
                 r = dict(zip(head, r))
                 n, f = int(r['n_primary']), int(r['n_fdfc'])
-                grids.setdefault(r['lens_id'], {})[(int(r['cell_x']), int(r['cell_y']))] = n >= MIN_CELL_OBJECTS and f/n >= FDFC_FRACTION
+                grids.setdefault(r['lens_id'], {})[(int(r['cell_x']), int(r['cell_y']))] = fdfc_cell(n, f)
     return dict(summary_sha256=sha(summary), grids=grids)
 
 
@@ -144,7 +193,14 @@ def run(output, provisional):
     lenses = {r['matched_lens_id']: r for r in ledger if r['role'] == 'lens'}
     lu = {g: unit([float(r['ra_deg'])], [float(r['dec_deg'])])[0] for g, r in lenses.items()}
     lr = {g: float(r['radius_arcsec'])/3600 for g, r in lenses.items()}
-    pts = load_points()
+    wide = load_wide()
+    wide_report = None
+    if wide is not None:
+        if fdfc is None:
+            raise SystemExit('wide extension needs the FDFC grid')
+        wide_report = merge_wide_fdfc(fdfc['grids'], wide)
+    cone = {g: WIDE_ARCMIN if wide is not None and g in wide['lenses'] else RADIUS_ARCMIN for g in lenses}
+    pts = load_points(wide)
     pu = unit([p['ra'] for p in pts], [p['dec'] for p in pts])
     ptree = cKDTree(pu)
     pools, lens_stats, rejected = {}, {}, {}
@@ -154,11 +210,11 @@ def run(output, provisional):
         lens_stats[g] = disc_stats(ptree.query_ball_point(lu[g], chord(R)), pts, area)
         counts = dict(geometry=0, lens_overlap=0, camira=0, footprint=0, tolerance=0, accepted=0)
         pool = []
-        for i, p in enumerate(pts):
-            if p['lens_id'] != g:
-                continue
-            d = float(sep_deg(pu[i], lu[g]))
-            if not (2*R <= d <= RADIUS_ARCMIN/60-R):
+        dist = sep_deg(pu, lu[g])
+        for i in np.flatnonzero(dist <= cone[g]/60):
+            p = pts[i]
+            d = float(dist[i])
+            if not (2*R <= d <= cone[g]/60-R):
                 counts['geometry'] += 1; continue
             if any(float(sep_deg(pu[i], lu[h])) <= R+lr[h] for h in lenses if h != g):
                 counts['lens_overlap'] += 1; continue
@@ -226,10 +282,12 @@ def run(output, provisional):
         w = csv.DictWriter(stream, fieldnames=list(rows[0]), delimiter='\t', lineterminator='\n')
         w.writeheader(); w.writerows(rows)
     summary = dict(
-        schema='astrafek-s16a-random-centre-selection-v3',
+        schema='astrafek-s16a-random-centre-selection-v4',
         status='provisional_not_for_queries' if fdfc is None else 'selected_pending_user_approval',
         footprint='i-processed coverage proxy (FDFC grid absent)' if fdfc is None else 'FDFC grid',
         fdfc_grid_summary_sha256=None if fdfc is None else fdfc['summary_sha256'],
+        wide_extension_summary_sha256=None if wide is None else wide['summary_sha256'], wide_fdfc_check=wide_report,
+        cone_arcmin_per_lens=cone,
         fdfc_acceptance_sha256=sha(ACCEPTANCE) if fdfc is not None else None,
         camira_mpc_used=camira_mpc, camira_ladder={str(k): v for k, v in ladder.items()},
         constants=dict(h0=H0, om0=OM0, camira_ladder=CAMIRA_LADDER, target=TARGET, minimum=MINIMUM, fdfc_min=FDFC_MIN,

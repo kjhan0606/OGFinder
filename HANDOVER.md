@@ -7747,3 +7747,13 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
 - 최종 선택(`s16a_random_centre_selection_20261125_01/`, summary `0ce03303…`, 상태 `selected_pending_user_approval`): FDFC ≥ 0.95를 쓰면 사다리가 1 Mpc까지 내려가도 S23B_8206이 3개(<5)라 R_c=1 Mpc가 쓰였다. 80개 선택, FDFC 최소 0.953. 3 Mpc 반경 기준 군집 여유: 1–2 Mpc 61개, 2–3 Mpc 10개, >3 Mpc 9개. 즉 대부분의 random 원판 가장자리가 CAMIRA 군집 중심에서 1–2 Mpc 안까지 온다(군집 바깥 영역 오염 위험). 사용 전 결정 필요.
 - 미커밋: `audit_s16a_fdfc_grid.py`, `audit_s16a_fdfc_areas.py`, `select_s16a_random_centres.py`·`audit_s16a_random_point_areas.py` 변경, HANDOVER.
 - 사용자 결정(권장안 A): R_c = 2 Mpc 고정, 5개 미만 렌즈는 받은 만큼 쓰고 보고. 선택기 schema v3. 출력 `/home/kjhan/BACKUP/Astrafek/s16a_random_centre_selection_20261125_02/`(summary `2a4dba3c…`, `selected_centres.tsv` `65b09619…`, 상태 `selected_pending_user_approval`). 55개: 3012·9828 8, 8627·9013·9131 6, 6290·9307 5, 10600·3620·8206 3, 8310 2(5개 미만 4개 렌즈; 앞 보고의 "7개"는 잘못 센 값). 군집 여유 2–3 Mpc 43개, >3 Mpc 12개, FDFC 최소 0.953. `_01`(1 Mpc) 결과는 비교용으로만 남긴다.
+
+### 2026-11-25 180′ 확장 조회 계획(5개 미만 렌즈 4개)
+
+- 사용자 결정: source 조회 계획 승인, 5개 미만 렌즈는 원뿔을 90′보다 넓혀 다시 조회. source 계획은 최종 중심이 확정된 뒤 한 번에 만든다(두 번 조회하지 않기 위해).
+- 계획 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_wide_extension_plan_2026-11-25_01`, plan sha `7f72e4fb0d163628232c91896ae02a04bf0487b2e4dd1457aa4b90285b39ee79`(미제출). `prepare_s16a_wide_extension.py`(`b6456038…`), 수신기 `submit_s16a_wide_extension.py`(`981230fd…`, `APPROVED_SHA=None`), 테스트 10개 통과.
+- 렌즈 S23B_10600, 3620, 8206, 8310(선택 `_02` summary `2a4dba3c…`의 below_minimum과 대조). 렌즈당 2배치: thinned random 점 90<d≤180′ 고리(P2와 같은 열, LIMIT 45,000), FDFC 격자 180′ 전체 원뿔(019c8228과 같은 형식, coneSearch 10800″, LIMIT 110,000). 추정 최대 random 32,300행/렌즈, 격자 101,800칸/렌즈, 합계 약 72 MB(128 MiB 상한 이내).
+- 받은 뒤 할 일: (1) 선택기 수정 — 렌즈 후보를 lens_id 표시가 아니라 원뿔 안의 모든 보유 점으로 잡는다(현재 8206·8310 원뿔 겹침에서 점이 먼저 나온 렌즈에만 배정되어 8310 후보가 줄어든다); 네 렌즈는 2R ≤ d ≤ 180′−R. (2) 180′ 격자를 66개 중심 수락 규칙으로 검사하고 90′ 격자와 칸별 일치 확인. (3) 최종 선택 후 source 조회 계획.
+- 수신(2026-11-26): 사용자 승인 후 tmux `hsc_auth`, CAS 작업 1097038–1097048 중 8개, 재시도 없음. 43,748,169 B. random 고리 점 21,708/20,593/12,899/19,914(10600/3620/8206/8310), 격자 73,937/74,687/53,723/71,242칸. `credentials_saved=false`, 인증 문자열 없음.
+- 선택기 v4(`select_s16a_random_centres.py` `6e14f88f…`): 후보를 거리로 배정(겹침 수정; 확장 전 단독 효과는 8310 2→5, 8206 3→2), 네 렌즈 원뿔 180′, 180′ 격자를 89′ 안쪽 칸에서 90′ 격자와 비교(네 렌즈 모두 불일치 0칸) 후 대체.
+- 최종 선택 `/home/kjhan/BACKUP/Astrafek/s16a_random_centre_selection_20261126_01/`(summary `b12b346d…`, tsv `c30e0383…`, `selected_pending_user_approval`): 76개, 11개 렌즈 모두 ≥5(3012·3620·8206·8310·9828·10600 8개, 8627·9013·9131 6개, 6290·9307 5개). 군집 여유 2–3 Mpc 62개, >3 Mpc 14개. FDFC 최소 0.953. 네 렌즈의 random은 렌즈에서 36–166′ 떨어져 있다(먼 random의 PSF·깊이는 허용 범위로만 맞췄다).
