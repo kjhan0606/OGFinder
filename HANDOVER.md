@@ -7579,3 +7579,150 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
 - (a) footprint 구멍을 source 팽창이 아니라 survey 마스크(밝은 별·패치 마스크)로 정의한다. 로컬에 해당 파일이 있는지 먼저 확인한다. 없으면 새 자료 수신이므로 별도 승인 대상이다.
 - (b) 렌즈마다 서로 겹치지 않는 random 중심을 더 많이 둔 재설계. 새 count·행 조회가 필요하므로 별도 승인 대상이다.
 - (c) 두 번째 고마스크 장이 로컬에 없으므로, 이식·회전 검정은 S23B_3620 하나에 기댄 채로 남는다.
+
+## 2026-11-25 (a) S16A 마스크 구멍·(b) random 중심 재설계: 조사와 조회 계획 3개(제출 전)
+
+이 절은 Claude 세션의 작업이다. 사용자가 다음 후보 (a)(b)와 commit·push를 승인했다("모두 승인함"). 앞 절까지의 작업은 `e27add2d7`로 commit·push했다. 이 절에서는 CAS 조회·다운로드·인증 사용을 하지 않았고, 공개 스키마·문서만 인증 없이 받았다.
+
+**조사(워크플로, 에이전트 3개; 읽기 전용).**
+- **현재 55개 random의 출처.**
+  - PDR3 `pdr3_wide.random` 후보 풀에서 뽑았다(계획 `143a1bd0`). ICL 대조용 풀이라 렌즈 30′ 안에서 렌즈당 200개를 받았다.
+  - 고른 규칙은 PDR3 patch 깊이·seeing·E(B−V) 일치, CAMIRA 제외, 렌즈에서 6 Mpc 초과다. control끼리의 거리 규칙은 없다.
+  - 그래서 같은 patch에 몰렸다. 같은 렌즈의 random 쌍 110개 중 59개가 6 Mpc 미만, 51개가 3 Mpc 미만이다. S16A footprint도 고려하지 않아 23개가 비었다.
+  - 이 풀(30′)로는 3-Mpc 원판 5개를 서로 겹치지 않게 놓을 수 있는 렌즈가 3/11개뿐이다.
+- **로컬 S16A 마스크 자료: 없다.**
+  - S16A random 표, Sirius 영역 파일, S16A 영상이 모두 없다. 로컬 마스크는 전부 PDR3다.
+  - PDR3 BRIGHT_OBJECT 평면 위에 S16A WL source의 42.7%가 놓인다. 마스크가 다르다는 뜻이다.
+  - source별 S16A 정보는 afterburner 수신의 countinputs뿐이다.
+- **공개 스키마.**
+  - `pdr1.s16a_wide.random`이 있다. 문서상 100 points/arcmin², 열은 grizy countinputs, edge, bright_object_center/_any, i PSF 모멘트(pixel), sky_std, adjust_density다. coord 열이 없다.
+  - S16A·PDR1의 마스크는 Sirius다. 공개 Sirius 영역 파일은 찾지 못했다.
+  - random에는 wl_fulldepth_fullcolor(FDFC) 플래그가 없다.
+- 공개 스키마 고정본: `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_random_schema_2026-11-25_01/`(`sources.json`; random 스키마 `9676a159…`, 밀도 문서 `cb1805c0…`).
+
+**조회 계획 3개(제출 안 함; 각각 정확한 hash 승인 필요).** 독립 검토를 두 번 반영했다(1차 3개, 2차 2개 에이전트). 수신기 테스트는 5개 파일 93 passed다.
+
+| 계획 | hash | 내용 | 예상 |
+|---|---|---|---|
+| P3 내부 random | `e8b05d6e8ed2235930b797a0e21332b2915f9df116d7918186a194d31f0d5ff6` | 66개 중심의 0.4 Mpc + 30″ 안 full-density `s16a_wide.random`, 35열, 11 batch(UNION ALL 6개) | 약 81k행, 19–24 MB |
+| P1 source 플래그 | `e73c0f9027c5f75162516430703ee70b7eb6e87d4d454ca5f33b6ea5c2c7062b` | 기존 115,993 ID에 forced(wl_fulldepth_fullcolor, grizy bright_object_center/_any, edge)와 meas(i 같은 3개) LEFT JOIN, 22열, 24 batch | 115,993행, 17–23 MB |
+| P2 thinned random | `cdd04062b79415328e7bbdae08a938a5224bf19daa2717d2d9665f81ed21b356` | 렌즈 11개의 90′ 안 `iadjust_density < 0.003`, 47열, 11 batch, LIMIT 27000 | 약 118k행, 43–51 MB |
+
+- 계획 위치(`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/` 아래):
+  - `s16a_random_inner_rows_plan_2026-11-25_01`
+  - `s16a_bright_object_flag_rows_plan_2026-11-25_03`
+  - `s16a_random_candidate_rows_plan_2026-11-25_02`
+- 이전 판(P1 `_01`/`_02`, P2 `_01`)은 제출 전이라 지웠다.
+- 실행기: `prepare_`/`submit_`/`test_submit_` × `s16a_random_inner_rows`, `s16a_bright_object_flag_rows`, `s16a_random_candidate_rows`, 그리고 공용 `cas_transfer_checks.py`.
+- 수신기 hash(승인 전, `APPROVED_SHA=None`):
+  - P3 `55018bcb…`
+  - P1 `023b3a23…`
+  - P2 `6d01e407…`
+  - 공용 `c83eaf84…`
+  - 승인 시 `APPROVED_SHA` 한 줄만 바뀐다.
+- 안전장치:
+  - 정확한 hash, 고정 디렉터리, LagEunha, 계획별 128 MiB 예산, SQL 재해시를 지킨다.
+  - Content-Length 또는 chunked 전송만 받고, CSV는 줄바꿈으로 끝나야 한다. 폴링은 6시간까지다.
+  - P2·P3는 `count(*) OVER ()`(LIMIT 전에 계산) 값과 행 수가 같아야 한다. P3는 batch 전체 `n_batch`도 맞아야 해서, 서버가 깔끔하게 잘라 보낸 응답이나 빠진 중심을 거부한다.
+  - P1은 ID 정확 일치로 검사한다.
+- WHERE에 플래그 필터가 없다. 마스크된 점도 일부러 받는다. SQL 형식은 dec/ra BETWEEN, cx/cy/cz 원뿔, ORDER BY object_id, LIMIT이다.
+
+**사전 등록한 판정·분석 규칙(계획 hash 안).**
+- **P1** (meas i가 판정 권한을 가진다. T는 True 수, N=115,993):
+  - `_center`: T ≤ 11이면 적용. 0.5·N·f_rand < 110이면 판정 불가. T/N ≥ 0.5·f_rand이면 미적용. 그 밖은 모호.
+  - `_any`: T ≤ 11이면 적용, 아니면 미적용.
+  - edge: band별로 T ≤ 11이면 그 band의 edge가 구멍을 정의한다. meas i edge가 T > 11이면 멈춘다.
+  - FDFC: T(FDFC=False) ≤ 11이면 FDFC가 random footprint를 정의해야 한다.
+  - f_rand는 P2(`cdd04062…`) 점 중 43개 source 원판 합집합 안의 i non-edge 점에서 구한다.
+- **P3:**
+  - 면적 = 기하 면적 × (구멍 규칙 통과 점 / 존재하는 점, inner 중복 제거).
+  - i 미처리 점(NULL inner, icountinputs=0, iedge)은 구멍으로 센다.
+  - 개수 ÷ 100/arcmin²은 patch 누락 표시에만 쓴다. 0–0.1 Mpc의 이항 잡음이 17–21%이기 때문이다.
+  - 점이 있고 통과하면 전체 면적을 유지한다.
+  - 중심점 상태는 6″ 안 다수 플래그로 보고하고, 중심을 배제하지 않는다.
+- **P2:**
+  - 기하: 2R ≤ d ≤ 90′−R, 쌍 간격 ≥ 6 Mpc, 렌즈 간 겹침 금지, 렌즈당 목표 8개 이상.
+  - 점 단위 countinputs 컷은 쓰지 않는다(WL source의 15–75%가 탈락하므로). 대신 분포를 렌즈 원판과 맞춘다.
+  - source 수로는 중심을 고르거나 순위를 매기지 않는다. 가려진 중심점이라도 배제하지 않는다.
+  - 남은 결정: 배치 순서, 순위 기준, 최소 개수, 새 위치의 CAMIRA 계산, FDFC footprint. 이것들은 새 중심에 대한 count·행 조회 전에 hash로 고정한다.
+
+**남은 과제.**
+- FDFC 정의가 고정되지 않았다. 공식 지도가 있는지 먼저 보고, 없으면 forced wl_fulldepth_fullcolor 집계 격자 계획을 따로 만든다. 빈 pilot random 23개로 검증한다.
+- P3는 P2 prepare 모듈의 hash에 묶여 있다. P2를 고치면 P3도 새로 만들어야 하므로 둘을 함께 승인한다.
+- 검토가 권한 실행 순서: P3(가장 싸서 첫 호환성 확인) → P1 → P2.
+- 서버 측 CAS 동작(pdr1 release에서 UNION ALL·window 함수·응답 framing)은 첫 batch에서 확인된다.
+
+## 2026-11-25 조회 3개 결과와 후속 4단계(f_rand, 내부 면적, FDFC 계획, 선택기 시험)
+
+**조회 결과(승인 hash 그대로, 모두 exit 0, credentials_saved=false).**
+- P3 `e8b05d6e…`: 84,817행, 20.4 MB, 빈 중심 0.
+- P1 `e73c0f90…`: 115,993행, NULL 없음.
+  - True 수: wl_fulldepth_fullcolor 115,993(=False 0), bright_object_any g/r/i/z/y 3312/3360/2672/3139/3488(meas i 2672), center 각 1(meas 0), edge g4 r11 z5 y1(meas i 0).
+- P2 `cdd04062…`: 107,743행, 46.6 MB.
+
+**1. f_rand와 P1 판정**(`audit_s16a_random_point_areas.py` `1d3f3183…` → `/home/kjhan/BACKUP/Astrafek/s16a_random_point_areas_20261125_01/`, summary `79517442…`).
+- 43개 비어 있지 않은 원판의 합집합에 P2 점 n=2,242개가 들어간다(모두 90′ 원뿔 안). f_rand(center) = 0.112 ± 0.007이고, source 가중으로는 0.113이다.
+  - random 점의 `_any`는 `_center`와 정확히 같다(반경 0).
+- 판정 결과:
+  - `_center` 적용(T=0 ≤ 11). 미적용이었다면 약 13,000개가 기대된다.
+  - `_any` 미적용(T/N = 2.3% = 0.21·f_rand).
+  - 다섯 band의 edge 모두 구멍을 정의한다.
+  - FDFC는 선택에 포함된다.
+- 구멍 규칙: random 점에서 i `bright_object_center`, grizy edge 중 하나, 또는 i 미처리.
+
+**2. P3 내부 면적과 0–0.4 Mpc boost**(기록된 inner 기대개수 stack은 6.7e-16까지 재현된다).
+- i NULL 행 4,356개는 2개 patch에서 나오고, 모두 S23B_9307의 빈 random 5개에 속한다.
+  - 이 점들 주변 15″의 inner 밀도는 명목값의 0.97–1.02배다. 즉 이 행들은 patch 겹침 중복이지 구멍이 아니다.
+  - 사전 등록 규칙(NULL=구멍)을 그대로 쓰면 이 5개의 면적이 절반이 된다. 지원되는 6개 그룹 stack에는 영향이 없다.
+  - 결과표는 중복 처리 판을 쓰고, 사전 등록 판도 함께 둔다.
+- 중심점 상태: 가려진 중심 2개(LC-S23B_10600, RC-d57f0241…). 배제하지 않는다.
+- 0.2–0.4 Mpc의 중복 제거 후 밀도 중앙값은 99.75/arcmin²다. patch 누락 표시는 없다.
+- 렌즈 핵의 label 면적은 random 점 면적보다 작다. 합계 기준으로 0–0.1 Mpc에서 1.76 대 2.58 arcmin², 0.2–0.4에서 21.0 대 33.1이다. source에서 30″ 안만 세는 label 방식이 렌즈 핵의 source 공백을 면적에서 뺀 탓이다.
+- 렌즈 stack boost(n 가중, ±는 그룹 jackknife):
+
+  | 면적 기준 | 0–0.1 Mpc | 0.1–0.2 Mpc | 0.2–0.4 Mpc |
+  |---|---|---|---|
+  | label, own 규칙(기록값) | 1.31 ± 0.19 | 1.51 ± 0.17 | 1.15 ± 0.14 |
+  | label, own 규칙 없음 | 1.44 | 1.51 | 1.15 |
+  | random 점 | 1.42 ± 0.29 | 1.42 ± 0.30 | 1.04 ± 0.19 |
+  | random 점 + 빈 random 포함 | 1.63 | 1.59 | 1.17 |
+
+  - 0.2–0.4 Mpc boost는 면적 기준에 따라 약 0.11 움직인다(1.15 → 1.04). 다만 jackknife 오차 안이다.
+- 초점 중심 2개:
+  - RC-6065306c…: 0–0.1 Mpc 점이 모두 통과하고, 면적 0.218은 label 0.216과 같다.
+  - RC-1d54db20…: random 점 면적 0.300(전부 통과)인데 label unmasked는 0.181이다. label 쪽의 마스크 dilation이 원인이다.
+- 빈 pilot random 23개:
+  - S16A random 점이 기대치의 1.005배로 있고, 94%가 구멍 규칙을 통과한다.
+  - 즉 비어 있는 이유는 처리 누락이나 bright mask가 아니라, random 점에 없는 footprint 컷(FDFC 등)이다.
+  - random 점 면적에 이들을 넣으면 boost가 0.13–0.21 올라간다. FDFC footprint가 꼭 필요하다는 뜻이다.
+
+**3. FDFC footprint.**
+- 공식 지도는 공개되지 않았다(HSC release 문서 p=1745, p=2400에 없음).
+- 정의는 Mandelbaum+2018 2.2절에 있다:
+  - NSIDE=1024 HEALPix 화소당 방문 수 ≥ (4,4,4,6,6).
+  - 적합으로 얻은 i_lim > 25.6.
+  - PSF 실패 영역과 고립 영역을 제거한다.
+- 점 단위 countinputs 대리 지표는 실패한다. 가까운 S16A source가 전부 있는 중심 주변에서도 (4,4,4,6,6) 통과율이 0–100%로 제각각이다(source 보존율: 통과 점 0.94, 실패 점 0.90).
+- 그래서 집계 조회 계획을 만들었다(제출 전, `APPROVED_SHA=None`):
+  - 위치: `s16a_fdfc_grid_plan_2026-11-25_01`, plan `019c8228ba2f39264763bfaa9defd2f7e588f02b72d1a93d376d42db41f0189a`.
+  - 내용: forced primary 천체를 렌즈별 90′ 원뿔 안 1′ 격자로 묶어 세포별 n, n_FDFC, n_NULL을 센다. 객체 행은 받지 않는다.
+  - 크기: 약 28만 세포, 11–20 MB.
+  - 검증(사전 등록): 빈 random 23개는 원판 FDFC 비율 < 0.1, 비어 있지 않은 43개는 > 0.5여야 한다. 하나라도 어긋나면 사용을 멈춘다.
+  - 실행기: `prepare_s16a_fdfc_grid.py` `becd6d17…`, `submit_s16a_fdfc_grid.py` `be5699b5…`, `test_submit_s16a_fdfc_grid.py` `797c8062…`. 새 계획 4개의 테스트 70개가 모두 통과한다.
+
+**4. 중심 선택기**(`select_s16a_random_centres.py` `723bd76e…`).
+- FDFC 격자가 없으면 실행을 거부한다(P1 FDFC 규칙). `--provisional-without-fdfc`로는 구속력 없는 시험만 할 수 있다.
+- 규칙(코드에 고정):
+  - 2R ≤ d ≤ 90′−R. 다른 렌즈 원판이나 이미 채택된 원판과 겹치지 않는다.
+  - CAMIRA S20A ∪ S23B: 3 Mpc 대 3 Mpc 원이 겹치면 배제한다(기존 WL random 화면 규칙).
+  - 렌즈 원판과 비교해 icountinputs 차 ≤ 2, PSF FWHM 비 ≤ 1.2, isky_std 비 ≤ 1.3. 점수는 이 차이들의 제곱합이다.
+  - 배치: 렌즈 ID 순으로 돌아가며 하나씩 고른다. 동점은 sha256(lens|object_id)로 가른다. 목표 8개, 최소 5개.
+- 시험 결과(FDFC 대신 i 처리 점 피복률 ≥ 0.8을 대리로 씀; scratchpad, 기록하지 않음):
+  - 모두 47개. 8개에 닿은 렌즈는 S23B_3012, S23B_9828 둘뿐이다.
+  - 6개 렌즈가 최소 5개에 못 미친다. 3620, 6290, 8627, 9307은 각 2개, 10600은 3개, 8310·9131은 4개다.
+  - 가장 큰 제약은 CAMIRA 3+3 배제다. 렌즈별 후보의 54–79%가 여기서 빠진다. 남은 후보도 CAMIRA가 없는 작은 빈 영역에 몰려 있어 6 Mpc 간격 조건 때문에 몇 개밖에 놓이지 않는다.
+  - FDFC를 적용하면 더 줄어든다.
+- 다음 결정(사용자):
+  - CAMIRA 반경을 완화할지(P2 점 전체 기준 CAMIRA 통과율: 지금 3+3은 렌즈별 2–28%, 3+2는 7–35%, 3+1은 17–45%).
+  - random 원판끼리 겹침을 허용할지(공분산으로 처리).
+  - 원뿔을 90′보다 넓힐지(새 P2 조회가 필요하다).
