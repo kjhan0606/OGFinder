@@ -152,7 +152,7 @@ def part_f_rand(centers, data, flag_summary):
                 any_source_over_random=(T_a/N)/f_a if f_a > 0 else None), discs
 
 
-def part_areas(centers, data):
+def part_areas(centers, data, extra_hole=None):
     summary, rows = load_rows(INNER)
     by_c = {}
     for r in rows:
@@ -182,7 +182,7 @@ def part_areas(centers, data):
             null_info.append(dict(center_id=cid, null_rows=int(nulls.sum()), null_rows_under_full_inner_density=int(dup.sum()),
                                   median_local_inner_over_nominal=float(np.median(local)/nominal)))
         keep = np.array([inner_ok(r) for r in rs], bool) | nulls
-        holes = np.array([hole(r) for r in rs], bool)
+        holes = np.array([hole(r) or (extra_hole is not None and extra_hole(c, r)) for r in rs], bool)
         res = {}
         for variant, present in (('preregistered', keep), ('null_duplicates', keep & ~dup)):
             vals = []

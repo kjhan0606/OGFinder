@@ -7726,3 +7726,24 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
   - CAMIRA 반경을 완화할지(P2 점 전체 기준 CAMIRA 통과율: 지금 3+3은 렌즈별 2–28%, 3+2는 7–35%, 3+1은 17–45%).
   - random 원판끼리 겹침을 허용할지(공분산으로 처리).
   - 원뿔을 90′보다 넓힐지(새 P2 조회가 필요하다).
+
+### 2026-11-25 FDFC 격자 수신, 사전 등록 검증 불일치, CAMIRA 완화 사다리
+
+- 사용자가 FDFC 격자 계획 `019c8228…` 제출, CAMIRA 배제 완화, 커밋을 승인했다. 커밋 `a1b804345`.
+- 수신: tmux `hsc_auth`, `--use-env-auth`, CAS 작업 1097019–1097030(11개) 모두 첫 시도에 완료. 259,234칸, 10,548,989 B. primary 33,526,625개 중 FDFC 20,273,366개, NULL 0개. receipt `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_fdfc_grid_plan_2026-11-25_01/results/download_summary.json`(`02241838…`), `credentials_saved=false`, 결과 파일에 인증 문자열 없음.
+- 사전 등록 검증(`audit_s16a_fdfc_grid.py`, `4e1367ec…`; 출력 `/home/kjhan/BACKUP/Astrafek/s16a_fdfc_grid_validation_20261125_01/`, summary `1f186760…`): **불일치 10건, `grid_validated=false`**. 빈 random 23개는 모두 FDFC 비율 정확히 0으로 통과. 비어 있지 않은 43개 중 10개가 0.5 미만(0.066–0.475): 렌즈 원판 LC-9013(0.42), 6290(0.30), 8310(0.21), 8206(0.26), 9307(0.24)과 random 5개.
+- 진단(검증 규칙 밖, 해석용): source 수/(FDFC 비율×원판 면적)이 f=0.07–1 전 구간에서 15.6–27.1 /arcmin²로 일정하고, n/A는 f에 비례한다. 격자는 맞고, "비어 있지 않은 원판은 대부분 FDFC"라는 사전 기대가 틀렸다(부분 footprint 원판이 렌즈 5개를 포함해 흔하다). 규칙대로 격자 사용은 사용자 검토까지 멈췄고, 최종 선택은 돌리지 않았다.
+- 함의: 렌즈 5개의 3 Mpc 원판이 21–42%만 FDFC다. random 점 면적과 label 면적은 FDFC를 모르므로 이 렌즈들과 부분 random에서 면적이 과대 추정된다. boost는 FDFC 제한 면적으로 다시 내야 한다. 선택기의 "random 원판 FDFC ≥ 0.95" 조건도 렌즈 자신이 만족하지 못하므로 재검토가 필요하다.
+- CAMIRA 완화(`select_s16a_random_centres.py`, `e3dcf69f…`, schema v2): 사다리 3→2→1 Mpc, 모든 렌즈가 MINIMUM을 채우는 가장 큰 R_c 하나를 전 렌즈에 쓴다. 선택 원판마다 `camira_clearance_mpc` 기록. FDFC 없는 시험: 3+3은 47개(4개 렌즈만 ≥5), 3+2는 81개(모든 렌즈 ≥5, 최소 8310의 5개). 이 변경과 검증 스크립트는 아직 미커밋.
+
+### 2026-11-25 FDFC 격자 수락, FDFC 면적 boost, 최종 선택 시험
+
+- 사용자 결정: 격자를 받아들인다(검증 규칙을 "빈 원판 FDFC < 0.1 + FDFC 면적당 source 밀도 일정"으로 수정), random 원판 FDFC ≥ 0.95 조건은 유지. 기록 `/home/kjhan/BACKUP/Astrafek/s16a_fdfc_grid_validation_20261125_01/user_acceptance.json`. 선택기는 이 수락 기록이 격자 receipt와 맞지 않으면 실행을 거부한다.
+- FDFC 면적 boost(`audit_s16a_fdfc_areas.py`, 출력 `/home/kjhan/BACKUP/Astrafek/s16a_fdfc_areas_20261125_01/`; `audit_s16a_random_point_areas.part_areas`에 `extra_hole` 인자 추가). 2″ label은 기록값(1.31/1.51/1.15)을 재현한다. n-가중 렌즈 stack, 6–8개 그룹:
+  - label: 0–0.1 1.31±0.19, 0.1–0.2 1.51±0.17, 0.2–0.4 1.15±0.14, 0.4–0.7 0.97±0.09, 0.7–1 1.02±0.04, 1–1.5 0.94±0.09, 1.5–2 1.06±0.06, 2–3 1.04±0.06.
+  - label∩FDFC: 1.53±0.23, 1.61±0.23, 1.19±0.16, 0.98±0.10, 1.01±0.03, 0.95±0.09, 1.08±0.06, 1.04±0.06.
+  - random 점∩FDFC(0–0.4): 1.64±0.24, 1.61±0.29, 1.17±0.14.
+  - 빈 random을 넣어도 FDFC 면적에서는 값이 그대로다(면적 0). 이전의 "빈 random 포함 시 +0.13–0.21" 불일치는 FDFC로 설명된다. FDFC 칸이 1′라 0–0.1 Mpc 값은 칸 경계 영향을 받는다.
+- 최종 선택(`s16a_random_centre_selection_20261125_01/`, summary `0ce03303…`, 상태 `selected_pending_user_approval`): FDFC ≥ 0.95를 쓰면 사다리가 1 Mpc까지 내려가도 S23B_8206이 3개(<5)라 R_c=1 Mpc가 쓰였다. 80개 선택, FDFC 최소 0.953. 3 Mpc 반경 기준 군집 여유: 1–2 Mpc 61개, 2–3 Mpc 10개, >3 Mpc 9개. 즉 대부분의 random 원판 가장자리가 CAMIRA 군집 중심에서 1–2 Mpc 안까지 온다(군집 바깥 영역 오염 위험). 사용 전 결정 필요.
+- 미커밋: `audit_s16a_fdfc_grid.py`, `audit_s16a_fdfc_areas.py`, `select_s16a_random_centres.py`·`audit_s16a_random_point_areas.py` 변경, HANDOVER.
+- 사용자 결정(권장안 A): R_c = 2 Mpc 고정, 5개 미만 렌즈는 받은 만큼 쓰고 보고. 선택기 schema v3. 출력 `/home/kjhan/BACKUP/Astrafek/s16a_random_centre_selection_20261125_02/`(summary `2a4dba3c…`, `selected_centres.tsv` `65b09619…`, 상태 `selected_pending_user_approval`). 55개: 3012·9828 8, 8627·9013·9131 6, 6290·9307 5, 10600·3620·8206 3, 8310 2(5개 미만 4개 렌즈; 앞 보고의 "7개"는 잘못 센 값). 군집 여유 2–3 Mpc 43개, >3 Mpc 12개, FDFC 최소 0.953. `_01`(1 Mpc) 결과는 비교용으로만 남긴다.

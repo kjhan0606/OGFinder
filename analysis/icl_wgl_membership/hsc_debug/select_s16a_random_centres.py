@@ -5,8 +5,11 @@ Candidates are the deduplicated thinned S16A random points of the approved candi
 - geometry: 2 R <= d(lens) <= 90 arcmin - R, R = the lens 3-proper-Mpc radius; a disc may not overlap any pilot
   lens disc (separation > R + R_lens) or any already accepted disc of any lens (> R + R_other; within one lens
   this is the 6-Mpc pairwise separation);
-- CAMIRA: zero overlap of the 3-Mpc disc with any S20A or S23B CAMIRA cluster's 3-proper-Mpc aperture at the
-  cluster redshift (the WL random-coordinate screen rule, both catalogues unioned);
+- CAMIRA: zero overlap of the 3-Mpc disc with any S20A or S23B CAMIRA cluster's aperture of radius R_c proper Mpc
+  at the cluster redshift (both catalogues unioned). R_c = 2 Mpc for all lenses (user decisions 2026-11-25: relax
+  the 3+3 WL screen rule; then fix R_c = 2 rather than fall to 1, since at 1 Mpc 61 of 80 discs came within 1-2 Mpc
+  of a cluster centre). Lenses below MINIMUM keep what they get and are reported. The CAMIRA clearance of each
+  selected disc is reported;
 - footprint: the FDFC grid (disc FDFC fraction >= 0.95) is required. Without it the selector only runs with
   --provisional-without-fdfc, writes 'provisional_not_for_queries' and uses an i-processed point-coverage proxy;
 - masks: never rejects on the centre point or on mask fraction (reported); never uses S16A source counts;
@@ -36,8 +39,9 @@ DATA = Path('/gpfs/kjhan/Astrafek/data')
 CAMIRA = {DATA/'catalog/camira_s20a_wide_sm.tbl': 'd929985d7f6ee38c4435fc12099e9df1e5dbfd9ce9603cea319d5704129d22aa',
           DATA/'catalogue_s23b_camira_2026-10-20_01/camira_s23b_wide_sm.tbl': '5af057028feab7976cd3ed389a7246cbe73add8bbb96891101f0f692b1de4d71'}
 FDFC_GRID = DATA/'sample_800_2026-10-13/s16a_fdfc_grid_plan_2026-11-25_01'
+ACCEPTANCE = Path('/home/kjhan/BACKUP/Astrafek/s16a_fdfc_grid_validation_20261125_01/user_acceptance.json')
 H0, OM0 = 70.0, 0.3
-CAMIRA_MPC = 3.0
+CAMIRA_LADDER = (2.0,)
 TARGET, MINIMUM = 8, 5
 FDFC_MIN = 0.95
 COVERAGE_MIN = 0.8  # provisional proxy: deduplicated i-processed points / expected (0.3 per arcmin^2)
@@ -119,6 +123,10 @@ def load_fdfc():
 
 def run(output, provisional):
     fdfc = load_fdfc()
+    if fdfc is not None:
+        acc = json.loads((ACCEPTANCE).read_text()) if ACCEPTANCE.is_file() else {}
+        if not (acc.get('accepted') and acc.get('grid_summary_sha256') == fdfc['summary_sha256']):
+            raise SystemExit('FDFC grid failed the preregistered validation and has no recorded user acceptance')
     if fdfc is None and not provisional:
         raise SystemExit('FDFC grid not available: the bright-object rule requires FDFC before the selector is hashed '
                          '(use --provisional-without-fdfc for a non-binding feasibility run)')
@@ -130,7 +138,7 @@ def run(output, provisional):
     cosmo = FlatLambdaCDM(H0=H0, Om0=OM0)
     camira = [c for path in CAMIRA for c in read_camira(path)]
     cu = unit([c['ra_deg'] for c in camira], [c['dec_deg'] for c in camira])
-    crad = np.degrees(CAMIRA_MPC/cosmo.angular_diameter_distance(np.array([c['z'] for c in camira])).value)
+    da_c = cosmo.angular_diameter_distance(np.array([c['z'] for c in camira])).value
     ctree = cKDTree(cu)
     ledger = centres()
     lenses = {r['matched_lens_id']: r for r in ledger if r['role'] == 'lens'}
@@ -154,8 +162,10 @@ def run(output, provisional):
                 counts['geometry'] += 1; continue
             if any(float(sep_deg(pu[i], lu[h])) <= R+lr[h] for h in lenses if h != g):
                 counts['lens_overlap'] += 1; continue
-            near = np.array(ctree.query_ball_point(pu[i], chord(R+crad.max())), int)
-            if len(near) and np.any(sep_deg(pu[i], cu[near]) <= R+crad[near]):
+            near = np.array(ctree.query_ball_point(pu[i], chord(R+np.degrees(max(CAMIRA_LADDER)/da_c.min()))), int)
+            # largest cluster aperture (proper Mpc) this disc clears; inf if no cluster within reach
+            clear = math.inf if not len(near) else float(np.min(np.radians(np.maximum(sep_deg(pu[i], cu[near])-R, 0))*da_c[near]))
+            if clear <= min(CAMIRA_LADDER):
                 counts['camira'] += 1; continue
             st = disc_stats(ptree.query_ball_point(pu[i], chord(R)), pts, area)
             if fdfc is not None:
@@ -173,22 +183,34 @@ def run(output, provisional):
                 counts['tolerance'] += 1; continue
             score = (dci/TOL['icountinputs'])**2+(math.log(rp)/math.log(TOL['psf_fwhm_ratio']))**2+(math.log(rs)/math.log(TOL['sky_ratio']))**2
             tie = hashlib.sha256(f"{g}|{p['object_id']}".encode()).hexdigest()
-            pool.append(dict(index=i, score=score, tie=tie, **st))
+            pool.append(dict(index=i, score=score, tie=tie, camira_clearance_mpc=clear, **st))
             counts['accepted'] += 1
         pools[g] = sorted(pool, key=lambda c: (c['score'], c['tie']))
         rejected[g] = counts
-    chosen, placed = {g: [] for g in lenses}, []
-    active = True
-    while active:
-        active = False
-        for g in sorted(lenses):
-            if len(chosen[g]) >= TARGET:
-                continue
-            while pools[g]:
-                c = pools[g].pop(0)
-                if all(float(sep_deg(pu[c['index']], pu[j])) > lr[g]+r for j, r in placed):
-                    chosen[g].append(c); placed.append((c['index'], lr[g])); active = True
-                    break
+
+    def place(camira_mpc):
+        queue = {g: [c for c in pools[g] if c['camira_clearance_mpc'] > camira_mpc] for g in lenses}
+        chosen, placed = {g: [] for g in lenses}, []
+        active = True
+        while active:
+            active = False
+            for g in sorted(lenses):
+                if len(chosen[g]) >= TARGET:
+                    continue
+                while queue[g]:
+                    c = queue[g].pop(0)
+                    if all(float(sep_deg(pu[c['index']], pu[j])) > lr[g]+r for j, r in placed):
+                        chosen[g].append(c); placed.append((c['index'], lr[g])); active = True
+                        break
+        return chosen
+
+    ladder = {}
+    for camira_mpc in CAMIRA_LADDER:
+        chosen = place(camira_mpc)
+        ladder[camira_mpc] = {g: dict(pool=sum(c['camira_clearance_mpc'] > camira_mpc for c in pools[g]), selected=len(chosen[g]))
+                              for g in sorted(lenses)}
+        if all(len(v) >= MINIMUM for v in chosen.values()):
+            break
     rows = []
     for g in sorted(lenses):
         for rank, c in enumerate(chosen[g]):
@@ -197,18 +219,20 @@ def run(output, provisional):
                              lens_id=g, rank=rank, random_object_id=p['object_id'], ra_deg=repr(p['ra']), dec_deg=repr(p['dec']),
                              z_lens=lenses[g]['z_lens'], radius_arcsec=lenses[g]['radius_arcsec'],
                              offset_arcmin=float(sep_deg(pu[c['index']], lu[g]))*60, score=c['score'],
-                             **{k: c[k] for k in ('n_points', 'coverage', 'hole_fraction', 'icountinputs', 'psf_fwhm', 'sky')},
+                             **{k: c[k] for k in ('n_points', 'coverage', 'hole_fraction', 'icountinputs', 'psf_fwhm', 'sky', 'camira_clearance_mpc')},
                              fdfc_fraction=c.get('fdfc_fraction')))
     output.mkdir(parents=True)
     with (output/'selected_centres.tsv').open('w', newline='') as stream:
         w = csv.DictWriter(stream, fieldnames=list(rows[0]), delimiter='\t', lineterminator='\n')
         w.writeheader(); w.writerows(rows)
     summary = dict(
-        schema='astrafek-s16a-random-centre-selection-v1',
+        schema='astrafek-s16a-random-centre-selection-v3',
         status='provisional_not_for_queries' if fdfc is None else 'selected_pending_user_approval',
         footprint='i-processed coverage proxy (FDFC grid absent)' if fdfc is None else 'FDFC grid',
         fdfc_grid_summary_sha256=None if fdfc is None else fdfc['summary_sha256'],
-        constants=dict(h0=H0, om0=OM0, camira_mpc=CAMIRA_MPC, target=TARGET, minimum=MINIMUM, fdfc_min=FDFC_MIN,
+        fdfc_acceptance_sha256=sha(ACCEPTANCE) if fdfc is not None else None,
+        camira_mpc_used=camira_mpc, camira_ladder={str(k): v for k, v in ladder.items()},
+        constants=dict(h0=H0, om0=OM0, camira_ladder=CAMIRA_LADDER, target=TARGET, minimum=MINIMUM, fdfc_min=FDFC_MIN,
                        coverage_min=COVERAGE_MIN, tolerances=TOL, cone_arcmin=RADIUS_ARCMIN),
         per_lens={g: dict(selected=len(chosen[g]), below_minimum=len(chosen[g]) < MINIMUM, candidate_filter=rejected[g],
                           lens_disc=lens_stats[g]) for g in sorted(lenses)},
