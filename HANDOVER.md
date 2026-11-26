@@ -7894,3 +7894,16 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
 - 면적 이항 잡음: 배경 source 0.025 / 0.012 / 0.008, 전체 source 0.043 / 0.018 / 0.010 — jackknife(0.07–0.22)에 비해 작다.
 - 비교용 전체 source(배경 컷 없음): 1.70±0.18 / 1.55±0.08 / 1.27±0.08 / 1.20 / 1.10 / 1.05 / 1.12 / 1.10±0.02.
 - 해석: 표준 정의에서 배경 source의 boost는 0–3 Mpc 전 구간에서 1σ 안에서 1. 남은 체계 점검 항목은 P(z) 기반 희석(점 photo-z 컷은 꼬리 member를 남길 수 있음)과 0–0.2 Mpc의 그룹 수(7).
+
+### 2026-11-26 Ephor_AB PDF 요약 조회(승인·수신)와 표준 boost의 P(z) 희석 점검
+
+- 계획 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_photoz_interval_rows_plan_2026-11-26_01`, sha `be6bd1a95bee49638a5d5337fa4c63f3cc93f8ac77d40a37e3fafe4a558c60cb`(사용자 승인 2026-11-26, "승인함"). `prepare_/submit_/test_submit_s16a_photoz_interval_rows.py`. ID 395,299개(렌즈 원판 35,208): 렌즈 11개·새 random 76개 원판의 선택·Ephor_AB 가용 source, 배경 컷 없음. 열: s16a_wide.photoz_ephor_ab의 photoz_mc(PDF 1회 추출), mean, median, mode, std_best, conf_best, err68/err95 하한·상한. 완전한 PDF는 CAS 열이 아니어서 요청하지 않음.
+- 수신: CAS job 1097341–1097420, 80 CSV, 55,461,336 B, 모든 ID 정확히 1행, NULL 0.
+- `audit_s16a_pz_dilution.py`(`de2e21c9…`), 출력 `/home/kjhan/BACKUP/Astrafek/s16a_pz_dilution_20261126_01/`. 표준 boost 설정 그대로(면적 잡음 재추출 없음).
+- 표준 배경 집합(best > z_l+0.2) 안의 부분집합, n 가중 0–0.1 / 0.1–0.2 / 0.2–0.4 / 2–3 Mpc:
+  - PDF 추출도 배경(mc > z_l+0.2, 약 93%): 1.02±0.23 / 0.99±0.20 / 1.01±0.07 / 1.04±0.03.
+  - 95% 구간이 렌즈에 닿음(err95_min ≤ z_l): 1.73±0.57 / 1.29±0.45 / 1.35±0.15 / 1.08±0.04. 비율 렌즈 0.27 / 0.24 / 0.23 vs random 0.20 / 0.19 / 0.19; 0.4 Mpc 밖은 같음(0.18–0.19).
+  - mc ≤ z_l+0.1 비율: 렌즈 0.045 / 0.092 / 0.038, random 0.031 / 0.028 / 0.032.
+- 대안 source 컷: mc > z_l+0.2 1.04±0.22 / 1.08±0.15 / 1.05±0.08 / 1.05±0.03; err95_min > z_l+0.1 0.91±0.26 / 0.99±0.21 / 0.95±0.08 / 1.04±0.04; best > z_l+0.2 및 err95_min > z_l 0.86±0.23 / 0.95±0.18 / 0.94±0.08 / 1.03±0.04.
+- 해석: 표준 집합에는 PDF가 넓은 source를 통한 member 누설이 0–0.4 Mpc에 남아 있다(95% 구간이 렌즈에 닿는 부분집합 0.2–0.4 Mpc 1.35±0.15; 표준 집합의 약 5–6%에 해당하는 초과). 이를 빼면 0–0.4 Mpc boost는 0.86–0.95로 1 아래(각 1σ 안). 즉 표준 boost ≈1은 member 오염(+)과 깨끗한 배경의 결손(−; 자기 확대 결핍이나 member에 의한 blending/가림 후보, 미분리)이 상쇄된 값일 수 있다. boost = 1을 "오염 없음"으로 읽으면 안 된다. 2–3 Mpc에서는 모든 컷이 1.03–1.05로 일치.
+- 한계: photoz_mc는 source당 1회 추출. 결손의 원인(확대·blending·면적)은 분리하지 않았다.
