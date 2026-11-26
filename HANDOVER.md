@@ -7862,3 +7862,22 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
   - 엄격(risk 낮음 + Mizuki 배경): 1.07±0.49 / 1.20±0.23 / 1.07±0.17 / 1.07±0.05.
 - 해석: 잔여 중심부 boost는 risk·Mizuki 일치로 줄지 않는다. 뚜렷한 photo-z 누설 신호는 없고, 잔여 자체가 각 고리에서 1과 약 1σ 안이다(렌즈 source 수가 적어 0–0.1 Mpc Poisson만 ±21%). Mizuki 비배경 소수(5%)의 0.2–0.4 Mpc 1.41은 약한 누설 단서지만 통계가 작다.
 - 한계: 점 photo-z만 사용, P(z) 없음.
+
+### 2026-11-26 새 중심의 0–0.4 Mpc random 점 면적과 중심부 boost(오프라인)
+
+- 사용자 결정(2026-11-26, "진행하시오."). 새 조회 없음. 렌즈 11개의 점은 pilot inner 영수증(e8b05d6e, 84,817행), 새 random 76개는 source 계획 c1dfe5a4의 inner 배치(85,210행).
+- `audit_s16a_new_inner_point_areas.py`(`4676f8b5…`), 출력 `/home/kjhan/BACKUP/Astrafek/s16a_new_inner_point_areas_20261126_01/`. 구멍 규칙·NULL 중복 탐침·면적(기하 고리 × 통과/존재 점)은 audit_s16a_random_point_areas와 같다. 새 변형: 수락 FDFC 격자(확장 렌즈 180′) 밖의 점도 구멍으로 센다. source 쪽은 label_fdfc parts 그대로, expected count, 그룹 jackknife, own 규칙 없음. 결손 패치(3σ 부족) 없음.
+- boost(n 가중, 0–0.1 / 0.1–0.2 / 0.2–0.4 Mpc):
+
+| source | 면적 | 0–0.1 | 0.1–0.2 | 0.2–0.4 |
+|---|---|---|---|---|
+| 전체 | label_fdfc | 1.82±0.37 (7) | 1.80±0.12 (7) | 1.39±0.10 (8) |
+| 전체 | random 점, FDFC 없음 | 1.01±0.27 (11) | 0.89±0.24 (11) | 0.75±0.18 (11) |
+| 전체 | random 점 + FDFC | 1.70±0.17 (7) | 1.55±0.08 (7) | 1.27±0.08 (8) |
+| Δz>0.2 | label_fdfc | 1.06±0.33 | 1.18±0.26 | 1.10±0.10 |
+| Δz>0.2 | random 점 + FDFC | 1.00±0.22 | 1.01±0.21 | 1.01±0.07 |
+
+- FDFC 없는 점 면적은 비교 불가: source는 모두 FDFC인데 낮은 FDFC 렌즈 원판의 비FDFC 면적까지 세어 boost가 낮게 나온다. NULL 중복 변형은 사전 등록 규칙과 같은 값.
+- random 점 + FDFC 면적 ÷ label_fdfc 면적(중앙값, 10–90%): 렌즈 1.01 / 1.00 / 0.94, random 1.00(0.56–1.03) / 0.97(0.71–1.01) / 0.93(0.79–0.99). label 면적이 일부 random 중심부에서 면적을 크게 잡아 random 밀도를 낮게 본다.
+- 해석: 중심부 boost는 점 면적에서 7–14% 작아진다(1.70 / 1.55 / 1.27). 배경 컷 뒤 남았던 중심부 잔여(1.06–1.18)는 점 면적에서 1.00–1.01로 사라진다: label 면적의 인공물이었다. 배경 source(Δz>0.2)의 boost는 0–3 Mpc 전 구간에서 1σ 안에서 1이다.
+- 한계: FDFC는 1′ 칸 기하로만 들어간다. 이항 면적 잡음은 jackknife에 넣지 않았다. 0–0.2 Mpc는 7개 그룹만 지지.
