@@ -7781,3 +7781,34 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
   - part 2 `bce80af866047312eeb1d8327a3d6378cc5366ff45a10a13575296f22f73f022`
   - part 3 `7d7ed612bea5678ec115e9d8687a6ce997fd28826c177dbd97b9ef3843ee2cca`
 - `prepare_s16a_random_id_supplement.py`(`f9dccaf2…`), 수신기 `submit_s16a_random_id_supplement.py --part N`(승인 반영 후 `7e82d915…`; 사용자 승인 2026-11-26 "1,2 에 대해서 승인": 세 hash 제출과 커밋), pilot 검증 함수 재사용(ID당 정확히 1행, 결합 ID 일치), 테스트 5개 통과.
+- 수신(2026-11-26): tmux `hsc_auth`, part 1→2→3 순서, CAS 작업 1097104–1097332 중 225개, 재시도 없음, EXIT 0. 합계 258,403,185 B(part별 86.2/86.2/86.0 MB, 각 128 MiB 이내, 확인 bytes 일치), `credentials_saved=false`, 결과에 인증 문자열 없음. 373,449개 ID 모두 종류별로 정확히 1행.
+  - quality: Ephor_AB photoz_best·risk 결측 13,290(3.6%), band flux 결측 g 1,150 / r 898 / z 299 / y 922.
+  - cmodel: photoz_ephor 행 없음 1,706, mizuki 행 없음 92.
+  - flags: wl_fulldepth_fullcolor 373,449 전부 True. bright_object_any g/r/i/z/y 9,678/9,448/7,933/8,994/9,902(i 2.1%; pilot 2.3%), _center 각 3(meas i 0), edge g9 r19 z9 y7(meas i 0).
+
+### 2026-11-26 새 random 76개로 본 S16A boost(오프라인)
+
+- 사용자 결정(2026-11-26, "진행하시오"): 새 random을 pilot 규칙 그대로 처리해 boost 재계산.
+- `audit_s16a_random_extension_boosts.py`, 출력 `/home/kjhan/BACKUP/Astrafek/s16a_random_extension_boosts_20261126_02/`(`_01`은 같은 boost에 pilot 비교 열이 없는 첫 실행). 새 pair는 pilot 규칙 그대로: Y1 진단 선택(select_row table4 통과 + 수치 보정 유한·양수), photo-z 유무(Ephor_AB photoz_best·risk 유한), 렌즈 z에서의 proper 반경. 면적은 label_fdfc(2″ 격자, 30″ footprint, photo-z 없는 source 마스크, FDFC 칸 밖 제외; 확장 렌즈 4개는 180′ 격자). expected-count stack, 렌즈 그룹 jackknife.
+- source: pair 373,449, 선택 373,381, 그중 photo-z 있음 360,091.
+- 재현 검사: pilot random으로 다시 계산하면 0–0.1/0.1–0.2/0.2–0.4 Mpc 1.526±0.227, 1.606±0.225, 1.189±0.157 — 앞의 label_fdfc 값과 같다.
+- boost(n 가중, ±jackknife, 괄호는 그룹 수):
+
+| 반경 Mpc | 새 random 76 | pilot random | 둘 다 |
+|---|---|---|---|
+| 0–0.1 | 1.82±0.37 (7) | 1.53±0.23 (6) | 1.59±0.28 (7) |
+| 0.1–0.2 | 1.80±0.12 (7) | 1.61±0.23 (6) | 1.68±0.09 (7) |
+| 0.2–0.4 | 1.39±0.10 (8) | 1.19±0.16 (6) | 1.33±0.12 (8) |
+| 0.4–0.7 | 1.20±0.07 (8) | 0.98±0.10 (6) | 1.15±0.08 (8) |
+| 0.7–1 | 1.10±0.07 (9) | 1.01±0.03 (6) | 1.09±0.06 (9) |
+| 1–1.5 | 1.05±0.06 (10) | 0.95±0.09 (7) | 1.03±0.07 (10) |
+| 1.5–2 | 1.12±0.05 (11) | 1.08±0.06 (8) | 1.11±0.04 (11) |
+| 2–3 | 1.10±0.02 (11) | 1.04±0.06 (8) | 1.08±0.03 (11) |
+
+- 안쪽 고리의 그룹 수가 7–8개인 것은 FDFC 비율이 낮은 렌즈 원판(9013·6290·8310·8206·9307)에서 렌즈 쪽 FDFC 면적이 그 고리에 없기 때문이다.
+- 2–3 Mpc에서도 1.10±0.02로 1보다 크다. 원인 점검:
+  - 새 random 밀도(FDFC 미마스크 면적당, photo-z 있는 선택 source) ÷ 렌즈 1.5–3 Mpc 밀도: 중앙값 0.915(0.72–1.10). 그룹별 2–3 Mpc boost 0.94–1.21, 확장 렌즈에만 몰리지 않는다(3012 1.12, 9828 1.11도 높다).
+  - 새 random ÷ 같은 렌즈의 pilot random 평균 밀도: 3012 1.03, 3620 0.97, 8310 1.05, 8627 1.05, 9013 1.07, 9828 0.98, 8206 0.84, 9131 0.82. 새 random이 전반적으로 더 성기지는 않다. 차이는 8206·9131 두 그룹이다.
+  - 밀도 비 vs 렌즈 거리 Spearman −0.21(p=0.07), vs CAMIRA 여유 −0.03(p=0.80). 평균 weight 비 0.92–1.04, 거리와 +0.28(p=0.013): 작지만 거리에 따른 경향이 있다.
+  - 해석은 아직 열려 있다: (a) 2–3 Mpc의 실제 군집 주변 과밀(2-halo·infall), (b) CAMIRA 2 Mpc 배제로 random이 평균보다 성긴 곳에 놓이는 편향, (c) 렌즈별 깊이 차. pilot random(렌즈 30′ 안)은 렌즈 주변 구조를 공유해 바깥 boost를 낮게 볼 수 있다.
+- 한계: 새 중심의 inner random 점 FDFC 면적(0–0.4 Mpc)은 아직 계산하지 않았다(점은 받아 두었다).
