@@ -8013,3 +8013,14 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
   - 1 Mpc 밖은 모든 class가 1과 맞음.
 - 해석: 중심부 손실은 |e|가 낮은 class에는 없고(B ≈ 1) 중간·높은 class에 몰려 있다. 이는 길쭉한 소스가 더 많이 빠지는 형태 의존 손실과 맞고, 남은 소스의 |e| 감소를 정성적으로 설명한다. 다만 (i) 0.2–0.4 Mpc에서 낮음−높음 차는 전체 0.24±0.20, 파랑 0.27±0.17로 2σ 미만이고, (ii) 형태와 무관한 손실(약 0.84)에 다른 원인의 |e| 하향 이동이 겹쳐도 같은 모양이 나오므로 둘을 이 검정만으로는 가를 수 없다.
 - 국소 배경 열 조회 계획(제출하지 않음): `prepare_s16a_local_background_rows.py`, 계획 `/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_local_background_rows_plan_2026-11-27_01`, 해시 `6851a9e9c795895a5b37c8c29523403831972a122d4aadfa9c7955b0660150b2`. P(z) 계획(be6bd1a9)의 ID 395,299개를 그대로 쓰고, 80배치, 21열: forced g/i variance·countinputs, meas parent_id·deblend_nchild, i blendedness abs flux child/parent, i child/parent 2차 모멘트(11/22/12), i deblend 플래그 4개. 예상 118.6 MB(상한 128 MiB). s16a_wide에 sky 수준 열은 없다. 실행은 이 해시의 별도 승인이 필요.
+
+### 2026-11-27 국소 배경 열 수신과 후보 (a) 재검정
+
+- 사용자 승인(2026-11-27, "승인") of plan `6851a9e9c795895a5b37c8c29523403831972a122d4aadfa9c7955b0660150b2`. 수신기 `submit_s16a_local_background_rows.py`(테스트 `test_submit_s16a_local_background_rows.py`, 4 통과), LagEunha tmux `Astrafek:hsc_auth`, `--use-env-auth`. CAS 작업 1097428–1097511, 80 CSV, 395,299행, 93,399,409 B, NULL 없음. 수신 요약 sha `8cad9d45…`.
+- `audit_s16a_local_background_abs_e.py`(`cf99088e…`), 출력 `/home/kjhan/BACKUP/Astrafek/s16a_local_background_abs_e_20261127_01/`.
+- 파랑 주 정의 30–60″(|e| 렌즈 − random −0.130±0.021, n=36)에서 렌즈 − random:
+  - 이웃·BCG 빛(child 맞춤 가우스 가중의 parent/child − 1) −0.012±0.006(렌즈 쪽이 오히려 적음); 추가 빛의 |e_extra| −0.003±0.007; 접선 성분 −0.001±0.009;
+  - log variance i +0.041±0.041, g +0.065±0.061(g는 90–300″에서도 +0.03–0.04라 장 수준 차); countinputs −0.6±0.5(모든 각거리에서 렌즈 쪽이 약 0.1–0.5 적음); child 비율 +0.01±0.08; deblend 플래그 모두 0.
+- random |e|는 variance가 클수록 커진다(5분위 0.558 → 0.582). 대리 지표를 맞춘 θ < 60″ 차: extra 맞춤 파랑 −0.085±0.020, |e_extra| 맞춤 −0.088±0.021, variance 맞춤 −0.085±0.020(전체 −0.042 ~ −0.045±0.014). 그대로 남는다. (extra와 |e_extra|는 0이 많아 5분위 경계가 겹치고 빈 칸이 있다.)
+- 부수 관찰: 추가 빛의 접선 성분이 렌즈 60–90 / 90–150 / 150–300″에서 +0.007±0.002 / +0.004±0.001 / +0.0014±0.0008(모든 색). 크기는 |e| 감소보다 훨씬 작지만 접선 shear 편향 후보다. 모멘트 축을 shape e1/e2 축과 같다고 가정했으므로 부호 규약은 따로 확인되지 않았다.
+- 해석: 소스 위치의 BCG/ICL·이웃 빛과 국소 잡음으로는 파란 소스의 중심부 |e| 감소가 설명되지 않는다. 다만 넓게 퍼진 ICL은 sky 차감에서 빠져 parent 플럭스에 남지 않을 수 있으므로, 매끈한 ICL 성분은 이 열로 완전히 배제되지 않는다. 남는 설명: 형태 의존 손실(|e| 3분위 boost, 2σ 미만) 또는 36개 표본의 통계 요동.
