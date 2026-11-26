@@ -7769,3 +7769,15 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
 - 추정: pair 약 41만 행(렌즈 source 수 ÷ 렌즈 원판 FDFC 비율(하한 0.2) × random FDFC 비율), inner 점 약 9.4만, 약 101 MB(128 MiB 상한 이내; 넘으면 수신기가 멈춘다).
 - 수신 검사: 모든 중심이 행을 내야 함, 중심별 행 수 = n_matched < LIMIT, 배치 합계 = n_batch, (중심, object) 유일, pair는 3 Mpc 원뿔 안(pilot과 같은 0.01″), inner는 원뿔 안.
 - 렌즈 11개는 두 산물이 이미 있다. Y1 품질 보충·cmodel photo-z·forced/meas 플래그는 돌려받은 ID가 있어야 하므로 별도 ID 계획으로 나중에 만든다(별도 승인·별도 128 MiB 예산; pilot 기준 행당 391+133+168 B라 약 40만 ID면 한 계획에 다 안 들어가 둘로 나눠야 할 수 있다).
+- 수신(2026-11-26): tmux `hsc_auth`, CAS 작업 1097066–1097089 중 22개, 재시도 없음, EXIT 0. 90,422,830 B(확인·청구 일치, 128 MiB 이내), `credentials_saved=false`, 결과 디렉터리에 인증 문자열 없음. pair 373,449행(76개 중심 모두 행 있음, 중심당 3,129–7,041, 비유한 값 0, 원뿔 초과 최대 −0.0001″), inner 점 85,210(중심당 704–2,354). 다음: ID 보충 계획(Y1 품질·cmodel photo-z·플래그).
+
+### 2026-11-26 76개 random source의 ID 보충 조회 계획 3개(제출 전)
+
+- 사용자 결정(2026-11-26, "진행 승인"): ID 보충 계획 작성.
+- ID: source 수신(`c1dfe5a4`)의 유일 object_id 373,449개(pair 행 수와 같음, 중심 간 중복 없음). 정렬 후 연속 3등분, 계획마다 124,483개, 5,000개씩 batch.
+- 종류 3개, 모두 실행된 pilot 조회 함수 그대로(FROM VALUES … LEFT JOIN): quality(Y1 입력 계약, `44b9d4df`, 31열), cmodel(photoz_ephor·mizuki, `35265ee4`), flags(forced/meas 밝은 천체·edge·FDFC, `e73c0f90`). afterburner 플럭스(`951a81fb`)는 결측 진단용이라 요청하지 않는다.
+- 계획(`/gpfs/kjhan/Astrafek/data/sample_800_2026-10-13/s16a_random_id_supplement_plan_2026-11-26_0{1,2,3}`), 각 75 batch, 추정 86 MB(pilot 행당 391+133+168 B):
+  - part 1 `aeda229e886582c75074c3c58e19bbb727a364fc5dff3fbc44463893cd801fe7`
+  - part 2 `bce80af866047312eeb1d8327a3d6378cc5366ff45a10a13575296f22f73f022`
+  - part 3 `7d7ed612bea5678ec115e9d8687a6ce997fd28826c177dbd97b9ef3843ee2cca`
+- `prepare_s16a_random_id_supplement.py`(`f9dccaf2…`), 수신기 `submit_s16a_random_id_supplement.py --part N`(승인 반영 후 `7e82d915…`; 사용자 승인 2026-11-26 "1,2 에 대해서 승인": 세 hash 제출과 커밋), pilot 검증 함수 재사용(ID당 정확히 1행, 결합 ID 일치), 테스트 5개 통과.
