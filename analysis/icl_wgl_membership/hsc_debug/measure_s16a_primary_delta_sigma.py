@@ -85,10 +85,8 @@ def cosmos():
     return out, dict(rows=len(rows_), missing_err95=int(np.isnan(out['err95']).sum()), missing_imag=int(np.isnan(out['imag']).sum()))
 
 
-def run(output):
-    if output.exists():
-        raise FileExistsError(output)
-    cosmo = Cosmology()
+def load_primary(cosmo):
+    """Primary-definition pairs of the 11 lenses and the 76 randoms, plus the lens photo-z responses."""
     centres, selection_sha = load_new_centres()
     new, _, provenance, _ = load_new(centres)
     pilot_centres, pilot, _, _ = bt.load_centres()
@@ -118,7 +116,7 @@ def run(output):
         chil, chis = float(cosmo.comoving(zl)), cosmo.comoving(zs[keep])
         sinv = 4*np.pi*G_MPC/C_KMS**2*chil/(1+zl)*(1-chil/chis)  # Mpc^2/Msun, proper
         et, ex = tangential(xy[:, 0], xy[:, 1], f['e1']-f['c1'], f['e2']-f['c2'])
-        data[cid] = dict(zl=zl, rprop=np.hypot(*xy.T)*3.0/float(e['radius']), et=et, ex=ex, sinv=sinv, wls=f['weight']*sinv**2,
+        data[cid] = dict(zl=zl, ids=ids, phi=np.arctan2(xy[:, 1], xy[:, 0]), rprop=np.hypot(*xy.T)*3.0/float(e['radius']), et=et, ex=ex, sinv=sinv, wls=f['weight']*sinv**2,
                          m=f['m'], rms=f['rms_e'], sig=f['sigma_e'], gi=np.array([colour(q[o]) for o in ids]))
     rand_cids = [r for g in groups for r in new_rand[g]]
     t1 = float(np.nanpercentile(np.concatenate([data[c]['gi'] for c in rand_cids]), 100/3))
@@ -127,7 +125,6 @@ def run(output):
         d['bin'] = np.digitize(d['rprop'], RADIAL_EDGES)-1
         d['blue'] = d['gi'] <= t1
 
-    # photo-z multiplier
     C, cinfo = cosmos()
     def responses(zl, idx=None):
         p, r, sh, so, e95, im = (C[k] if idx is None else C[k][idx] for k in ('photo', 'ref', 'shape', 'som', 'err95', 'imag'))
@@ -140,8 +137,19 @@ def run(output):
         rp, rs, npm, nst = responses(float(lens_row[g]['z_lens']))
         lens_resp[g] = dict(lens_z=float(lens_row[g]['z_lens']), primary_response=rp, primary_multiplier=1/rp, standard_multiplier=1/rs,
                             cosmos_primary_rows=npm, cosmos_standard_rows=nst)
+    return dict(data=data, groups=groups, lens_ids=lens_ids, new_rand=new_rand, t1=t1, nb=nb, lens_resp=lens_resp, responses=responses,
+                nC=len(C['photo']), cinfo=cinfo, pz_sha=pz_sha, selection_sha=selection_sha, provenance=provenance)
+
+
+def run(output):
+    if output.exists():
+        raise FileExistsError(output)
+    cosmo = Cosmology()
+    S = load_primary(cosmo)
+    data, groups, lens_ids, new_rand, t1, nb, lens_resp, responses, cinfo = (S[k] for k in
+        ('data', 'groups', 'lens_ids', 'new_rand', 't1', 'nb', 'lens_resp', 'responses', 'cinfo'))
+    pz_sha, selection_sha, provenance, nC = S['pz_sha'], S['selection_sha'], S['provenance'], S['nC']
     rng = np.random.default_rng(SEED)
-    nC = len(C['photo'])
     boot = [{g: responses(lens_resp[g]['lens_z'], idx)[0] for g in groups} for idx in (rng.integers(0, nC, nC) for _ in range(BOOT))]
 
     def sums(cids, k, cname):

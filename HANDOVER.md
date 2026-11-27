@@ -8075,3 +8075,24 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
 - 0.4–3 Mpc 대각 S/N(jackknife ⊕ multiplier): 모든 색 3.9, 파랑 3.2, 9307 제외 3.4. shape noise만으로는 모든 색 약 4.7. cross χ²: 5.7 / 0.7 / 8.4 (dof 5); 1–1.5 Mpc 모든 색 ΔΣ× 50±24(2.1σ)가 가장 크다.
 - random ΔΣ는 0.4–3 Mpc에서 −13 ~ +5 M⊙/pc²로 0과 맞다.
 - 한계: bin 간 공분산 없음(대각 S/N); jackknife 11그룹이라 SE 자체가 불확실(일부 bin에서 jackknife < shape noise); boost = 1·혼잡 손실 미보정; 추가 빛 편향 상한(모든 색 0.4–1.7 Mpc 약 10%) 미보정; COSMOS seeing 전이 미시험; COSMOS i는 S17A 동반 측광 cmodel(S16A는 meas icmodel_mag). 질량 적합은 아직 하지 않았다.
+
+### 2026-11-27 주 정의 ΔΣ 공분산과 스택 질량 적합
+
+- 사용자 결정(2026-11-27, "모든 커밋을 푸시하고 1-->2"). 새 조회 없음. `measure_s16a_primary_delta_sigma.py`는 `load_primary()`로 적재부를 분리(`ce25e235…`); 재실행한 `delta_sigma.tsv`가 기존과 바이트 단위로 같음(`4c874fe9…`). `fit_s16a_primary_delta_sigma.py`(`5ce5f27b…`), 출력 `/home/kjhan/BACKUP/Astrafek/s16a_primary_delta_sigma_fit_20261127_01/`(`profile_errors.tsv`, `covariances.npz`, `summary.json`).
+- 공분산: 선형 추정량 계수가 측정을 재현(rtol 1e-9). shape noise를 소스 하나당 한 번(디스크 간 재사용 포함) 정확히 전파: 재사용 효과는 SE 비 1.000(렌즈 쪽이 지배하고 렌즈 디스크끼리는 소스를 공유하지 않음), 구간 간 상관 0.00. jackknife 대각이 shape noise보다 큰 구간(0.4–3 Mpc 모두)에서 그 초과를 대각에 더함. multiplier 공분산은 무시할 만함(≤0.1 M⊙/pc²). 채택 SE(모든 색) 0.4–0.7 / 0.7–1 / 1–1.5 / 1.5–2 / 2–3 Mpc: 51 / 43 / 29 / 19 / 13 M⊙/pc².
+- 적합(0.4–3 Mpc, 5 구간; M200c 공통, log M 평탄 사전, 렌즈별 z_l, Duffy c(M), 선형 2-halo; 값은 log10 M200c/M⊙ 중앙값과 68%):
+
+| 변형 | log M200c | χ²/dof | 검출 √(χ²₀−χ²min) |
+|---|---|---|---|
+| 기준(모든 색) | 14.28 (+0.18 −0.25), 최적 14.34 | 2.76/4 | 3.5σ |
+| jackknife+Hartlap(0.4) | 14.25 (+0.27 −0.46) | 11.4/4 (p=0.02) | 2.5σ |
+| 2-halo 없음 | 14.31 (+0.18 −0.25) | 3.00/4 | 3.5σ |
+| miscentring f=0.7, σ=0.2 Mpc | 14.30 (+0.18 −0.25) | 2.54/4 | 3.5σ |
+| c 자유(1–20) | 14.28 (+0.20 −0.27), c 최적 1(사전 하한) | 1.15/3 | 3.7σ |
+| 파랑 | 14.26 (+0.26 −0.43) | 3.73/4 | 2.6σ |
+| S23B_9307 제외 | 14.16 (+0.22 −0.34) | 3.15/4 | 2.9σ |
+| 추가 빛 상한 보정 | 14.23 (+0.19 −0.29) | 3.41/4 | 3.3σ |
+
+- cross χ²(채택 공분산, dof 5): 모든 색 5.4, 파랑 0.7, 9307 제외 7.8.
+- 해석: 스택 질량 M200c ≈ 1.9×10¹⁴ M⊙(68%: 1.1–2.9×10¹⁴), 모형 선택(2-halo·miscentring·c)에 대한 변화는 ±0.03 dex로 통계 오차보다 훨씬 작다. 추가 빛 상한은 −0.05 dex, 9307 제외는 −0.12 dex(1σ 안). 프로파일이 평평해 c 자유 적합은 c 사전 하한으로 간다(외곽 1.5–3 Mpc가 NFW보다 높음). jackknife 공분산은 11그룹이라 불안정하고(Hartlap 0.4) 그 χ²가 커서 채택 공분산의 구간 간 LSS 상관 누락 가능성을 남긴다.
+- 한계: LSS/halo 간 초과는 대각만; 비축소 shear; boost 1·혼잡 손실 미보정; 질량–풍부도 산포·z 진화 무시; COSMOS seeing 전이 미시험.
