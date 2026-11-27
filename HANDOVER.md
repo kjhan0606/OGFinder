@@ -8053,3 +8053,25 @@ Evidence: `/home/kjhan/BACKUP/Astrafek/s16a_cosmos_companion_metadata_20261124_0
   - photo-z multiplier: 기존 값(1.0232)은 표준 정의(gap 0.2만)의 것이므로 주 정의(err95_min > z_l, i > 23 추가)로 COSMOS 재가중을 다시 계산해야 한다(오프라인, 새 조회 불필요 여부 확인 필요).
   - 반경: 0.4–3 Mpc 적합 구간, 0–0.4 Mpc는 표시만. 공분산: 그룹 jackknife(11) + shape noise, multiplier 공분산 전파.
   - 오차 예산 항: 위 한계 1–4, COSMOS seeing 전이 미시험, 혼잡 손실 미보정.
+
+### 2026-11-27 S16A 주 정의 ΔΣ 본 측정(첫 실행)
+
+- 사용자 승인(2026-11-27, "승인") of the 초안 above. 새 조회 없음. `measure_s16a_primary_delta_sigma.py`(`16b3aa30…`), 출력 `/home/kjhan/BACKUP/Astrafek/s16a_primary_delta_sigma_20261127_01/`. `science_measurement=true`, `calibration_applied=true`(m, R, c, photo-z multiplier; boost = 1).
+- photo-z multiplier(주 정의 컷을 COSMOS에 적용: photo_z > z_l+0.2, PHOTOZ_ERR95_MIN > z_l, 동반 측광 icmodel_flux − a_i > 23; 18,768행 모두 err95·i 있음): 렌즈별 0.977–0.990(response 1.010–1.024), 스택 약 0.982–0.983. 같은 코드의 표준 컷 값은 기존 `lens_photoz_reweight.tsv` baseline을 1e-15 안에서 재현(검증). 표준 정의(1.018–1.030)와 부호가 반대: err95 컷이 reference 전경을 빼서 희석이 사라지고, photoz_best가 약간 과대인 쪽이 남는다. COSMOS 객체 bootstrap(200, seed 2026112701) SE는 ΔΣ의 0.2% 이하(장 분산 미포함).
+- ΔΣ(렌즈 − random, M⊙/pc², ± 그룹 jackknife ⊕ multiplier; 괄호 shape noise):
+
+| R (Mpc) | 모든 색 | 파랑 | 9307 제외 | ΔΣ×(모든 색) |
+|---|---|---|---|---|
+| 0–0.1 † | 437±175 (219) | 365±172 | 478±177 | 413±131 |
+| 0.1–0.2 † | −53±151 (147) | −83±211 | −57±152 | −96±64 |
+| 0.2–0.4 † | 97±78 (72) | 20±104 | 103±82 | −19±111 |
+| 0.4–0.7 | 69±51 (43) | 11±81 | 54±56 | −27±45 |
+| 0.7–1.0 | 31±43 (34) | 52±63 | 17±43 | −22±26 |
+| 1.0–1.5 | 28±29 (22) | 19±39 | 25±30 | 50±24 |
+| 1.5–2.0 | 49±19 (17) | 69±27 | 49±20 | 1±14 |
+| 2.0–3.0 | 31±13 (10) | 30±17 | 27±14 | −5±10 |
+
+  † 0–0.4 Mpc: 계통 미확정(위 한계 1–4), 적합에 쓰지 않음.
+- 0.4–3 Mpc 대각 S/N(jackknife ⊕ multiplier): 모든 색 3.9, 파랑 3.2, 9307 제외 3.4. shape noise만으로는 모든 색 약 4.7. cross χ²: 5.7 / 0.7 / 8.4 (dof 5); 1–1.5 Mpc 모든 색 ΔΣ× 50±24(2.1σ)가 가장 크다.
+- random ΔΣ는 0.4–3 Mpc에서 −13 ~ +5 M⊙/pc²로 0과 맞다.
+- 한계: bin 간 공분산 없음(대각 S/N); jackknife 11그룹이라 SE 자체가 불확실(일부 bin에서 jackknife < shape noise); boost = 1·혼잡 손실 미보정; 추가 빛 편향 상한(모든 색 0.4–1.7 Mpc 약 10%) 미보정; COSMOS seeing 전이 미시험; COSMOS i는 S17A 동반 측광 cmodel(S16A는 meas icmodel_mag). 질량 적합은 아직 하지 않았다.
